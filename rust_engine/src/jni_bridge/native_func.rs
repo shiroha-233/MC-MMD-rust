@@ -740,6 +740,51 @@ pub extern "system" fn Java_com_shiroha_skinlayers3d_NativeFunc_DeleteAnimation(
     animations.remove(&anim);
 }
 
+/// 设置模型全局变换（用于人物移动时传递位置给物理系统）
+/// 传入 4x4 矩阵的 16 个 float 值（列主序）
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_skinlayers3d_NativeFunc_SetModelTransform(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    m00: jfloat, m01: jfloat, m02: jfloat, m03: jfloat,
+    m10: jfloat, m11: jfloat, m12: jfloat, m13: jfloat,
+    m20: jfloat, m21: jfloat, m22: jfloat, m23: jfloat,
+    m30: jfloat, m31: jfloat, m32: jfloat, m33: jfloat,
+) {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut model = model_arc.lock().unwrap();
+        let transform = glam::Mat4::from_cols_array(&[
+            m00, m01, m02, m03,
+            m10, m11, m12, m13,
+            m20, m21, m22, m23,
+            m30, m31, m32, m33,
+        ]);
+        model.set_model_transform(transform);
+    }
+}
+
+/// 设置模型位置和朝向（简化版，用于惯性计算）
+/// pos_x, pos_y, pos_z: 模型位置（已缩放）
+/// yaw: 人物朝向角度（弧度）
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_skinlayers3d_NativeFunc_SetModelPositionAndYaw(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    pos_x: jfloat,
+    pos_y: jfloat, 
+    pos_z: jfloat,
+    yaw: jfloat,
+) {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut model = model_arc.lock().unwrap();
+        model.set_model_position_and_yaw(pos_x, pos_y, pos_z, yaw);
+    }
+}
+
 /// 设置头部角度
 #[no_mangle]
 pub extern "system" fn Java_com_shiroha_skinlayers3d_NativeFunc_SetHeadAngle(

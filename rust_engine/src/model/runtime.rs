@@ -4,7 +4,7 @@ use crate::animation::{VmdAnimation, AnimationLayerManager};
 use crate::morph::MorphManager;
 use crate::physics::MMDPhysics;
 use crate::skeleton::BoneManager;
-use glam::{Mat4, Quat, Vec2, Vec3};
+use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -698,6 +698,21 @@ impl MmdModel {
         self.model_transform = transform;
     }
     
+    /// 设置模型位置和朝向（用于惯性计算）
+    /// 位置用于计算速度，yaw 用于将世界速度转换到模型局部空间
+    pub fn set_model_position_and_yaw(&mut self, x: f32, y: f32, z: f32, yaw: f32) {
+        // 构建带旋转的变换矩阵
+        let cos_y = yaw.cos();
+        let sin_y = yaw.sin();
+        // Y轴旋转矩阵 + 平移
+        self.model_transform = Mat4::from_cols(
+            Vec4::new(cos_y, 0.0, sin_y, 0.0),
+            Vec4::new(0.0, 1.0, 0.0, 0.0),
+            Vec4::new(-sin_y, 0.0, cos_y, 0.0),
+            Vec4::new(x, y, z, 1.0),
+        );
+    }
+    
     /// 获取模型全局变换
     pub fn model_transform(&self) -> Mat4 {
         self.model_transform
@@ -1127,11 +1142,15 @@ impl MmdModel {
         }
         
         if let Some(ref mut physics) = self.physics {
-            // 同步运动学刚体（跟随骨骼）
+            // 同步运动学刚体（跟随骨骼），传入 delta_time 用于计算速度
+            // 注意：骨骼变换保持在模型局部空间，不乘以 model_transform
+            // model_transform 的变化会通过 sync_kinematic_bodies 内部计算位置差来影响速度
             let bone_transforms: Vec<Mat4> = (0..self.bone_manager.bone_count())
                 .map(|i| self.bone_manager.get_global_transform(i))
                 .collect();
-            physics.sync_kinematic_bodies(&bone_transforms);
+            
+            // 传入 model_transform 用于计算模型整体移动的速度
+            physics.sync_kinematic_bodies_with_model_velocity(&bone_transforms, delta_time, self.model_transform);
             
             // 更新物理模拟
             physics.update(delta_time);
@@ -1148,7 +1167,7 @@ impl MmdModel {
             // 设置物理骨骼索引，防止后续骨骼更新覆盖物理变换
             self.bone_manager.set_physics_bone_indices(physics_bone_indices.clone());
             
-            // 只更新被物理驱动的骨骼（使用不递归更新子骨骼的方法）
+            // 只更新被物理驱动的骨骼
             for (bone_idx, transform) in dynamic_bone_transforms {
                 self.bone_manager.set_global_transform_physics(bone_idx, transform);
             }

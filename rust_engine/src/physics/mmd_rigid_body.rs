@@ -55,6 +55,8 @@ pub struct MMDRigidBody {
     pub inv_offset_matrix: Mat4,
     /// 初始变换（用于重置）
     pub initial_transform: Pose,
+    /// 上一帧的世界变换（用于计算速度）
+    pub prev_transform: Option<Pose>,
     /// 质量
     pub mass: f32,
     /// 线性阻尼
@@ -127,6 +129,7 @@ impl MMDRigidBody {
             offset_matrix,
             inv_offset_matrix,
             initial_transform,
+            prev_transform: None,
             mass: pmx_rb.mass,
             linear_damping: pmx_rb.move_attenuation,
             angular_damping: pmx_rb.rotation_attenuation,

@@ -222,6 +222,27 @@ public class NativeFunc {
     public native void DeleteAnimation(long anim);
 
     public native void SetHeadAngle(long model, float x, float y, float z, boolean flag);
+    
+    /**
+     * 设置模型全局变换（用于人物移动时传递位置给物理系统）
+     * @param model 模型句柄
+     * @param m00-m33 4x4变换矩阵的16个元素（列主序）
+     */
+    public native void SetModelTransform(long model,
+        float m00, float m01, float m02, float m03,
+        float m10, float m11, float m12, float m13,
+        float m20, float m21, float m22, float m23,
+        float m30, float m31, float m32, float m33);
+    
+    /**
+     * 设置模型位置和朝向（简化版，用于惯性计算）
+     * @param model 模型句柄
+     * @param posX 位置X（已缩放）
+     * @param posY 位置Y（已缩放）
+     * @param posZ 位置Z（已缩放）
+     * @param yaw 人物朝向（弧度）
+     */
+    public native void SetModelPositionAndYaw(long model, float posX, float posY, float posZ, float yaw);
 
     // ========== 眼球追踪相关 ==========
     

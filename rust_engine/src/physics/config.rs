@@ -55,6 +55,12 @@ pub struct PhysicsConfig {
     /// **增大此值减少头发弹跳**
     pub angular_spring_damping_factor: f32,
 
+    // ========== 惯性效果 ==========
+    /// 惯性效果强度，默认 1.0
+    /// 控制人物移动时头发被拖拽的程度
+    /// 0.0 = 无惯性，1.0 = 正常，2.0 = 双倍效果
+    pub inertia_strength: f32,
+
     // ========== 速度限制 ==========
     /// 最大线速度 (m/s)，默认 50.0
     pub max_linear_velocity: f32,
@@ -76,13 +82,13 @@ impl Default for PhysicsConfig {
             // MMD 标准约 -98.0，但游戏中通常用更小的值
             // 值越小（绝对值越大）→ 头发下垂越快、越重
             // 值越大（绝对值越小）→ 头发飘起来、更轻盈
-            gravity_y: -9.8,
+            gravity_y: -3.8,
 
             // ====== 模拟参数 ======
             // 物理模拟的帧率（每秒计算多少次物理）
             // 越高 → 模拟越精确、越稳定，但 CPU 消耗越大
             // 建议范围: 30~120，60 是平衡点
-            physics_fps: 30.0,
+            physics_fps: 60.0,
             
             // 每帧最多分成几个子步骤
             // 当游戏帧率低于 physics_fps 时会分步计算
@@ -101,58 +107,60 @@ impl Default for PhysicsConfig {
             // 穿透后的最大修正速度
             // 当刚体卡进别的刚体时，修正的最大速度
             // 越大 → 修正越快但可能弹飞；越小 → 修正更平滑
-            max_corrective_velocity: 3.0,
+            max_corrective_velocity: 0.1,
 
             // ====== 刚体阻尼（空气阻力）======
             // 线性阻尼 = 移动时的空气阻力
             // 这个值会乘以 PMX 模型里设置的原始阻尼
             // 越大 → 头发移动越慢、停止越快、更"稠"
             // 越小 → 头发移动越自由、惯性越大
-            linear_damping_scale: 3.0,
+            linear_damping_scale: 0.3,
             
             // 角速度阻尼 = 旋转时的空气阻力
             // 越大 → 头发旋转越慢、更稳定
             // 越小 → 头发旋转越自由、更飘逸
-            angular_damping_scale: 1.5,
+            angular_damping_scale: 0.2,
 
             // ====== 质量 ======
             // 质量缩放，乘以 PMX 模型里的原始质量
             // 越大 → 头发越"重"，惯性越大，不容易被带动
             // 越小 → 头发越"轻"，跟随性好，但可能太飘
-            mass_scale: 0.3,
+            mass_scale: 2.0,
 
             // ====== 弹簧刚度（头发弹性！）======
             // 线性弹簧刚度 = 头发被拉伸后回弹的力度
             // 越大 → 回弹越猛、越"弹"、橡皮筋感
             // 越小 → 回弹越慢、越"软"、更自然
-            // 【头发太弹就减小这个值！试试 0.3~0.5】
-            linear_spring_stiffness_scale: 1.0,
+            linear_spring_stiffness_scale: 0.01,
             
             // 角度弹簧刚度 = 头发被扭转后回弹的力度
             // 原理同上
-            // 【头发太弹就减小这个值！试试 0.3~0.5】
-            angular_spring_stiffness_scale: 1.0,
+            angular_spring_stiffness_scale: 0.01,
 
             // ====== 弹簧阻尼（减少弹跳！）======
             // 弹簧阻尼 = 弹簧振动时的能量损耗
             // 公式: 实际阻尼 = sqrt(刚度 * 此值)
             // 越大 → 弹跳次数越少，很快停下来
             // 越小 → 弹跳次数越多，像果冻一样晃
-            // 【头发弹跳太久就增大这个值！试试 0.5~1.0】
-            linear_spring_damping_factor: 0.1,
+            linear_spring_damping_factor: 8.0,
             
             // 角度弹簧阻尼，原理同上
-            // 【头发弹跳太久就增大这个值！试试 0.5~1.0】
-            angular_spring_damping_factor: 0.1,
+            angular_spring_damping_factor: 8.0,
+
+            // ====== 惯性效果 ======
+            // 惯性效果强度
+            // 0.0 = 无惯性，1.0 = 正常，>1.0 = 更强的拖拽感
+            inertia_strength: 1.0,
 
             // ====== 速度限制（防止爆炸）======
             // 最大线速度（米/秒）
             // 超过这个速度会被强制限制，防止物理爆炸
-            max_linear_velocity: 30.0,
+            // 注意：人物移动速度约 4-6 方块/秒，需要设置足够大
+            max_linear_velocity: 1.0,
             
             // 最大角速度（弧度/秒）
             // 同上
-            max_angular_velocity: 20.0,
+            max_angular_velocity: 1.0,
 
             // ====== 调试 ======
             // 是否启用关节约束

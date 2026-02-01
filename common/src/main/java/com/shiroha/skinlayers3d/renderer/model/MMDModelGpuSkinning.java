@@ -303,6 +303,17 @@ public class MMDModelGpuSkinning implements IMMDModel {
         // 使用公共工具类更新眼球追踪
         EyeTrackingHelper.updateEyeTracking(nf, model, entityIn, entityYaw, tickDelta);
         
+        // 传递实体位置和朝向给物理系统（用于人物移动时的惯性效果）
+        // 位置用于计算速度差，朝向用于将世界速度转换到模型局部空间
+        // 注意：模型渲染时缩放了 0.09 倍，所以位置也需要同步缩放
+        final float MODEL_SCALE = 0.09f;
+        float posX = (float)(Mth.lerp(tickDelta, entityIn.xo, entityIn.getX()) * MODEL_SCALE);
+        float posY = (float)(Mth.lerp(tickDelta, entityIn.yo, entityIn.getY()) * MODEL_SCALE);
+        float posZ = (float)(Mth.lerp(tickDelta, entityIn.zo, entityIn.getZ()) * MODEL_SCALE);
+        // 使用实体的身体朝向（不是头部朝向）
+        float bodyYaw = Mth.lerp(tickDelta, entityIn.yBodyRotO, entityIn.yBodyRot) * ((float) Math.PI / 180F);
+        nf.SetModelPositionAndYaw(model, posX, posY, posZ, bodyYaw);
+        
         Update();
         RenderModel(entityIn, entityYaw, entityPitch, entityTrans, mat);
     }

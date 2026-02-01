@@ -63,6 +63,8 @@ pub struct MMDPhysics {
     pub gravity: Vector,
     /// 是否启用关节（调试用）
     pub joints_enabled: bool,
+    /// 上一帧的模型变换（用于计算模型整体移动速度）
+    pub prev_model_transform: Option<Mat4>,
 }
 
 impl MMDPhysics {
@@ -115,6 +117,7 @@ impl MMDPhysics {
             max_substep_count: config.max_substep_count,
             gravity: Vector::new(0.0, config.gravity_y, 0.0),
             joints_enabled: config.joints_enabled,
+            prev_model_transform: None,
         }
     }
     
@@ -323,10 +326,15 @@ impl MMDPhysics {
     
     /// 在物理更新前同步运动学刚体（跟随骨骼）
     /// 
+    /// 关键改进：计算并设置运动学刚体的速度，使连接的动态刚体产生惯性
+    /// 
     /// # 参数
     /// - `bone_transforms`: 骨骼全局变换列表
-    pub fn sync_kinematic_bodies(&mut self, bone_transforms: &[Mat4]) {
-        for mmd_rb in &self.mmd_rigid_bodies {
+    /// - `delta_time`: 时间步长（秒）
+    pub fn sync_kinematic_bodies(&mut self, bone_transforms: &[Mat4], delta_time: f32) {
+        let dt = delta_time.max(0.001); // 防止除零
+        
+        for mmd_rb in &mut self.mmd_rigid_bodies {
             if mmd_rb.body_type != RigidBodyType::Kinematic {
                 continue;
             }
@@ -337,8 +345,129 @@ impl MMDPhysics {
                     if bone_idx >= 0 && (bone_idx as usize) < bone_transforms.len() {
                         let bone_transform = bone_transforms[bone_idx as usize];
                         let new_pose = mmd_rb.compute_world_transform(bone_transform);
+                        
+                        // 计算速度（基于位置变化）
+                        if let Some(prev_pose) = mmd_rb.prev_transform {
+                            // 线速度 = (新位置 - 旧位置) / dt
+                            let delta_pos = new_pose.translation - prev_pose.translation;
+                            let linvel = delta_pos / dt;
+                            
+                            // 角速度计算：从四元数差计算
+                            // delta_rot = new_rot * prev_rot.inverse()
+                            let prev_rot = prev_pose.rotation;
+                            let new_rot = new_pose.rotation;
+                            let delta_rot = new_rot * prev_rot.inverse();
+                            
+                            // 从四元数提取角速度：
+                            // 对于小角度旋转，角速度 ≈ 2 * (qx, qy, qz) / dt
+                            // 这是四元数到角速度的近似公式
+                            let angvel = Vector::new(
+                                2.0 * delta_rot.x / dt,
+                                2.0 * delta_rot.y / dt,
+                                2.0 * delta_rot.z / dt,
+                            );
+                            
+                            // 设置速度（这会影响通过关节连接的动态刚体）
+                            rb.set_linvel(linvel, true);
+                            rb.set_angvel(angvel, true);
+                        }
+                        
+                        // 设置目标位置
                         rb.set_next_kinematic_position(new_pose);
+                        
+                        // 保存当前变换用于下一帧
+                        mmd_rb.prev_transform = Some(new_pose);
                     }
+                }
+            }
+        }
+    }
+    
+    /// 在物理更新前同步运动学刚体，同时考虑模型整体移动
+    /// 
+    /// 关键改进：直接给 Dynamic 刚体施加惯性速度，而不是依赖 Kinematic 传递
+    /// 
+    /// # 参数
+    /// - `bone_transforms`: 骨骼局部空间的全局变换列表
+    /// - `delta_time`: 时间步长（秒）
+    /// - `model_transform`: 当前模型的世界变换
+    pub fn sync_kinematic_bodies_with_model_velocity(
+        &mut self, 
+        bone_transforms: &[Mat4], 
+        delta_time: f32,
+        model_transform: Mat4,
+    ) {
+        let dt = delta_time.max(0.001);
+        
+        // 计算模型整体移动的速度（仅使用位置差）
+        let model_velocity = if let Some(prev_transform) = self.prev_model_transform {
+            let curr_pos = model_transform.w_axis.truncate();
+            let prev_pos = prev_transform.w_axis.truncate();
+            (curr_pos - prev_pos) / dt
+        } else {
+            Vec3::ZERO
+        };
+        
+        // 保存当前模型变换
+        self.prev_model_transform = Some(model_transform);
+        
+        // 模型速度（保留用于调试）
+        let _model_linvel = Vector::new(model_velocity.x, model_velocity.y, model_velocity.z);
+        
+        // 第一步：同步 Kinematic 刚体位置
+        for mmd_rb in &mut self.mmd_rigid_bodies {
+            if mmd_rb.body_type != RigidBodyType::Kinematic {
+                continue;
+            }
+            
+            if let Some(rb_handle) = mmd_rb.rigid_body_handle {
+                if let Some(rb) = self.rigid_body_set.get_mut(rb_handle) {
+                    let bone_idx = mmd_rb.bone_index;
+                    if bone_idx >= 0 && (bone_idx as usize) < bone_transforms.len() {
+                        let bone_transform = bone_transforms[bone_idx as usize];
+                        let new_pose = mmd_rb.compute_world_transform(bone_transform);
+                        
+                        // Kinematic 刚体：只设置位置，速度设置无意义
+                        rb.set_next_kinematic_position(new_pose);
+                        mmd_rb.prev_transform = Some(new_pose);
+                    }
+                }
+            }
+        }
+        
+        // 第二步：给 Dynamic 刚体施加惯性速度
+        // 关键：需要将世界空间的速度转换到模型局部空间
+        // 从 model_transform 提取旋转矩阵（3x3 部分）
+        let rot_col0 = model_transform.x_axis.truncate(); // 第一列
+        let rot_col2 = model_transform.z_axis.truncate(); // 第三列
+        
+        // 将世界速度转换到模型局部空间：v_local = R^T * v_world
+        // R^T 的行就是 R 的列
+        let world_vel = model_velocity;
+        let local_vel_x = rot_col0.x * world_vel.x + rot_col0.y * world_vel.y + rot_col0.z * world_vel.z;
+        let local_vel_y = world_vel.y; // Y轴不变
+        let local_vel_z = rot_col2.x * world_vel.x + rot_col2.y * world_vel.y + rot_col2.z * world_vel.z;
+        
+        // 惯性速度（模型局部空间，反方向），乘以惯性强度系数
+        let strength = get_config().inertia_strength;
+        let inertia_velocity = Vector::new(
+            -local_vel_x * strength, 
+            -local_vel_y * strength, 
+            -local_vel_z * strength
+        );
+        
+        for mmd_rb in &self.mmd_rigid_bodies {
+            // 只处理动态刚体
+            if mmd_rb.body_type == RigidBodyType::Kinematic {
+                continue;
+            }
+            
+            if let Some(rb_handle) = mmd_rb.rigid_body_handle {
+                if let Some(rb) = self.rigid_body_set.get_mut(rb_handle) {
+                    // 获取当前速度并叠加惯性速度
+                    let current_vel = rb.linvel().clone();
+                    let new_vel = current_vel + inertia_velocity;
+                    rb.set_linvel(new_vel, true);
                 }
             }
         }

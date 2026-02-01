@@ -307,6 +307,14 @@ public class MMDModelOpenGL implements IMMDModel {
         // 使用公共工具类更新眼球追踪
         EyeTrackingHelper.updateEyeTracking(nf, model, entityIn, entityYaw, tickDelta);
         
+        // 传递实体位置和朝向给物理系统（用于人物移动时的惯性效果）
+        final float MODEL_SCALE = 0.09f;
+        float posX = (float)(Mth.lerp(tickDelta, entityIn.xo, entityIn.getX()) * MODEL_SCALE);
+        float posY = (float)(Mth.lerp(tickDelta, entityIn.yo, entityIn.getY()) * MODEL_SCALE);
+        float posZ = (float)(Mth.lerp(tickDelta, entityIn.zo, entityIn.getZ()) * MODEL_SCALE);
+        float bodyYaw = Mth.lerp(tickDelta, entityIn.yBodyRotO, entityIn.yBodyRot) * ((float) Math.PI / 180F);
+        nf.SetModelPositionAndYaw(model, posX, posY, posZ, bodyYaw);
+        
         Update();
         RenderModel(entityIn, entityYaw, entityPitch, entityTrans, mat);
     }
