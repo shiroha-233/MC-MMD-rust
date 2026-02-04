@@ -11,6 +11,10 @@ loom {
     forge {
         mixinConfig "mmdskin-forge.mixins.json"
     }
+    // 启用 mixin refmap 生成
+    mixin {
+        defaultRefmapName = "mmdskin-forge-refmap.json"
+    }
     runs {
         client {
             client()
@@ -40,6 +44,9 @@ shadowJar {
     exclude "architectury.common.json"
     configurations = [project.configurations.shadowCommon]
     archiveClassifier.set("dev-shadow")
+    
+    // 包含 common 模块的资源（原生库、默认动画等）
+    from(project(":common").sourceSets.main.resources)
     
     // 排除不需要的文件
     exclude 'META-INF/versions/**'

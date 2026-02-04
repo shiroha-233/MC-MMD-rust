@@ -57,4 +57,4 @@ rootProject.name = 'mmdskin'
 // 包含子项目
 include 'common'
 include 'fabric'
-// include 'forge'  // 已注释掉，暂时不包含 forge 模块
+include 'forge'

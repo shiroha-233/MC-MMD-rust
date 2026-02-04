@@ -5,7 +5,7 @@ import com.shiroha.mmdskin.forge.config.ModConfigScreen;
 import com.shiroha.mmdskin.forge.network.MmdSkinNetworkPack;
 import com.shiroha.mmdskin.maid.MaidActionNetworkHandler;
 import com.shiroha.mmdskin.maid.MaidModelNetworkHandler;
-import com.shiroha.mmdskin.renderer.render.SkinLayersRenderFactory;
+import com.shiroha.mmdskin.renderer.render.MmdSkinRenderFactory;
 import com.shiroha.mmdskin.ui.ActionWheelNetworkHandler;
 import com.shiroha.mmdskin.ui.ConfigWheelScreen;
 import com.shiroha.mmdskin.ui.MaidConfigWheelScreen;
@@ -168,7 +168,7 @@ public class MmdSkinRegisterClient {
                     if (EntityType.byString(mcEntityName).isPresent()) {
                         event.registerEntityRenderer(
                             EntityType.byString(mcEntityName).get(), 
-                            new SkinLayersRenderFactory<>(mcEntityName));
+                            new MmdSkinRenderFactory<>(mcEntityName));
                         logger.info("{} 实体渲染器注册成功", mcEntityName);
                     } else {
                         logger.warn("{} 实体不存在，跳过渲染注册", mcEntityName);

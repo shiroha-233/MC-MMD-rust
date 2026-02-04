@@ -1,9 +1,9 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "com.shiroha.skinlayers3d.mixin.forge",
+  "package": "com.shiroha.mmdskin.mixin.forge",
   "compatibilityLevel": "JAVA_17",
-  "refmap": "skinlayers3d-forge-refmap.json",
+  "refmap": "mmdskin-forge-refmap.json",
   "mixins": [],
   "client": [
     "ForgePlayerRendererMixin"

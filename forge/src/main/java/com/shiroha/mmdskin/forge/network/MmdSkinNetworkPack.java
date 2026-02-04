@@ -132,12 +132,12 @@ public class MmdSkinNetworkPack {
         switch (opCode) {
             case 1: {
                 // 执行动画（使用字符串ID）
-                SkinLayersRendererPlayerHelper.CustomAnim(target, animId);
+                MmdSkinRendererPlayerHelper.CustomAnim(target, animId);
                 break;
             }
             case 2: {
                 // 重置物理
-                SkinLayersRendererPlayerHelper.ResetPhysics(target);
+                MmdSkinRendererPlayerHelper.ResetPhysics(target);
                 break;
             }
             case 4: {

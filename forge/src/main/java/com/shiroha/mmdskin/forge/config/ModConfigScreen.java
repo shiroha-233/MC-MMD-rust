@@ -17,7 +17,7 @@ public class ModConfigScreen {
      * 创建模组设置界面
      */
     public static Screen create(Screen parent) {
-        ConfigData data = SkinLayers3DConfig.getData();
+        ConfigData data = MmdSkinConfig.getData();
         
         ConfigBuilder builder = ConfigBuilder.create()
             .setParentScreen(parent)
@@ -218,7 +218,7 @@ public class ModConfigScreen {
             .build());
         
         builder.setSavingRunnable(() -> {
-            SkinLayers3DConfig.save();
+            MmdSkinConfig.save();
             // 同步渲染模式设置到工厂
             com.shiroha.mmdskin.renderer.core.RenderModeManager.setUseGpuSkinning(data.gpuSkinningEnabled);
         });

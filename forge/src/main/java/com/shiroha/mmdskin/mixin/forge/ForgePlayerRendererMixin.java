@@ -1,14 +1,15 @@
-package com.shiroha.skinlayers3d.mixin.forge;
+package com.shiroha.mmdskin.mixin.forge;
 
-import com.shiroha.skinlayers3d.SkinLayers3DClient;
-import com.shiroha.skinlayers3d.renderer.animation.AnimationStateManager;
-import com.shiroha.skinlayers3d.renderer.render.ItemRenderHelper;
-import com.shiroha.skinlayers3d.renderer.render.InventoryRenderHelper;
-import com.shiroha.skinlayers3d.renderer.core.IMMDModel;
-import com.shiroha.skinlayers3d.renderer.core.RenderContext;
-import com.shiroha.skinlayers3d.renderer.core.RenderParams;
-import com.shiroha.skinlayers3d.renderer.model.MMDModelManager;
-import com.shiroha.skinlayers3d.renderer.model.MMDModelManager.ModelWithEntityData;
+import com.shiroha.mmdskin.MmdSkinClient;
+import com.shiroha.mmdskin.renderer.animation.AnimationStateManager;
+import com.shiroha.mmdskin.renderer.render.ItemRenderHelper;
+import com.shiroha.mmdskin.renderer.render.InventoryRenderHelper;
+import com.shiroha.mmdskin.renderer.core.IMMDModel;
+import com.shiroha.mmdskin.renderer.core.RenderContext;
+import com.shiroha.mmdskin.renderer.core.RenderParams;
+import com.shiroha.mmdskin.renderer.model.MMDModelManager;
+import com.shiroha.mmdskin.renderer.model.MMDModelManager.ModelWithEntityData;
+import com.shiroha.mmdskin.ui.ModelSelectorConfig;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.model.PlayerModel;
@@ -40,18 +41,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * - 依赖倒置：依赖辅助类而非直接实现
  */
 @Mixin(PlayerRenderer.class)
-public abstract class SkinLayersPlayerRendererMixin extends LivingEntityRenderer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> {
+public abstract class ForgePlayerRendererMixin extends LivingEntityRenderer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> {
 
-    public SkinLayersPlayerRendererMixin(EntityRendererProvider.Context ctx, PlayerModel<AbstractClientPlayer> model, float shadowRadius) {
+    public ForgePlayerRendererMixin(EntityRendererProvider.Context ctx, PlayerModel<AbstractClientPlayer> model, float shadowRadius) {
         super(ctx, model, shadowRadius);
     }
 
-    @Inject(method = "render(Lnet/minecraft/client/player/AbstractClientPlayer;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "render", at = @At("HEAD"), cancellable = true)
     public void onRender(AbstractClientPlayer player, float entityYaw, float tickDelta, PoseStack matrixStack, 
                       MultiBufferSource vertexConsumers, int packedLight, CallbackInfo ci) {
         // 获取玩家选择的模型
         String playerName = player.getName().getString();
-        String selectedModel = com.shiroha.skinlayers3d.ui.ModelSelectorConfig.getInstance().getPlayerModel(playerName);
+        String selectedModel = ModelSelectorConfig.getInstance().getPlayerModel(playerName);
         
         // 如果选择了默认渲染，使用原版渲染
         if (selectedModel.equals("默认 (原版渲染)") || selectedModel.isEmpty()) {
@@ -72,7 +73,7 @@ public abstract class SkinLayersPlayerRendererMixin extends LivingEntityRenderer
         IMMDModel model = modelWithData.model;
         
         // 加载模型属性
-        modelWithData.loadModelProperties(SkinLayers3DClient.reloadProperties);
+        modelWithData.loadModelProperties(MmdSkinClient.reloadProperties);
         
         // 获取模型尺寸
         float[] size = getModelSize(modelWithData);
@@ -152,6 +153,6 @@ public abstract class SkinLayersPlayerRendererMixin extends LivingEntityRenderer
      */
     private Vector3f getPropertyVector(ModelWithEntityData modelData, String key) {
         String value = modelData.properties.getProperty(key);
-        return value == null ? new Vector3f(0.0f) : SkinLayers3DClient.str2Vec3f(value);
+        return value == null ? new Vector3f(0.0f) : MmdSkinClient.str2Vec3f(value);
     }
 }

@@ -106,22 +106,26 @@ public class NativeFunc {
         
         File libFile = new File(gameDirectory, fileName);
         
-        // 1. 尝试加载已存在的外部文件（用户可自行替换版本）
+        // 1. 优先从模组内置资源提取（确保版本一致）
+        File extracted = extractNativeLibrary(resourcePath, fileName);
+        if (extracted != null) {
+            try {
+                LoadLibrary(extracted);
+                return;
+            } catch (Error e) {
+                logger.warn("内置库加载失败，尝试外部文件: " + e.getMessage());
+            }
+        }
+        
+        // 2. 回退到游戏目录的外部文件（用户自定义版本）
         if (libFile.exists()) {
             try {
                 LoadLibrary(libFile);
                 logger.info("已从游戏目录加载原生库: " + fileName);
                 return;
             } catch (Error e) {
-                logger.warn("游戏目录的库文件损坏，尝试从内置资源提取...");
+                logger.error("外部库文件也无法加载: " + e.getMessage());
             }
-        }
-        
-        // 2. 从模组内置资源提取
-        File extracted = extractNativeLibrary(resourcePath, fileName);
-        if (extracted != null) {
-            LoadLibrary(extracted);
-            return;
         }
         
         // 3. 全部失败
