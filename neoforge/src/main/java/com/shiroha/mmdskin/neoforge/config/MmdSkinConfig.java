@@ -1,15 +1,15 @@
-package com.shiroha.mmdskin.forge.config;
+package com.shiroha.mmdskin.neoforge.config;
 
 import com.shiroha.mmdskin.config.ConfigData;
 import com.shiroha.mmdskin.config.ConfigManager;
-import net.minecraftforge.fml.loading.FMLPaths;
+import net.neoforged.fml.loading.FMLPaths;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.nio.file.Path;
 
 /**
- * Forge 配置实现
+ * NeoForge 配置实现
  * 使用 JSON 格式，配置文件位于 config/mmdskin/config.json
  * 与 Fabric 使用相同的配置格式
  */
@@ -27,7 +27,7 @@ public final class MmdSkinConfig implements ConfigManager.IConfigProvider {
     public static void init() {
         instance = new MmdSkinConfig();
         ConfigManager.init(instance);
-        logger.info("Forge 配置系统初始化完成 (JSON)");
+        logger.info("NeoForge 配置系统初始化完成 (JSON)");
     }
     
     /** 获取配置数据（供 UI 使用） */

@@ -1,4 +1,4 @@
-package com.shiroha.mmdskin.forge.config;
+package com.shiroha.mmdskin.neoforge.config;
 
 import com.shiroha.mmdskin.config.ConfigData;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
@@ -8,7 +8,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * Forge 模组设置界面
+ * NeoForge 模组设置界面
  * 使用 Cloth Config API 构建
  */
 public class ModConfigScreen {

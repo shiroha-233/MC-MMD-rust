@@ -1,21 +1,21 @@
-package com.shiroha.mmdskin.forge.maid;
+package com.shiroha.mmdskin.neoforge.maid;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.maid.MaidMMDModelManager;
 import com.shiroha.mmdskin.maid.MaidMMDRenderer;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.client.event.RenderLivingEvent;
-import net.minecraftforge.eventbus.api.EventPriority;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
+import net.neoforged.neoforge.client.event.RenderLivingEvent;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.bus.api.SubscribeEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * 女仆渲染事件处理器
  * 
- * 使用 Forge 事件系统替代 Mixin，实现对 TouhouLittleMaid 女仆的 MMD 模型渲染。
+ * 使用 NeoForge 事件系统替代 Mixin，实现对 TouhouLittleMaid 女仆的 MMD 模型渲染。
  * 这种方式不需要编译时依赖 TouhouLittleMaid 模组。
  */
 @OnlyIn(Dist.CLIENT)

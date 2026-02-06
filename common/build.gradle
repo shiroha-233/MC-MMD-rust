@@ -1,10 +1,10 @@
  architectury {
-    common("fabric", "forge")
+    common("fabric", "neoforge")
 }
 
 dependencies {
     // Architectury API（作为 mod 依赖以启用 Loom 重映射）
-    modImplementation("dev.architectury:architectury:9.2.14")
+    modImplementation("dev.architectury:architectury:${project.architectury_version}")
     compileOnly("net.fabricmc:fabric-loader:${project.loader_version}")
 }
  

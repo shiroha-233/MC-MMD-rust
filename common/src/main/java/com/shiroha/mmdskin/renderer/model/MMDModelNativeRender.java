@@ -7,6 +7,7 @@ import com.shiroha.mmdskin.renderer.resource.MMDTextureManager;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
+import com.mojang.blaze3d.vertex.MeshData;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
@@ -309,9 +310,7 @@ public class MMDModelNativeRender implements IMMDModel {
         }
         
         // 构建顶点数据
-        Tesselator tesselator = Tesselator.getInstance();
-        BufferBuilder builder = tesselator.getBuilder();
-        builder.begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
         
         Matrix4f pose = poseStack.last().pose();
         
@@ -333,17 +332,16 @@ public class MMDModelNativeRender implements IMMDModel {
             float u = uv0Buffer.getFloat(idx * 8);
             float v = uv0Buffer.getFloat(idx * 8 + 4);
             
-            builder.vertex(pose, px, py, pz)
-                   .color(255, 255, 255, 255)
-                   .uv(u, v)
-                   .overlayCoords(0, 10)
-                   .uv2(packedLight)
-                   .normal(poseStack.last().normal(), nx, ny, nz)
-                   .endVertex();
+            builder.addVertex(pose, px, py, pz)
+                   .setColor(255, 255, 255, 255)
+                   .setUv(u, v)
+                   .setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
+                   .setLight(packedLight)
+                   .setNormal(poseStack.last(), nx, ny, nz);
         }
         
         // 上传并使用 Minecraft 原生渲染（Iris 兼容！）
-        BufferBuilder.RenderedBuffer rendered = builder.end();
+        MeshData rendered = builder.buildOrThrow();
         VertexBuffer vb = subMeshVertexBuffers[subMeshIndex];
         vb.bind();
         vb.upload(rendered);

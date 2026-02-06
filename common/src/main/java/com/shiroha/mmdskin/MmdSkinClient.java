@@ -209,12 +209,7 @@ public class MmdSkinClient {
     }
     
     public static void drawText(String arg, int x, int y){
-        //MinecraftClient MCinstance = MinecraftClient.getInstance();
-        PoseStack mat;
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        mat = RenderSystem.getModelViewStack();
-        mat.pushPose();
-        //instance.textRenderer.draw(mat, arg, x, y, -1);
-        mat.popPose();
+        // MC 1.21.1: RenderSystem.getModelViewStack() 已移除，使用新的渲染 API
+        // 此方法暂不使用，保留空实现
     }
 }

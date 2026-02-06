@@ -48,44 +48,23 @@ public class InventoryRenderHelper {
     
     /**
      * 在库存屏幕中渲染模型
+     * MC 1.21.1: 使用传入的 PoseStack 而非 RenderSystem.getModelViewStack()
      */
     public static void renderInInventory(AbstractClientPlayer player, IMMDModel model, float entityYaw, 
                                         float tickDelta, PoseStack matrixStack, int packedLight, float[] size) {
-        Minecraft mc = Minecraft.getInstance();
-        
-        RenderSystem.setShader(GameRenderer::getPositionTexShader);
-        PoseStack modelViewStack = RenderSystem.getModelViewStack();
-        modelViewStack.pushPose();
-        
-        int posX, posY;
-        if (mc.gameMode.getPlayerMode() != GameType.CREATIVE && mc.screen instanceof InventoryScreen) {
-            InventoryScreen invScreen = (InventoryScreen) mc.screen;
-            posX = invScreen.getRecipeBookComponent().updateScreenPosition(mc.screen.width, 176);
-            posY = (mc.screen.height - 166) / 2;
-            modelViewStack.translate(posX + 51, posY + 75, 50);
-            modelViewStack.scale(1.5f, 1.5f, 1.5f);
-        } else {
-            posX = (mc.screen.width - 121) / 2;
-            posY = (mc.screen.height - 195) / 2;
-            modelViewStack.translate(posX + 51, posY + 75, 50.0);
-        }
+        matrixStack.pushPose();
         
         float inventorySize = size[1];
-        modelViewStack.scale(inventorySize, inventorySize, inventorySize);
-        modelViewStack.scale(20.0f, 20.0f, -20.0f);
+        matrixStack.scale(inventorySize, inventorySize, inventorySize);
+        matrixStack.scale(20.0f, 20.0f, -20.0f);
         
         Quaternionf rotation = calculateRotation(player);
-        modelViewStack.mulPose(rotation);
+        matrixStack.mulPose(rotation);
         
         RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
-        model.render(player, entityYaw, 0.0f, new Vector3f(0.0f), tickDelta, modelViewStack, packedLight, RenderContext.INVENTORY);
+        model.render(player, entityYaw, 0.0f, new Vector3f(0.0f), tickDelta, matrixStack, packedLight, RenderContext.INVENTORY);
         
-        modelViewStack.popPose();
-        
-        Quaternionf bodyRotation = new Quaternionf().rotateY(-player.yBodyRot * ((float)Math.PI / 180F));
-        matrixStack.mulPose(bodyRotation);
-        matrixStack.scale(inventorySize, inventorySize, inventorySize);
-        matrixStack.scale(0.09f, 0.09f, 0.09f);
+        matrixStack.popPose();
     }
     
     private static Quaternionf calculateRotation(AbstractClientPlayer player) {

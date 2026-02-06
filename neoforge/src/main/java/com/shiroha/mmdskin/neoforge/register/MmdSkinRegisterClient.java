@@ -1,8 +1,8 @@
-package com.shiroha.mmdskin.forge.register;
+package com.shiroha.mmdskin.neoforge.register;
 
 import com.shiroha.mmdskin.MmdSkin;
-import com.shiroha.mmdskin.forge.config.ModConfigScreen;
-import com.shiroha.mmdskin.forge.network.MmdSkinNetworkPack;
+import com.shiroha.mmdskin.neoforge.config.ModConfigScreen;
+import com.shiroha.mmdskin.neoforge.network.MmdSkinNetworkPack;
 import com.shiroha.mmdskin.maid.MaidActionNetworkHandler;
 import com.shiroha.mmdskin.maid.MaidModelNetworkHandler;
 import com.shiroha.mmdskin.renderer.render.MmdSkinRenderFactory;
@@ -19,24 +19,26 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.client.settings.KeyConflictContext;
-import net.minecraftforge.client.event.EntityRenderersEvent;
-import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.client.settings.KeyConflictContext;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.ModLoadingContext;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Forge 客户端注册
+ * NeoForge 客户端注册
  * 负责按键绑定、网络通信和实体渲染器注册
  * 
  * 使用两个事件总线：
@@ -76,12 +78,8 @@ public class MmdSkinRegisterClient {
      * 注册事件监听器到两个事件总线
      */
     public static void Register() {
-        // 注册到 MOD 事件总线（按键注册、实体渲染器注册）
-        FMLJavaModLoadingContext.get().getModEventBus().addListener(MmdSkinRegisterClient::onRegisterKeyMappings);
-        FMLJavaModLoadingContext.get().getModEventBus().addListener(MmdSkinRegisterClient::onRegisterEntityRenderers);
-        
-        // 注册到 Forge 事件总线（按键输入、客户端 Tick）
-        MinecraftForge.EVENT_BUS.register(ForgeEventHandler.class);
+        // 注册到 NeoForge 事件总线（按键输入、客户端 Tick）
+        NeoForge.EVENT_BUS.register(NeoForgeEventHandler.class);
         
         // 设置模组设置界面工厂
         ConfigWheelScreen.setModSettingsScreenFactory(() -> ModConfigScreen.create(null));
@@ -89,7 +87,7 @@ public class MmdSkinRegisterClient {
         // 注册网络发送器
         registerNetworkSenders();
         
-        logger.info("MMD Skin Forge 客户端注册完成");
+        logger.info("MMD Skin NeoForge 客户端注册完成");
     }
     
     /**
@@ -101,39 +99,33 @@ public class MmdSkinRegisterClient {
         
         Minecraft MCinstance = Minecraft.getInstance();
         
-        // 注册动作轮盘网络发送器
+        // 注册动作轮盘网络发送器 - NeoForge 1.21.1 使用 PacketDistributor
         ActionWheelNetworkHandler.setNetworkSender(animId -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
                 logger.info("发送动作到服务器: " + animId);
-                MmdSkinRegisterCommon.channel.sendToServer(
-                    new MmdSkinNetworkPack(1, player.getUUID(), animId));
+                PacketDistributor.sendToServer(MmdSkinNetworkPack.withAnimId(1, player.getUUID(), animId));
             }
         });
         
-        // 注册模型选择网络发送器（旧接口，保留向后兼容）
+        // 注册模型选择网络发送器
         com.shiroha.mmdskin.ui.ModelSelectorNetworkHandler.setNetworkSender(modelName -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
-                // 使用 opCode 3 表示模型变更（字符串参数）
-                MmdSkinRegisterCommon.channel.sendToServer(
-                    new MmdSkinNetworkPack(3, player.getUUID(), modelName));
+                PacketDistributor.sendToServer(MmdSkinNetworkPack.withAnimId(3, player.getUUID(), modelName));
             }
         });
         
-        // 注册模型同步管理器的网络广播器（新接口，用于联机同步）
+        // 注册模型同步管理器的网络广播器
         PlayerModelSyncManager.setNetworkBroadcaster((playerUUID, modelName) -> {
-            // 使用 opCode 3 发送模型选择到服务器
-            MmdSkinRegisterCommon.channel.sendToServer(
-                new MmdSkinNetworkPack(3, playerUUID, modelName));
+            PacketDistributor.sendToServer(MmdSkinNetworkPack.withAnimId(3, playerUUID, modelName));
         });
         
         // 注册女仆模型选择网络发送器
         MaidModelNetworkHandler.setNetworkSender((entityId, modelName) -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
-                MmdSkinRegisterCommon.channel.sendToServer(
-                    new MmdSkinNetworkPack(4, player.getUUID(), entityId, modelName));
+                PacketDistributor.sendToServer(MmdSkinNetworkPack.forMaid(4, player.getUUID(), entityId, modelName));
             }
         });
         
@@ -142,8 +134,7 @@ public class MmdSkinRegisterClient {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
                 logger.info("发送女仆动作到服务器: 实体={}, 动画={}", entityId, animId);
-                MmdSkinRegisterCommon.channel.sendToServer(
-                    new MmdSkinNetworkPack(5, player.getUUID(), entityId, animId));
+                PacketDistributor.sendToServer(MmdSkinNetworkPack.forMaid(5, player.getUUID(), entityId, animId));
             }
         });
     }
@@ -189,17 +180,16 @@ public class MmdSkinRegisterClient {
     }
     
     /**
-     * Forge 事件处理器（注册到 Forge 事件总线）
+     * NeoForge 事件处理器（注册到 NeoForge 事件总线）
      */
-    @Mod.EventBusSubscriber(value = Dist.CLIENT, modid = MmdSkin.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
-    public static class ForgeEventHandler {
+    @EventBusSubscriber(value = Dist.CLIENT, modid = MmdSkin.MOD_ID, bus = EventBusSubscriber.Bus.GAME)
+    public static class NeoForgeEventHandler {
         
         /**
-         * 客户端 Tick 事件 - 处理按键状态（与 Fabric 的 ClientTickEvents 对应）
+         * 客户端 Tick 事件 - 处理按键状态
          */
         @SubscribeEvent
-        public static void onClientTick(TickEvent.ClientTickEvent event) {
-            if (event.phase != TickEvent.Phase.END) return;
+        public static void onClientTick(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
             
             Minecraft mc = Minecraft.getInstance();
             if (mc.player == null) return;

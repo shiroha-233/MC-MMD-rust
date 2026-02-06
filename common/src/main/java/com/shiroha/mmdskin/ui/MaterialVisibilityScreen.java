@@ -218,7 +218,7 @@ public class MaterialVisibilityScreen extends Screen {
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         // 渲染暗化背景
-        this.renderBackground(guiGraphics);
+        this.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         
         // 主面板背景
         int panelX = (this.width - PANEL_WIDTH) / 2;
@@ -445,8 +445,8 @@ public class MaterialVisibilityScreen extends Screen {
     }
     
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int)(delta * 25)));
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int)(scrollY * 25)));
         return true;
     }
     

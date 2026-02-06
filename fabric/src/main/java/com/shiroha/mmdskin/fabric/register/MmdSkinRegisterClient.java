@@ -116,15 +116,15 @@ public class MmdSkinRegisterClient {
             }
         }
 
-        // 注册网络接收器
-        ClientPlayNetworking.registerGlobalReceiver(MmdSkinRegisterCommon.SKIN_S2C, (client, handler, buf, responseSender) -> {
-            // 复制缓冲区数据，因为需要在主线程处理
-            FriendlyByteBuf copiedBuf = new FriendlyByteBuf(buf.copy());
-            client.execute(() -> {
-                MmdSkinNetworkPack.DoInClient(copiedBuf);
-                copiedBuf.release();
-            });
-        });
+        // MC 1.21.1: 使用新的 Payload API 注册网络接收器
+        ClientPlayNetworking.registerGlobalReceiver(
+            com.shiroha.mmdskin.fabric.network.MmdSkinPayload.TYPE,
+            (payload, context) -> {
+                context.client().execute(() -> {
+                    MmdSkinNetworkPack.handlePayload(payload);
+                });
+            }
+        );
         
         // 注册玩家加入服务器事件（广播自己的模型选择）
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {

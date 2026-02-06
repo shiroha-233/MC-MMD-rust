@@ -146,8 +146,7 @@ public class MaidActionWheelScreen extends Screen {
         int b = color & 0xFF;
         int a = (color >> 24) & 0xFF;
         
-        BufferBuilder bufferBuilder = Tesselator.getInstance().getBuilder();
-        bufferBuilder.begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
         
         int steps = 32;
         for (int i = 0; i <= steps; i++) {
@@ -157,14 +156,14 @@ public class MaidActionWheelScreen extends Screen {
             
             float iX = centerX + cosA * innerRadius;
             float iY = centerY + sinA * innerRadius;
-            bufferBuilder.vertex(matrix, iX, iY, 0).color(r, g, b, a / 2).endVertex();
+            bufferBuilder.addVertex(matrix, iX, iY, 0).setColor(r, g, b, a / 2);
             
             float oX = centerX + cosA * outerRadius;
             float oY = centerY + sinA * outerRadius;
-            bufferBuilder.vertex(matrix, oX, oY, 0).color(r, g, b, a).endVertex();
+            bufferBuilder.addVertex(matrix, oX, oY, 0).setColor(r, g, b, a);
         }
         
-        BufferUploader.drawWithShader(bufferBuilder.end());
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
     }
 
     private void renderDividerLines(GuiGraphics guiGraphics) {
@@ -210,13 +209,12 @@ public class MaidActionWheelScreen extends Screen {
         int b = color & 0xFF;
         int a = (color >> 24) & 0xFF;
         
-        BufferBuilder bufferBuilder = Tesselator.getInstance().getBuilder();
-        bufferBuilder.begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
-        bufferBuilder.vertex(matrix, x1 + px, y1 + py, 0).color(r, g, b, a).endVertex();
-        bufferBuilder.vertex(matrix, x1 - px, y1 - py, 0).color(r, g, b, a).endVertex();
-        bufferBuilder.vertex(matrix, x2 + px, y2 + py, 0).color(r, g, b, a).endVertex();
-        bufferBuilder.vertex(matrix, x2 - px, y2 - py, 0).color(r, g, b, a).endVertex();
-        BufferUploader.drawWithShader(bufferBuilder.end());
+        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        bufferBuilder.addVertex(matrix, x1 + px, y1 + py, 0).setColor(r, g, b, a);
+        bufferBuilder.addVertex(matrix, x1 - px, y1 - py, 0).setColor(r, g, b, a);
+        bufferBuilder.addVertex(matrix, x2 + px, y2 + py, 0).setColor(r, g, b, a);
+        bufferBuilder.addVertex(matrix, x2 - px, y2 - py, 0).setColor(r, g, b, a);
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
     }
     
     private void renderOuterRing(GuiGraphics guiGraphics) {
@@ -235,8 +233,7 @@ public class MaidActionWheelScreen extends Screen {
         int b = LINE_COLOR_DIM & 0xFF;
         int a = (LINE_COLOR_DIM >> 24) & 0xFF;
         
-        BufferBuilder bufferBuilder = Tesselator.getInstance().getBuilder();
-        bufferBuilder.begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
         
         for (int i = 0; i <= steps; i++) {
             double angle = Math.toRadians(i * 360.0 / steps);
@@ -248,11 +245,11 @@ public class MaidActionWheelScreen extends Screen {
             float outerX = centerX + cosA * (outerRadius + thickness);
             float outerY = centerY + sinA * (outerRadius + thickness);
             
-            bufferBuilder.vertex(matrix, innerX, innerY, 0).color(r, g, b, a).endVertex();
-            bufferBuilder.vertex(matrix, outerX, outerY, 0).color(r, g, b, a).endVertex();
+            bufferBuilder.addVertex(matrix, innerX, innerY, 0).setColor(r, g, b, a);
+            bufferBuilder.addVertex(matrix, outerX, outerY, 0).setColor(r, g, b, a);
         }
         
-        BufferUploader.drawWithShader(bufferBuilder.end());
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
         RenderSystem.disableBlend();
     }
 
@@ -264,25 +261,24 @@ public class MaidActionWheelScreen extends Screen {
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         
-        BufferBuilder bufferBuilder = Tesselator.getInstance().getBuilder();
-        bufferBuilder.begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
+        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
         
         int bgR = (CENTER_BG >> 16) & 0xFF;
         int bgG = (CENTER_BG >> 8) & 0xFF;
         int bgB = CENTER_BG & 0xFF;
         int bgA = (CENTER_BG >> 24) & 0xFF;
         
-        bufferBuilder.vertex(matrix, centerX, centerY, 0).color(bgR, bgG, bgB, bgA).endVertex();
+        bufferBuilder.addVertex(matrix, centerX, centerY, 0).setColor(bgR, bgG, bgB, bgA);
         
         int steps = 48;
         for (int i = 0; i <= steps; i++) {
             double angle = Math.toRadians(i * 360.0 / steps);
             float x = centerX + (float) (Math.cos(angle) * innerRadius);
             float y = centerY + (float) (Math.sin(angle) * innerRadius);
-            bufferBuilder.vertex(matrix, x, y, 0).color(bgR, bgG, bgB, bgA).endVertex();
+            bufferBuilder.addVertex(matrix, x, y, 0).setColor(bgR, bgG, bgB, bgA);
         }
         
-        BufferUploader.drawWithShader(bufferBuilder.end());
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
         
         // 边框
         float thickness = 3.0f;
@@ -291,8 +287,7 @@ public class MaidActionWheelScreen extends Screen {
         int borderB = CENTER_BORDER & 0xFF;
         int borderA = (CENTER_BORDER >> 24) & 0xFF;
         
-        bufferBuilder = Tesselator.getInstance().getBuilder();
-        bufferBuilder.begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
         
         for (int i = 0; i <= steps; i++) {
             double angle = Math.toRadians(i * 360.0 / steps);
@@ -304,11 +299,11 @@ public class MaidActionWheelScreen extends Screen {
             float oX = centerX + cosA * (innerRadius + thickness);
             float oY = centerY + sinA * (innerRadius + thickness);
             
-            bufferBuilder.vertex(matrix, iX, iY, 0).color(borderR, borderG, borderB, borderA).endVertex();
-            bufferBuilder.vertex(matrix, oX, oY, 0).color(borderR, borderG, borderB, borderA).endVertex();
+            bufferBuilder.addVertex(matrix, iX, iY, 0).setColor(borderR, borderG, borderB, borderA);
+            bufferBuilder.addVertex(matrix, oX, oY, 0).setColor(borderR, borderG, borderB, borderA);
         }
         
-        BufferUploader.drawWithShader(bufferBuilder.end());
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
         RenderSystem.disableBlend();
         
         // 中心文字

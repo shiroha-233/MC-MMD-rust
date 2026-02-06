@@ -1,21 +1,21 @@
-package com.shiroha.mmdskin.forge;
+package com.shiroha.mmdskin.neoforge;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.shiroha.mmdskin.MmdSkin;
-import com.shiroha.mmdskin.forge.register.MmdSkinRegisterCommon;
+import com.shiroha.mmdskin.neoforge.register.MmdSkinRegisterCommon;
 
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 
 @Mod(MmdSkin.MOD_ID)
-public class MmdSkinForge {
+public class MmdSkinNeoForge {
     public static final Logger logger = LogManager.getLogger();
 
-    public MmdSkinForge() {
-        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::preInit);
+    public MmdSkinNeoForge(IEventBus modEventBus) {
+        modEventBus.addListener(this::preInit);
     }
 
     public void preInit(FMLCommonSetupEvent event) {

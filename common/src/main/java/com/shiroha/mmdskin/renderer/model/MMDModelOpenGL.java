@@ -922,8 +922,7 @@ public class MMDModelOpenGL implements IMMDModel {
         if(shader.PROJECTION_MATRIX != null)
             shader.PROJECTION_MATRIX.set(RenderSystem.getProjectionMatrix());
 
-        if(shader.INVERSE_VIEW_ROTATION_MATRIX != null)
-            shader.INVERSE_VIEW_ROTATION_MATRIX.set(RenderSystem.getInverseViewRotationMatrix());
+        // MC 1.21.1: INVERSE_VIEW_ROTATION_MATRIX 已移除
 
         if(shader.COLOR_MODULATOR != null)
             shader.COLOR_MODULATOR.set(RenderSystem.getShaderColor());

@@ -1,4 +1,4 @@
-package com.shiroha.mmdskin.mixin.forge;
+package com.shiroha.mmdskin.mixin.neoforge;
 
 import com.shiroha.mmdskin.MmdSkinClient;
 import com.shiroha.mmdskin.renderer.animation.AnimationStateManager;
@@ -41,9 +41,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * - 依赖倒置：依赖辅助类而非直接实现
  */
 @Mixin(PlayerRenderer.class)
-public abstract class ForgePlayerRendererMixin extends LivingEntityRenderer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> {
+public abstract class NeoForgePlayerRendererMixin extends LivingEntityRenderer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> {
 
-    public ForgePlayerRendererMixin(EntityRendererProvider.Context ctx, PlayerModel<AbstractClientPlayer> model, float shadowRadius) {
+    public NeoForgePlayerRendererMixin(EntityRendererProvider.Context ctx, PlayerModel<AbstractClientPlayer> model, float shadowRadius) {
         super(ctx, model, shadowRadius);
     }
 

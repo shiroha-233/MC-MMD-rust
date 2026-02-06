@@ -1,12 +1,12 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "com.shiroha.mmdskin.mixin.fabric",
+  "package": "com.shiroha.mmdskin.mixin.neoforge",
   "compatibilityLevel": "JAVA_21",
-  "refmap": "mmdskin-fabric-refmap.json",
+  "refmap": "mmdskin-neoforge-refmap.json",
   "mixins": [],
   "client": [
-    "FabricPlayerRendererMixin"
+    "NeoForgePlayerRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

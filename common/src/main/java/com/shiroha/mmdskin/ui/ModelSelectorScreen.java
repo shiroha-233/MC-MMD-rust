@@ -132,7 +132,7 @@ public class ModelSelectorScreen extends Screen {
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         // 渲染半透明背景
-        this.renderBackground(guiGraphics);
+        this.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         
         // 渲染头部
         renderHeader(guiGraphics);
@@ -286,8 +286,8 @@ public class ModelSelectorScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int)(delta * 30)));
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int)(scrollY * 30)));
         return true;
     }
 

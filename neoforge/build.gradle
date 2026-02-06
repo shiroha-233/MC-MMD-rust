@@ -4,30 +4,23 @@ plugins {
 
 architectury {
     platformSetupLoomIde()
-    forge()
+    neoForge()
 }
 
 loom {
-    forge {
-        mixinConfig "mmdskin-forge.mixins.json"
-    }
-    // 启用 mixin refmap 生成
-    mixin {
-        defaultRefmapName = "mmdskin-forge-refmap.json"
-    }
     runs {
         client {
             client()
-            name "Forge Client"
+            name "NeoForge Client"
             runDir "run/client"
-            vmArgs "-Dneoforge.enabledGameTestNamespace=template-mod"
+            vmArgs "-Dneoforge.enabledGameTestNamespace=mmdskin"
             programArgs "--username", "Player1"
         }
         server {
             server()
-            name "Forge Server"
+            name "NeoForge Server"
             runDir "run/server"
-            vmArgs "-Dneoforge.enabledGameTestNamespace=template-mod"
+            vmArgs "-Dneoforge.enabledGameTestNamespace=mmdskin"
         }
     }
 }
@@ -37,11 +30,12 @@ configurations {
     shadowCommon // Don't use shadow from the shadow plugin since it conflicts with Loom.
     compileClasspath.extendsFrom common
     runtimeClasspath.extendsFrom common
-    developmentForge.extendsFrom common
+    developmentNeoForge.extendsFrom common
 }
 
 shadowJar {
     exclude "architectury.common.json"
+    exclude "fabric.mod.json"
     configurations = [project.configurations.shadowCommon]
     archiveClassifier.set("dev-shadow")
     
@@ -89,8 +83,16 @@ repositories {
         name "Shedaniel Maven"
     }
     maven {
-        url "https://maven.minecraftforge.net/"
-        name "Forge"
+        url = "https://api.modrinth.com/maven"
+        name = "Modrinth Maven"
+    }
+    maven {
+        url "https://bmclapi2.bangbang93.com/maven/"
+        name "NeoForge Mirror"
+    }
+    maven {
+        url "https://maven.neoforged.net/releases/"
+        name "NeoForge"
     }
     maven {
         url "https://maven.architectury.dev/"
@@ -100,29 +102,25 @@ repositories {
         url "https://cursemaven.com"
         name "CurseMaven"
     }
-    maven {
-        url "https://api.modrinth.com/maven"
-        name "Modrinth"
-    }
 }
 
 tasks.named('processResources', ProcessResources).configure {
     def replaceProperties = [
-        minecraft_version: '1.20.1',
-        minecraft_version_range: '[1.20.1,1.21)',
-        forge_version: project.forge_version,
-        forge_version_range: '[47,48)',
-        loader_version_range: '[47,)',
-        mod_id: 'template-mod',
-        mod_name: 'Template Mod',
+        minecraft_version: '1.21.1',
+        minecraft_version_range: '[1.21.1,1.22)',
+        neoforge_version: project.neoforge_version,
+        neoforge_version_range: '[21.1,)',
+        loader_version_range: '[4,)',
+        mod_id: 'mmdskin',
+        mod_name: '3D Skin Layers',
         mod_version: project.version,
-        mod_authors: 'Template Author',
-        mod_description: 'Template Mod for Architectury'
+        mod_authors: 'shiroha233, kjkjkAIStudio, asuka-mio, Gengorou-C',
+        mod_description: 'A mod that replaces Minecraft entity rendering with MMD models'
     ]
 
     inputs.properties replaceProperties
 
-    filesMatching(['META-INF/mods.toml']) {
+    filesMatching(['META-INF/neoforge.mods.toml']) {
         expand replaceProperties
     }
 }
@@ -130,21 +128,18 @@ tasks.named('processResources', ProcessResources).configure {
 dependencies {
     // Common 模块 - 添加源代码到编译路径
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
-    shadowCommon(project(path: ":common", configuration: "transformProductionForge")) { transitive false }
+    shadowCommon(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
 
-    // Forge 平台
-    forge "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    // NeoForge 平台
+    neoForge "net.neoforged:neoforge:${neoforge_version}"
 
     // Architectury API - 使用 Jar-in-Jar 内嵌
-    modApi("dev.architectury:architectury-forge:9.2.14")
-    include("dev.architectury:architectury-forge:9.2.14")
-    
-    // TouhouLittleMaid - 可选依赖，用于联动
-    modCompileOnly("maven.modrinth:touhou-little-maid:1.5.0-forge+mc1.20.1")
-    modLocalRuntime("maven.modrinth:touhou-little-maid:1.5.0-forge+mc1.20.1")
-    
-    // Cloth Config API - 配置界面
-    modApi("me.shedaniel.cloth:cloth-config-forge:11.1.136")
+    modApi("dev.architectury:architectury-neoforge:${project.architectury_version}")
+    include("dev.architectury:architectury-neoforge:${project.architectury_version}")
+
+    // Cloth Config API for NeoForge - Jar-in-Jar include
+    modApi("me.shedaniel.cloth:cloth-config-neoforge:${project.cloth_config_version}")
+    include("me.shedaniel.cloth:cloth-config-neoforge:${project.cloth_config_version}")
 }
 
 // Source JAR 组装（合并 common 源码）
@@ -168,7 +163,7 @@ sourceSets {
             // Avoid JPMS split-package: keep top-level network package only in common
         }
         resources {
-            exclude 'assets/template-mod/lang/*.json'
+            exclude 'assets/mmdskin/lang/*.json'
         }
     }
 }
