@@ -248,8 +248,17 @@ impl MMDPhysics {
             );
         }
         
+        // 判断关联的刚体是否为胸部刚体（任一为胸部则使用胸部参数）
+        let is_bust = self.mmd_rigid_bodies[rb_a_idx].is_bust
+            || self.mmd_rigid_bodies[rb_b_idx].is_bust;
+        
+        // 如果是胸部关节但胸部物理未启用，跳过
+        if is_bust && !get_config().bust_physics_enabled {
+            return None;
+        }
+        
         // 创建 Rapier 关节
-        let joint = mmd_joint.build_joint();
+        let joint = mmd_joint.build_joint(is_bust);
         let joint_handle = self.impulse_joint_set.insert(
             rb_a_handle,
             rb_b_handle,

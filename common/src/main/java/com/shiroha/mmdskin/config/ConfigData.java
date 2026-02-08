@@ -78,6 +78,16 @@ public class ConfigData {
     public float physicsMaxLinearVelocity = 1.0f;
     public float physicsMaxAngularVelocity = 1.0f;
     
+    // 胸部物理专用参数
+    public boolean physicsBustEnabled = true;
+    public float physicsBustLinearDampingScale = 1.5f;
+    public float physicsBustAngularDampingScale = 1.5f;
+    public float physicsBustMassScale = 1.0f;
+    public float physicsBustLinearSpringStiffnessScale = 2.0f;
+    public float physicsBustAngularSpringStiffnessScale = 2.0f;
+    public float physicsBustLinearSpringDampingFactor = 2.0f;
+    public float physicsBustAngularSpringDampingFactor = 2.0f;
+    
     // 调试
     public boolean physicsJointsEnabled = true;
     public boolean physicsDebugLog = false;
@@ -170,6 +180,15 @@ public class ConfigData {
         other.physicsInertiaStrength = this.physicsInertiaStrength;
         other.physicsMaxLinearVelocity = this.physicsMaxLinearVelocity;
         other.physicsMaxAngularVelocity = this.physicsMaxAngularVelocity;
+        // 胸部物理配置
+        other.physicsBustEnabled = this.physicsBustEnabled;
+        other.physicsBustLinearDampingScale = this.physicsBustLinearDampingScale;
+        other.physicsBustAngularDampingScale = this.physicsBustAngularDampingScale;
+        other.physicsBustMassScale = this.physicsBustMassScale;
+        other.physicsBustLinearSpringStiffnessScale = this.physicsBustLinearSpringStiffnessScale;
+        other.physicsBustAngularSpringStiffnessScale = this.physicsBustAngularSpringStiffnessScale;
+        other.physicsBustLinearSpringDampingFactor = this.physicsBustLinearSpringDampingFactor;
+        other.physicsBustAngularSpringDampingFactor = this.physicsBustAngularSpringDampingFactor;
         other.physicsJointsEnabled = this.physicsJointsEnabled;
         other.physicsDebugLog = this.physicsDebugLog;
     }

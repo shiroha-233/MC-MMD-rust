@@ -987,6 +987,14 @@ public class NativeFunc {
      * @param inertiaStrength 惯性效果强度
      * @param maxLinearVelocity 最大线速度
      * @param maxAngularVelocity 最大角速度
+     * @param bustPhysicsEnabled 胸部物理是否启用
+     * @param bustLinearDampingScale 胸部线性阻尼缩放
+     * @param bustAngularDampingScale 胸部角速度阻尼缩放
+     * @param bustMassScale 胸部质量缩放
+     * @param bustLinearSpringStiffnessScale 胸部线性弹簧刚度缩放
+     * @param bustAngularSpringStiffnessScale 胸部角度弹簧刚度缩放
+     * @param bustLinearSpringDampingFactor 胸部线性弹簧阻尼系数
+     * @param bustAngularSpringDampingFactor 胸部角度弹簧阻尼系数
      * @param jointsEnabled 是否启用关节
      * @param debugLog 是否输出调试日志
      */
@@ -1007,6 +1015,14 @@ public class NativeFunc {
         float inertiaStrength,
         float maxLinearVelocity,
         float maxAngularVelocity,
+        boolean bustPhysicsEnabled,
+        float bustLinearDampingScale,
+        float bustAngularDampingScale,
+        float bustMassScale,
+        float bustLinearSpringStiffnessScale,
+        float bustAngularSpringStiffnessScale,
+        float bustLinearSpringDampingFactor,
+        float bustAngularSpringDampingFactor,
         boolean jointsEnabled,
         boolean debugLog
     );

@@ -167,7 +167,7 @@ impl MMDJoint {
     /// - 如果 lower == upper == 0，则锁定该轴
     /// - 如果 lower < upper，则该轴自由但有限制
     /// - 如果 lower > upper，则该轴完全自由（无限制）
-    pub fn build_joint(&self) -> GenericJoint {
+    pub fn build_joint(&self, is_bust: bool) -> GenericJoint {
         // Bullet3 的 btGeneric6DofSpringConstraint 行为：
         // - 不锁定任何轴，而是设置限制范围
         // - 当 lower <= upper 时，设置限制
@@ -259,11 +259,22 @@ impl MMDJoint {
         // Rapier 使用电机来模拟弹簧：target_pos=0, stiffness=刚度, damping=阻尼
         let config = get_config();
         
-        // 应用配置缩放
-        let lin_stiff_scale = config.linear_spring_stiffness_scale;
-        let ang_stiff_scale = config.angular_spring_stiffness_scale;
-        let lin_damp_factor = config.linear_spring_damping_factor;
-        let ang_damp_factor = config.angular_spring_damping_factor;
+        // 根据是否为胸部关节选用不同的弹簧参数组
+        let (lin_stiff_scale, ang_stiff_scale, lin_damp_factor, ang_damp_factor) = if is_bust {
+            (
+                config.bust_linear_spring_stiffness_scale,
+                config.bust_angular_spring_stiffness_scale,
+                config.bust_linear_spring_damping_factor,
+                config.bust_angular_spring_damping_factor,
+            )
+        } else {
+            (
+                config.linear_spring_stiffness_scale,
+                config.angular_spring_stiffness_scale,
+                config.linear_spring_damping_factor,
+                config.angular_spring_damping_factor,
+            )
+        };
         
         // 线性弹簧
         if self.linear_spring.x != 0.0 && !locked_axes.contains(JointAxesMask::LIN_X) {

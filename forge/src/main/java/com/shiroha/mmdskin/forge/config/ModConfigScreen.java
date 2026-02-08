@@ -404,6 +404,14 @@ public class ModConfigScreen {
                     data.physicsInertiaStrength,
                     data.physicsMaxLinearVelocity,
                     data.physicsMaxAngularVelocity,
+                    data.physicsBustEnabled,
+                    data.physicsBustLinearDampingScale,
+                    data.physicsBustAngularDampingScale,
+                    data.physicsBustMassScale,
+                    data.physicsBustLinearSpringStiffnessScale,
+                    data.physicsBustAngularSpringStiffnessScale,
+                    data.physicsBustLinearSpringDampingFactor,
+                    data.physicsBustAngularSpringDampingFactor,
                     data.physicsJointsEnabled,
                     data.physicsDebugLog
                 );

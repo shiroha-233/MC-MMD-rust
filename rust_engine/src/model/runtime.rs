@@ -1283,8 +1283,8 @@ impl MmdModel {
                     RigidBodyType::DynamicWithBonePosition => "DynamicWithBonePosition",
                 };
                 info.push_str(&format!(
-                    "    {{\"index\": {}, \"name\": \"{}\", \"type\": \"{}\", \"bone\": {}, \"mass\": {:.3}}}",
-                    i, rb.name, type_str, rb.bone_index, rb.mass
+                    "    {{\"index\": {}, \"name\": \"{}\", \"type\": \"{}\", \"bone\": {}, \"mass\": {:.3}, \"is_bust\": {}}}",
+                    i, rb.name, type_str, rb.bone_index, rb.mass, rb.is_bust
                 ));
                 if i < physics.mmd_rigid_bodies.len() - 1 {
                     info.push_str(",\n");

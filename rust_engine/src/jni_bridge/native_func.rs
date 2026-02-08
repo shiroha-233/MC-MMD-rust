@@ -2212,6 +2212,14 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetPhysicsConfig(
     inertia_strength: jfloat,
     max_linear_velocity: jfloat,
     max_angular_velocity: jfloat,
+    bust_physics_enabled: jboolean,
+    bust_linear_damping_scale: jfloat,
+    bust_angular_damping_scale: jfloat,
+    bust_mass_scale: jfloat,
+    bust_linear_spring_stiffness_scale: jfloat,
+    bust_angular_spring_stiffness_scale: jfloat,
+    bust_linear_spring_damping_factor: jfloat,
+    bust_angular_spring_damping_factor: jfloat,
     joints_enabled: jboolean,
     debug_log: jboolean,
 ) {
@@ -2234,6 +2242,14 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetPhysicsConfig(
         inertia_strength,
         max_linear_velocity,
         max_angular_velocity,
+        bust_physics_enabled: bust_physics_enabled != 0,
+        bust_linear_damping_scale,
+        bust_angular_damping_scale,
+        bust_mass_scale,
+        bust_linear_spring_stiffness_scale,
+        bust_angular_spring_stiffness_scale,
+        bust_linear_spring_damping_factor,
+        bust_angular_spring_damping_factor,
         joints_enabled: joints_enabled != 0,
         debug_log: debug_log != 0,
     };
@@ -2241,9 +2257,10 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetPhysicsConfig(
     set_config(config);
     
     if debug_log != 0 {
-        log::info!("[物理配置] 已更新: 重力={}, FPS={}, 阻尼={}/{}, 刚度={}/{}", 
+        log::info!("[物理配置] 已更新: 重力={}, FPS={}, 阻尼={}/{}, 刚度={}/{}, 胸部启用={}", 
             gravity_y, physics_fps, 
             linear_damping_scale, angular_damping_scale,
-            linear_spring_stiffness_scale, angular_spring_stiffness_scale);
+            linear_spring_stiffness_scale, angular_spring_stiffness_scale,
+            bust_physics_enabled != 0);
     }
 }

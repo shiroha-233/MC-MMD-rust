@@ -224,6 +224,48 @@ public final class MmdSkinConfig implements ConfigManager.IConfigProvider {
         return data.physicsMaxAngularVelocity;
     }
     
+    // ==================== 胸部物理配置 ====================
+    
+    @Override
+    public boolean isPhysicsBustEnabled() {
+        return data.physicsBustEnabled;
+    }
+    
+    @Override
+    public float getPhysicsBustLinearDampingScale() {
+        return data.physicsBustLinearDampingScale;
+    }
+    
+    @Override
+    public float getPhysicsBustAngularDampingScale() {
+        return data.physicsBustAngularDampingScale;
+    }
+    
+    @Override
+    public float getPhysicsBustMassScale() {
+        return data.physicsBustMassScale;
+    }
+    
+    @Override
+    public float getPhysicsBustLinearSpringStiffnessScale() {
+        return data.physicsBustLinearSpringStiffnessScale;
+    }
+    
+    @Override
+    public float getPhysicsBustAngularSpringStiffnessScale() {
+        return data.physicsBustAngularSpringStiffnessScale;
+    }
+    
+    @Override
+    public float getPhysicsBustLinearSpringDampingFactor() {
+        return data.physicsBustLinearSpringDampingFactor;
+    }
+    
+    @Override
+    public float getPhysicsBustAngularSpringDampingFactor() {
+        return data.physicsBustAngularSpringDampingFactor;
+    }
+    
     @Override
     public boolean isPhysicsJointsEnabled() {
         return data.physicsJointsEnabled;

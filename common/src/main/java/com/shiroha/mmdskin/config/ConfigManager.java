@@ -206,6 +206,40 @@ public class ConfigManager {
         return provider != null ? provider.getPhysicsMaxAngularVelocity() : 1.0f;
     }
     
+    // 胸部物理专用参数
+    
+    public static boolean isPhysicsBustEnabled() {
+        return provider != null ? provider.isPhysicsBustEnabled() : true;
+    }
+    
+    public static float getPhysicsBustLinearDampingScale() {
+        return provider != null ? provider.getPhysicsBustLinearDampingScale() : 1.0f;
+    }
+    
+    public static float getPhysicsBustAngularDampingScale() {
+        return provider != null ? provider.getPhysicsBustAngularDampingScale() : 1.0f;
+    }
+    
+    public static float getPhysicsBustMassScale() {
+        return provider != null ? provider.getPhysicsBustMassScale() : 1.0f;
+    }
+    
+    public static float getPhysicsBustLinearSpringStiffnessScale() {
+        return provider != null ? provider.getPhysicsBustLinearSpringStiffnessScale() : 1.0f;
+    }
+    
+    public static float getPhysicsBustAngularSpringStiffnessScale() {
+        return provider != null ? provider.getPhysicsBustAngularSpringStiffnessScale() : 1.0f;
+    }
+    
+    public static float getPhysicsBustLinearSpringDampingFactor() {
+        return provider != null ? provider.getPhysicsBustLinearSpringDampingFactor() : 1.0f;
+    }
+    
+    public static float getPhysicsBustAngularSpringDampingFactor() {
+        return provider != null ? provider.getPhysicsBustAngularSpringDampingFactor() : 1.0f;
+    }
+    
     public static boolean isPhysicsJointsEnabled() {
         return provider != null ? provider.isPhysicsJointsEnabled() : true;
     }
@@ -311,6 +345,32 @@ public class ConfigManager {
         
         /** 最大角速度（默认 1.0） */
         default float getPhysicsMaxAngularVelocity() { return 1.0f; }
+        
+        // 胸部物理专用参数
+        
+        /** 胸部物理是否启用（默认 true） */
+        default boolean isPhysicsBustEnabled() { return true; }
+        
+        /** 胸部线性阻尼缩放（默认 1.0） */
+        default float getPhysicsBustLinearDampingScale() { return 1.0f; }
+        
+        /** 胸部角速度阻尼缩放（默认 1.0） */
+        default float getPhysicsBustAngularDampingScale() { return 1.0f; }
+        
+        /** 胸部质量缩放（默认 1.0） */
+        default float getPhysicsBustMassScale() { return 1.0f; }
+        
+        /** 胸部线性弹簧刚度缩放（默认 1.0） */
+        default float getPhysicsBustLinearSpringStiffnessScale() { return 1.0f; }
+        
+        /** 胸部角度弹簧刚度缩放（默认 1.0） */
+        default float getPhysicsBustAngularSpringStiffnessScale() { return 1.0f; }
+        
+        /** 胸部线性弹簧阻尼系数（默认 1.0） */
+        default float getPhysicsBustLinearSpringDampingFactor() { return 1.0f; }
+        
+        /** 胸部角度弹簧阻尼系数（默认 1.0） */
+        default float getPhysicsBustAngularSpringDampingFactor() { return 1.0f; }
         
         /** 是否启用关节（默认 true） */
         default boolean isPhysicsJointsEnabled() { return true; }

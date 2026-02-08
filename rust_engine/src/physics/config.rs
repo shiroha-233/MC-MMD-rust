@@ -67,6 +67,27 @@ pub struct PhysicsConfig {
     /// 最大角速度 (rad/s)，默认 20.0
     pub max_angular_velocity: f32,
 
+    // ========== 胸部物理专用参数 ==========
+    // 胸部刚体通过名称自动识别（おっぱ、乳、胸、bust、Bust 等），
+    // 使用独立的参数组，避免与头发物理互相干扰。
+
+    /// 胸部物理是否启用，默认 true
+    pub bust_physics_enabled: bool,
+    /// 胸部线性阻尼缩放（乘以 PMX 原值），默认 1.0
+    pub bust_linear_damping_scale: f32,
+    /// 胸部角速度阻尼缩放（乘以 PMX 原值），默认 1.0
+    pub bust_angular_damping_scale: f32,
+    /// 胸部质量缩放（乘以 PMX 原值），默认 1.0
+    pub bust_mass_scale: f32,
+    /// 胸部线性弹簧刚度缩放，默认 1.0
+    pub bust_linear_spring_stiffness_scale: f32,
+    /// 胸部角度弹簧刚度缩放，默认 1.0
+    pub bust_angular_spring_stiffness_scale: f32,
+    /// 胸部线性弹簧阻尼系数，默认 1.0
+    pub bust_linear_spring_damping_factor: f32,
+    /// 胸部角度弹簧阻尼系数，默认 1.0
+    pub bust_angular_spring_damping_factor: f32,
+
     // ========== 调试 ==========
     /// 是否启用关节，默认 true
     pub joints_enabled: bool,
@@ -161,6 +182,18 @@ impl Default for PhysicsConfig {
             // 最大角速度（弧度/秒）
             // 同上
             max_angular_velocity: 1.0,
+
+            // ====== 胸部物理（独立参数组）======
+            // 胸部刚体需要比头发更高的弹簧刚度来保持形状，
+            // 同时需要较高的阻尼防止过度弹跳。
+            bust_physics_enabled: true,
+            bust_linear_damping_scale: 1.5,
+            bust_angular_damping_scale: 1.5,
+            bust_mass_scale: 1.0,
+            bust_linear_spring_stiffness_scale: 2.0,
+            bust_angular_spring_stiffness_scale: 2.0,
+            bust_linear_spring_damping_factor: 2.0,
+            bust_angular_spring_damping_factor: 2.0,
 
             // ====== 调试 ======
             // 是否启用关节约束
