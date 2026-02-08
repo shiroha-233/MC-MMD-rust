@@ -94,6 +94,7 @@ subprojects {
 		tasks.named('runClient', JavaExec).configure {
 			def username = rootProject.properties.getOrDefault('minecraft_username', 'Player')
 			args '--username', username
+			jvmArgs '-Xmx4G', '-Xms2G'
 		}
 	}
 }

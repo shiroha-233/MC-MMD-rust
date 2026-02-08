@@ -51,6 +51,7 @@ public class StageSelectScreen extends Screen {
     private static final int COLOR_TAG_BONE = 0xFFD0A050;
     private static final int COLOR_TAG_MORPH = 0xFFD070A0;
     private static final int COLOR_BTN_START = 0xFF40A060;
+    private static final int COLOR_TAG_AUDIO = 0xFF60B0E0;
     
     // 舞台包列表
     private List<StagePack> stagePacks = new ArrayList<>();
@@ -58,6 +59,7 @@ public class StageSelectScreen extends Screen {
     // 选择状态
     private int selectedPackIndex = -1;
     private boolean cinematicMode;
+    private boolean stageStarted = false;
     
     // 滚动
     private int packScrollOffset = 0;
@@ -108,6 +110,9 @@ public class StageSelectScreen extends Screen {
     protected void init() {
         super.init();
         
+        // 立即进入舞台模式（切换第三人称 + 相机过渡到展示位置）
+        MMDCameraController.getInstance().enterStageMode();
+        
         // 面板位置：屏幕左侧
         panelX = PANEL_MARGIN;
         panelY = PANEL_MARGIN;
@@ -136,7 +141,10 @@ public class StageSelectScreen extends Screen {
     
     private void updateDetailScroll() {
         StagePack selected = getSelectedPack();
-        int fileCount = selected != null ? selected.getVmdFiles().size() : 0;
+        int fileCount = 0;
+        if (selected != null) {
+            fileCount = selected.getVmdFiles().size() + selected.getAudioFiles().size();
+        }
         int contentH = fileCount * (ITEM_HEIGHT + ITEM_SPACING);
         int visibleH = detailBottom - detailTop;
         detailMaxScroll = Math.max(0, contentH - visibleH);
@@ -223,9 +231,17 @@ public class StageSelectScreen extends Screen {
             }
             
             // 包名
-            String displayName = truncate(pack.getName(), 16);
+            int nameStartX = itemX + 6;
             int nameColor = isSelected ? COLOR_TEXT_SELECTED : COLOR_TEXT;
-            g.drawString(this.font, displayName, itemX + 6, itemY + 3, nameColor, false);
+            
+            // 音频标记（包名前方）
+            if (pack.hasAudio()) {
+                g.drawString(this.font, "\u266B", nameStartX, itemY + 3, COLOR_TAG_AUDIO, false);
+                nameStartX += 8;
+            }
+            
+            String displayName = truncate(pack.getName(), pack.hasAudio() ? 15 : 16);
+            g.drawString(this.font, displayName, nameStartX, itemY + 3, nameColor, false);
             
             // 选中标记
             if (isSelected) {
@@ -242,9 +258,13 @@ public class StageSelectScreen extends Screen {
         
         // 详情标题
         StagePack selected = getSelectedPack();
-        String detailTitle = selected != null 
-            ? selected.getVmdFiles().size() + " files" 
-            : "---";
+        String detailTitle;
+        if (selected != null) {
+            int total = selected.getVmdFiles().size() + selected.getAudioFiles().size();
+            detailTitle = total + " files";
+        } else {
+            detailTitle = "---";
+        }
         g.drawString(this.font, detailTitle, panelX + 8, splitY + 3, COLOR_TEXT_DIM, false);
     }
     
@@ -254,10 +274,14 @@ public class StageSelectScreen extends Screen {
         
         g.enableScissor(panelX, detailTop, panelX + PANEL_WIDTH, detailBottom);
         
+        int row = 0;
+        
+        // VMD 文件
         List<StagePack.VmdFileInfo> files = selected.getVmdFiles();
         for (int i = 0; i < files.size(); i++) {
             StagePack.VmdFileInfo info = files.get(i);
-            int itemY = detailTop + i * (ITEM_HEIGHT + ITEM_SPACING) - detailScrollOffset;
+            int itemY = detailTop + row * (ITEM_HEIGHT + ITEM_SPACING) - detailScrollOffset;
+            row++;
             
             if (itemY + ITEM_HEIGHT < detailTop || itemY > detailBottom) continue;
             
@@ -286,6 +310,31 @@ public class StageSelectScreen extends Screen {
                 tagX -= 10;
                 g.drawString(this.font, "\uD83D\uDE0A", tagX, itemY + 3, COLOR_TAG_MORPH, false);
             }
+        }
+        
+        // 音频文件
+        List<StagePack.AudioFileInfo> audios = selected.getAudioFiles();
+        for (int i = 0; i < audios.size(); i++) {
+            StagePack.AudioFileInfo audio = audios.get(i);
+            int itemY = detailTop + row * (ITEM_HEIGHT + ITEM_SPACING) - detailScrollOffset;
+            row++;
+            
+            if (itemY + ITEM_HEIGHT < detailTop || itemY > detailBottom) continue;
+            
+            int itemX = panelX + 6;
+            int itemW = PANEL_WIDTH - 12;
+            
+            // 文件名（去掉扩展名）
+            String fileName = audio.name;
+            int dot = fileName.lastIndexOf('.');
+            if (dot >= 0) fileName = fileName.substring(0, dot);
+            fileName = truncate(fileName, 14);
+            g.drawString(this.font, fileName, itemX + 4, itemY + 3, COLOR_TEXT, false);
+            
+            // 音频格式标签（右对齐）
+            String formatTag = "\u266B" + audio.format;
+            int tagW = this.font.width(formatTag);
+            g.drawString(this.font, formatTag, itemX + itemW - tagW, itemY + 3, COLOR_TAG_AUDIO, false);
         }
         
         g.disableScissor();
@@ -505,14 +554,27 @@ public class StageSelectScreen extends Screen {
             }
         }
         
-        // 启动相机控制器（传递 modelHandle + modelName 用于禁用/恢复自动行为及停止时重载）
-        MMDCameraController.getInstance().startStage(mergedAnim, cameraAnim, cinematicMode, modelHandle, modelName);
+        // 获取音频路径（取第一个音频文件）
+        String audioPath = pack.getFirstAudioPath();
         
-        // 关闭界面
+        // 启动相机控制器（传递 modelHandle + modelName + 音频路径）
+        MMDCameraController.getInstance().startStage(mergedAnim, cameraAnim, cinematicMode, modelHandle, modelName, audioPath);
+        
+        // 标记已启动（onClose 不会退出舞台模式）
+        this.stageStarted = true;
         this.onClose();
         
         logger.info("[舞台模式] 开始: 包={}, 动作文件={}, 相机={}, 影院={}", 
                    pack.getName(), motionFiles.size(), cameraFile != null, cinematicMode);
+    }
+    
+    @Override
+    public void onClose() {
+        // 未启动播放时退出舞台模式（恢复视角）
+        if (!stageStarted) {
+            MMDCameraController.getInstance().exitStageMode();
+        }
+        super.onClose();
     }
     
     @Override

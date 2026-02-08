@@ -132,6 +132,10 @@ dependencies {
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionForge")) { transitive false }
 
+    // JLayer - MP3 解码器（舞台模式音频播放，shadow 打包进 JAR）
+    implementation("javazoom:jlayer:1.0.1")
+    shadowCommon("javazoom:jlayer:1.0.1")
+
     // Forge 平台
     forge "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
 

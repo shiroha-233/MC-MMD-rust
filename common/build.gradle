@@ -6,6 +6,9 @@ dependencies {
     // Architectury API（作为 mod 依赖以启用 Loom 重映射）
     modImplementation("dev.architectury:architectury:9.2.14")
     compileOnly("net.fabricmc:fabric-loader:${project.loader_version}")
+    
+    // JLayer - MP3 解码器（舞台模式音频播放）
+    implementation("javazoom:jlayer:1.0.1")
 }
  
 sourceSets {
