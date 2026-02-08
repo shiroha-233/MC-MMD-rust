@@ -124,7 +124,7 @@ public class GpuMorphShader {
             
             GL46C.glDeleteShader(shader);
             
-            // 创建 SSBO
+            // 创建 SSBO（使用 GL_COPY_WRITE_BUFFER 作为中性 target，避免修改 generic SSBO 绑定点导致 AMD 驱动与 Iris 光影冲突）
             morphOffsetsSSBO = GL46C.glGenBuffers();
             morphWeightsSSBO = GL46C.glGenBuffers();
             positionsSSBO = GL46C.glGenBuffers();
@@ -151,12 +151,12 @@ public class GpuMorphShader {
         this.vertexCount = vertexCount;
         this.morphCount = morphCount;
         
-        GL46C.glBindBuffer(GL46C.GL_SHADER_STORAGE_BUFFER, morphOffsetsSSBO);
-        GL46C.glBufferData(GL46C.GL_SHADER_STORAGE_BUFFER, offsetData, GL46C.GL_STATIC_DRAW);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, morphOffsetsSSBO);
+        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, offsetData, GL46C.GL_STATIC_DRAW);
         
         // 预分配权重缓冲区
-        GL46C.glBindBuffer(GL46C.GL_SHADER_STORAGE_BUFFER, morphWeightsSSBO);
-        GL46C.glBufferData(GL46C.GL_SHADER_STORAGE_BUFFER, morphCount * 4L, GL46C.GL_DYNAMIC_DRAW);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, morphWeightsSSBO);
+        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, morphCount * 4L, GL46C.GL_DYNAMIC_DRAW);
         
         logger.debug("GPU Morph 数据上传: {} 顶点, {} Morph, 数据大小 {:.2f} MB",
             vertexCount, morphCount, (offsetData.remaining()) / 1024.0 / 1024.0);
@@ -169,9 +169,9 @@ public class GpuMorphShader {
     public void updateMorphWeights(FloatBuffer weights) {
         if (!initialized || morphWeightsSSBO == 0) return;
         
-        GL46C.glBindBuffer(GL46C.GL_SHADER_STORAGE_BUFFER, morphWeightsSSBO);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, morphWeightsSSBO);
         weights.position(0);
-        GL46C.glBufferSubData(GL46C.GL_SHADER_STORAGE_BUFFER, 0, weights);
+        GL46C.glBufferSubData(GL46C.GL_COPY_WRITE_BUFFER, 0, weights);
     }
     
     /**
@@ -183,6 +183,10 @@ public class GpuMorphShader {
         if (!initialized || computeProgram == 0 || vertexCount == 0 || morphCount == 0) {
             return;
         }
+        
+        int savedProgram = GL46C.glGetInteger(GL46C.GL_CURRENT_PROGRAM);
+        // 保存当前所有 SSBO 绑定状态（避免破坏光影 mod 的 SSBO）
+        var savedSSBO = new SSBOBindings();
         
         GL46C.glUseProgram(computeProgram);
         
@@ -202,8 +206,12 @@ public class GpuMorphShader {
         int workGroupCount = (vertexCount + 255) / 256;
         GL46C.glDispatchCompute(workGroupCount, 1, 1);
         
-        // 内存屏障，确保计算完成后才能读取
-        GL46C.glMemoryBarrier(GL46C.GL_SHADER_STORAGE_BARRIER_BIT);
+        // 内存屏障：输出顶点后续作为顶点属性用于 draw call，需要 VERTEX_ATTRIB_ARRAY_BARRIER_BIT
+        GL46C.glMemoryBarrier(GL46C.GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL46C.GL_SHADER_STORAGE_BARRIER_BIT);
+        
+        // 恢复之前的 SSBO 绑定状态
+        savedSSBO.restore();
+        GL46C.glUseProgram(savedProgram);
     }
     
     /**
@@ -219,8 +227,8 @@ public class GpuMorphShader {
     public void initPositionsSSBO(int vertexCount) {
         if (!initialized) return;
         
-        GL46C.glBindBuffer(GL46C.GL_SHADER_STORAGE_BUFFER, positionsSSBO);
-        GL46C.glBufferData(GL46C.GL_SHADER_STORAGE_BUFFER, vertexCount * 12L, GL46C.GL_DYNAMIC_DRAW);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, positionsSSBO);
+        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, vertexCount * 12L, GL46C.GL_DYNAMIC_DRAW);
     }
     
     public boolean isInitialized() {

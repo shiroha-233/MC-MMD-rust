@@ -237,8 +237,9 @@ public class GpuSkinningShader {
             
             // 创建骨骼矩阵 SSBO
             boneMatrixSSBO = GL46C.glGenBuffers();
-            GL46C.glBindBuffer(GL46C.GL_SHADER_STORAGE_BUFFER, boneMatrixSSBO);
-            GL46C.glBufferData(GL46C.GL_SHADER_STORAGE_BUFFER, MAX_BONES * 64, GL46C.GL_DYNAMIC_DRAW);
+            GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, boneMatrixSSBO);
+            GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, MAX_BONES * 64, GL46C.GL_DYNAMIC_DRAW);
+            GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
             GL46C.glBindBufferBase(GL46C.GL_SHADER_STORAGE_BUFFER, 0, boneMatrixSSBO);
             
             // 创建 Morph SSBO（初始大小为 0，会在 uploadMorphData 时重新分配）
@@ -265,13 +266,14 @@ public class GpuSkinningShader {
         
         // 每次渲染时重新绑定 SSBO（Minecraft 可能会改变绑定状态）
         GL46C.glBindBufferBase(GL46C.GL_SHADER_STORAGE_BUFFER, 0, boneMatrixSSBO);
-        GL46C.glBindBuffer(GL46C.GL_SHADER_STORAGE_BUFFER, boneMatrixSSBO);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, boneMatrixSSBO);
         
         // 只上传实际使用的骨骼数量
         int actualBones = Math.min(boneCount, MAX_BONES);
         matrices.limit(actualBones * 16);
         matrices.position(0);
-        GL46C.glBufferSubData(GL46C.GL_SHADER_STORAGE_BUFFER, 0, matrices);
+        GL46C.glBufferSubData(GL46C.GL_COPY_WRITE_BUFFER, 0, matrices);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
     }
     
     public void use() {
@@ -321,12 +323,13 @@ public class GpuSkinningShader {
     public void uploadMorphOffsets(java.nio.ByteBuffer data, int morphCount, int vertexCount) {
         if (!initialized || morphOffsetsSSBO == 0) return;
         
-        GL46C.glBindBuffer(GL46C.GL_SHADER_STORAGE_BUFFER, morphOffsetsSSBO);
-        GL46C.glBufferData(GL46C.GL_SHADER_STORAGE_BUFFER, data, GL46C.GL_STATIC_DRAW);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, morphOffsetsSSBO);
+        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, data, GL46C.GL_STATIC_DRAW);
         
         // 预分配权重缓冲区
-        GL46C.glBindBuffer(GL46C.GL_SHADER_STORAGE_BUFFER, morphWeightsSSBO);
-        GL46C.glBufferData(GL46C.GL_SHADER_STORAGE_BUFFER, morphCount * 4L, GL46C.GL_DYNAMIC_DRAW);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, morphWeightsSSBO);
+        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, morphCount * 4L, GL46C.GL_DYNAMIC_DRAW);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
         
     }
     
@@ -336,9 +339,10 @@ public class GpuSkinningShader {
     public void updateMorphWeights(java.nio.FloatBuffer weights) {
         if (!initialized || morphWeightsSSBO == 0) return;
         
-        GL46C.glBindBuffer(GL46C.GL_SHADER_STORAGE_BUFFER, morphWeightsSSBO);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, morphWeightsSSBO);
         weights.position(0);
-        GL46C.glBufferSubData(GL46C.GL_SHADER_STORAGE_BUFFER, 0, weights);
+        GL46C.glBufferSubData(GL46C.GL_COPY_WRITE_BUFFER, 0, weights);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
     }
     
     /**

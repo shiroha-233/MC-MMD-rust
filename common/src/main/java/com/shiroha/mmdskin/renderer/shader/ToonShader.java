@@ -200,8 +200,9 @@ public class ToonShader extends ToonShaderBase {
         
         // 创建骨骼矩阵 SSBO
         boneMatrixSSBO = GL46C.glGenBuffers();
-        GL46C.glBindBuffer(GL46C.GL_SHADER_STORAGE_BUFFER, boneMatrixSSBO);
-        GL46C.glBufferData(GL46C.GL_SHADER_STORAGE_BUFFER, MAX_BONES * 64, GL46C.GL_DYNAMIC_DRAW);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, boneMatrixSSBO);
+        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, MAX_BONES * 64, GL46C.GL_DYNAMIC_DRAW);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
         GL46C.glBindBufferBase(GL46C.GL_SHADER_STORAGE_BUFFER, 0, boneMatrixSSBO);
     }
     
@@ -214,12 +215,13 @@ public class ToonShader extends ToonShaderBase {
         if (!initialized || boneMatrixSSBO == 0) return;
         
         GL46C.glBindBufferBase(GL46C.GL_SHADER_STORAGE_BUFFER, 0, boneMatrixSSBO);
-        GL46C.glBindBuffer(GL46C.GL_SHADER_STORAGE_BUFFER, boneMatrixSSBO);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, boneMatrixSSBO);
         
         int actualBones = Math.min(boneCount, MAX_BONES);
         matrices.limit(actualBones * 16);
         matrices.position(0);
-        GL46C.glBufferSubData(GL46C.GL_SHADER_STORAGE_BUFFER, 0, matrices);
+        GL46C.glBufferSubData(GL46C.GL_COPY_WRITE_BUFFER, 0, matrices);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
     }
     
     // ==================== GPU 蒙皮特有方法 ====================

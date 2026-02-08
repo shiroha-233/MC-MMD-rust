@@ -236,14 +236,14 @@ public class SkinningComputeShader {
         long bufferSize = (long) vertexCount * 3 * 4; // vec3 * sizeof(float)
         
         int posBuffer = GL46C.glGenBuffers();
-        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, posBuffer);
-        GL46C.glBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, bufferSize, GL46C.GL_DYNAMIC_COPY);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, posBuffer);
+        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, bufferSize, GL46C.GL_DYNAMIC_COPY);
         
         int norBuffer = GL46C.glGenBuffers();
-        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, norBuffer);
-        GL46C.glBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, bufferSize, GL46C.GL_DYNAMIC_COPY);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, norBuffer);
+        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, bufferSize, GL46C.GL_DYNAMIC_COPY);
         
-        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, 0);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
         return new int[]{posBuffer, norBuffer};
     }
     
@@ -271,6 +271,8 @@ public class SkinningComputeShader {
         if (!initialized || program == 0) return;
         
         int savedProgram = GL46C.glGetInteger(GL46C.GL_CURRENT_PROGRAM);
+        // 保存当前所有 SSBO 绑定状态（避免破坏光影 mod 如 Eclipse Shaders 的 SSBO）
+        var savedSSBO = new SSBOBindings();
         
         GL43C.glUseProgram(program);
         
@@ -299,10 +301,8 @@ public class SkinningComputeShader {
         // 内存屏障：确保 compute 写入完成后再用作顶点属性
         GL43C.glMemoryBarrier(GL43C.GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL43C.GL_SHADER_STORAGE_BARRIER_BIT);
         
-        // 解绑 SSBO（防止与后续渲染冲突）
-        for (int i = 0; i <= BINDING_SKINNED_NORMALS; i++) {
-            GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, i, 0);
-        }
+        // 恢复之前的 SSBO 绑定状态（避免破坏光影 mod 的 SSBO）
+        savedSSBO.restore();
         
         // 恢复之前的 GL 程序（保持 ShaderInstance.lastProgramId 和 GlStateManager 缓存一致）
         GL43C.glUseProgram(savedProgram);
@@ -314,14 +314,14 @@ public class SkinningComputeShader {
     public void uploadBoneMatrices(int boneMatrixSSBO, FloatBuffer matrices, int boneCount) {
         if (!initialized || boneMatrixSSBO == 0) return;
         
-        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, boneMatrixSSBO);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, boneMatrixSSBO);
         int actualBones = Math.min(boneCount, MAX_BONES);
         int savedLimit = matrices.limit();
         matrices.limit(actualBones * 16);
         matrices.position(0);
-        GL46C.glBufferSubData(GL43C.GL_SHADER_STORAGE_BUFFER, 0, matrices);
+        GL46C.glBufferSubData(GL46C.GL_COPY_WRITE_BUFFER, 0, matrices);
         matrices.limit(savedLimit);
-        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, 0);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
     }
     
     /**
@@ -330,9 +330,9 @@ public class SkinningComputeShader {
     public void uploadMorphOffsets(int morphOffsetsSSBO, ByteBuffer data) {
         if (!initialized || morphOffsetsSSBO == 0) return;
         
-        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, morphOffsetsSSBO);
-        GL46C.glBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, data, GL46C.GL_STATIC_DRAW);
-        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, 0);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, morphOffsetsSSBO);
+        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, data, GL46C.GL_STATIC_DRAW);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
     }
     
     /**
@@ -341,10 +341,10 @@ public class SkinningComputeShader {
     public void updateMorphWeights(int morphWeightsSSBO, FloatBuffer weights) {
         if (!initialized || morphWeightsSSBO == 0) return;
         
-        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, morphWeightsSSBO);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, morphWeightsSSBO);
         weights.position(0);
-        GL46C.glBufferSubData(GL43C.GL_SHADER_STORAGE_BUFFER, 0, weights);
-        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, 0);
+        GL46C.glBufferSubData(GL46C.GL_COPY_WRITE_BUFFER, 0, weights);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
     }
     
     /**
@@ -356,9 +356,9 @@ public class SkinningComputeShader {
         int offsetsSSBO = GL46C.glGenBuffers();
         int weightsSSBO = GL46C.glGenBuffers();
         // 预分配权重缓冲区
-        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, weightsSSBO);
-        GL46C.glBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, (long) morphCount * 4, GL46C.GL_DYNAMIC_DRAW);
-        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, 0);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, weightsSSBO);
+        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, (long) morphCount * 4, GL46C.GL_DYNAMIC_DRAW);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
         return new int[]{offsetsSSBO, weightsSSBO};
     }
     
@@ -372,9 +372,9 @@ public class SkinningComputeShader {
      */
     public static int createBoneMatrixBuffer() {
         int ssbo = GL46C.glGenBuffers();
-        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, ssbo);
-        GL46C.glBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, (long) MAX_BONES * 64, GL46C.GL_DYNAMIC_DRAW);
-        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, 0);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, ssbo);
+        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, (long) MAX_BONES * 64, GL46C.GL_DYNAMIC_DRAW);
+        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
         return ssbo;
     }
     
