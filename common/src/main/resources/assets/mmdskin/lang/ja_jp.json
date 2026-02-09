@@ -105,6 +105,8 @@
   "gui.mmdskin.mod_settings.physics_bust_linear_spring_damping.tooltip": "胸のバウンスを減少",
   "gui.mmdskin.mod_settings.physics_bust_angular_spring_damping": "胸角度バネ減衰",
   "gui.mmdskin.mod_settings.physics_bust_angular_spring_damping.tooltip": "胸の回転バウンスを減少",
+  "gui.mmdskin.mod_settings.physics_bust_clamp_inward": "胸の凹み防止",
+  "gui.mmdskin.mod_settings.physics_bust_clamp_inward.tooltip": "胸が内側に凹むのを防止する、外側への変形には影響しない",
   "gui.mmdskin.mod_settings.physics_debug_log": "デバッグログ",
   "gui.mmdskin.mod_settings.physics_debug_log.tooltip": "物理システムのデバッグログを出力",
 

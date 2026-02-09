@@ -21,6 +21,7 @@ public class StageConfig {
     // 配置字段
     public String lastStagePack = "";
     public boolean cinematicMode = true;
+    public float cameraHeightOffset = 0.0f; // 镜头高度偏移（MC单位，正值=抬高）
     
     private StageConfig() {}
     

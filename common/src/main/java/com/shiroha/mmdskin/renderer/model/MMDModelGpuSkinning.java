@@ -735,12 +735,17 @@ public class MMDModelGpuSkinning implements IMMDModel {
         updateLocation(shaderProgram);
         
         // === UV2 和 Color：所有顶点值相同，使用常量顶点属性（避免逐顶点循环和缓冲区上传）===
+        boolean irisActive = IrisCompat.isIrisShaderActive();
         int blockBrightness = 16 * blockLight;
-        int skyBrightness = Math.round((15.0f - skyDarken) * (skyLight / 15.0f) * 16);
+        // Iris 兼容：UV2 不应包含 skyDarken，Iris 的光照管线会自行处理昼夜变化
+        int skyBrightness = irisActive ? (16 * skyLight) : Math.round((15.0f - skyDarken) * (skyLight / 15.0f) * 16);
         if (uv2Location != -1) GL46C.glVertexAttribI4i(uv2Location, blockBrightness, skyBrightness, 0, 0);
         if (I_uv2Location != -1) GL46C.glVertexAttribI4i(I_uv2Location, blockBrightness, skyBrightness, 0, 0);
-        if (colorLocation != -1) GL46C.glVertexAttrib4f(colorLocation, lightIntensity, lightIntensity, lightIntensity, 1.0f);
-        if (I_colorLocation != -1) GL46C.glVertexAttrib4f(I_colorLocation, lightIntensity, lightIntensity, lightIntensity, 1.0f);
+        // Iris 兼容：Color 应为白色，让 Iris 的 G-buffer 管线完全控制光照；
+        // 否则 lightIntensity 预乘后会与 Iris 自身光照叠加导致夜间过暗
+        float colorFactor = irisActive ? 1.0f : lightIntensity;
+        if (colorLocation != -1) GL46C.glVertexAttrib4f(colorLocation, colorFactor, colorFactor, colorFactor, 1.0f);
+        if (I_colorLocation != -1) GL46C.glVertexAttrib4f(I_colorLocation, colorFactor, colorFactor, colorFactor, 1.0f);
         
         // 绑定顶点属性（标准名称）
         if (positionLocation != -1) {
@@ -924,11 +929,14 @@ public class MMDModelGpuSkinning implements IMMDModel {
                 RenderSystem.enableCull();
             }
             
+            int texId;
             if (mats[materialID].tex == 0) {
-                RenderSystem.setShaderTexture(0, MCinstance.getTextureManager().getTexture(TextureManager.INTENTIONAL_MISSING_TEXTURE).getId());
+                texId = MCinstance.getTextureManager().getTexture(TextureManager.INTENTIONAL_MISSING_TEXTURE).getId();
             } else {
-                RenderSystem.setShaderTexture(0, mats[materialID].tex);
+                texId = mats[materialID].tex;
             }
+            RenderSystem.setShaderTexture(0, texId);
+            GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, texId);
             
             long startPos = (long) nf.GetSubMeshBeginIndex(model, i) * indexElementSize;
             int count = nf.GetSubMeshVertexCount(model, i);

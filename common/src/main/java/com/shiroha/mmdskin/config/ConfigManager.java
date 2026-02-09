@@ -240,6 +240,10 @@ public class ConfigManager {
         return provider != null ? provider.getPhysicsBustAngularSpringDampingFactor() : 1.0f;
     }
     
+    public static boolean isPhysicsBustClampInward() {
+        return provider != null ? provider.isPhysicsBustClampInward() : true;
+    }
+    
     public static boolean isPhysicsJointsEnabled() {
         return provider != null ? provider.isPhysicsJointsEnabled() : true;
     }
@@ -371,6 +375,9 @@ public class ConfigManager {
         
         /** 胸部角度弹簧阻尼系数（默认 1.0） */
         default float getPhysicsBustAngularSpringDampingFactor() { return 1.0f; }
+        
+        /** 胸部防凹陷修正（默认 true） */
+        default boolean isPhysicsBustClampInward() { return true; }
         
         /** 是否启用关节（默认 true） */
         default boolean isPhysicsJointsEnabled() { return true; }

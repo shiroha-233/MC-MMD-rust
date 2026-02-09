@@ -105,6 +105,8 @@
   "gui.mmdskin.mod_settings.physics_bust_linear_spring_damping.tooltip": "Reduce bust bounce",
   "gui.mmdskin.mod_settings.physics_bust_angular_spring_damping": "Bust Angular Spring Damping",
   "gui.mmdskin.mod_settings.physics_bust_angular_spring_damping.tooltip": "Reduce bust rotational bounce",
+  "gui.mmdskin.mod_settings.physics_bust_clamp_inward": "Bust Anti-Collapse",
+  "gui.mmdskin.mod_settings.physics_bust_clamp_inward.tooltip": "Prevent bust from caving inward, outward bounce unaffected",
   "gui.mmdskin.mod_settings.physics_debug_log": "Debug Log",
   "gui.mmdskin.mod_settings.physics_debug_log.tooltip": "Output physics system debug logs",
   

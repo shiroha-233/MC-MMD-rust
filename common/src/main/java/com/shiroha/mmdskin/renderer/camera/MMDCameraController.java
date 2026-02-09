@@ -49,6 +49,7 @@ public class MMDCameraController {
     
     private boolean cinematicMode = false;
     private boolean previousHideGui = false;
+    private float cameraHeightOffset = 0.0f; // 镇头高度偏移（MC单位）
     
     // 帧控制
     private float currentFrame = 0.0f;
@@ -157,7 +158,7 @@ public class MMDCameraController {
      * 从 STANDBY 或 INTRO 状态切换到 PLAYING
      */
     public void startStage(long motionAnim, long cameraAnim, boolean cinematic, 
-                           long modelHandle, String modelName, String audioPath) {
+                           long modelHandle, String modelName, String audioPath, float heightOffset) {
         if (state != StageState.STANDBY && state != StageState.INTRO) return;
         
         NativeFunc nf = NativeFunc.GetInst();
@@ -177,6 +178,7 @@ public class MMDCameraController {
         this.maxFrame = nf.GetAnimMaxFrame(this.cameraAnimHandle);
         this.currentFrame = 0.0f;
         this.cinematicMode = cinematic;
+        this.cameraHeightOffset = heightOffset;
         this.modelName = modelName;
         this.cameraData.setAnimHandle(this.cameraAnimHandle);
         
@@ -207,7 +209,7 @@ public class MMDCameraController {
         this.state = StageState.PLAYING;
         this.lastTickTimeNs = System.nanoTime();
         
-        logger.info("[舞台模式] 开始播放: 相机帧={}, 影院={}, 模型={}, 音频={}", maxFrame, cinematic, modelHandle, audioPath != null);
+        logger.info("[舞台模式] 开始播放: 相机帧={}, 影院={}, 模型={}, 音频={}, 高度偏移={}", maxFrame, cinematic, modelHandle, audioPath != null, cameraHeightOffset);
     }
     
     /**
@@ -438,7 +440,7 @@ public class MMDCameraController {
         float cos = (float) Math.cos(yawRad);
         float sin = (float) Math.sin(yawRad);
         cameraX = anchorX + sx * cos - sz * sin;
-        cameraY = anchorY + sy;
+        cameraY = anchorY + sy + cameraHeightOffset;
         cameraZ = anchorZ + sx * sin + sz * cos;
         
         cameraPitch = (float) Math.toDegrees(cameraData.getPitch());

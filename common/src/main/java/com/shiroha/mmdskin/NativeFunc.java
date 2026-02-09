@@ -17,6 +17,17 @@ import org.apache.logging.log4j.Logger;
 public class NativeFunc {
     public static final Logger logger = LogManager.getLogger();
     private static volatile String gameDirectory;
+
+    private static String getGameDirectory() {
+        if (gameDirectory == null) {
+            synchronized (lock) {
+                if (gameDirectory == null) {
+                    gameDirectory = Minecraft.getInstance().gameDirectory.getAbsolutePath();
+                }
+            }
+        }
+        return gameDirectory;
+    }
     private static final boolean isAndroid;
     private static final boolean isLinux;
     private static final boolean isWindows = System.getProperty("os.name").toLowerCase().contains("windows");
@@ -56,20 +67,13 @@ public class NativeFunc {
             androidDetected = vendor.contains("android") || vmName.contains("dalvik") || vmName.contains("art");
         }
         isAndroid = androidDetected;
+        // isLinux 排除 Android，避免误判
         isLinux = System.getProperty("os.name").toLowerCase().contains("linux") && !isAndroid;
     }
     static final String libraryVersion = "v1.0.1";
-    private static final String RELEASE_BASE_URL =
-        "https://github.com/shiroha-233/MC-MMD-rust/releases/download/" + libraryVersion + "/";
+    private static final String RELEASE_BASE_URL = "https://github.com/shiroha-23/MC-MMD-rust/releases/download/" + libraryVersion + "/";
     private static volatile NativeFunc inst;
     private static final Object lock = new Object();
-
-    private static String getGameDirectory() {
-        if (gameDirectory == null) {
-            gameDirectory = Minecraft.getInstance().gameDirectory.getAbsolutePath();
-        }
-        return gameDirectory;
-    }
 
     public static NativeFunc GetInst() {
         if (inst == null) {
@@ -153,17 +157,17 @@ public class NativeFunc {
                     }
                     return null;
                 }
-                
+
                 if (targetFile.exists()) {
                     // 版本不匹配，重命名旧文件
                     logger.info("检测到版本变更: " + (installedVersion != null ? installedVersion : "未知") + " -> " + libraryVersion);
                     renameOldLibrary(fileName);
                 }
-                
+
                 // 释放新版本
                 Files.copy(is, targetPath, StandardCopyOption.REPLACE_EXISTING);
             }
-            
+
             // 保存版本文件
             saveInstalledVersion(fileName, libraryVersion);
             
@@ -176,9 +180,7 @@ public class NativeFunc {
     }
 
     /**
-     * 从 GitHub Release 下载缺失的原生库
-     * @param downloadFileName Release 中的资产文件名（如 mmd_engine-windows-x64.dll）
-     * @param localFileName    本地保存的文件名（如 mmd_engine.dll）
+     * 从 GitHub Release 下载原生库
      */
     private File downloadNativeLibrary(String downloadFileName, String localFileName) {
         try {
@@ -247,6 +249,10 @@ public class NativeFunc {
             } catch (Exception ignored) {}
             return null;
         }
+    }
+
+    private void LoadLibrary(File file) {
+        System.load(file.getAbsolutePath());
     }
 
     private void initAndroid() {
@@ -357,10 +363,6 @@ public class NativeFunc {
             "请检查日志获取详细信息，或从 " + RELEASE_BASE_URL + " 手动下载 libmmd_engine-android-arm64.so");
     }
 
-    private void LoadLibrary(File file) {
-        System.load(file.getAbsolutePath());
-    }
-
     private void Init() {
         // Android 走专用加载流程
         if (isAndroid) {
@@ -430,7 +432,7 @@ public class NativeFunc {
                 logger.error("下载的库加载失败: " + e.getClass().getName() + ": " + e.getMessage(), e);
             }
         }
-        
+
         // 3. 回退到游戏目录的外部文件（用户自定义版本）
         // 同时检查不带后缀的文件名（如 mmd_engine.dll）和带平台后缀的文件名（如 mmd_engine-windows-x64.dll）
         File[] candidates = new File[] {
@@ -448,7 +450,7 @@ public class NativeFunc {
                 }
             }
         }
-        
+
         // 4. 全部失败
         throw new UnsatisfiedLinkError("无法加载原生库: " + fileName +
             "（也尝试了 " + downloadFileName + "），请检查网络连接或从 " + RELEASE_BASE_URL + " 手动下载");
@@ -541,6 +543,8 @@ public class NativeFunc {
     public native long CreateMat();
 
     public native void DeleteMat(long mat);
+
+    public native boolean CopyMatToBuffer(long mat, java.nio.ByteBuffer buffer);
 
     public native void GetRightHandMat(long model, long mat);
 
@@ -1098,6 +1102,7 @@ public class NativeFunc {
      * @param bustAngularSpringStiffnessScale 胸部角度弹簧刚度缩放
      * @param bustLinearSpringDampingFactor 胸部线性弹簧阻尼系数
      * @param bustAngularSpringDampingFactor 胸部角度弹簧阻尼系数
+     * @param bustClampInward 胸部防凹陷修正是否启用
      * @param jointsEnabled 是否启用关节
      * @param debugLog 是否输出调试日志
      */
@@ -1126,6 +1131,7 @@ public class NativeFunc {
         float bustAngularSpringStiffnessScale,
         float bustLinearSpringDampingFactor,
         float bustAngularSpringDampingFactor,
+        boolean bustClampInward,
         boolean jointsEnabled,
         boolean debugLog
     );

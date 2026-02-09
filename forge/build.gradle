@@ -132,8 +132,10 @@ dependencies {
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionForge")) { transitive false }
 
-    // JLayer - MP3 解码器（舞台模式音频播放，shadow 打包进 JAR）
-    implementation("javazoom:jlayer:1.0.1")
+    // JLayer - MP3 解码器（舞台模式音频播放）
+    // common 配置使其在 dev 运行时可用（developmentForge extends common）
+    // shadowCommon 配置使其打包进生产 JAR
+    common("javazoom:jlayer:1.0.1") { transitive = false }
     shadowCommon("javazoom:jlayer:1.0.1")
 
     // Forge 平台

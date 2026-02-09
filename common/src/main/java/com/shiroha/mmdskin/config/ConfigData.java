@@ -83,10 +83,13 @@ public class ConfigData {
     public float physicsBustLinearDampingScale = 1.5f;
     public float physicsBustAngularDampingScale = 1.5f;
     public float physicsBustMassScale = 1.0f;
-    public float physicsBustLinearSpringStiffnessScale = 8.0f;
-    public float physicsBustAngularSpringStiffnessScale = 8.0f;
+    public float physicsBustLinearSpringStiffnessScale = 10.0f;
+    public float physicsBustAngularSpringStiffnessScale = 10.0f;
     public float physicsBustLinearSpringDampingFactor = 3.0f;
     public float physicsBustAngularSpringDampingFactor = 3.0f;
+    
+    // 胸部防凹陷
+    public boolean physicsBustClampInward = true;
     
     // 调试
     public boolean physicsJointsEnabled = true;
@@ -189,6 +192,7 @@ public class ConfigData {
         other.physicsBustAngularSpringStiffnessScale = this.physicsBustAngularSpringStiffnessScale;
         other.physicsBustLinearSpringDampingFactor = this.physicsBustLinearSpringDampingFactor;
         other.physicsBustAngularSpringDampingFactor = this.physicsBustAngularSpringDampingFactor;
+        other.physicsBustClampInward = this.physicsBustClampInward;
         other.physicsJointsEnabled = this.physicsJointsEnabled;
         other.physicsDebugLog = this.physicsDebugLog;
     }

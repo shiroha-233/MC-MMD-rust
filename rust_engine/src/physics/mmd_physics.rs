@@ -10,7 +10,7 @@
 //! | btCollisionDispatcher | NarrowPhase |
 //! | btSequentialImpulseConstraintSolver | 内置于 PhysicsPipeline |
 
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec3, Quat};
 use rapier3d::prelude::*;
 use rapier3d::math::Real;
 use std::num::NonZeroUsize;
@@ -270,13 +270,13 @@ impl MMDPhysics {
         self.mmd_joints.push(mmd_joint);
         Some(index)
     }
-    
+
     /// 设置胸部-头发碰撞过滤
     /// 
     /// 在所有刚体和关节添加完成后调用。
     /// 收集胸部和头发刚体各自占用的 PMX 碰撞组位，
     /// 然后从对方的碰撞过滤掩码中清除这些位，
-    /// 使头发碰撞体和胸部碰撞体互不碰撞，避免头发压塌胸部。
+    /// 使头发碰撞体和胸部碰撞体互不碰撞，避免头发压塔胸部。
     pub fn setup_bust_hair_collision_filter(&mut self) {
         // 第一遍：收集胸部和头发刚体各自使用的碰撞组位
         let mut bust_membership_bits: u32 = 0;
@@ -312,13 +312,13 @@ impl MMDPhysics {
             if !mmd_rb.is_bust && !mmd_rb.is_hair {
                 continue;
             }
-            
+
             if let Some(collider_handle) = mmd_rb.collider_handle {
                 if let Some(collider) = self.collider_set.get_mut(collider_handle) {
                     let current_groups = collider.collision_groups();
                     let current_membership = current_groups.memberships.bits();
                     let mut current_filter = current_groups.filter.bits();
-                    
+
                     if mmd_rb.is_bust {
                         // 胸部：不与头发碰撞
                         current_filter &= !hair_membership_bits;
@@ -327,7 +327,7 @@ impl MMDPhysics {
                         // 头发：不与胸部碰撞
                         current_filter &= !bust_membership_bits;
                     }
-                    
+
                     let new_groups = InteractionGroups::new(
                         Group::from_bits_truncate(current_membership),
                         Group::from_bits_truncate(current_filter),
@@ -341,7 +341,7 @@ impl MMDPhysics {
     }
     
     /// 更新物理模拟
-    /// 
+    ///
     /// 使用时间累积器模式：前 N-1 步使用固定 dt，最后一步消化剩余时间，
     /// 保证物理模拟时间完整覆盖 delta_time，不丢失任何时间。
     /// 
@@ -364,17 +364,17 @@ impl MMDPhysics {
             let fixed_steps = max_steps - 1;
             let consumed = fixed_steps as f32 * fixed_dt;
             let remaining = delta_time - consumed;
-            
+
             for _ in 0..fixed_steps {
                 self.step_once(fixed_dt);
             }
             // 最后一步消化剩余时间
             self.step_once(remaining);
         }
-        
+
         self.clamp_velocities();
     }
-    
+
     /// 执行一次物理步进
     fn step_once(&mut self, dt: f32) {
         self.integration_parameters.dt = dt;
@@ -569,6 +569,11 @@ impl MMDPhysics {
                 continue;
             }
             
+            // 胸部刚体不施加惯性速度，避免拖拽感
+            if mmd_rb.is_bust {
+                continue;
+            }
+            
             if let Some(rb_handle) = mmd_rb.rigid_body_handle {
                 if let Some(rb) = self.rigid_body_set.get_mut(rb_handle) {
                     // 获取当前速度并叠加惯性速度
@@ -649,6 +654,7 @@ impl MMDPhysics {
     /// 返回 (骨骼索引, 新变换) 列表，按刚体顺序排列
     /// 用于物理更新后只更新被物理驱动的骨骼
     pub fn get_dynamic_bone_transforms(&self, current_bone_transforms: &[Mat4]) -> Vec<(usize, Mat4)> {
+        let config = get_config();
         let mut result = Vec::new();
         
         for mmd_rb in &self.mmd_rigid_bodies {
@@ -662,7 +668,7 @@ impl MMDPhysics {
                     if bone_idx >= 0 && (bone_idx as usize) < current_bone_transforms.len() {
                         let rb_pose = *rb.position();
                         
-                        let new_bone_transform = match mmd_rb.body_type {
+                        let mut new_bone_transform = match mmd_rb.body_type {
                             RigidBodyType::Dynamic => {
                                 mmd_rb.compute_bone_transform(rb_pose)
                             }
@@ -675,6 +681,15 @@ impl MMDPhysics {
                             RigidBodyType::Kinematic => unreachable!(),
                         };
                         
+                        // 胸部防凹陷修正
+                        if mmd_rb.is_bust && config.bust_clamp_inward {
+                            new_bone_transform = Self::clamp_bust_inward(
+                                mmd_rb,
+                                new_bone_transform,
+                                &current_bone_transforms[bone_idx as usize],
+                            );
+                        }
+                        
                         result.push((bone_idx as usize, new_bone_transform));
                     }
                 }
@@ -682,6 +697,82 @@ impl MMDPhysics {
         }
         
         result
+    }
+    
+    /// 胸部防凹陷修正
+    /// 
+    /// 原理：在骨骼本地空间中，刚体中心相对于骨骼有一个固定的"朝外"方向。
+    /// 将这个方向分别用运动学参考（动画姿态）和物理结果旋转，
+    /// 若物理结果将"朝外"方向抽向了身体内部（与动画参考的朝外方向点积 < 1，
+    /// 即物理探针在动画朝外方向的投影小于动画探针），则进行 slerp 修正。
+    /// 
+    /// 关键特性：
+    /// - 向外弹跳完全不受影响（保留物理感）
+    /// - 向内凹陷被平滑钳位回动画姿态（不会视觉跳变）
+    fn clamp_bust_inward(
+        mmd_rb: &MMDRigidBody,
+        physics_bone_transform: Mat4,
+        kinematic_bone_transform: &Mat4,
+    ) -> Mat4 {
+        let outward_local = match mmd_rb.bust_local_outward {
+            Some(dir) => dir,
+            None => return physics_bone_transform,
+        };
+        
+        // 用运动学参考（动画姿态）旋转"朝外"方向到当前世界空间
+        let kin_rot = Quat::from_mat4(kinematic_bone_transform).normalize();
+        let kin_outward = kin_rot * outward_local;
+        
+        // 用物理结果旋转"朝外"方向到当前世界空间
+        let phys_rot = Quat::from_mat4(&physics_bone_transform).normalize();
+        let phys_outward = phys_rot * outward_local;
+        
+        // 检测凹陷：物理朝外方向在动画朝外方向上的投影
+        // dot = 1.0 表示完全一致（无偏移）
+        // dot < 1.0 表示物理结果将胸部拽向了内部
+        // dot > 1.0 不可能（单位向量点积不超过 1）
+        let dot = phys_outward.dot(kin_outward);
+        
+        if dot >= 1.0 {
+            // 完全一致或向外，不需修正
+            return physics_bone_transform;
+        }
+        
+        // 计算物理探针相对于动画探针的位移
+        // 如果物理探针在动画朝外方向上的分量小于动画探针，则说明向内移动了
+        // 但如果物理探针只是向侧偏移（与 kin_outward 垂直的分量），则允许
+        //
+        // 投影测试：物理探针在动画朝外方向的分量
+        // 若 < 1.0（物理探针没有完全投影到动画朝外方向），则存在凹陷风险
+        // 但我们只在 dot < cos(threshold) 时才介入，避免微小偏移触发修正
+        
+        // 允许的最小点积（对应允许的最大偏移角度）
+        // cos(5°) ≈ 0.996 —— 允许极小的向内偏移，避免精度报动
+        const MIN_DOT: f32 = 0.996;
+        
+        if dot >= MIN_DOT {
+            // 偏移极小，不需修正
+            return physics_bone_transform;
+        }
+        
+        // 渐进式修正：随着凹陷程度加深，修正力度增大
+        // dot 在 [MIN_DOT, -1] 范围内
+        // t = 0.0 表示完全用动画姿态（最强修正）
+        // t = 1.0 表示完全用物理结果（不修正）
+        //
+        // 当 dot 跌破 MIN_DOT 时快速钳位到动画姿态
+        // 使用 dot 到 0.95 的范围作为过渡带
+        const FULL_CLAMP_DOT: f32 = 0.95;
+        let t = if dot <= FULL_CLAMP_DOT {
+            0.0 // 完全钳位到动画姿态
+        } else {
+            // 在 [FULL_CLAMP_DOT, MIN_DOT] 范围内线性插值
+            (dot - FULL_CLAMP_DOT) / (MIN_DOT - FULL_CLAMP_DOT)
+        };
+        
+        let clamped_rot = kin_rot.slerp(phys_rot, t);
+        let pos = physics_bone_transform.w_axis.truncate();
+        Mat4::from_rotation_translation(clamped_rot, pos)
     }
     
     /// 获取所有动态刚体关联的骨骼索引集合

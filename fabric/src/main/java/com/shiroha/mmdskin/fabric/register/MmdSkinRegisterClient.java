@@ -2,6 +2,7 @@ package com.shiroha.mmdskin.fabric.register;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.shiroha.mmdskin.fabric.config.ModConfigScreen;
+import com.shiroha.mmdskin.mixin.fabric.KeyMappingAccessor;
 import com.shiroha.mmdskin.fabric.maid.MaidCompatMixinPlugin;
 import com.shiroha.mmdskin.fabric.network.MmdSkinNetworkPack;
 import com.shiroha.mmdskin.maid.MaidActionNetworkHandler;
@@ -127,7 +128,7 @@ public class MmdSkinRegisterClient {
             if (MCinstance.screen == null || MCinstance.screen instanceof ConfigWheelScreen) {
                 boolean keyDown = keyConfigWheel.isDown();
                 if (keyDown && !configWheelKeyWasDown) {
-                    int keyCode = keyConfigWheel.getDefaultKey().getValue();
+                    int keyCode = ((KeyMappingAccessor) keyConfigWheel).mmd$getBoundKey().getValue();
                     MCinstance.setScreen(new ConfigWheelScreen(keyCode));
                 }
                 configWheelKeyWasDown = keyDown;
@@ -214,7 +215,7 @@ public class MmdSkinRegisterClient {
         String className = target.getClass().getName();
         if (className.contains("EntityMaid") || className.contains("touhoulittlemaid")) {
             String maidName = target.getName().getString();
-            int keyCode = keyMaidConfigWheel.getDefaultKey().getValue();
+            int keyCode = ((KeyMappingAccessor) keyMaidConfigWheel).mmd$getBoundKey().getValue();
             mc.setScreen(new MaidConfigWheelScreen(target.getUUID(), target.getId(), maidName, keyCode));
             logger.info("打开女仆配置轮盘: {} (ID: {})", maidName, target.getId());
         }

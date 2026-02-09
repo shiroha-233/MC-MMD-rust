@@ -12,6 +12,9 @@ import net.minecraft.world.item.ItemDisplayContext;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
 /**
  * 物品渲染辅助类
  * 负责渲染玩家手持物品
@@ -33,7 +36,7 @@ public class ItemRenderHelper {
         nf.GetRightHandMat(model.model.GetModelLong(), model.entityData.rightHandMat);
         
         matrixStack.pushPose();
-        matrixStack.last().pose().mul(convertToMatrix4f(nf, model.entityData.rightHandMat));
+        matrixStack.last().pose().mul(convertToMatrix4f(nf, model.entityData.rightHandMat, model.entityData.matBuffer));
         
         // 基础旋转：剑朝前（原始状态朝上，绕X轴旋转90度使其朝前）
         matrixStack.mulPose(new Quaternionf().rotateX(90.0f * ((float)Math.PI / 180F)));
@@ -66,7 +69,7 @@ public class ItemRenderHelper {
         nf.GetLeftHandMat(model.model.GetModelLong(), model.entityData.leftHandMat);
         
         matrixStack.pushPose();
-        matrixStack.last().pose().mul(convertToMatrix4f(nf, model.entityData.leftHandMat));
+        matrixStack.last().pose().mul(convertToMatrix4f(nf, model.entityData.leftHandMat, model.entityData.matBuffer));
         
         // 基础旋转：剑朝前（原始状态朝上，绕X轴旋转90度使其朝前）
         matrixStack.mulPose(new Quaternionf().rotateX(90.0f * ((float)Math.PI / 180F)));
@@ -126,23 +129,20 @@ public class ItemRenderHelper {
         return descriptionId.substring(descriptionId.indexOf(".") + 1);
     }
     
-    private static Matrix4f convertToMatrix4f(NativeFunc nf, long data) {
+    private static Matrix4f convertToMatrix4f(NativeFunc nf, long matId, ByteBuffer buf) {
+        buf.clear();
+        buf.order(ByteOrder.LITTLE_ENDIAN);
+        if (!nf.CopyMatToBuffer(matId, buf)) {
+            return new Matrix4f();
+        }
+        buf.position(0);
         Matrix4f result = new Matrix4f(
-            readFloat(nf, data, 0),  readFloat(nf, data, 16), readFloat(nf, data, 32), readFloat(nf, data, 48),
-            readFloat(nf, data, 4),  readFloat(nf, data, 20), readFloat(nf, data, 36), readFloat(nf, data, 52),
-            readFloat(nf, data, 8),  readFloat(nf, data, 24), readFloat(nf, data, 40), readFloat(nf, data, 56),
-            readFloat(nf, data, 12), readFloat(nf, data, 28), readFloat(nf, data, 44), readFloat(nf, data, 60)
+            buf.getFloat(0),  buf.getFloat(16), buf.getFloat(32), buf.getFloat(48),
+            buf.getFloat(4),  buf.getFloat(20), buf.getFloat(36), buf.getFloat(52),
+            buf.getFloat(8),  buf.getFloat(24), buf.getFloat(40), buf.getFloat(56),
+            buf.getFloat(12), buf.getFloat(28), buf.getFloat(44), buf.getFloat(60)
         );
         result.transpose();
         return result;
-    }
-    
-    private static float readFloat(NativeFunc nf, long data, long pos) {
-        int temp = 0;
-        temp |= nf.ReadByte(data, pos) & 0xff;
-        temp |= (nf.ReadByte(data, pos + 1) & 0xff) << 8;
-        temp |= (nf.ReadByte(data, pos + 2) & 0xff) << 16;
-        temp |= (nf.ReadByte(data, pos + 3) & 0xff) << 24;
-        return Float.intBitsToFloat(temp);
     }
 }

@@ -91,6 +91,7 @@ public class MMDAnimManager {
     public static long GetAnimModel(IMMDModel model, String animName) {
         // 尝试从缓存获取
         Map<String, Long> sub = animModel.get(model);
+        if (sub == null) return 0;
         String cacheKey = animName;
         Long cached = sub.get(cacheKey);
         if (cached != null) {

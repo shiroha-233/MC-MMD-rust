@@ -30,7 +30,7 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -77,11 +77,9 @@ public class MmdSkinRegisterClient {
      * 注册事件监听器到两个事件总线
      */
     public static void Register() {
-        // 注册到 MOD 事件总线（按键注册、实体渲染器注册）
-        FMLJavaModLoadingContext.get().getModEventBus().addListener(MmdSkinRegisterClient::onRegisterKeyMappings);
-        FMLJavaModLoadingContext.get().getModEventBus().addListener(MmdSkinRegisterClient::onRegisterEntityRenderers);
-        
         // 注册到 Forge 事件总线（按键输入、客户端 Tick）
+        // 注意：按键注册和实体渲染器注册已由 MmdSkinForgeClient 中的 @SubscribeEvent 处理
+        //（RegisterKeyMappingsEvent 和 EntityRenderersEvent 在 FMLClientSetupEvent 之前触发）
         MinecraftForge.EVENT_BUS.register(ForgeEventHandler.class);
         
         // 设置模组设置界面工厂
@@ -209,7 +207,7 @@ public class MmdSkinRegisterClient {
             if (mc.screen == null || mc.screen instanceof ConfigWheelScreen) {
                 boolean keyDown = keyConfigWheel.isDown();
                 if (keyDown && !configWheelKeyWasDown) {
-                    int keyCode = keyConfigWheel.getDefaultKey().getValue();
+                    int keyCode = keyConfigWheel.getKey().getValue();
                     mc.setScreen(new ConfigWheelScreen(keyCode));
                 }
                 configWheelKeyWasDown = keyDown;
@@ -244,7 +242,7 @@ public class MmdSkinRegisterClient {
             String className = target.getClass().getName();
             if (className.contains("EntityMaid") || className.contains("touhoulittlemaid")) {
                 String maidName = target.getName().getString();
-                int keyCode = keyMaidConfigWheel.getDefaultKey().getValue();
+                int keyCode = keyMaidConfigWheel.getKey().getValue();
                 mc.setScreen(new MaidConfigWheelScreen(target.getUUID(), target.getId(), maidName, keyCode));
                 logger.info("打开女仆配置轮盘: {} (ID: {})", maidName, target.getId());
             }

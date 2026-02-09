@@ -30,7 +30,7 @@ public class StageSelectScreen extends Screen {
     private static final int PANEL_WIDTH = 160;
     private static final int PANEL_MARGIN = 4;
     private static final int HEADER_HEIGHT = 28;
-    private static final int FOOTER_HEIGHT = 40;
+    private static final int FOOTER_HEIGHT = 56;
     private static final int ITEM_HEIGHT = 14;
     private static final int ITEM_SPACING = 1;
     private static final int DETAIL_HEADER = 14;
@@ -59,6 +59,7 @@ public class StageSelectScreen extends Screen {
     // 选择状态
     private int selectedPackIndex = -1;
     private boolean cinematicMode;
+    private float cameraHeightOffset;
     private boolean stageStarted = false;
     
     // 滚动
@@ -72,6 +73,7 @@ public class StageSelectScreen extends Screen {
     private boolean hoverStart = false;
     private boolean hoverCancel = false;
     private boolean hoverToggle = false;
+    private boolean draggingHeightSlider = false;
     
     // 面板区域缓存
     private int panelX, panelY, panelH;
@@ -84,6 +86,7 @@ public class StageSelectScreen extends Screen {
         super(Component.translatable("gui.mmdskin.config.stage_mode"));
         StageConfig config = StageConfig.getInstance();
         this.cinematicMode = config.cinematicMode;
+        this.cameraHeightOffset = config.cameraHeightOffset;
         
         // 确保 StageAnim 目录存在
         PathConstants.ensureStageAnimDir();
@@ -377,8 +380,31 @@ public class StageSelectScreen extends Screen {
         g.drawString(this.font, Component.translatable("gui.mmdskin.stage.cinematic"), 
                      toggleX + toggleW + 4, toggleY + 1, COLOR_TEXT, false);
         
-        // 按钮行（第二行）
-        int btnY = footerY + 18;
+        // 镜头高度滑块（第二行）
+        int sliderY = footerY + 18;
+        int sliderX = panelX + 8;
+        int sliderW = PANEL_WIDTH - 16;
+        int sliderH = 10;
+        
+        // 滑块标签 + 数值
+        String heightLabel = String.format("H: %+.1f", cameraHeightOffset);
+        g.drawString(this.font, heightLabel, sliderX, sliderY, COLOR_TEXT_DIM, false);
+        
+        // 滑块轨道
+        int trackX = sliderX + 36;
+        int trackW = sliderW - 36;
+        int trackY = sliderY + 3;
+        int trackH = 4;
+        g.fill(trackX, trackY, trackX + trackW, trackY + trackH, 0xFF303030);
+        
+        // 滑块位置（范围 -5.0 ~ +5.0）
+        float normalizedValue = (cameraHeightOffset + 5.0f) / 10.0f;
+        normalizedValue = Math.max(0, Math.min(1, normalizedValue));
+        int thumbX = trackX + (int)(normalizedValue * (trackW - 6));
+        g.fill(thumbX, trackY - 1, thumbX + 6, trackY + trackH + 1, COLOR_ACCENT);
+        
+        // 按钮行（第三行）
+        int btnY = footerY + 34;
         int btnW = (PANEL_WIDTH - 20) / 2;
         int btnH = 16;
         
@@ -414,6 +440,16 @@ public class StageSelectScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0) {
+            // 镜头高度滑块
+            int footerY = panelY + panelH - FOOTER_HEIGHT;
+            int sliderY = footerY + 18;
+            int trackX = panelX + 8 + 36;
+            int trackW = PANEL_WIDTH - 16 - 36;
+            if (mouseX >= trackX && mouseX < trackX + trackW && mouseY >= sliderY && mouseY < sliderY + 10) {
+                draggingHeightSlider = true;
+                updateHeightSliderFromMouse(mouseX, trackX, trackW);
+                return true;
+            }
             // 包列表点击
             if (hoveredPackIndex >= 0 && hoveredPackIndex < stagePacks.size()) {
                 selectedPackIndex = hoveredPackIndex;
@@ -438,6 +474,32 @@ public class StageSelectScreen extends Screen {
             }
         }
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+    
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (draggingHeightSlider && button == 0) {
+            int trackX = panelX + 8 + 36;
+            int trackW = PANEL_WIDTH - 16 - 36;
+            updateHeightSliderFromMouse(mouseX, trackX, trackW);
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+    
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && draggingHeightSlider) {
+            draggingHeightSlider = false;
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+    
+    private void updateHeightSliderFromMouse(double mouseX, int trackX, int trackW) {
+        float normalized = (float)(mouseX - trackX) / trackW;
+        normalized = Math.max(0, Math.min(1, normalized));
+        cameraHeightOffset = normalized * 10.0f - 5.0f; // 范围 -5.0 ~ +5.0
     }
     
     @Override
@@ -484,6 +546,7 @@ public class StageSelectScreen extends Screen {
         StageConfig config = StageConfig.getInstance();
         config.lastStagePack = pack.getName();
         config.cinematicMode = cinematicMode;
+        config.cameraHeightOffset = cameraHeightOffset;
         config.save();
         
         // 分离相机和动作 VMD
@@ -557,8 +620,8 @@ public class StageSelectScreen extends Screen {
         // 获取音频路径（取第一个音频文件）
         String audioPath = pack.getFirstAudioPath();
         
-        // 启动相机控制器（传递 modelHandle + modelName + 音频路径）
-        MMDCameraController.getInstance().startStage(mergedAnim, cameraAnim, cinematicMode, modelHandle, modelName, audioPath);
+        // 启动相机控制器（传递 modelHandle + modelName + 音频路径 + 高度偏移）
+        MMDCameraController.getInstance().startStage(mergedAnim, cameraAnim, cinematicMode, modelHandle, modelName, audioPath, cameraHeightOffset);
         
         // 标记已启动（onClose 不会退出舞台模式）
         this.stageStarted = true;
