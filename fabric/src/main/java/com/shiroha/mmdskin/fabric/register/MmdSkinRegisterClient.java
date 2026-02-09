@@ -10,6 +10,7 @@ import com.shiroha.mmdskin.renderer.render.MmdSkinRenderFactory;
 import com.shiroha.mmdskin.ui.network.ActionWheelNetworkHandler;
 import com.shiroha.mmdskin.ui.network.MorphWheelNetworkHandler;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
+import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
 import com.shiroha.mmdskin.ui.wheel.ConfigWheelScreen;
 import com.shiroha.mmdskin.ui.wheel.MaidConfigWheelScreen;
 
@@ -189,8 +190,9 @@ public class MmdSkinRegisterClient {
             });
         });
         
-        // 注册玩家断开连接事件（清理远程玩家缓存）
+        // 注册玩家断开连接事件（清理远程玩家缓存 + 舞台模式）
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            MMDCameraController.getInstance().exitStageMode();
             PlayerModelSyncManager.onDisconnect();
         });
         

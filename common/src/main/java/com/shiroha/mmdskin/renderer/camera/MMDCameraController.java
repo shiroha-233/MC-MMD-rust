@@ -6,6 +6,7 @@ import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import com.shiroha.mmdskin.ui.stage.StageSelectScreen;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.PauseScreen;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.joml.Vector3f;
@@ -490,7 +491,21 @@ public class MMDCameraController {
     public void checkEscapeKey() {
         if (state == StageState.INACTIVE) return;
         Minecraft mc = Minecraft.getInstance();
-        // 如果有 Screen 打开（如 StageSelectScreen），不拦截 ESC（由 Screen.onClose 处理）
+        
+        // MC 的 ESC 处理（tick 阶段）先于 Camera.setup（渲染阶段），
+        // 会抢先打开 PauseScreen 导致舞台 ESC 被吞。
+        // 检测到 PauseScreen 时，关闭它并转为舞台 ESC 处理。
+        if (mc.screen instanceof PauseScreen) {
+            mc.setScreen(null);
+            if (state == StageState.PLAYING) {
+                endPlayback();
+            } else {
+                exitStageMode();
+            }
+            return;
+        }
+        
+        // 如果有其他 Screen 打开（如 StageSelectScreen），不拦截 ESC（由 Screen.onClose 处理）
         if (mc.screen != null) return;
         long window = mc.getWindow().getWindow();
         if (org.lwjgl.glfw.GLFW.glfwGetKey(window, org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) == org.lwjgl.glfw.GLFW.GLFW_PRESS) {
