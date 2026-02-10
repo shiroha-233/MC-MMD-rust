@@ -392,7 +392,7 @@ public class StageSelectScreen extends Screen {
         int sliderH = 10;
         
         // 滑块标签 + 数值
-        String heightLabel = String.format("H: %+.1f", cameraHeightOffset);
+        String heightLabel = String.format("H: %+.2f", cameraHeightOffset);
         g.drawString(this.font, heightLabel, sliderX, sliderY, COLOR_TEXT_DIM, false);
         
         // 滑块轨道
@@ -402,8 +402,8 @@ public class StageSelectScreen extends Screen {
         int trackH = 4;
         g.fill(trackX, trackY, trackX + trackW, trackY + trackH, 0xFF303030);
         
-        // 滑块位置（范围 -5.0 ~ +5.0）
-        float normalizedValue = (cameraHeightOffset + 5.0f) / 10.0f;
+        // 滑块位置（范围 -2.0 ~ +2.0）
+        float normalizedValue = (cameraHeightOffset + 2.0f) / 4.0f;
         normalizedValue = Math.max(0, Math.min(1, normalizedValue));
         int thumbX = trackX + (int)(normalizedValue * (trackW - 6));
         g.fill(thumbX, trackY - 1, thumbX + 6, trackY + trackH + 1, COLOR_ACCENT);
@@ -504,7 +504,7 @@ public class StageSelectScreen extends Screen {
     private void updateHeightSliderFromMouse(double mouseX, int trackX, int trackW) {
         float normalized = (float)(mouseX - trackX) / trackW;
         normalized = Math.max(0, Math.min(1, normalized));
-        cameraHeightOffset = normalized * 10.0f - 5.0f; // 范围 -5.0 ~ +5.0
+        cameraHeightOffset = normalized * 4.0f - 2.0f; // 范围 -2.0 ~ +2.0
     }
     
     @Override

@@ -1074,6 +1074,34 @@ public class NativeFunc {
      */
     public native int CopyMaterialMorphResultsToBuffer(long model, java.nio.ByteBuffer buffer);
     
+    // ========== NativeRender 顶点构建（P2-9 优化）==========
+    
+    /**
+     * 在 Rust 侧直接构建 MC NEW_ENTITY 顶点格式的交错数据
+     * 
+     * 消除 Java 侧逐顶点循环，将 SoA→AoS 转换 + 矩阵变换全部在 Rust 完成。
+     * 
+     * 顶点布局（每顶点 36 字节）：
+     * Position(3×f32) + Color(4×u8) + UV0(2×f32) + Overlay(2×i16) + UV2(2×i16) + Normal(3×i8+pad)
+     * 
+     * @param model 模型句柄
+     * @param subMeshIndex 子网格索引
+     * @param buffer 输出缓冲区（DirectByteBuffer，需预分配 vertCount * 36 字节）
+     * @param poseMatrix 4×4 模型变换矩阵（DirectByteBuffer，64 字节，列主序 float）
+     * @param normalMatrix 3×3 法线变换矩阵（DirectByteBuffer，36 字节，列主序 float）
+     * @param colorRGBA 打包的 RGBA 颜色值（如 0xFFFFFFFF 白色）
+     * @param overlayUV 打包的 overlay 坐标（如 OverlayTexture.pack(0, 10)）
+     * @param packedLight MC 打包光照值
+     * @return 写入的顶点数量
+     */
+    public native int BuildMCVertexBuffer(
+        long model, int subMeshIndex,
+        java.nio.ByteBuffer buffer,
+        java.nio.ByteBuffer poseMatrix,
+        java.nio.ByteBuffer normalMatrix,
+        int colorRGBA, int overlayUV, int packedLight
+    );
+    
     // ========== 物理配置相关 ==========
     
     /**

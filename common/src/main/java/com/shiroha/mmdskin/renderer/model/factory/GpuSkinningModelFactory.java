@@ -63,4 +63,14 @@ public class GpuSkinningModelFactory implements IMMDModelFactory {
             return null;
         }
     }
+    
+    @Override
+    public IMMDModel createModelFromHandle(long modelHandle, String modelDir) {
+        try {
+            return MMDModelGpuSkinning.createFromHandle(modelHandle, modelDir);
+        } catch (Exception e) {
+            logger.error("GPU 蒙皮模型（从句柄）创建失败", e);
+            return null;
+        }
+    }
 }

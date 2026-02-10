@@ -45,6 +45,17 @@ public interface IMMDModelFactory {
      * @return 创建的模型实例，失败返回 null
      */
     IMMDModel createModel(String modelFilename, String modelDir, boolean isPMD, long layerCount);
+
+    /**
+     * 从已加载的模型句柄创建渲染实例（Phase 2：GL 资源创建，必须在渲染线程调用）
+     * 用于两阶段异步加载：Phase 1 在后台线程调用 NativeFunc.LoadModelPMX/PMD 获取句柄，
+     * Phase 2 在渲染线程调用此方法完成 GL 资源创建。
+     * 
+     * @param modelHandle 后台线程加载的模型句柄（nf.LoadModelPMX/PMD 的返回值）
+     * @param modelDir 模型目录
+     * @return 创建的模型实例，失败返回 null
+     */
+    IMMDModel createModelFromHandle(long modelHandle, String modelDir);
     
     /**
      * 根据 ModelInfo 创建模型（便捷方法）

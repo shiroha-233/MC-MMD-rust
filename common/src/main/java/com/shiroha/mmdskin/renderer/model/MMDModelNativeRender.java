@@ -1,15 +1,14 @@
 package com.shiroha.mmdskin.renderer.model;
 
 import com.shiroha.mmdskin.NativeFunc;
-import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
 import com.shiroha.mmdskin.renderer.core.IMMDModel;
 import com.shiroha.mmdskin.renderer.core.EyeTrackingHelper;
+import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
 import com.shiroha.mmdskin.renderer.core.RenderContext;
 import com.shiroha.mmdskin.renderer.resource.MMDTextureManager;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
-import com.mojang.blaze3d.vertex.MeshData;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
@@ -24,6 +23,7 @@ import org.apache.logging.log4j.Logger;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
+import org.lwjgl.opengl.GL46C;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
@@ -32,11 +32,11 @@ import java.nio.FloatBuffer;
 
 /**
  * 使用 Minecraft 原生渲染系统的 MMD 模型渲染器
- * 
+ *
  * 关键点：
  * 1. 蒙皮计算在 Rust 引擎完成（高性能）
- * 2. 渲染使用 Minecraft 的 BufferBuilder + VertexBuffer + ShaderInstance
- * 3. Iris 可以正确拦截 ShaderInstance，实现光影兼容
+ * 2. P2-9: Rust 直接输出 MC NEW_ENTITY 顶点格式（含矩阵变换），消除 Java 逐顶点循环
+ * 3. 使用自定义 VAO/VBO + MC ShaderInstance，Iris 可正确拦截
  */
 public class MMDModelNativeRender implements IMMDModel {
     private static final Logger logger = LogManager.getLogger();
@@ -45,31 +45,26 @@ public class MMDModelNativeRender implements IMMDModel {
     // 模型数据
     long model;
     String modelDir;
+    private String cachedModelName;
     int vertexCount;
-    
-    // 顶点缓冲区（从 Rust 引擎获取蒙皮后的数据）
-    ByteBuffer posBuffer;
-    ByteBuffer norBuffer;
-    ByteBuffer uv0Buffer;
-    
-    // Minecraft 原生 VertexBuffer（每个子网格一个）
-    VertexBuffer[] subMeshVertexBuffers;
-    
-    // 索引数据
-    int[] indices;
-    int indexCount;
-    int indexElementSize;
-    
+
+    // P2-9: 自定义 VAO/VBO（替代 BufferBuilder 逐顶点循环）
+    private int vao;
+    private int[] subMeshVBOs;
+    private int subMeshCount;
+
+    // P2-9: Rust 顶点构建缓冲区（预分配，每帧复用）
+    private ByteBuffer mcVertexBuf;    // 输出：MC NEW_ENTITY 交错顶点数据
+    private ByteBuffer poseMatBuf;     // 4×4 pose 矩阵（64 字节）
+    private ByteBuffer normalMatBuf;   // 3×3 normal 矩阵（36 字节）
+
     // 材质
     Material[] mats;
-    
+
     // 材质 Morph 结果
     private FloatBuffer materialMorphResultsBuffer;
     private ByteBuffer materialMorphResultsByteBuffer;
     private int materialMorphResultCount = 0;
-
-    // 模型名称缓存
-    private String cachedModelName;
 
     // 预分配临时对象（避免每帧分配）
     private final Quaternionf tempQuat = new Quaternionf();
@@ -79,7 +74,31 @@ public class MMDModelNativeRender implements IMMDModel {
     private static final float MAX_DELTA_TIME = 0.25f; // 最大 250ms（4FPS），防止暂停后跳跃
     
     MMDModelNativeRender() {}
-    
+
+    private void fetchMaterialMorphResults() {
+        if (materialMorphResultCount <= 0 || materialMorphResultsBuffer == null) return;
+        materialMorphResultsByteBuffer.clear();
+        nf.CopyMaterialMorphResultsToBuffer(model, materialMorphResultsByteBuffer);
+        materialMorphResultsBuffer.clear();
+        materialMorphResultsByteBuffer.position(0);
+        materialMorphResultsBuffer.put(materialMorphResultsByteBuffer.asFloatBuffer());
+        materialMorphResultsBuffer.flip();
+    }
+
+    /**
+     * 计算材质经 Morph 变形后的有效 alpha
+     * 布局：每材质 56 float = mul(28) + add(28)，diffuse.w 在各组偏移 3
+     * 计算：effective = baseAlpha * mul + add
+     */
+    private float getEffectiveMaterialAlpha(int materialIndex, float baseAlpha) {
+        if (materialMorphResultsBuffer == null || materialIndex >= materialMorphResultCount) return baseAlpha;
+        int mulOffset = materialIndex * 56 + 3;
+        int addOffset = materialIndex * 56 + 28 + 3;
+        float mulAlpha = (mulOffset < materialMorphResultsBuffer.capacity()) ? materialMorphResultsBuffer.get(mulOffset) : 1.0f;
+        float addAlpha = (addOffset < materialMorphResultsBuffer.capacity()) ? materialMorphResultsBuffer.get(addOffset) : 0.0f;
+        return baseAlpha * mulAlpha + addAlpha;
+    }
+
     public static void Init(NativeFunc nativeFunc) {
         nf = nativeFunc;
     }
@@ -94,38 +113,34 @@ public class MMDModelNativeRender implements IMMDModel {
                 logger.error("加载模型失败: {}", pmxPath);
                 return null;
             }
-            
-            int vertexCount = (int) nf.GetVertexCount(model);
-            
-            // 分配缓冲区
-            int posSize = vertexCount * 12;
-            int norSize = vertexCount * 12;
-            int uvSize = vertexCount * 8;
-            
-            ByteBuffer posBuffer = MemoryUtil.memAlloc(posSize);
-            ByteBuffer norBuffer = MemoryUtil.memAlloc(norSize);
-            ByteBuffer uv0Buffer = MemoryUtil.memAlloc(uvSize);
-            
-            // 加载索引
-            long idxCount = nf.GetIndexCount(model);
-            int indexElementSize = (int) nf.GetIndexElementSize(model);
-            int[] indices = new int[(int) idxCount];
-            
-            ByteBuffer idxBuffer = MemoryUtil.memAlloc((int) (idxCount * indexElementSize));
-            long idxData = nf.GetIndices(model);
-            nf.CopyDataToByteBuffer(idxBuffer, idxData, (int) (idxCount * indexElementSize));
-            
-            if (indexElementSize == 2) {
-                for (int i = 0; i < idxCount; i++) {
-                    indices[i] = idxBuffer.getShort(i * 2) & 0xFFFF;
-                }
-            } else {
-                for (int i = 0; i < idxCount; i++) {
-                    indices[i] = idxBuffer.getInt(i * 4);
-                }
+            MMDModelNativeRender result = createFromHandle(model, modelDirectory);
+            if (result == null) {
+                nf.DeleteModel(model);
             }
-            MemoryUtil.memFree(idxBuffer);
-            
+            return result;
+        } catch (Exception e) {
+            logger.error("加载模型异常", e);
+            return null;
+        }
+    }
+
+    /**
+     * 从已加载的模型句柄创建渲染实例（Phase 2：GL 资源创建，必须在渲染线程调用）
+     * Phase 1（nf.LoadModelPMX）已在后台线程完成
+     */
+    public static MMDModelNativeRender createFromHandle(long model, String modelDirectory) {
+        if (nf == null) nf = NativeFunc.GetInst();
+
+        // 资源追踪变量（用于异常时清理）
+        FloatBuffer matMorphResultsBuf = null;
+        ByteBuffer matMorphResultsByteBuf = null;
+        int vao = 0;
+        int[] vbos = null;
+        ByteBuffer mcVertexBuf = null, poseMatBuf = null, normalMatBuf = null;
+
+        try {
+            int vertexCount = (int) nf.GetVertexCount(model);
+
             // 加载材质
             int matCount = (int) nf.GetMaterialCount(model);
             Material[] mats = new Material[matCount];
@@ -133,72 +148,90 @@ public class MMDModelNativeRender implements IMMDModel {
                 mats[i] = new Material();
                 String texPath = nf.GetMaterialTex(model, i);
                 if (texPath != null && !texPath.isEmpty()) {
-                    String fullPath = modelDirectory + "/" + texPath;
-                    MMDTextureManager.Texture tex = MMDTextureManager.GetTexture(fullPath);
+                    MMDTextureManager.Texture tex = MMDTextureManager.GetTexture(texPath);
                     if (tex != null) {
                         mats[i].tex = tex.tex;
                         mats[i].hasAlpha = tex.hasAlpha;
                     }
                 }
             }
-            
-            // 创建子网格 VertexBuffer
-            long subMeshCount = nf.GetSubMeshCount(model);
-            VertexBuffer[] subMeshVertexBuffers = new VertexBuffer[(int) subMeshCount];
+
+            // P2-9: 创建自定义 VAO + 每子网格 VBO（替代 MC VertexBuffer + BufferBuilder）
+            BufferUploader.reset();
+            int subMeshCount = (int) nf.GetSubMeshCount(model);
+            vao = GL46C.glGenVertexArrays();
+            vbos = new int[subMeshCount];
+            int maxVertCount = 0;
             for (int i = 0; i < subMeshCount; i++) {
-                subMeshVertexBuffers[i] = new VertexBuffer(VertexBuffer.Usage.DYNAMIC);
+                vbos[i] = GL46C.glGenBuffers();
+                int vc = nf.GetSubMeshVertexCount(model, i);
+                maxVertCount = Math.max(maxVertCount, vc);
+                // 预分配 VBO（后续使用 glBufferSubData 更新）
+                GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, vbos[i]);
+                GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, (long) vc * 36, GL46C.GL_DYNAMIC_DRAW);
             }
-            
+            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, 0);
+
+            // 预分配 Rust 顶点构建缓冲区
+            mcVertexBuf = MemoryUtil.memAlloc(maxVertCount * 36);
+            poseMatBuf = MemoryUtil.memAlloc(64);   // 4×4 float 矩阵
+            normalMatBuf = MemoryUtil.memAlloc(36);  // 3×3 float 矩阵
+
             // 组装结果
             MMDModelNativeRender result = new MMDModelNativeRender();
             result.model = model;
             result.modelDir = modelDirectory;
             result.vertexCount = vertexCount;
-            result.posBuffer = posBuffer;
-            result.norBuffer = norBuffer;
-            result.uv0Buffer = uv0Buffer;
-            result.indices = indices;
-            result.indexCount = (int) idxCount;
-            result.indexElementSize = indexElementSize;
             result.mats = mats;
-            result.subMeshVertexBuffers = subMeshVertexBuffers;
+            result.vao = vao;
+            result.subMeshVBOs = vbos;
+            result.subMeshCount = subMeshCount;
+            result.mcVertexBuf = mcVertexBuf;
+            result.poseMatBuf = poseMatBuf;
+            result.normalMatBuf = normalMatBuf;
 
             // 初始化材质 Morph 结果缓冲区
             int matMorphCount = nf.GetMaterialMorphResultCount(model);
             if (matMorphCount > 0) {
                 int floatCount = matMorphCount * 56;
                 result.materialMorphResultCount = matMorphCount;
-                result.materialMorphResultsBuffer = MemoryUtil.memAllocFloat(floatCount);
-                result.materialMorphResultsByteBuffer = MemoryUtil.memAlloc(floatCount * 4);
-                result.materialMorphResultsByteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+                matMorphResultsBuf = MemoryUtil.memAllocFloat(floatCount);
+                matMorphResultsByteBuf = MemoryUtil.memAlloc(floatCount * 4);
+                matMorphResultsByteBuf.order(ByteOrder.LITTLE_ENDIAN);
+                result.materialMorphResultsBuffer = matMorphResultsBuf;
+                result.materialMorphResultsByteBuffer = matMorphResultsByteBuf;
             }
 
             // 启用自动眨眼
             nf.SetAutoBlinkEnabled(model, true);
 
-            logger.info("原生渲染模型加载成功: 顶点={}, 索引={}, 子网格={}", vertexCount, idxCount, subMeshCount);
+            logger.info("原生渲染模型加载成功 (P2-9): 顶点={}, 子网格={}, 最大子网格顶点={}", vertexCount, subMeshCount, maxVertCount);
             return result;
-            
+
         } catch (Exception e) {
-            logger.error("加载模型异常", e);
+            logger.error("原生渲染模型创建失败，清理资源", e);
+
+            if (matMorphResultsBuf != null) MemoryUtil.memFree(matMorphResultsBuf);
+            if (matMorphResultsByteBuf != null) MemoryUtil.memFree(matMorphResultsByteBuf);
+            if (mcVertexBuf != null) MemoryUtil.memFree(mcVertexBuf);
+            if (poseMatBuf != null) MemoryUtil.memFree(poseMatBuf);
+            if (normalMatBuf != null) MemoryUtil.memFree(normalMatBuf);
+            if (vao != 0) GL46C.glDeleteVertexArrays(vao);
+            if (vbos != null) {
+                for (int vbo : vbos) {
+                    if (vbo != 0) GL46C.glDeleteBuffers(vbo);
+                }
+            }
+
             return null;
         }
     }
     
     @Override
     public void dispose() {
-        if (posBuffer != null) {
-            MemoryUtil.memFree(posBuffer);
-            posBuffer = null;
-        }
-        if (norBuffer != null) {
-            MemoryUtil.memFree(norBuffer);
-            norBuffer = null;
-        }
-        if (uv0Buffer != null) {
-            MemoryUtil.memFree(uv0Buffer);
-            uv0Buffer = null;
-        }
+        if (mcVertexBuf != null) { MemoryUtil.memFree(mcVertexBuf); mcVertexBuf = null; }
+        if (poseMatBuf != null) { MemoryUtil.memFree(poseMatBuf); poseMatBuf = null; }
+        if (normalMatBuf != null) { MemoryUtil.memFree(normalMatBuf); normalMatBuf = null; }
         if (materialMorphResultsBuffer != null) {
             MemoryUtil.memFree(materialMorphResultsBuffer);
             materialMorphResultsBuffer = null;
@@ -207,12 +240,13 @@ public class MMDModelNativeRender implements IMMDModel {
             MemoryUtil.memFree(materialMorphResultsByteBuffer);
             materialMorphResultsByteBuffer = null;
         }
-        if (subMeshVertexBuffers != null) {
-            for (VertexBuffer vb : subMeshVertexBuffers) {
-                if (vb != null) vb.close();
+        if (subMeshVBOs != null) {
+            for (int vbo : subMeshVBOs) {
+                if (vbo != 0) GL46C.glDeleteBuffers(vbo);
             }
-            subMeshVertexBuffers = null;
+            subMeshVBOs = null;
         }
+        if (vao != 0) { GL46C.glDeleteVertexArrays(vao); vao = 0; }
         if (model != 0) {
             nf.DeleteModel(model);
             model = 0;
@@ -320,64 +354,53 @@ public class MMDModelNativeRender implements IMMDModel {
             }
         }
         
-        // 从 Rust 引擎获取蒙皮后的顶点数据
-        int posSize = vertexCount * 12;
-        int norSize = vertexCount * 12;
-        int uvSize = vertexCount * 8;
-        
-        long posData = nf.GetPoss(model);
-        long norData = nf.GetNormals(model);
-        long uvData = nf.GetUVs(model);
-        
-        nf.CopyDataToByteBuffer(posBuffer, posData, posSize);
-        nf.CopyDataToByteBuffer(norBuffer, norData, norSize);
-        nf.CopyDataToByteBuffer(uv0Buffer, uvData, uvSize);
-        
-        posBuffer.rewind();
-        norBuffer.rewind();
-        uv0Buffer.rewind();
-        
         // 获取材质 Morph 结果
         fetchMaterialMorphResults();
-        
+
+        // P2-9: 将 pose/normal 矩阵写入 ByteBuffer，供 Rust 侧矩阵变换使用
+        poseMatBuf.clear();
+        poseStack.last().pose().get(poseMatBuf);
+        normalMatBuf.clear();
+        poseStack.last().normal().get(normalMatBuf);
+
         // 启用混合和深度测试
+        BufferUploader.reset();
         RenderSystem.enableBlend();
         RenderSystem.enableDepthTest();
         RenderSystem.defaultBlendFunc();
-        
+
         // 按子网格渲染
-        long subMeshCount = nf.GetSubMeshCount(model);
-        
         for (int i = 0; i < subMeshCount; i++) {
             int materialID = nf.GetSubMeshMaterialID(model, i);
-            
+
             if (!nf.IsMaterialVisible(model, materialID)) continue;
             float alpha = nf.GetMaterialAlpha(model, materialID);
             if (getEffectiveMaterialAlpha(materialID, alpha) < 0.001f) continue;
-            
-            int startIndex = nf.GetSubMeshBeginIndex(model, i);
-            int vertCount = nf.GetSubMeshVertexCount(model, i);
-            
-            renderSubMesh(poseStack, packedLight, materialID, startIndex, vertCount, i, mc);
+
+            renderSubMesh(poseStack, packedLight, materialID, i, mc);
         }
-        
+
         poseStack.popPose();
     }
     
     /**
-     * 使用 Minecraft 原生系统渲染子网格
+     * P2-9: 使用 Rust 构建的 MC 顶点数据 + 自定义 VAO/VBO 渲染子网格
+     *
+     * 替代旧的 BufferBuilder 逐顶点循环：
+     * - Rust 侧完成 SoA→AoS 转换 + 矩阵变换 + 格式打包（1 次 JNI 调用）
+     * - Java 侧仅上传 + 绑定着色器 + 绘制
      */
-    private void renderSubMesh(PoseStack poseStack, int packedLight, int materialID, int startIndex, int vertCount, int subMeshIndex, Minecraft mc) {
+    private void renderSubMesh(PoseStack poseStack, int packedLight, int materialID, int subMeshIndex, Minecraft mc) {
         // 设置纹理
         if (mats[materialID].tex != 0) {
             RenderSystem.setShaderTexture(0, mats[materialID].tex);
         } else {
             RenderSystem.setShaderTexture(0, mc.getTextureManager().getTexture(TextureManager.INTENTIONAL_MISSING_TEXTURE).getId());
         }
-        
-        // === 关键：使用 Minecraft 原生着色器，Iris 会正确拦截 ===
+
+        // 使用 Minecraft 原生着色器（Iris 会正确拦截）
         RenderSystem.setShader(GameRenderer::getRendertypeEntityCutoutNoCullShader);
-        
+
         // 双面渲染
         boolean bothFace = nf.GetMaterialBothFace(model, materialID);
         if (bothFace) {
@@ -385,82 +408,61 @@ public class MMDModelNativeRender implements IMMDModel {
         } else {
             RenderSystem.enableCull();
         }
-        
-        // 构建顶点数据
-        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
-        
-        Matrix4f pose = poseStack.last().pose();
-        
-        // 添加顶点
-        for (int i = 0; i < vertCount; i++) {
-            int idx = indices[startIndex + i];
-            
-            // 位置
-            float px = posBuffer.getFloat(idx * 12);
-            float py = posBuffer.getFloat(idx * 12 + 4);
-            float pz = posBuffer.getFloat(idx * 12 + 8);
-            
-            // 法线
-            float nx = norBuffer.getFloat(idx * 12);
-            float ny = norBuffer.getFloat(idx * 12 + 4);
-            float nz = norBuffer.getFloat(idx * 12 + 8);
-            
-            // UV
-            float u = uv0Buffer.getFloat(idx * 8);
-            float v = uv0Buffer.getFloat(idx * 8 + 4);
-            
-            builder.addVertex(pose, px, py, pz)
-                   .setColor(255, 255, 255, 255)
-                   .setUv(u, v)
-                   .setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
-                   .setLight(packedLight)
-                   .setNormal(poseStack.last(), nx, ny, nz);
-        }
-        
-        // 上传并使用 Minecraft 原生渲染（Iris 兼容！）
-        MeshData rendered = builder.buildOrThrow();
-        VertexBuffer vb = subMeshVertexBuffers[subMeshIndex];
-        vb.bind();
-        vb.upload(rendered);
-        
+
+        // P2-9 核心：Rust 直接构建 MC NEW_ENTITY 格式的交错顶点数据
+        int overlayPacked = 0 | (10 << 16); // OverlayTexture.pack(0, 10)
+        mcVertexBuf.clear();
+        int written = nf.BuildMCVertexBuffer(
+            model, subMeshIndex, mcVertexBuf,
+            poseMatBuf, normalMatBuf,
+            0xFFFFFFFF, overlayPacked, packedLight
+        );
+        if (written <= 0) return;
+        mcVertexBuf.position(0).limit(written * 36);
+
+        // 上传到 VBO
+        GL46C.glBindVertexArray(vao);
+        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, subMeshVBOs[subMeshIndex]);
+        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, mcVertexBuf);
+
+        // 设置 NEW_ENTITY 格式的顶点属性指针（stride = 36 bytes）
+        DefaultVertexFormat.NEW_ENTITY.setupBufferState();
+
+        // 获取着色器并设置 uniform
         ShaderInstance shader = RenderSystem.getShader();
         if (shader == null) {
-            VertexBuffer.unbind();
+            DefaultVertexFormat.NEW_ENTITY.clearBufferState();
+            GL46C.glBindVertexArray(0);
             return;
         }
+
+        // 设置 uniform（复制自 VertexBuffer.drawWithShader 的逻辑）
         Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
         Matrix4f projection = RenderSystem.getProjectionMatrix();
-        vb.drawWithShader(modelView, projection, shader);
-        
-        VertexBuffer.unbind();
-    }
-    
-    /**
-     * 从 Rust 端获取材质 Morph 结果
-     */
-    private void fetchMaterialMorphResults() {
-        if (materialMorphResultCount <= 0 || materialMorphResultsBuffer == null) return;
-        
-        materialMorphResultsByteBuffer.clear();
-        nf.CopyMaterialMorphResultsToBuffer(model, materialMorphResultsByteBuffer);
-        materialMorphResultsBuffer.clear();
-        materialMorphResultsByteBuffer.position(0);
-        materialMorphResultsBuffer.put(materialMorphResultsByteBuffer.asFloatBuffer());
-        materialMorphResultsBuffer.flip();
-    }
-    
-    /**
-     * 计算材质经 Morph 变形后的有效 alpha
-     * 布局：每材质 56 float = mul(28) + add(28)，diffuse.w 在各组偏移 3
-     * 计算：effective = baseAlpha * mul + add
-     */
-    private float getEffectiveMaterialAlpha(int materialIndex, float baseAlpha) {
-        if (materialMorphResultsBuffer == null || materialIndex >= materialMorphResultCount) return baseAlpha;
-        int mulOffset = materialIndex * 56 + 3;
-        int addOffset = materialIndex * 56 + 28 + 3;
-        float mulAlpha = (mulOffset < materialMorphResultsBuffer.capacity()) ? materialMorphResultsBuffer.get(mulOffset) : 1.0f;
-        float addAlpha = (addOffset < materialMorphResultsBuffer.capacity()) ? materialMorphResultsBuffer.get(addOffset) : 0.0f;
-        return baseAlpha * mulAlpha + addAlpha;
+        for (int i = 0; i < 12; ++i) {
+            int j = RenderSystem.getShaderTexture(i);
+            shader.setSampler("Sampler" + i, j);
+        }
+        if (shader.MODEL_VIEW_MATRIX != null) shader.MODEL_VIEW_MATRIX.set(modelView);
+        if (shader.PROJECTION_MATRIX != null) shader.PROJECTION_MATRIX.set(projection);
+        // MC 1.21.1: INVERSE_VIEW_ROTATION_MATRIX 已移除
+        if (shader.COLOR_MODULATOR != null) shader.COLOR_MODULATOR.set(RenderSystem.getShaderColor());
+        if (shader.FOG_START != null) shader.FOG_START.set(RenderSystem.getShaderFogStart());
+        if (shader.FOG_END != null) shader.FOG_END.set(RenderSystem.getShaderFogEnd());
+        if (shader.FOG_COLOR != null) shader.FOG_COLOR.set(RenderSystem.getShaderFogColor());
+        if (shader.FOG_SHAPE != null) shader.FOG_SHAPE.set(RenderSystem.getShaderFogShape().getIndex());
+        if (shader.TEXTURE_MATRIX != null) shader.TEXTURE_MATRIX.set(RenderSystem.getTextureMatrix());
+        if (shader.GAME_TIME != null) shader.GAME_TIME.set(RenderSystem.getShaderGameTime());
+
+        shader.apply();
+
+        // 绘制（不使用索引，顶点已由 Rust 展开）
+        GL46C.glDrawArrays(GL46C.GL_TRIANGLES, 0, written);
+
+        // 清理
+        shader.clear();
+        DefaultVertexFormat.NEW_ENTITY.clearBufferState();
+        GL46C.glBindVertexArray(0);
     }
     
     @Override

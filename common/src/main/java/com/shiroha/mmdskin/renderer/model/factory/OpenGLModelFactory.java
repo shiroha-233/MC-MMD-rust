@@ -56,4 +56,14 @@ public class OpenGLModelFactory implements IMMDModelFactory {
             return null;
         }
     }
+    
+    @Override
+    public IMMDModel createModelFromHandle(long modelHandle, String modelDir) {
+        try {
+            return MMDModelOpenGL.createFromHandle(modelHandle, modelDir);
+        } catch (Throwable e) {
+            logger.error("CPU 蒙皮模型（从句柄）创建失败", e);
+            return null;
+        }
+    }
 }

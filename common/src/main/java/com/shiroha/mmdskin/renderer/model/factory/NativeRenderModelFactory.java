@@ -65,4 +65,14 @@ public class NativeRenderModelFactory implements IMMDModelFactory {
             return null;
         }
     }
+    
+    @Override
+    public IMMDModel createModelFromHandle(long modelHandle, String modelDir) {
+        try {
+            return MMDModelNativeRender.createFromHandle(modelHandle, modelDir);
+        } catch (Exception e) {
+            logger.error("原生渲染模型（从句柄）创建失败", e);
+            return null;
+        }
+    }
 }

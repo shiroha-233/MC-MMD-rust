@@ -108,6 +108,13 @@ public class MMDModelOpenGL implements IMMDModel {
     private FloatBuffer light0Buff;                  // 预分配的光照缓冲区
     private FloatBuffer light1Buff;
 
+    // 性能优化：缓存着色器程序ID，避免每帧重复查询属性位置
+    private int cachedShaderProgram = -1;
+    // 性能优化：标记是否有 UV Morph，无则跳过每帧 UV 重传
+    private boolean hasUvMorph = false;
+    // 性能优化：标记 VBO 是否已预分配，用于 glBufferSubData
+    private boolean vboPreallocated = false;
+
     MMDModelOpenGL() {
         // 不在这里初始化时间，等第一次 Update 时初始化
     }
@@ -138,6 +145,21 @@ public class MMDModelOpenGL implements IMMDModel {
             logger.info(String.format("Cannot open model: '%s'.", modelFilename));
             return null;
         }
+        MMDModelOpenGL result = createFromHandle(model, modelDir);
+        if (result == null) {
+            nf.DeleteModel(model);
+        }
+        return result;
+    }
+    
+    /**
+     * 从已加载的模型句柄创建渲染实例（Phase 2：GL 资源创建，必须在渲染线程调用）
+     * Phase 1（nf.LoadModelPMX/PMD）已在后台线程完成
+     */
+    public static MMDModelOpenGL createFromHandle(long model, String modelDir) {
+        if (!isShaderInited && isMMDShaderEnabled)
+            InitShader();
+        if (nf == null) nf = NativeFunc.GetInst();
         BufferUploader.reset();
         //Model exists,now we prepare data for OpenGL
         int vertexArrayObject = GL46C.glGenVertexArrays();
@@ -167,8 +189,7 @@ public class MMDModelOpenGL implements IMMDModel {
         int indexSize = indexCount * indexElementSize;
         long indexData = nf.GetIndices(model);
         ByteBuffer indexBuffer = ByteBuffer.allocateDirect(indexSize);
-        for (int i = 0; i < indexSize; ++i)
-            indexBuffer.put(nf.ReadByte(indexData, i));
+        nf.CopyDataToByteBuffer(indexBuffer, indexData, indexSize);
         indexBuffer.position(0);
         GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, indexBufferObject);
         GL46C.glBufferData(GL46C.GL_ELEMENT_ARRAY_BUFFER, indexBuffer, GL46C.GL_STATIC_DRAW);
@@ -236,6 +257,24 @@ public class MMDModelOpenGL implements IMMDModel {
         }
         uv1Buffer.flip();
 
+        // 性能优化：预分配动态 VBO 大小（后续使用 glBufferSubData 仅更新数据，避免每帧重分配 GPU 内存）
+        int posAndNorSize = vertexCount * 12;
+        int uv0Size = vertexCount * 8;
+        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, positionBufferObject);
+        GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, posAndNorSize, GL46C.GL_DYNAMIC_DRAW);
+        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, normalBufferObject);
+        GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, posAndNorSize, GL46C.GL_DYNAMIC_DRAW);
+        // UV0：加载初始数据并上传；无 UV Morph 时作为静态数据，有 UV Morph 时每帧更新
+        long uv0Data = nf.GetUVs(model);
+        nf.CopyDataToByteBuffer(uv0Buffer, uv0Data, uv0Size);
+        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv0BufferObject);
+        GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv0Buffer, GL46C.GL_DYNAMIC_DRAW);
+
+        // 性能优化：uv1 是静态数据（永远是 {15, 15}），只在创建时上传一次
+        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv1BufferObject);
+        GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv1Buffer, GL46C.GL_STATIC_DRAW);
+        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, 0);
+
         MMDModelOpenGL result = new MMDModelOpenGL();
         result.model = model;
         result.modelDir = modelDir;
@@ -277,6 +316,9 @@ public class MMDModelOpenGL implements IMMDModel {
         
         // 启用自动眨眼
         nf.SetAutoBlinkEnabled(model, true);
+        
+        result.vboPreallocated = true;
+        result.hasUvMorph = nf.GetUvMorphCount(model) > 0;
         
         return result;
     }
@@ -558,27 +600,28 @@ public class MMDModelOpenGL implements IMMDModel {
         RenderSystem.blendEquation(GL46C.GL_FUNC_ADD);
         RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
 
-        // === 上传顶点数据到 VBO（每个 VBO 只上传一次）===
+        // === 上传顶点数据到 VBO（使用 glBufferSubData 仅更新数据，避免每帧重分配 GPU 内存）===
         int posAndNorSize = vertexCount * 12; // float * 3
         long posData = nf.GetPoss(model);
         nf.CopyDataToByteBuffer(posBuffer, posData, posAndNorSize);
         GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, vertexBufferObject);
-        GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, posBuffer, GL46C.GL_DYNAMIC_DRAW);
+        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, posBuffer);
 
         long normalData = nf.GetNormals(model);
         nf.CopyDataToByteBuffer(norBuffer, normalData, posAndNorSize);
         GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, normalBufferObject);
-        GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, norBuffer, GL46C.GL_DYNAMIC_DRAW);
+        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, norBuffer);
 
-        int uv0Size = vertexCount * 8; // float * 2
-        long uv0Data = nf.GetUVs(model);
-        nf.CopyDataToByteBuffer(uv0Buffer, uv0Data, uv0Size);
-        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, texcoordBufferObject);
-        GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv0Buffer, GL46C.GL_DYNAMIC_DRAW);
+        // 性能优化：无 UV Morph 时跳过 UV0 重传（已在创建时上传）
+        if (hasUvMorph) {
+            int uv0Size = vertexCount * 8; // float * 2
+            long uv0Data = nf.GetUVs(model);
+            nf.CopyDataToByteBuffer(uv0Buffer, uv0Data, uv0Size);
+            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, texcoordBufferObject);
+            GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, uv0Buffer);
+        }
 
-        uv1Buffer.position(0);
-        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv1BufferObject);
-        GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv1Buffer, GL46C.GL_STATIC_DRAW);
+        // 性能优化：uv1 已在创建时上传，无需每帧重传
 
         // === UV2 和 Color：所有顶点值相同，使用常量顶点属性（避免逐顶点循环和缓冲区上传）===
         boolean irisActive = IrisCompat.isIrisShaderActive();
@@ -814,15 +857,25 @@ public class MMDModelOpenGL implements IMMDModel {
             }
         }
         
-        // 获取蒙皮后的顶点数据（由 Rust 引擎计算）
+        // 获取蒙皮后的顶点数据（由 Rust 引擎计算）并一次性上传到 VBO（两遍共用）
         int posAndNorSize = vertexCount * 12;
         long posData = nf.GetPoss(model);
         nf.CopyDataToByteBuffer(posBuffer, posData, posAndNorSize);
         long normalData = nf.GetNormals(model);
         nf.CopyDataToByteBuffer(norBuffer, normalData, posAndNorSize);
-        int uv0Size = vertexCount * 8;
-        long uv0Data = nf.GetUVs(model);
-        nf.CopyDataToByteBuffer(uv0Buffer, uv0Data, uv0Size);
+        
+        // 上传顶点数据到 VBO（glBufferSubData，描边和主体两遍共用，避免重复上传）
+        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, vertexBufferObject);
+        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, posBuffer);
+        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, normalBufferObject);
+        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, norBuffer);
+        if (hasUvMorph) {
+            int uv0Size = vertexCount * 8;
+            long uv0Data = nf.GetUVs(model);
+            nf.CopyDataToByteBuffer(uv0Buffer, uv0Data, uv0Size);
+            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, texcoordBufferObject);
+            GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, uv0Buffer);
+        }
         
         // 设置矩阵
         modelViewMatBuff.clear();
@@ -839,17 +892,15 @@ public class MMDModelOpenGL implements IMMDModel {
             int posLoc = toonShaderCpu.getOutlinePositionLocation();
             int norLoc = toonShaderCpu.getOutlineNormalLocation();
             
-            // 设置顶点属性
+            // 设置顶点属性（VBO 数据已上传，只需绑定属性指针）
             if (posLoc != -1) {
                 GL46C.glEnableVertexAttribArray(posLoc);
                 GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, vertexBufferObject);
-                GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, posBuffer, GL46C.GL_DYNAMIC_DRAW);
                 GL46C.glVertexAttribPointer(posLoc, 3, GL46C.GL_FLOAT, false, 0, 0);
             }
             if (norLoc != -1) {
                 GL46C.glEnableVertexAttribArray(norLoc);
                 GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, normalBufferObject);
-                GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, norBuffer, GL46C.GL_DYNAMIC_DRAW);
                 GL46C.glVertexAttribPointer(norLoc, 3, GL46C.GL_FLOAT, false, 0, 0);
             }
             
@@ -893,23 +944,20 @@ public class MMDModelOpenGL implements IMMDModel {
         int norLoc = toonShaderCpu.getNormalLocation();
         int uvLoc = toonShaderCpu.getUv0Location();
         
-        // 设置顶点属性
+        // 设置顶点属性（VBO 数据已上传，只需绑定属性指针）
         if (posLoc != -1) {
             GL46C.glEnableVertexAttribArray(posLoc);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, vertexBufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, posBuffer, GL46C.GL_DYNAMIC_DRAW);
             GL46C.glVertexAttribPointer(posLoc, 3, GL46C.GL_FLOAT, false, 0, 0);
         }
         if (norLoc != -1) {
             GL46C.glEnableVertexAttribArray(norLoc);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, normalBufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, norBuffer, GL46C.GL_DYNAMIC_DRAW);
             GL46C.glVertexAttribPointer(norLoc, 3, GL46C.GL_FLOAT, false, 0, 0);
         }
         if (uvLoc != -1) {
             GL46C.glEnableVertexAttribArray(uvLoc);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, texcoordBufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv0Buffer, GL46C.GL_DYNAMIC_DRAW);
             GL46C.glVertexAttribPointer(uvLoc, 2, GL46C.GL_FLOAT, false, 0, 0);
         }
         
@@ -986,6 +1034,8 @@ public class MMDModelOpenGL implements IMMDModel {
     }
 
     void updateLocation(int shaderProgram){
+        if (shaderProgram == cachedShaderProgram) return;
+        cachedShaderProgram = shaderProgram;
         positionLocation = GlStateManager._glGetAttribLocation(shaderProgram, "Position");
         normalLocation = GlStateManager._glGetAttribLocation(shaderProgram, "Normal");
         uv0Location = GlStateManager._glGetAttribLocation(shaderProgram, "UV0");

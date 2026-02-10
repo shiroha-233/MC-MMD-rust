@@ -235,6 +235,58 @@ public class RenderModeManager {
     }
     
     /**
+     * 从已加载的模型句柄创建渲染实例（Phase 2：GL 资源创建，必须在渲染线程调用）
+     * 用于两阶段异步加载。
+     * 
+     * @param modelHandle 后台线程加载的模型句柄
+     * @param modelDir 模型目录
+     * @param isPMD 是否为 PMD 格式
+     * @return 创建的模型实例，失败返回 null
+     */
+    public static IMMDModel createModelFromHandle(long modelHandle, String modelDir, boolean isPMD) {
+        syncFactoryStates();
+        
+        List<IMMDModelFactory> sorted = new ArrayList<>(factories);
+        sorted.sort(Comparator.comparingInt(IMMDModelFactory::getPriority).reversed());
+        
+        for (IMMDModelFactory factory : sorted) {
+            if (!factory.isAvailable() || !factory.isEnabled()) {
+                continue;
+            }
+            if (isPMD && factory.getModeName().contains("Native")) {
+                continue;
+            }
+
+            logger.info("尝试使用 {} 从句柄创建模型", factory.getModeName());
+
+            try {
+                IMMDModel model = factory.createModelFromHandle(modelHandle, modelDir);
+                if (model != null) {
+                    return model;
+                }
+                logger.warn("{} 从句柄创建失败，尝试下一个工厂", factory.getModeName());
+            } catch (Exception e) {
+                logger.error("{} 从句柄创建异常: {}", factory.getModeName(), e.getMessage());
+            }
+        }
+        
+        // 回退：尝试任何可用工厂
+        for (IMMDModelFactory factory : sorted) {
+            if (factory.isAvailable()) {
+                try {
+                    IMMDModel model = factory.createModelFromHandle(modelHandle, modelDir);
+                    if (model != null) return model;
+                } catch (Exception e) {
+                    logger.error("回退工厂 {} 从句柄创建异常", factory.getModeName(), e);
+                }
+            }
+        }
+        
+        logger.error("所有工厂都无法从句柄创建模型");
+        return null;
+    }
+    
+    /**
      * 获取所有已注册的工厂
      */
     public static List<IMMDModelFactory> getFactories() {
