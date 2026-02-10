@@ -159,15 +159,16 @@ impl MMDJoint {
         }
     }
     
-    /// 创建 Rapier GenericJoint
+    /// 创建 Rapier GenericJoint（限制 + ForceBased motor 弹簧）
     /// 
-    /// 使用 GenericJoint 实现 6DOF 弹簧约束，对应 Bullet3 的 btGeneric6DofSpringConstraint
+    /// 对应 Bullet3 的 btGeneric6DofSpringConstraint。
+    /// 弹簧通过 `MotorModel::ForceBased` motor 在约束求解器内部处理，保证数值稳定。
     /// 
-    /// 关键修复：根据 limits 范围确定哪些轴需要锁定
-    /// - 如果 lower == upper == 0，则锁定该轴
-    /// - 如果 lower < upper，则该轴自由但有限制
-    /// - 如果 lower > upper，则该轴完全自由（无限制）
-    pub fn build_joint(&self, is_bust: bool) -> GenericJoint {
+    /// 轴锁定规则（与 Bullet3 一致）：
+    /// - lower == upper == 0 → 锁定该轴
+    /// - lower < upper → 有限制范围
+    /// - lower > upper → 完全自由（无限制）
+    pub fn build_joint(&self) -> GenericJoint {
         // Bullet3 的 btGeneric6DofSpringConstraint 行为：
         // - 不锁定任何轴，而是设置限制范围
         // - 当 lower <= upper 时，设置限制
@@ -254,61 +255,63 @@ impl MMDJoint {
             }
         }
         
-        // 设置弹簧电机（用于模拟弹簧效果）
-        // saba/Bullet 使用 enableSpring + setStiffness
-        // Rapier 使用电机来模拟弹簧：target_pos=0, stiffness=刚度, damping=阻尼
+        // 弹簧：使用 Rapier ForceBased motor，与 Bullet3 语义一致
+        //
+        // Bullet3: F = stiffness * delta，通过约束求解器内部施加
+        // Rapier ForceBased: force = stiffness * (target - pos) + damping * (target_vel - vel)
+        //   target_pos = 0 (平衡点)，target_vel = 0
+        //   等价于 F = -stiffness * pos - damping * vel
+        //
+        // 与 Bullet3 的关键区别：
+        // - Bullet3 弹簧 damping=1.0 表示“无阻尼”，能量耗散依赖刚体的 linearDamping/angularDamping
+        // - Rapier motor damping=0 也是“无阻尼”，但可能振荡
+        // - 我们使用小量 velocity damping 保证数值稳定性
         let config = get_config();
+        let stiff_scale = config.spring_stiffness_scale;
         
-        // 根据是否为胸部关节选用不同的弹簧参数组
-        let (lin_stiff_scale, ang_stiff_scale, lin_damp_factor, ang_damp_factor) = if is_bust {
-            (
-                config.bust_linear_spring_stiffness_scale,
-                config.bust_angular_spring_stiffness_scale,
-                config.bust_linear_spring_damping_factor,
-                config.bust_angular_spring_damping_factor,
-            )
-        } else {
-            (
-                config.linear_spring_stiffness_scale,
-                config.angular_spring_stiffness_scale,
-                config.linear_spring_damping_factor,
-                config.angular_spring_damping_factor,
-            )
-        };
+        // 线性弹簧（仅对未锁定且 stiffness != 0 的轴）
+        Self::setup_spring_motor(&mut joint, JointAxis::LinX, self.linear_spring.x, stiff_scale,
+            !locked_axes.contains(JointAxesMask::LIN_X));
+        Self::setup_spring_motor(&mut joint, JointAxis::LinY, self.linear_spring.y, stiff_scale,
+            !locked_axes.contains(JointAxesMask::LIN_Y));
+        Self::setup_spring_motor(&mut joint, JointAxis::LinZ, self.linear_spring.z, stiff_scale,
+            !locked_axes.contains(JointAxesMask::LIN_Z));
         
-        // 线性弹簧
-        if self.linear_spring.x != 0.0 && !locked_axes.contains(JointAxesMask::LIN_X) {
-            let stiffness = self.linear_spring.x * lin_stiff_scale;
-            let damping = (stiffness * lin_damp_factor).sqrt();
-            joint.set_motor(JointAxis::LinX, 0.0, 0.0, stiffness, damping);
-        }
-        if self.linear_spring.y != 0.0 && !locked_axes.contains(JointAxesMask::LIN_Y) {
-            let stiffness = self.linear_spring.y * lin_stiff_scale;
-            let damping = (stiffness * lin_damp_factor).sqrt();
-            joint.set_motor(JointAxis::LinY, 0.0, 0.0, stiffness, damping);
-        }
-        if self.linear_spring.z != 0.0 && !locked_axes.contains(JointAxesMask::LIN_Z) {
-            let stiffness = self.linear_spring.z * lin_stiff_scale;
-            let damping = (stiffness * lin_damp_factor).sqrt();
-            joint.set_motor(JointAxis::LinZ, 0.0, 0.0, stiffness, damping);
-        }
-        // 角度弹簧（角度轴不锁定，总是可以设置）
-        if self.angular_spring.x != 0.0 {
-            let stiffness = self.angular_spring.x * ang_stiff_scale;
-            let damping = (stiffness * ang_damp_factor).sqrt();
-            joint.set_motor(JointAxis::AngX, 0.0, 0.0, stiffness, damping);
-        }
-        if self.angular_spring.y != 0.0 {
-            let stiffness = self.angular_spring.y * ang_stiff_scale;
-            let damping = (stiffness * ang_damp_factor).sqrt();
-            joint.set_motor(JointAxis::AngY, 0.0, 0.0, stiffness, damping);
-        }
-        if self.angular_spring.z != 0.0 {
-            let stiffness = self.angular_spring.z * ang_stiff_scale;
-            let damping = (stiffness * ang_damp_factor).sqrt();
-            joint.set_motor(JointAxis::AngZ, 0.0, 0.0, stiffness, damping);
-        }
+        // 角度弹簧（与 babylon-mmd 一致，始终启用所有 3 个角度轴）
+        Self::setup_spring_motor(&mut joint, JointAxis::AngX, self.angular_spring.x, stiff_scale, true);
+        Self::setup_spring_motor(&mut joint, JointAxis::AngY, self.angular_spring.y, stiff_scale, true);
+        Self::setup_spring_motor(&mut joint, JointAxis::AngZ, self.angular_spring.z, stiff_scale, true);
         
         joint
+    }
+    
+    /// 设置单轴弹簧 motor
+    ///
+    /// 使用 `MotorModel::ForceBased` 与 Bullet3 语义匹配：
+    /// - stiffness 直接产生力（不自动除以质量）
+    /// - damping 提供速度阻尼保证稳定性
+    fn setup_spring_motor(
+        joint: &mut GenericJoint,
+        axis: JointAxis,
+        pmx_stiffness: f32,
+        stiffness_scale: f32,
+        axis_free: bool,
+    ) {
+        if !axis_free {
+            return;
+        }
+        
+        let stiffness = pmx_stiffness * stiffness_scale;
+        if stiffness.abs() < 1e-6 {
+            return;
+        }
+        
+        // damping = sqrt(stiffness) 提供近似临界阻尼（假设单位质量）
+        // 与刚体自身的 linearDamping/angularDamping 叠加，总体偏过阻尼
+        // 使用较小的系数避免过度阻尼
+        let damping = stiffness.abs().sqrt() * 0.5;
+        
+        joint.set_motor_model(axis, MotorModel::ForceBased);
+        joint.set_motor(axis, 0.0, 0.0, stiffness, damping);
     }
 }

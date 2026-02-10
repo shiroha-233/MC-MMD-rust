@@ -211,10 +211,10 @@ pub fn load_pmx<P: AsRef<Path>>(path: P) -> Result<MmdModel> {
     model.update_uvs = update_uvs;
     model.bone_manager = bone_manager;
     model.morph_manager = morph_manager;
-
+    
     // 初始化 Morph 系统缓冲区（材质 Morph 结果 + UV Morph 偏移）
-    model.morph_manager.init_material_morph_results(model.materials.len());
-    model.morph_manager.init_uv_morph_deltas(model.vertices.len());
+    model.morph_manager.set_material_count(model.materials.len());
+    model.morph_manager.set_vertex_count(model.vertices.len());
     
     // 初始化材质可见性（默认全部可见）
     model.init_material_visibility();
@@ -268,7 +268,7 @@ fn convert_pmx_morph(pmx_morph: &mmd::pmx::morph::Morph<DefaultConfig>) -> crate
                 BoneMorphOffset {
                     bone_index: o.bone as u32,
                     translation: Vec3::new(o.translation[0], o.translation[1], -o.translation[2]),
-                    rotation: Vec4::new(o.rotation[0], o.rotation[1], -o.rotation[2], o.rotation[3]),
+                    rotation: Vec4::new(o.rotation[0], o.rotation[1], -o.rotation[2], -o.rotation[3]),
                 }
             }).collect();
             m

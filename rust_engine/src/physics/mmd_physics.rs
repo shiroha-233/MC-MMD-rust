@@ -10,7 +10,7 @@
 //! | btCollisionDispatcher | NarrowPhase |
 //! | btSequentialImpulseConstraintSolver | 内置于 PhysicsPipeline |
 
-use glam::{Mat4, Vec3, Quat};
+use glam::{Mat4, Vec3};
 use rapier3d::prelude::*;
 use rapier3d::math::Real;
 use std::num::NonZeroUsize;
@@ -67,6 +67,8 @@ pub struct MMDPhysics {
     pub joints_enabled: bool,
     /// 上一帧的模型变换（用于计算模型整体移动速度）
     pub prev_model_transform: Option<Mat4>,
+    /// 时间累积器（固定时间步模式）
+    accumulator: f32,
 }
 
 impl MMDPhysics {
@@ -120,6 +122,7 @@ impl MMDPhysics {
             gravity: Vector::new(0.0, config.gravity_y, 0.0),
             joints_enabled: config.joints_enabled,
             prev_model_transform: None,
+            accumulator: 0.0,
         }
     }
     
@@ -178,7 +181,7 @@ impl MMDPhysics {
         let index = self.mmd_rigid_bodies.len();
         
         // 调试：打印前几个刚体的信息
-        if index < 5 {
+        if get_config().debug_log && index < 5 {
             let pos = mmd_rb.initial_transform.translation;
             log::info!(
                 "[刚体调试] 刚体[{}] '{}': 类型={:?}, 骨骼={}, 质量={}, 初始位置=({:.2},{:.2},{:.2})",
@@ -222,43 +225,36 @@ impl MMDPhysics {
         
         // 调试：打印关节限制（特别关注头发相关的关节）
         let index = self.mmd_joints.len();
-        let is_hair = mmd_joint.name.contains("髪") || mmd_joint.name.contains("hair") 
-            || mmd_joint.name.contains("Hair") || mmd_joint.name.contains("毛");
-        if index < 5 || is_hair {
-            log::info!(
-                "[关节调试] 关节[{}] '{}': 刚体A={}, 刚体B={}",
-                index, mmd_joint.name, rb_a_idx, rb_b_idx
-            );
-            log::info!(
-                "  线性限制: ({:.4}~{:.4}, {:.4}~{:.4}, {:.4}~{:.4})",
-                mmd_joint.linear_lower.x, mmd_joint.linear_upper.x,
-                mmd_joint.linear_lower.y, mmd_joint.linear_upper.y,
-                mmd_joint.linear_lower.z, mmd_joint.linear_upper.z,
-            );
-            log::info!(
-                "  角度限制: ({:.4}~{:.4}, {:.4}~{:.4}, {:.4}~{:.4})",
-                mmd_joint.angular_lower.x, mmd_joint.angular_upper.x,
-                mmd_joint.angular_lower.y, mmd_joint.angular_upper.y,
-                mmd_joint.angular_lower.z, mmd_joint.angular_upper.z,
-            );
-            log::info!(
-                "  弹簧: 线性=({:.2}, {:.2}, {:.2}), 角度=({:.2}, {:.2}, {:.2})",
-                mmd_joint.linear_spring.x, mmd_joint.linear_spring.y, mmd_joint.linear_spring.z,
-                mmd_joint.angular_spring.x, mmd_joint.angular_spring.y, mmd_joint.angular_spring.z,
-            );
+        if get_config().debug_log {
+            let is_hair = mmd_joint.name.contains("髪") || mmd_joint.name.contains("hair") 
+                || mmd_joint.name.contains("Hair") || mmd_joint.name.contains("毛");
+            if index < 5 || is_hair {
+                log::info!(
+                    "[关节调试] 关节[{}] '{}': 刚体A={}, 刚体B={}",
+                    index, mmd_joint.name, rb_a_idx, rb_b_idx
+                );
+                log::info!(
+                    "  线性限制: ({:.4}~{:.4}, {:.4}~{:.4}, {:.4}~{:.4})",
+                    mmd_joint.linear_lower.x, mmd_joint.linear_upper.x,
+                    mmd_joint.linear_lower.y, mmd_joint.linear_upper.y,
+                    mmd_joint.linear_lower.z, mmd_joint.linear_upper.z,
+                );
+                log::info!(
+                    "  角度限制: ({:.4}~{:.4}, {:.4}~{:.4}, {:.4}~{:.4})",
+                    mmd_joint.angular_lower.x, mmd_joint.angular_upper.x,
+                    mmd_joint.angular_lower.y, mmd_joint.angular_upper.y,
+                    mmd_joint.angular_lower.z, mmd_joint.angular_upper.z,
+                );
+                log::info!(
+                    "  弹簧: 线性=({:.2}, {:.2}, {:.2}), 角度=({:.2}, {:.2}, {:.2})",
+                    mmd_joint.linear_spring.x, mmd_joint.linear_spring.y, mmd_joint.linear_spring.z,
+                    mmd_joint.angular_spring.x, mmd_joint.angular_spring.y, mmd_joint.angular_spring.z,
+                );
+            }
         }
         
-        // 判断关联的刚体是否为胸部刚体（任一为胸部则使用胸部参数）
-        let is_bust = self.mmd_rigid_bodies[rb_a_idx].is_bust
-            || self.mmd_rigid_bodies[rb_b_idx].is_bust;
-        
-        // 如果是胸部关节但胸部物理未启用，跳过
-        if is_bust && !get_config().bust_physics_enabled {
-            return None;
-        }
-        
-        // 创建 Rapier 关节
-        let joint = mmd_joint.build_joint(is_bust);
+        // 创建 Rapier 关节（限制 + ForceBased motor 弹簧）
+        let joint = mmd_joint.build_joint();
         let joint_handle = self.impulse_joint_set.insert(
             rb_a_handle,
             rb_b_handle,
@@ -271,79 +267,11 @@ impl MMDPhysics {
         Some(index)
     }
 
-    /// 设置胸部-头发碰撞过滤
-    /// 
-    /// 在所有刚体和关节添加完成后调用。
-    /// 收集胸部和头发刚体各自占用的 PMX 碰撞组位，
-    /// 然后从对方的碰撞过滤掩码中清除这些位，
-    /// 使头发碰撞体和胸部碰撞体互不碰撞，避免头发压塔胸部。
-    pub fn setup_bust_hair_collision_filter(&mut self) {
-        // 第一遍：收集胸部和头发刚体各自使用的碰撞组位
-        let mut bust_membership_bits: u32 = 0;
-        let mut hair_membership_bits: u32 = 0;
-        let mut bust_count = 0u32;
-        let mut hair_count = 0u32;
-        
-        for mmd_rb in &self.mmd_rigid_bodies {
-            if mmd_rb.is_bust {
-                bust_membership_bits |= 1 << mmd_rb.group;
-                bust_count += 1;
-            }
-            if mmd_rb.is_hair {
-                hair_membership_bits |= 1 << mmd_rb.group;
-                hair_count += 1;
-            }
-        }
-        
-        // 如果不存在胸部或头发刚体，无需过滤
-        if bust_membership_bits == 0 || hair_membership_bits == 0 {
-            return;
-        }
-        
-        log::info!(
-            "[碰撞过滤] 检测到 {} 个胸部刚体(组位=0x{:04X}), {} 个头发刚体(组位=0x{:04X})，设置互斥碰撞",
-            bust_count, bust_membership_bits, hair_count, hair_membership_bits
-        );
-        
-        // 第二遍：修改碰撞体的碰撞组
-        // - 胸部碰撞体：从 filter 中清除头发组位
-        // - 头发碰撞体：从 filter 中清除胸部组位
-        for mmd_rb in &self.mmd_rigid_bodies {
-            if !mmd_rb.is_bust && !mmd_rb.is_hair {
-                continue;
-            }
-
-            if let Some(collider_handle) = mmd_rb.collider_handle {
-                if let Some(collider) = self.collider_set.get_mut(collider_handle) {
-                    let current_groups = collider.collision_groups();
-                    let current_membership = current_groups.memberships.bits();
-                    let mut current_filter = current_groups.filter.bits();
-
-                    if mmd_rb.is_bust {
-                        // 胸部：不与头发碰撞
-                        current_filter &= !hair_membership_bits;
-                    }
-                    if mmd_rb.is_hair {
-                        // 头发：不与胸部碰撞
-                        current_filter &= !bust_membership_bits;
-                    }
-
-                    let new_groups = InteractionGroups::new(
-                        Group::from_bits_truncate(current_membership),
-                        Group::from_bits_truncate(current_filter),
-                    );
-                    collider.set_collision_groups(new_groups);
-                    // solver_groups 也同步修改，确保即使检测到碰撞也不产生力
-                    collider.set_solver_groups(new_groups);
-                }
-            }
-        }
-    }
-    
     /// 更新物理模拟
     ///
-    /// 使用时间累积器模式：前 N-1 步使用固定 dt，最后一步消化剩余时间，
-    /// 保证物理模拟时间完整覆盖 delta_time，不丢失任何时间。
+    /// 使用标准的 "Fix Your Timestep" 累积器模式：
+    /// 每次物理步进始终使用固定 dt，剩余不足一步的时间保留到下一帧。
+    /// 这保证了不同游戏帧率下物理行为完全一致。
     /// 
     /// # 参数
     /// - `delta_time`: 经过的时间（秒）
@@ -351,28 +279,23 @@ impl MMDPhysics {
         let fixed_dt = 1.0 / self.fps;
         let max_steps = self.max_substep_count.max(1);
         
-        // 计算需要多少个固定步
-        let needed_steps = (delta_time / fixed_dt).ceil() as i32;
+        // 累积本帧时间
+        self.accumulator += delta_time;
         
-        if needed_steps <= max_steps {
-            // 帧率足够高，全部使用固定 dt
-            for _ in 0..needed_steps {
-                self.step_once(fixed_dt);
-            }
-        } else {
-            // 帧率过低，前 (max_steps - 1) 步用固定 dt，最后一步用剩余时间
-            let fixed_steps = max_steps - 1;
-            let consumed = fixed_steps as f32 * fixed_dt;
-            let remaining = delta_time - consumed;
-
-            for _ in 0..fixed_steps {
-                self.step_once(fixed_dt);
-            }
-            // 最后一步消化剩余时间
-            self.step_once(remaining);
+        // 防止螺旋死亡：如果累积时间过大，截断到最大可处理时间
+        let max_accumulator = fixed_dt * max_steps as f32;
+        if self.accumulator > max_accumulator {
+            self.accumulator = max_accumulator;
+        }
+        
+        // 以固定步长消耗累积时间
+        while self.accumulator >= fixed_dt {
+            self.step_once(fixed_dt);
+            self.accumulator -= fixed_dt;
         }
 
-        self.clamp_velocities();
+        let config = get_config();
+        self.clamp_velocities(config.max_linear_velocity, config.max_angular_velocity);
     }
 
     /// 执行一次物理步进
@@ -399,10 +322,7 @@ impl MMDPhysics {
     /// 
     /// MMD 物理中，当刚体穿透卡模时会产生极大的恢复力导致速度过高。
     /// 通过限制最大速度可以防止这种情况。
-    fn clamp_velocities(&mut self) {
-        let config = get_config();
-        let max_linear_velocity = config.max_linear_velocity;
-        let max_angular_velocity = config.max_angular_velocity;
+    fn clamp_velocities(&mut self, max_linear_velocity: f32, max_angular_velocity: f32) {
         
         for mmd_rb in &self.mmd_rigid_bodies {
             if mmd_rb.body_type == RigidBodyType::Kinematic {
@@ -467,11 +387,13 @@ impl MMDPhysics {
                             
                             // 从四元数提取角速度：
                             // 对于小角度旋转，角速度 ≈ 2 * (qx, qy, qz) / dt
-                            // 这是四元数到角速度的近似公式
+                            // 修复四元数双重覆盖：q 和 -q 表示同一旋转，
+                            // 当 w < 0 时虚部方向翻转，需要取反以保证最短路径
+                            let sign = if delta_rot.coords[3] < 0.0 { -1.0 } else { 1.0 };
                             let angvel = Vector::new(
-                                2.0 * delta_rot.coords[0] / dt,
-                                2.0 * delta_rot.coords[1] / dt,
-                                2.0 * delta_rot.coords[2] / dt,
+                                sign * 2.0 * delta_rot.coords[0] / dt,
+                                sign * 2.0 * delta_rot.coords[1] / dt,
+                                sign * 2.0 * delta_rot.coords[2] / dt,
                             );
                             
                             // 设置速度（这会影响通过关节连接的动态刚体）
@@ -546,14 +468,15 @@ impl MMDPhysics {
         // 关键：需要将世界空间的速度转换到模型局部空间
         // 从 model_transform 提取旋转矩阵（3x3 部分）
         let rot_col0 = model_transform.x_axis.truncate(); // 第一列
+        let rot_col1 = model_transform.y_axis.truncate(); // 第二列
         let rot_col2 = model_transform.z_axis.truncate(); // 第三列
         
         // 将世界速度转换到模型局部空间：v_local = R^T * v_world
         // R^T 的行就是 R 的列
         let world_vel = model_velocity;
-        let local_vel_x = rot_col0.x * world_vel.x + rot_col0.y * world_vel.y + rot_col0.z * world_vel.z;
-        let local_vel_y = world_vel.y; // Y轴不变
-        let local_vel_z = rot_col2.x * world_vel.x + rot_col2.y * world_vel.y + rot_col2.z * world_vel.z;
+        let local_vel_x = rot_col0.dot(world_vel);
+        let local_vel_y = rot_col1.dot(world_vel);
+        let local_vel_z = rot_col2.dot(world_vel);
         
         // 惯性速度（模型局部空间，反方向），乘以惯性强度系数
         let strength = get_config().inertia_strength;
@@ -563,23 +486,22 @@ impl MMDPhysics {
             -local_vel_z * strength
         );
         
+        // 给 Dynamic 刚体施加惯性力（非速度累积）
+        // 使用 add_force 而非 set_linvel：力每帧重新设置，不会跨帧累积
+        // 模型什么速度就给多大的力（F = m * inertia_velocity）
         for mmd_rb in &self.mmd_rigid_bodies {
-            // 只处理动态刚体
             if mmd_rb.body_type == RigidBodyType::Kinematic {
-                continue;
-            }
-            
-            // 胸部刚体不施加惯性速度，避免拖拽感
-            if mmd_rb.is_bust {
                 continue;
             }
             
             if let Some(rb_handle) = mmd_rb.rigid_body_handle {
                 if let Some(rb) = self.rigid_body_set.get_mut(rb_handle) {
-                    // 获取当前速度并叠加惯性速度
-                    let current_vel = rb.linvel().clone();
-                    let new_vel = current_vel + inertia_velocity;
-                    rb.set_linvel(new_vel, true);
+                    let mass = rb.mass();
+                    // F = m * v / dt，将速度转换为力（冲量等效）
+                    // 这样在一个物理步内产生的速度变化 ≈ inertia_velocity
+                    let force = inertia_velocity * mass / dt;
+                    rb.reset_forces(false);
+                    rb.add_force(force, true);
                 }
             }
         }
@@ -624,7 +546,9 @@ impl MMDPhysics {
     
     /// 重置所有刚体到初始状态
     pub fn reset(&mut self) {
-        for mmd_rb in &self.mmd_rigid_bodies {
+        for mmd_rb in &mut self.mmd_rigid_bodies {
+            // 清除上一帧变换，防止重置后第一帧计算出巨大速度
+            mmd_rb.prev_transform = None;
             if let Some(rb_handle) = mmd_rb.rigid_body_handle {
                 if let Some(rb) = self.rigid_body_set.get_mut(rb_handle) {
                     // 重置位置
@@ -632,11 +556,16 @@ impl MMDPhysics {
                     // 重置速度
                     rb.set_linvel(Vector::new(0.0, 0.0, 0.0), true);
                     rb.set_angvel(Vector::new(0.0, 0.0, 0.0), true);
+                    // 清除残余力
+                    rb.reset_forces(true);
                     // 唤醒刚体
                     rb.wake_up(true);
                 }
             }
         }
+        // 清除模型变换状态和时间累积器
+        self.prev_model_transform = None;
+        self.accumulator = 0.0;
     }
     
     /// 获取刚体数量
@@ -654,7 +583,6 @@ impl MMDPhysics {
     /// 返回 (骨骼索引, 新变换) 列表，按刚体顺序排列
     /// 用于物理更新后只更新被物理驱动的骨骼
     pub fn get_dynamic_bone_transforms(&self, current_bone_transforms: &[Mat4]) -> Vec<(usize, Mat4)> {
-        let config = get_config();
         let mut result = Vec::new();
         
         for mmd_rb in &self.mmd_rigid_bodies {
@@ -668,7 +596,7 @@ impl MMDPhysics {
                     if bone_idx >= 0 && (bone_idx as usize) < current_bone_transforms.len() {
                         let rb_pose = *rb.position();
                         
-                        let mut new_bone_transform = match mmd_rb.body_type {
+                        let new_bone_transform = match mmd_rb.body_type {
                             RigidBodyType::Dynamic => {
                                 mmd_rb.compute_bone_transform(rb_pose)
                             }
@@ -681,15 +609,6 @@ impl MMDPhysics {
                             RigidBodyType::Kinematic => unreachable!(),
                         };
                         
-                        // 胸部防凹陷修正
-                        if mmd_rb.is_bust && config.bust_clamp_inward {
-                            new_bone_transform = Self::clamp_bust_inward(
-                                mmd_rb,
-                                new_bone_transform,
-                                &current_bone_transforms[bone_idx as usize],
-                            );
-                        }
-                        
                         result.push((bone_idx as usize, new_bone_transform));
                     }
                 }
@@ -697,82 +616,6 @@ impl MMDPhysics {
         }
         
         result
-    }
-    
-    /// 胸部防凹陷修正
-    /// 
-    /// 原理：在骨骼本地空间中，刚体中心相对于骨骼有一个固定的"朝外"方向。
-    /// 将这个方向分别用运动学参考（动画姿态）和物理结果旋转，
-    /// 若物理结果将"朝外"方向抽向了身体内部（与动画参考的朝外方向点积 < 1，
-    /// 即物理探针在动画朝外方向的投影小于动画探针），则进行 slerp 修正。
-    /// 
-    /// 关键特性：
-    /// - 向外弹跳完全不受影响（保留物理感）
-    /// - 向内凹陷被平滑钳位回动画姿态（不会视觉跳变）
-    fn clamp_bust_inward(
-        mmd_rb: &MMDRigidBody,
-        physics_bone_transform: Mat4,
-        kinematic_bone_transform: &Mat4,
-    ) -> Mat4 {
-        let outward_local = match mmd_rb.bust_local_outward {
-            Some(dir) => dir,
-            None => return physics_bone_transform,
-        };
-        
-        // 用运动学参考（动画姿态）旋转"朝外"方向到当前世界空间
-        let kin_rot = Quat::from_mat4(kinematic_bone_transform).normalize();
-        let kin_outward = kin_rot * outward_local;
-        
-        // 用物理结果旋转"朝外"方向到当前世界空间
-        let phys_rot = Quat::from_mat4(&physics_bone_transform).normalize();
-        let phys_outward = phys_rot * outward_local;
-        
-        // 检测凹陷：物理朝外方向在动画朝外方向上的投影
-        // dot = 1.0 表示完全一致（无偏移）
-        // dot < 1.0 表示物理结果将胸部拽向了内部
-        // dot > 1.0 不可能（单位向量点积不超过 1）
-        let dot = phys_outward.dot(kin_outward);
-        
-        if dot >= 1.0 {
-            // 完全一致或向外，不需修正
-            return physics_bone_transform;
-        }
-        
-        // 计算物理探针相对于动画探针的位移
-        // 如果物理探针在动画朝外方向上的分量小于动画探针，则说明向内移动了
-        // 但如果物理探针只是向侧偏移（与 kin_outward 垂直的分量），则允许
-        //
-        // 投影测试：物理探针在动画朝外方向的分量
-        // 若 < 1.0（物理探针没有完全投影到动画朝外方向），则存在凹陷风险
-        // 但我们只在 dot < cos(threshold) 时才介入，避免微小偏移触发修正
-        
-        // 允许的最小点积（对应允许的最大偏移角度）
-        // cos(5°) ≈ 0.996 —— 允许极小的向内偏移，避免精度报动
-        const MIN_DOT: f32 = 0.996;
-        
-        if dot >= MIN_DOT {
-            // 偏移极小，不需修正
-            return physics_bone_transform;
-        }
-        
-        // 渐进式修正：随着凹陷程度加深，修正力度增大
-        // dot 在 [MIN_DOT, -1] 范围内
-        // t = 0.0 表示完全用动画姿态（最强修正）
-        // t = 1.0 表示完全用物理结果（不修正）
-        //
-        // 当 dot 跌破 MIN_DOT 时快速钳位到动画姿态
-        // 使用 dot 到 0.95 的范围作为过渡带
-        const FULL_CLAMP_DOT: f32 = 0.95;
-        let t = if dot <= FULL_CLAMP_DOT {
-            0.0 // 完全钳位到动画姿态
-        } else {
-            // 在 [FULL_CLAMP_DOT, MIN_DOT] 范围内线性插值
-            (dot - FULL_CLAMP_DOT) / (MIN_DOT - FULL_CLAMP_DOT)
-        };
-        
-        let clamped_rot = kin_rot.slerp(phys_rot, t);
-        let pos = physics_bone_transform.w_axis.truncate();
-        Mat4::from_rotation_translation(clamped_rot, pos)
     }
     
     /// 获取所有动态刚体关联的骨骼索引集合

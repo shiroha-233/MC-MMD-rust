@@ -16,11 +16,12 @@ use crate::animation::bezier_curve::{BezierCurveFactory, Curve};
 /// 归一化的插值系数 [0, 1]
 #[inline]
 pub fn coefficient(prev_frame_index: u32, next_frame_index: u32, frame_index: u32) -> f32 {
-    let interval = next_frame_index - prev_frame_index;
-    if prev_frame_index == next_frame_index {
+    if prev_frame_index >= next_frame_index {
         1.0
     } else {
-        (frame_index - prev_frame_index) as f32 / interval as f32
+        let interval = next_frame_index - prev_frame_index;
+        let coef = frame_index.saturating_sub(prev_frame_index) as f32 / interval as f32;
+        coef.clamp(0.0, 1.0)
     }
 }
 
@@ -66,8 +67,6 @@ impl KeyframeInterpolationPoint {
     pub fn is_linear_interpolation(interpolation: &[u8; 4]) -> bool {
         interpolation[0] == interpolation[1]
             && interpolation[2] == interpolation[3]
-            && interpolation[0] as u16 + interpolation[2] as u16 
-               == interpolation[1] as u16 + interpolation[3] as u16
     }
 
     /// 从 VMD 插值参数创建

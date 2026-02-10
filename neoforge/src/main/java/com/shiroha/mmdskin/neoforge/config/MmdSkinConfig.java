@@ -280,4 +280,9 @@ public final class MmdSkinConfig implements ConfigManager.IConfigProvider {
     public boolean isPhysicsDebugLog() {
         return data.physicsDebugLog;
     }
+    
+    @Override
+    public boolean isFirstPersonModelEnabled() {
+        return data.firstPersonModelEnabled;
+    }
 }

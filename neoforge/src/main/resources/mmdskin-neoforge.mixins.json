@@ -8,7 +8,9 @@
   "client": [
     "NeoForgePlayerRendererMixin",
     "CameraMixin",
-    "GameRendererMixin"
+    "GameRendererMixin",
+    "LevelRendererMixin",
+    "ItemInHandRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

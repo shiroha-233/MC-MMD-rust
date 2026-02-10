@@ -2459,9 +2459,11 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetMaterialMorphResul
 }
 
 /// 复制材质 Morph 结果到 ByteBuffer
-/// 每个材质 28 个 float: diffuse(4) + specular(3) + specular_strength(1) +
-/// ambient(3) + edge_color(4) + edge_size(1) + texture_tint(4) +
-/// environment_tint(4) + toon_tint(4)
+/// 每个材质 56 个 float:
+/// mul[diffuse(4) + specular(3) + specular_strength(1) + ambient(3) +
+///     edge_color(4) + edge_size(1) + texture_tint(4) + environment_tint(4) + toon_tint(4)] = 28
+/// + add[同上布局] = 28
+/// 渲染时：final = base * mul + add
 #[no_mangle]
 pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyMaterialMorphResultsToBuffer(
     env: JNIEnv,
@@ -2508,26 +2510,29 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetPhysicsConfig(
     angular_damping_scale: jfloat,
     mass_scale: jfloat,
     linear_spring_stiffness_scale: jfloat,
-    angular_spring_stiffness_scale: jfloat,
-    linear_spring_damping_factor: jfloat,
-    angular_spring_damping_factor: jfloat,
+    _angular_spring_stiffness_scale: jfloat,
+    _linear_spring_damping_factor: jfloat,
+    _angular_spring_damping_factor: jfloat,
     inertia_strength: jfloat,
     max_linear_velocity: jfloat,
     max_angular_velocity: jfloat,
-    bust_physics_enabled: jboolean,
-    bust_linear_damping_scale: jfloat,
-    bust_angular_damping_scale: jfloat,
-    bust_mass_scale: jfloat,
-    bust_linear_spring_stiffness_scale: jfloat,
-    bust_angular_spring_stiffness_scale: jfloat,
-    bust_linear_spring_damping_factor: jfloat,
-    bust_angular_spring_damping_factor: jfloat,
-    bust_clamp_inward: jboolean,
+    _bust_physics_enabled: jboolean,
+    _bust_linear_damping_scale: jfloat,
+    _bust_angular_damping_scale: jfloat,
+    _bust_mass_scale: jfloat,
+    _bust_linear_spring_stiffness_scale: jfloat,
+    _bust_angular_spring_stiffness_scale: jfloat,
+    _bust_linear_spring_damping_factor: jfloat,
+    _bust_angular_spring_damping_factor: jfloat,
+    _bust_clamp_inward: jboolean,
     joints_enabled: jboolean,
     debug_log: jboolean,
 ) {
     use crate::physics::config::{PhysicsConfig, set_config};
     
+    // 旧参数映射：
+    // - linear_spring_stiffness_scale → spring_stiffness_scale
+    // - 其他弹簧/胸部参数均已废弃（胸部现在使用统一的 6DOF 弹簧系统）
     let config = PhysicsConfig {
         gravity_y,
         physics_fps,
@@ -2538,22 +2543,10 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetPhysicsConfig(
         linear_damping_scale,
         angular_damping_scale,
         mass_scale,
-        linear_spring_stiffness_scale,
-        angular_spring_stiffness_scale,
-        linear_spring_damping_factor,
-        angular_spring_damping_factor,
+        spring_stiffness_scale: linear_spring_stiffness_scale,
         inertia_strength,
         max_linear_velocity,
         max_angular_velocity,
-        bust_physics_enabled: bust_physics_enabled != 0,
-        bust_linear_damping_scale,
-        bust_angular_damping_scale,
-        bust_mass_scale,
-        bust_linear_spring_stiffness_scale,
-        bust_angular_spring_stiffness_scale,
-        bust_linear_spring_damping_factor,
-        bust_angular_spring_damping_factor,
-        bust_clamp_inward: bust_clamp_inward != 0,
         joints_enabled: joints_enabled != 0,
         debug_log: debug_log != 0,
     };
@@ -2561,10 +2554,78 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetPhysicsConfig(
     set_config(config);
     
     if debug_log != 0 {
-        log::info!("[物理配置] 已更新: 重力={}, FPS={}, 阻尼={}/{}, 刚度={}/{}, 胸部启用={}", 
+        log::info!("[物理配置] 已更新: 重力={}, FPS={}, 阻尼={}/{}, 弹簧缩放={}", 
             gravity_y, physics_fps, 
             linear_damping_scale, angular_damping_scale,
-            linear_spring_stiffness_scale, angular_spring_stiffness_scale,
-            bust_physics_enabled != 0);
+            linear_spring_stiffness_scale);
+    }
+}
+
+// ========== 第一人称模式相关 ==========
+
+/// 设置第一人称模式（启用时自动隐藏头部子网格，禁用时恢复）
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetFirstPersonMode(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    enabled: jboolean,
+) {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut model = model_arc.lock().unwrap();
+        model.set_first_person_mode(enabled != 0);
+    }
+}
+
+/// 获取第一人称模式是否启用
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_IsFirstPersonMode(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+) -> jboolean {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let model = model_arc.lock().unwrap();
+        if model.is_first_person_enabled() { 1 } else { 0 }
+    } else {
+        0
+    }
+}
+
+/// 获取头部骨骼的静态 Y 坐标（模型局部空间，用于相机高度计算）
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetHeadBonePositionY(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+) -> jfloat {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut model = model_arc.lock().unwrap();
+        model.get_head_bone_rest_position_y()
+    } else {
+        0.0
+    }
+}
+
+/// 获取眼睛骨骼的当前动画位置（模型局部空间）
+/// 每帧调用，返回经过动画/物理更新后的实时 [x, y, z]
+/// 如果传入的 out 数组长度 < 3 则不写入
+#[no_mangle]
+#[allow(unused_mut)]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetEyeBonePosition(
+    mut env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    out: jni::objects::JFloatArray,
+) {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut model = model_arc.lock().unwrap();
+        let pos = model.get_eye_bone_animated_position();
+        let buf: [f32; 3] = [pos.x, pos.y, pos.z];
+        let _ = env.set_float_array_region(&out, 0, &buf);
     }
 }

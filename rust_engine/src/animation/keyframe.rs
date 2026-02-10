@@ -108,7 +108,7 @@ pub struct CameraKeyframe {
 }
 
 /// 相机插值参数
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct CameraInterpolation {
     pub lookat_x: [u8; 4],
     pub lookat_y: [u8; 4],
@@ -116,6 +116,19 @@ pub struct CameraInterpolation {
     pub angle: [u8; 4],
     pub fov: [u8; 4],
     pub distance: [u8; 4],
+}
+
+impl Default for CameraInterpolation {
+    fn default() -> Self {
+        Self {
+            lookat_x: [20, 20, 107, 107],
+            lookat_y: [20, 20, 107, 107],
+            lookat_z: [20, 20, 107, 107],
+            angle: [20, 20, 107, 107],
+            fov: [20, 20, 107, 107],
+            distance: [20, 20, 107, 107],
+        }
+    }
 }
 
 impl Default for CameraKeyframe {

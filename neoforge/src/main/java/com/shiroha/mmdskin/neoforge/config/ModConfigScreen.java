@@ -46,6 +46,15 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.mmd_shader.tooltip"))
             .setSaveConsumer(value -> data.mmdShaderEnabled = value)
             .build());
+
+        renderCategory.addEntry(entryBuilder
+            .startBooleanToggle(
+                Component.translatable("gui.mmdskin.mod_settings.first_person_model"),
+                data.firstPersonModelEnabled)
+            .setDefaultValue(false)
+            .setTooltip(Component.translatable("gui.mmdskin.mod_settings.first_person_model.tooltip"))
+            .setSaveConsumer(value -> data.firstPersonModelEnabled = value)
+            .build());
         
         // 性能设置分类
         ConfigCategory performanceCategory = builder.getOrCreateCategory(

@@ -8,7 +8,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 
 use glam::{Vec3, Quat};
 
@@ -141,8 +140,6 @@ pub struct AnimationLayer {
     effective_weight: f32,
     /// 淡入淡出进度（0.0 - 1.0）
     fade_progress: f32,
-    /// 最后更新时间
-    last_update_time: Option<Instant>,
     /// 是否启用
     enabled: bool,
     
@@ -168,7 +165,6 @@ impl AnimationLayer {
             config: AnimationLayerConfig::default(),
             effective_weight: 0.0,
             fade_progress: 0.0,
-            last_update_time: None,
             enabled: true,
             transition_snapshot: None,
             transition_duration: 0.0,
@@ -222,7 +218,6 @@ impl AnimationLayer {
             self.effective_weight = self.config.weight;
         }
         
-        self.last_update_time = Some(Instant::now());
     }
 
     /// 播放动画
@@ -235,7 +230,6 @@ impl AnimationLayer {
                 self.state = AnimationLayerState::Playing;
                 self.effective_weight = self.config.weight;
             }
-            self.last_update_time = Some(Instant::now());
         }
     }
 
@@ -250,7 +244,6 @@ impl AnimationLayer {
     pub fn resume(&mut self) {
         if self.state == AnimationLayerState::Paused {
             self.state = AnimationLayerState::Playing;
-            self.last_update_time = Some(Instant::now());
         }
     }
 
@@ -322,10 +315,7 @@ impl AnimationLayer {
                 self.update_frame(dt);
                 true
             }
-            AnimationLayerState::Paused => {
-                self.last_update_time = Some(Instant::now());
-                true
-            }
+            AnimationLayerState::Paused => true,
             AnimationLayerState::Stopped => false,
         }
     }

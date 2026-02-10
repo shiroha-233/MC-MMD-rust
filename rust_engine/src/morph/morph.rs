@@ -51,7 +51,7 @@ impl Morph {
     
     /// 设置权重
     pub fn set_weight(&mut self, weight: f32) {
-        self.weight = weight.clamp(0.0, 1.0);
+        self.weight = weight;
     }
     
     /// 重置权重

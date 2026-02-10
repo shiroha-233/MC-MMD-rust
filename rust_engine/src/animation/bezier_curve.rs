@@ -97,9 +97,42 @@ impl BezierCurve {
         let left_interval = (self.interval as f32 * t) as u32;
         let right_interval = (self.interval as f32 * (1.0 - t)) as u32;
         
+        // left: P0(0,0) -> split_point，控制点需归一化到 [0,1]
+        let split_point = left[3];
+        let left_c0 = if split_point.x.abs() > f32::EPSILON && split_point.y.abs() > f32::EPSILON {
+            Vec2::new(left[1].x / split_point.x, left[1].y / split_point.y)
+        } else {
+            Vec2::new(0.25, 0.25)
+        };
+        let left_c1 = if split_point.x.abs() > f32::EPSILON && split_point.y.abs() > f32::EPSILON {
+            Vec2::new(left[2].x / split_point.x, left[2].y / split_point.y)
+        } else {
+            Vec2::new(0.75, 0.75)
+        };
+        
+        // right: split_point -> P1(1,1)，right 存储顺序为 [P1, C, E, F]
+        // 反转后子曲线为 [F, E, C, P1]，控制点 c0=E, c1=C
+        let range = Self::P1 - split_point;
+        let right_c0 = if range.x.abs() > f32::EPSILON && range.y.abs() > f32::EPSILON {
+            Vec2::new(
+                (right[2].x - split_point.x) / range.x,
+                (right[2].y - split_point.y) / range.y,
+            )
+        } else {
+            Vec2::new(0.25, 0.25)
+        };
+        let right_c1 = if range.x.abs() > f32::EPSILON && range.y.abs() > f32::EPSILON {
+            Vec2::new(
+                (right[1].x - split_point.x) / range.x,
+                (right[1].y - split_point.y) / range.y,
+            )
+        } else {
+            Vec2::new(0.75, 0.75)
+        };
+        
         (
-            Self::new(left[1], left[2], left_interval.max(1)),
-            Self::new(right[1], right[2], right_interval.max(1)),
+            Self::new(left_c0, left_c1, left_interval.max(1)),
+            Self::new(right_c0, right_c1, right_interval.max(1)),
         )
     }
 
@@ -186,20 +219,28 @@ impl BezierCurveFactory for BezierCurveCache {
         match self.0.read() {
             Ok(map) => {
                 if let Some(curve) = map.get(&key) {
-                    // 如果缓存的曲线间隔小于请求的间隔，重新创建
-                    if curve.interval < interval {
-                        return build_new_curve();
-                    } else {
+                    if curve.interval >= interval {
                         return curve.clone();
                     }
+                    // 精度不足，需要更新缓存
                 }
             }
             Err(_) => return build_new_curve(),
         };
         
-        // 写入缓存
+        // 写入缓存（新建或更新精度不足的条目）
         match self.0.write() {
-            Ok(mut map) => map.entry(key).or_insert_with(build_new_curve).clone(),
+            Ok(mut map) => {
+                // Double-checked locking: 再次检查是否已被其他线程更新
+                if let Some(existing) = map.get(&key) {
+                    if existing.interval >= interval {
+                        return existing.clone();
+                    }
+                }
+                let curve = build_new_curve();
+                map.insert(key, curve.clone());
+                curve
+            }
             Err(_) => build_new_curve(),
         }
     }

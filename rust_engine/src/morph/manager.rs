@@ -1,65 +1,86 @@
 //! Morph 管理器
+//!
+//! 完整实现 MMD Morph 系统：
+//! - Vertex Morph: 顶点位置偏移
+//! - Bone Morph: 骨骼平移/旋转偏移
+//! - Group Morph: 递归组合多个 Morph（含循环引用保护）
+//! - Material Morph: 材质参数变形（乘算/加算）
+//! - UV Morph: 纹理坐标偏移
 
 use std::collections::HashMap;
-use glam::{Vec2, Vec3};
+use glam::{Vec2, Vec3, Vec4};
 
 use crate::skeleton::BoneManager;
 use super::{Morph, MorphType, MaterialMorphOffset};
 
-/// 材质 Morph 结果（每材质一个，累计所有 Material Morph 的影响）
+/// Morph 权重阈值，低于此值视为不活跃
+const MORPH_WEIGHT_EPSILON: f32 = 0.001;
+/// Group Morph 最大递归深度（防止循环引用导致无限递归）
+const MAX_GROUP_MORPH_DEPTH: u32 = 16;
+
+/// 材质变形参数值（乘算或加算共用的字段集合）
 #[derive(Clone, Debug)]
-pub struct MaterialMorphResult {
-    pub diffuse: glam::Vec4,
+pub struct MaterialMorphValues {
+    pub diffuse: Vec4,
     pub specular: Vec3,
     pub specular_strength: f32,
     pub ambient: Vec3,
-    pub edge_color: glam::Vec4,
+    pub edge_color: Vec4,
     pub edge_size: f32,
-    pub texture_tint: glam::Vec4,
-    pub environment_tint: glam::Vec4,
-    pub toon_tint: glam::Vec4,
+    pub texture_tint: Vec4,
+    pub environment_tint: Vec4,
+    pub toon_tint: Vec4,
 }
 
-impl MaterialMorphResult {
-    pub fn new() -> Self {
+impl MaterialMorphValues {
+    /// 乘算单位值（所有字段 = 1.0，乘上去无变化）
+    pub fn mul_identity() -> Self {
         Self {
-            diffuse: glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
-            specular: Vec3::new(1.0, 1.0, 1.0),
+            diffuse: Vec4::ONE,
+            specular: Vec3::ONE,
             specular_strength: 1.0,
-            ambient: Vec3::new(1.0, 1.0, 1.0),
-            edge_color: glam::Vec4::new(0.0, 0.0, 0.0, 1.0),
+            ambient: Vec3::ONE,
+            edge_color: Vec4::ONE,
             edge_size: 1.0,
-            texture_tint: glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
-            environment_tint: glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
-            toon_tint: glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
+            texture_tint: Vec4::ONE,
+            environment_tint: Vec4::ONE,
+            toon_tint: Vec4::ONE,
         }
     }
     
-    pub fn reset(&mut self) {
-        *self = Self::new();
+    /// 加算单位值（所有字段 = 0.0，加上去无变化）
+    pub fn add_identity() -> Self {
+        Self {
+            diffuse: Vec4::ZERO,
+            specular: Vec3::ZERO,
+            specular_strength: 0.0,
+            ambient: Vec3::ZERO,
+            edge_color: Vec4::ZERO,
+            edge_size: 0.0,
+            texture_tint: Vec4::ZERO,
+            environment_tint: Vec4::ZERO,
+            toon_tint: Vec4::ZERO,
+        }
     }
     
-    /// 乘算混合 (operation=0)
-    pub fn apply_multiply(&mut self, offset: &MaterialMorphOffset, weight: f32) {
-        let lerp_vec4 = |base: glam::Vec4, target: glam::Vec4, w: f32| -> glam::Vec4 {
-            base * (glam::Vec4::ONE + (target - glam::Vec4::ONE) * w)
-        };
-        let lerp_vec3 = |base: Vec3, target: Vec3, w: f32| -> Vec3 {
-            base * (Vec3::ONE + (target - Vec3::ONE) * w)
-        };
-        self.diffuse = lerp_vec4(self.diffuse, offset.diffuse, weight);
-        self.specular = lerp_vec3(self.specular, offset.specular, weight);
-        self.specular_strength *= 1.0 + (offset.specular_strength - 1.0) * weight;
-        self.ambient = lerp_vec3(self.ambient, offset.ambient, weight);
-        self.edge_color = lerp_vec4(self.edge_color, offset.edge_color, weight);
-        self.edge_size *= 1.0 + (offset.edge_size - 1.0) * weight;
-        self.texture_tint = lerp_vec4(self.texture_tint, offset.texture_tint, weight);
-        self.environment_tint = lerp_vec4(self.environment_tint, offset.environment_tint, weight);
-        self.toon_tint = lerp_vec4(self.toon_tint, offset.toon_tint, weight);
+    /// 应用一个乘算偏移（operation=0）
+    /// 将 lerp(1.0, offset, weight) 乘到现有累积值上，确保多个乘算 Morph 正确复合
+    fn apply_multiply(&mut self, offset: &MaterialMorphOffset, weight: f32) {
+        let w = weight;
+        let inv_w = 1.0 - w;
+        self.diffuse *= Vec4::ONE * inv_w + offset.diffuse * w;
+        self.specular *= Vec3::ONE * inv_w + offset.specular * w;
+        self.specular_strength *= inv_w + offset.specular_strength * w;
+        self.ambient *= Vec3::ONE * inv_w + offset.ambient * w;
+        self.edge_color *= Vec4::ONE * inv_w + offset.edge_color * w;
+        self.edge_size *= inv_w + offset.edge_size * w;
+        self.texture_tint *= Vec4::ONE * inv_w + offset.texture_tint * w;
+        self.environment_tint *= Vec4::ONE * inv_w + offset.environment_tint * w;
+        self.toon_tint *= Vec4::ONE * inv_w + offset.toon_tint * w;
     }
     
-    /// 加算混合 (operation=1)
-    pub fn apply_additive(&mut self, offset: &MaterialMorphOffset, weight: f32) {
+    /// 应用一个加算偏移（operation=1）
+    fn apply_additive(&mut self, offset: &MaterialMorphOffset, weight: f32) {
         self.diffuse += offset.diffuse * weight;
         self.specular += offset.specular * weight;
         self.specular_strength += offset.specular_strength * weight;
@@ -70,26 +91,33 @@ impl MaterialMorphResult {
         self.environment_tint += offset.environment_tint * weight;
         self.toon_tint += offset.toon_tint * weight;
     }
-    
-    /// 将结果平坦化为 28 个 float
-    pub fn to_flat_floats(&self) -> [f32; 28] {
-        [
-            self.diffuse.x, self.diffuse.y, self.diffuse.z, self.diffuse.w,
-            self.specular.x, self.specular.y, self.specular.z,
-            self.specular_strength,
-            self.ambient.x, self.ambient.y, self.ambient.z,
-            self.edge_color.x, self.edge_color.y, self.edge_color.z, self.edge_color.w,
-            self.edge_size,
-            self.texture_tint.x, self.texture_tint.y, self.texture_tint.z, self.texture_tint.w,
-            self.environment_tint.x, self.environment_tint.y, self.environment_tint.z, self.environment_tint.w,
-            self.toon_tint.x, self.toon_tint.y, self.toon_tint.z, self.toon_tint.w,
-        ]
-    }
+}
+
+/// 单个材质的 Morph 计算结果
+///
+/// 渲染时：final = base * mul + add
+/// 乘算累积基准为 1.0（无变化），加算累积基准为 0.0。
+#[derive(Clone, Debug)]
+pub struct MaterialMorphResult {
+    /// 乘算累积
+    pub mul: MaterialMorphValues,
+    /// 加算累积
+    pub add: MaterialMorphValues,
 }
 
 impl Default for MaterialMorphResult {
     fn default() -> Self {
-        Self::new()
+        Self {
+            mul: MaterialMorphValues::mul_identity(),
+            add: MaterialMorphValues::add_identity(),
+        }
+    }
+}
+
+impl MaterialMorphResult {
+    /// 重置为初始状态（乘算=1, 加算=0）
+    pub fn reset(&mut self) {
+        *self = Self::default();
     }
 }
 
@@ -98,20 +126,15 @@ pub struct MorphManager {
     morphs: Vec<Morph>,
     name_to_index: HashMap<String, usize>,
     
-    /// UV Morph 偏移（每顶点一个 Vec2）
-    pub uv_morph_deltas: Vec<Vec2>,
+    /// 每个材质的 Morph 计算结果（材质索引 -> 结果）
+    material_morph_results: Vec<MaterialMorphResult>,
+    /// 材质数量（由外部设置）
+    material_count: usize,
     
-    /// 材质 Morph 结果（每材质一个）
-    pub material_morph_results: Vec<MaterialMorphResult>,
-    
-    /// 材质 Morph 结果平坦化缓存
-    material_morph_results_flat_cache: Vec<f32>,
-    
-    // GPU UV Morph 数据（密集格式，供 Compute Shader 使用）
-    gpu_uv_morph_offsets: Vec<f32>,
-    gpu_uv_morph_weights: Vec<f32>,
-    gpu_uv_morph_initialized: bool,
-    uv_morph_indices: Vec<usize>,
+    /// UV Morph 偏移结果（每顶点的 UV 偏移，在 apply_morphs 时累积）
+    uv_morph_deltas: Vec<Vec2>,
+    /// 顶点数量（由外部设置）
+    vertex_count: usize,
 }
 
 impl MorphManager {
@@ -119,14 +142,23 @@ impl MorphManager {
         Self {
             morphs: Vec::new(),
             name_to_index: HashMap::new(),
-            uv_morph_deltas: Vec::new(),
             material_morph_results: Vec::new(),
-            material_morph_results_flat_cache: Vec::new(),
-            gpu_uv_morph_offsets: Vec::new(),
-            gpu_uv_morph_weights: Vec::new(),
-            gpu_uv_morph_initialized: false,
-            uv_morph_indices: Vec::new(),
+            material_count: 0,
+            uv_morph_deltas: Vec::new(),
+            vertex_count: 0,
         }
+    }
+    
+    /// 设置材质数量（模型加载后调用）
+    pub fn set_material_count(&mut self, count: usize) {
+        self.material_count = count;
+        self.material_morph_results = vec![MaterialMorphResult::default(); count];
+    }
+    
+    /// 设置顶点数量（模型加载后调用）
+    pub fn set_vertex_count(&mut self, count: usize) {
+        self.vertex_count = count;
+        self.uv_morph_deltas = vec![Vec2::ZERO; count];
     }
     
     /// 添加 Morph
@@ -175,106 +207,25 @@ impl MorphManager {
         }
     }
     
-    /// 初始化材质 Morph 结果缓冲区
-    pub fn init_material_morph_results(&mut self, material_count: usize) {
-        self.material_morph_results = vec![MaterialMorphResult::new(); material_count];
-        self.material_morph_results_flat_cache = vec![0.0; material_count * 28];
+    /// 获取材质 Morph 结果
+    pub fn get_material_morph_result(&self, material_index: usize) -> Option<&MaterialMorphResult> {
+        self.material_morph_results.get(material_index)
     }
     
-    /// 初始化 UV Morph 偏移缓冲区
-    pub fn init_uv_morph_deltas(&mut self, vertex_count: usize) {
-        self.uv_morph_deltas = vec![Vec2::ZERO; vertex_count];
+    /// 获取所有材质 Morph 结果
+    pub fn get_material_morph_results(&self) -> &[MaterialMorphResult] {
+        &self.material_morph_results
     }
     
-    /// 获取材质 Morph 结果数量
-    pub fn get_material_morph_result_count(&self) -> usize {
-        self.material_morph_results.len()
+    /// 获取 UV Morph 偏移结果
+    pub fn get_uv_morph_deltas(&self) -> &[Vec2] {
+        &self.uv_morph_deltas
     }
     
-    /// 获取材质 Morph 结果平坦化数据
-    pub fn get_material_morph_results_flat(&mut self) -> &[f32] {
-        let count = self.material_morph_results.len();
-        self.material_morph_results_flat_cache.resize(count * 28, 0.0);
-        for (i, result) in self.material_morph_results.iter().enumerate() {
-            let flat = result.to_flat_floats();
-            let start = i * 28;
-            self.material_morph_results_flat_cache[start..start + 28].copy_from_slice(&flat);
-        }
-        &self.material_morph_results_flat_cache
-    }
-    
-    // ========== GPU UV Morph 相关 ==========
-    
-    /// 初始化 GPU UV Morph 数据（将稀疏偏移转化为密集格式）
-    pub fn init_gpu_uv_morph_data(&mut self, vertex_count: usize) {
-        // 收集所有 UV Morph 的索引
-        self.uv_morph_indices = self.morphs.iter().enumerate()
-            .filter(|(_, m)| matches!(m.morph_type, MorphType::Uv | MorphType::AdditionalUv1))
-            .map(|(i, _)| i)
-            .collect();
-        
-        let uv_morph_count = self.uv_morph_indices.len();
-        if uv_morph_count == 0 {
-            self.gpu_uv_morph_initialized = true;
-            return;
-        }
-        
-        // 每个 UV Morph 对每个顶点存储 2 个 float (u, v)
-        self.gpu_uv_morph_offsets = vec![0.0; uv_morph_count * vertex_count * 2];
-        self.gpu_uv_morph_weights = vec![0.0; uv_morph_count];
-        
-        for (dense_idx, &morph_idx) in self.uv_morph_indices.iter().enumerate() {
-            if let Some(morph) = self.morphs.get(morph_idx) {
-                for offset in &morph.uv_offsets {
-                    let vid = offset.vertex_index as usize;
-                    if vid < vertex_count {
-                        let base = dense_idx * vertex_count * 2 + vid * 2;
-                        self.gpu_uv_morph_offsets[base] = offset.offset.x;
-                        self.gpu_uv_morph_offsets[base + 1] = offset.offset.y;
-                    }
-                }
-            }
-        }
-        
-        self.gpu_uv_morph_initialized = true;
-    }
-    
-    /// 同步 GPU UV Morph 权重
-    pub fn sync_gpu_uv_morph_weights(&mut self) {
-        for (dense_idx, &morph_idx) in self.uv_morph_indices.iter().enumerate() {
-            if dense_idx < self.gpu_uv_morph_weights.len() {
-                self.gpu_uv_morph_weights[dense_idx] = 
-                    self.morphs.get(morph_idx).map(|m| m.weight).unwrap_or(0.0);
-            }
-        }
-    }
-    
-    pub fn get_uv_morph_count(&self) -> usize {
-        self.uv_morph_indices.len()
-    }
-    
-    pub fn get_gpu_uv_morph_offsets_ptr(&self) -> (*const f32, usize) {
-        (self.gpu_uv_morph_offsets.as_ptr(), self.gpu_uv_morph_offsets.len() * 4)
-    }
-    
-    pub fn get_gpu_uv_morph_offsets_size(&self) -> usize {
-        self.gpu_uv_morph_offsets.len() * 4
-    }
-    
-    pub fn get_gpu_uv_morph_weights_ptr(&self) -> (*const f32, usize) {
-        (self.gpu_uv_morph_weights.as_ptr(), self.gpu_uv_morph_weights.len())
-    }
-    
-    pub fn is_gpu_uv_morph_initialized(&self) -> bool {
-        self.gpu_uv_morph_initialized
-    }
-    
-    // ========== Morph 应用 ==========
-    
-    /// 应用所有 Morph
+    /// 应用所有 Morph（完整流水线）
     ///
-    /// 流程:
-    /// 1. 重置材质 Morph 结果和 UV 偏移
+    /// 处理顺序遵循 MMD 规范：
+    /// 1. 重置材质/UV 累积缓冲区
     /// 2. 遍历所有 Morph，按类型分发处理
     /// 3. Group Morph 递归展开子项
     pub fn apply_morphs(&mut self, bone_manager: &mut BoneManager, positions: &mut [Vec3]) {
@@ -287,159 +238,191 @@ impl MorphManager {
             *delta = Vec2::ZERO;
         }
         
-        // 收集需要处理的 morph 索引和权重（避免借用冲突）
+        // 收集需要处理的 morph 索引和权重
         let active_morphs: Vec<(usize, f32)> = self.morphs.iter().enumerate()
-            .filter(|(_, m)| m.weight.abs() > 0.001)
+            .filter(|(_, m)| m.weight.abs() > MORPH_WEIGHT_EPSILON)
             .map(|(i, m)| (i, m.weight))
             .collect();
         
         for (morph_idx, weight) in active_morphs {
-            self.apply_single_morph(morph_idx, weight, bone_manager, positions, 0);
+            // 拆分借用：morphs 只读，material_morph_results / uv_morph_deltas 可写
+            apply_single_morph(
+                &self.morphs,
+                &mut self.material_morph_results,
+                &mut self.uv_morph_deltas,
+                morph_idx,
+                weight,
+                bone_manager,
+                positions,
+                0,
+            );
         }
     }
+}
+
+/// 应用单个 Morph（支持递归，depth 用于防止无限循环）
+///
+/// 独立函数，通过拆分字段借用避免 clone 偏移数组的开销
+fn apply_single_morph(
+    morphs: &[Morph],
+    material_morph_results: &mut [MaterialMorphResult],
+    uv_morph_deltas: &mut [Vec2],
+    morph_idx: usize,
+    effective_weight: f32,
+    bone_manager: &mut BoneManager,
+    positions: &mut [Vec3],
+    depth: u32,
+) {
+    if depth > MAX_GROUP_MORPH_DEPTH || effective_weight.abs() < MORPH_WEIGHT_EPSILON {
+        return;
+    }
     
-    /// 应用单个 Morph（支持递归，depth 用于防止无限循环）
-    fn apply_single_morph(
-        &mut self,
-        morph_idx: usize,
-        effective_weight: f32,
-        bone_manager: &mut BoneManager,
-        positions: &mut [Vec3],
-        depth: u32,
-    ) {
-        // 防止无限递归（Group Morph 可能循环引用）
-        if depth > 16 || effective_weight.abs() < 0.001 {
-            return;
+    let morph = match morphs.get(morph_idx) {
+        Some(m) => m,
+        None => return,
+    };
+    
+    match morph.morph_type {
+        MorphType::Vertex => {
+            apply_vertex_morph(&morph.vertex_offsets, effective_weight, positions);
         }
-        
-        // 安全地获取 morph 数据的副本以避免借用冲突
-        let morph_type;
-        let vertex_offsets;
-        let bone_offsets;
-        let material_offsets;
-        let uv_offsets;
-        let group_offsets;
-        
-        if let Some(morph) = self.morphs.get(morph_idx) {
-            morph_type = morph.morph_type.clone();
-            vertex_offsets = morph.vertex_offsets.clone();
-            bone_offsets = morph.bone_offsets.clone();
-            material_offsets = morph.material_offsets.clone();
-            uv_offsets = morph.uv_offsets.clone();
-            group_offsets = morph.group_offsets.clone();
-        } else {
-            return;
+        MorphType::Bone => {
+            apply_bone_morph(&morph.bone_offsets, effective_weight, bone_manager);
         }
-        
-        match morph_type {
-            MorphType::Vertex => {
-                Self::apply_vertex_morph_static(&vertex_offsets, effective_weight, positions);
-            }
-            MorphType::Bone => {
-                Self::apply_bone_morph_static(&bone_offsets, effective_weight, bone_manager);
-            }
-            MorphType::Group | MorphType::Flip => {
-                for sub in &group_offsets {
+        MorphType::Group => {
+            // 需要收集子项信息后释放 morph 借用再递归
+            let subs: Vec<(usize, f32)> = morph.group_offsets.iter()
+                .filter_map(|sub| {
                     let sub_idx = sub.morph_index as usize;
-                    if sub_idx < self.morphs.len() && sub_idx != morph_idx {
-                        let sub_weight = effective_weight * sub.influence;
-                        self.apply_single_morph(sub_idx, sub_weight, bone_manager, positions, depth + 1);
-                    }
-                }
-            }
-            MorphType::Material => {
-                self.apply_material_morph_offsets(&material_offsets, effective_weight);
-            }
-            MorphType::Uv | MorphType::AdditionalUv1 => {
-                self.apply_uv_morph_offsets(&uv_offsets, effective_weight);
-            }
-            _ => {
-                // AdditionalUv2/3/4, Impulse 暂不处理
-            }
-        }
-    }
-    
-    /// 应用顶点 Morph（静态方法，不需要 &self）
-    fn apply_vertex_morph_static(
-        offsets: &[super::VertexMorphOffset],
-        weight: f32,
-        positions: &mut [Vec3],
-    ) {
-        for offset in offsets {
-            let idx = offset.vertex_index as usize;
-            if idx < positions.len() {
-                positions[idx] += offset.offset * weight;
-            }
-        }
-    }
-    
-    /// 应用骨骼 Morph（静态方法，不需要 &self）
-    fn apply_bone_morph_static(
-        offsets: &[super::BoneMorphOffset],
-        weight: f32,
-        bone_manager: &mut BoneManager,
-    ) {
-        for offset in offsets {
-            let idx = offset.bone_index as usize;
-            let translation = offset.translation * weight;
-            let rotation = glam::Quat::from_xyzw(
-                offset.rotation.x * weight,
-                offset.rotation.y * weight,
-                offset.rotation.z * weight,
-                1.0 - (1.0 - offset.rotation.w) * weight,
-            ).normalize();
-            
-            if let Some(bone) = bone_manager.get_bone_mut(idx) {
-                bone.animation_translate += translation;
-                bone.animation_rotate = bone.animation_rotate * rotation;
-            }
-        }
-    }
-    
-    /// 应用材质 Morph 偏移
-    ///
-    /// material_index == -1 表示应用到所有材质。
-    /// operation: 0=乘算, 1=加算
-    fn apply_material_morph_offsets(
-        &mut self,
-        offsets: &[MaterialMorphOffset],
-        weight: f32,
-    ) {
-        for offset in offsets {
-            if offset.material_index < 0 {
-                // -1 表示应用到所有材质
-                for result in &mut self.material_morph_results {
-                    if offset.operation == 0 {
-                        result.apply_multiply(offset, weight);
+                    if sub_idx < morphs.len() && sub_idx != morph_idx {
+                        Some((sub_idx, effective_weight * sub.influence))
                     } else {
-                        result.apply_additive(offset, weight);
+                        None
                     }
+                })
+                .collect();
+            for (sub_idx, sub_weight) in subs {
+                apply_single_morph(
+                    morphs, material_morph_results, uv_morph_deltas,
+                    sub_idx, sub_weight, bone_manager, positions, depth + 1,
+                );
+            }
+        }
+        MorphType::Flip => {
+            let count = morph.group_offsets.len();
+            if count > 0 {
+                let w = effective_weight.clamp(0.0, 1.0);
+                let index = ((w * count as f32).floor() as usize).min(count - 1);
+                let sub = &morph.group_offsets[index];
+                let sub_idx = sub.morph_index as usize;
+                let sub_influence = sub.influence;
+                if sub_idx < morphs.len() && sub_idx != morph_idx {
+                    apply_single_morph(
+                        morphs, material_morph_results, uv_morph_deltas,
+                        sub_idx, sub_influence, bone_manager, positions, depth + 1,
+                    );
                 }
-            } else {
-                let mat_idx = offset.material_index as usize;
-                if mat_idx < self.material_morph_results.len() {
-                    if offset.operation == 0 {
-                        self.material_morph_results[mat_idx].apply_multiply(offset, weight);
-                    } else {
-                        self.material_morph_results[mat_idx].apply_additive(offset, weight);
-                    }
+            }
+        }
+        MorphType::Material => {
+            apply_material_morph(&morph.material_offsets, effective_weight, material_morph_results);
+        }
+        MorphType::Uv | MorphType::AdditionalUv1 => {
+            apply_uv_morph(&morph.uv_offsets, effective_weight, uv_morph_deltas);
+        }
+        _ => {
+            // AdditionalUv2/3/4, Impulse 暂不处理
+        }
+    }
+}
+
+/// 应用顶点 Morph
+fn apply_vertex_morph(
+    offsets: &[super::VertexMorphOffset],
+    weight: f32,
+    positions: &mut [Vec3],
+) {
+    for offset in offsets {
+        let idx = offset.vertex_index as usize;
+        if idx < positions.len() {
+            positions[idx] += offset.offset * weight;
+        }
+    }
+}
+
+/// 应用骨骼 Morph
+fn apply_bone_morph(
+    offsets: &[super::BoneMorphOffset],
+    weight: f32,
+    bone_manager: &mut BoneManager,
+) {
+    for offset in offsets {
+        let idx = offset.bone_index as usize;
+        let translation = offset.translation * weight;
+        // 确保四元数插值走最短路径：
+        // identity = (0,0,0,1)，dot(identity, offset) = offset.w
+        // 当 dot < 0 时取反 offset 以走短弧
+        let (ox, oy, oz, ow) = if offset.rotation.w < 0.0 {
+            (-offset.rotation.x, -offset.rotation.y, -offset.rotation.z, -offset.rotation.w)
+        } else {
+            (offset.rotation.x, offset.rotation.y, offset.rotation.z, offset.rotation.w)
+        };
+        let rotation = glam::Quat::from_xyzw(
+            ox * weight,
+            oy * weight,
+            oz * weight,
+            1.0 - (1.0 - ow) * weight,
+        ).normalize();
+        
+        if let Some(bone) = bone_manager.get_bone_mut(idx) {
+            bone.animation_translate += translation;
+            bone.animation_rotate = bone.animation_rotate * rotation;
+        }
+    }
+}
+
+/// 应用材质 Morph 偏移
+///
+/// material_index == -1 表示应用到所有材质。
+/// operation: 0=乘算（累积到 mul）, 1=加算（累积到 add）
+fn apply_material_morph(
+    offsets: &[MaterialMorphOffset],
+    weight: f32,
+    material_morph_results: &mut [MaterialMorphResult],
+) {
+    for offset in offsets {
+        if offset.material_index < 0 {
+            for result in material_morph_results.iter_mut() {
+                if offset.operation == 0 {
+                    result.mul.apply_multiply(offset, weight);
+                } else {
+                    result.add.apply_additive(offset, weight);
+                }
+            }
+        } else {
+            let mat_idx = offset.material_index as usize;
+            if let Some(result) = material_morph_results.get_mut(mat_idx) {
+                if offset.operation == 0 {
+                    result.mul.apply_multiply(offset, weight);
+                } else {
+                    result.add.apply_additive(offset, weight);
                 }
             }
         }
     }
-    
-    /// 应用 UV Morph 偏移
-    fn apply_uv_morph_offsets(
-        &mut self,
-        offsets: &[super::UvMorphOffset],
-        weight: f32,
-    ) {
-        for offset in offsets {
-            let idx = offset.vertex_index as usize;
-            if idx < self.uv_morph_deltas.len() {
-                // 只取 x, y 分量作为 UV 偏移
-                self.uv_morph_deltas[idx] += Vec2::new(offset.offset.x, offset.offset.y) * weight;
-            }
+}
+
+/// 应用 UV Morph 偏移
+fn apply_uv_morph(
+    offsets: &[super::UvMorphOffset],
+    weight: f32,
+    uv_morph_deltas: &mut [Vec2],
+) {
+    for offset in offsets {
+        let idx = offset.vertex_index as usize;
+        if idx < uv_morph_deltas.len() {
+            // 只取 x, y 分量作为 UV 偏移
+            uv_morph_deltas[idx] += Vec2::new(offset.offset.x, offset.offset.y) * weight;
         }
     }
 }

@@ -3,7 +3,7 @@
 //! 存储单个骨骼或 Morph 的所有关键帧，并提供查找和插值功能
 
 use std::collections::BTreeMap;
-use glam::{Mat4, Vec3, Quat};
+use glam::{Vec3, Quat, Mat4};
 
 use super::bezier_curve::BezierCurveFactory;
 use super::interpolation::{
@@ -293,7 +293,7 @@ impl MotionTrack for BoneMotionTrack {
         let f0 = self.seek(frame_index, bezier_factory);
         
         if amount > 0.0 {
-            let f1 = self.seek(frame_index + 1, bezier_factory);
+            let f1 = self.seek(frame_index.saturating_add(1), bezier_factory);
             
             let local_transform_mix = match (f0.local_transform_mix, f1.local_transform_mix) {
                 (Some(a0), Some(a1)) => Some(lerp_f32(a0, a1, amount)),
@@ -425,7 +425,7 @@ impl MotionTrack for MorphMotionTrack {
         let w0 = self.seek(frame_index, bezier_factory);
         
         if amount > 0.0 {
-            let w1 = self.seek(frame_index + 1, bezier_factory);
+            let w1 = self.seek(frame_index.saturating_add(1), bezier_factory);
             lerp_f32(w0, w1, amount)
         } else {
             w0
@@ -691,7 +691,7 @@ impl CameraMotionTrack {
         let f0 = self.seek_raw(frame_index, bezier_factory);
 
         if amount > 0.0 {
-            let f1 = self.seek_raw(frame_index + 1, bezier_factory);
+            let f1 = self.seek_raw(frame_index.saturating_add(1), bezier_factory);
 
             let raw = CameraRawFrame {
                 look_at: f0.look_at.lerp(f1.look_at, amount),

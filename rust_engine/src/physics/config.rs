@@ -37,23 +37,11 @@ pub struct PhysicsConfig {
     /// 增大质量让头发更"重"，惯性更大
     pub mass_scale: f32,
 
-    // ========== 弹簧刚度（头发弹性的核心！）==========
-    /// 线性弹簧刚度缩放（乘以 PMX 原值），默认 1.0
-    /// **减小此值让头发不那么弹**
-    pub linear_spring_stiffness_scale: f32,
-    /// 角度弹簧刚度缩放（乘以 PMX 原值），默认 1.0
-    /// **减小此值让头发不那么弹**
-    pub angular_spring_stiffness_scale: f32,
-
-    // ========== 弹簧阻尼（减少弹跳的关键！）==========
-    /// 线性弹簧阻尼系数，默认 0.1
-    /// 公式：damping = sqrt(stiffness * 此值)
-    /// **增大此值减少头发弹跳**
-    pub linear_spring_damping_factor: f32,
-    /// 角度弹簧阻尼系数，默认 0.1
-    /// 公式：damping = sqrt(stiffness * 此值)
-    /// **增大此值减少头发弹跳**
-    pub angular_spring_damping_factor: f32,
+    // ========== 6DOF 弹簧（移植自 Bullet3 btGeneric6DofSpringConstraint）==========
+    /// 弹簧刚度缩放因子（乘以 PMX 原值），默认 1.0
+    /// 与 Bullet3 原版一致时应为 1.0。
+    /// 游戏中可适当调整，因为重力和尺寸与 MMD 原版不同。
+    pub spring_stiffness_scale: f32,
 
     // ========== 惯性效果 ==========
     /// 惯性效果强度，默认 1.0
@@ -66,33 +54,6 @@ pub struct PhysicsConfig {
     pub max_linear_velocity: f32,
     /// 最大角速度 (rad/s)，默认 20.0
     pub max_angular_velocity: f32,
-
-    // ========== 胸部物理专用参数 ==========
-    // 胸部刚体通过名称自动识别（おっぱ、乳、胸、bust、Bust 等），
-    // 使用独立的参数组，避免与头发物理互相干扰。
-
-    /// 胸部物理是否启用，默认 true
-    pub bust_physics_enabled: bool,
-    /// 胸部线性阻尼缩放（乘以 PMX 原值），默认 1.0
-    pub bust_linear_damping_scale: f32,
-    /// 胸部角速度阻尼缩放（乘以 PMX 原值），默认 1.0
-    pub bust_angular_damping_scale: f32,
-    /// 胸部质量缩放（乘以 PMX 原值），默认 1.0
-    pub bust_mass_scale: f32,
-    /// 胸部线性弹簧刚度缩放，默认 1.0
-    pub bust_linear_spring_stiffness_scale: f32,
-    /// 胸部角度弹簧刚度缩放，默认 1.0
-    pub bust_angular_spring_stiffness_scale: f32,
-    /// 胸部线性弹簧阻尼系数，默认 1.0
-    pub bust_linear_spring_damping_factor: f32,
-    /// 胸部角度弹簧阻尼系数，默认 1.0
-    pub bust_angular_spring_damping_factor: f32,
-
-    // ========== 胸部防凹陷 ==========
-    /// 是否启用胸部防凹陷修正，默认 true
-    /// 开启后，胸部骨骼向身体内部旋转时会被钳位回动画姿态，
-    /// 但向外弹跳不受影响。
-    pub bust_clamp_inward: bool,
 
     // ========== 调试 ==========
     /// 是否启用关节，默认 true
@@ -125,7 +86,7 @@ impl Default for PhysicsConfig {
             // 约束求解器迭代次数
             // 越大 → 关节约束越精确（头发不会穿模），但更慢
             // 建议范围: 4~16
-            solver_iterations: 4,
+            solver_iterations: 8,
             
             // 内部 PGS（投影高斯-赛德尔）迭代次数
             // 配合 solver_iterations 使用，一般不用改
@@ -154,25 +115,11 @@ impl Default for PhysicsConfig {
             // 越小 → 头发越"轻"，跟随性好，但可能太飘
             mass_scale: 2.0,
 
-            // ====== 弹簧刚度（头发弹性！）======
-            // 线性弹簧刚度 = 头发被拉伸后回弹的力度
-            // 越大 → 回弹越猛、越"弹"、橡皮筋感
-            // 越小 → 回弹越慢、越"软"、更自然
-            linear_spring_stiffness_scale: 0.01,
-            
-            // 角度弹簧刚度 = 头发被扭转后回弹的力度
-            // 原理同上
-            angular_spring_stiffness_scale: 0.01,
-
-            // ====== 弹簧阻尼（减少弹跳！）======
-            // 弹簧阻尼 = 弹簧振动时的能量损耗
-            // 公式: 实际阻尼 = sqrt(刚度 * 此值)
-            // 越大 → 弹跳次数越少，很快停下来
-            // 越小 → 弹跳次数越多，像果冻一样晃
-            linear_spring_damping_factor: 8.0,
-            
-            // 角度弹簧阻尼，原理同上
-            angular_spring_damping_factor: 8.0,
+            // ====== 6DOF 弹簧（移植自 Bullet3）======
+            // 弹簧刚度缩放因子，乘以 PMX 模型中的原始弹簧刚度
+            // 1.0 = 与 Bullet3/MMD 原版一致
+            // 游戏中因为重力和尺寸与 MMD 不同，可能需要调整
+            spring_stiffness_scale: 1.0,
 
             // ====== 惯性效果 ======
             // 惯性效果强度
@@ -183,26 +130,11 @@ impl Default for PhysicsConfig {
             // 最大线速度（米/秒）
             // 超过这个速度会被强制限制，防止物理爆炸
             // 注意：人物移动速度约 4-6 方块/秒，需要设置足够大
-            max_linear_velocity: 1.0,
+            max_linear_velocity: 5.0,
             
             // 最大角速度（弧度/秒）
             // 同上
-            max_angular_velocity: 1.0,
-
-            // ====== 胸部物理（独立参数组）======
-            // 胸部刚体需要比头发更高的弹簧刚度来保持形状，
-            // 同时需要较高的阻尼防止过度弹跳。
-            bust_physics_enabled: true,
-            bust_linear_damping_scale: 1.5,
-            bust_angular_damping_scale: 1.5,
-            bust_mass_scale: 1.0,
-            bust_linear_spring_stiffness_scale: 10.0,
-            bust_angular_spring_stiffness_scale: 10.0,
-            bust_linear_spring_damping_factor: 3.0,
-            bust_angular_spring_damping_factor: 3.0,
-
-            // ====== 胸部防凹陷 ======
-            bust_clamp_inward: true,
+            max_angular_velocity: 5.0,
 
             // ====== 调试 ======
             // 是否启用关节约束
@@ -222,15 +154,15 @@ static PHYSICS_CONFIG: Lazy<RwLock<PhysicsConfig>> = Lazy::new(|| {
 
 /// 获取当前配置（只读）
 pub fn get_config() -> PhysicsConfig {
-    PHYSICS_CONFIG.read().unwrap().clone()
+    PHYSICS_CONFIG.read().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
 /// 手动设置配置（用于运行时调试）
 pub fn set_config(config: PhysicsConfig) {
-    *PHYSICS_CONFIG.write().unwrap() = config;
+    *PHYSICS_CONFIG.write().unwrap_or_else(|e| e.into_inner()) = config;
 }
 
 /// 重置为默认配置
 pub fn reset_config() {
-    *PHYSICS_CONFIG.write().unwrap() = PhysicsConfig::default();
+    *PHYSICS_CONFIG.write().unwrap_or_else(|e| e.into_inner()) = PhysicsConfig::default();
 }

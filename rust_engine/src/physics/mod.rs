@@ -7,7 +7,7 @@
 //! |---------------|---------------|
 //! | btDiscreteDynamicsWorld | PhysicsPipeline + RigidBodySet + ColliderSet |
 //! | btRigidBody | RigidBody + Collider |
-//! | btGeneric6DofSpringConstraint | GenericJoint with limits/motors |
+//! | btGeneric6DofSpringConstraint | GenericJoint (limits + ForceBased motor springs) |
 //! | btSphereShape | ColliderBuilder::ball() |
 //! | btBoxShape | ColliderBuilder::cuboid() |
 //! | btCapsuleShape | ColliderBuilder::capsule() |
@@ -15,6 +15,7 @@
 mod mmd_physics;
 mod mmd_rigid_body;
 mod mmd_joint;
+pub mod spring_6dof;
 pub mod config;
 
 pub use mmd_physics::MMDPhysics;

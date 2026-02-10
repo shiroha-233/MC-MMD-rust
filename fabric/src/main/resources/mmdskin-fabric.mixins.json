@@ -9,7 +9,9 @@
     "FabricPlayerRendererMixin",
     "CameraMixin",
     "GameRendererMixin",
-    "KeyMappingAccessor"
+    "KeyMappingAccessor",
+    "LevelRendererMixin",
+    "ItemInHandRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

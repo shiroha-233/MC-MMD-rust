@@ -24,14 +24,19 @@ impl MmdMaterial {
         (self.draw_flags & 0x01) != 0
     }
     
-    /// 是否投射阴影
-    pub fn casts_shadow(&self) -> bool {
+    /// 是否投射地面阴影 (GroundShadow, bit 1)
+    pub fn ground_shadow(&self) -> bool {
         (self.draw_flags & 0x02) != 0
     }
     
-    /// 是否接收阴影
-    pub fn receives_shadow(&self) -> bool {
+    /// 是否投射到阴影贴图 (DrawShadow, bit 2)
+    pub fn draws_shadow(&self) -> bool {
         (self.draw_flags & 0x04) != 0
+    }
+    
+    /// 是否接收阴影 (ReceiveShadow, bit 3)
+    pub fn receives_shadow(&self) -> bool {
+        (self.draw_flags & 0x08) != 0
     }
     
     /// 是否绘制边缘

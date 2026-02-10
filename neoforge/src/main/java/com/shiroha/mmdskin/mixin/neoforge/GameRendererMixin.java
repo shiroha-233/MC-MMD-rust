@@ -10,7 +10,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * GameRenderer Mixin — 舞台模式 FOV 覆盖
- * 当舞台模式激活时，用 VMD 相机的 FOV 覆盖游戏 FOV
  */
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {

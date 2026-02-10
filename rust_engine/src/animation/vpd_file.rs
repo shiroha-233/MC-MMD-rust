@@ -86,6 +86,7 @@ impl VpdFile {
         // 解析内容
         let mut current_bone_name: Option<String> = None;
         let mut current_values: Vec<f32> = Vec::new();
+        let mut current_morph_index: Option<usize> = None;
 
         for line_result in lines {
             let line = match line_result {
@@ -103,6 +104,7 @@ impl VpdFile {
                 if let Some(start) = line.find('{') {
                     let name = &line[start + 1..];
                     current_bone_name = Some(name.to_string());
+                    current_morph_index = None;
                     current_values.clear();
                 }
             }
@@ -110,16 +112,15 @@ impl VpdFile {
             else if line.starts_with("Morph") && line.contains('{') {
                 if let Some(start) = line.find('{') {
                     let name = &line[start + 1..];
-                    // 读取下一行获取权重
-                    // Morph 格式简单，权重在下一行
                     current_bone_name = None;
                     morphs.push(VpdMorph {
                         name: name.to_string(),
-                        weight: 0.0, // 稍后解析
+                        weight: 0.0,
                     });
+                    current_morph_index = Some(morphs.len() - 1);
                 }
             }
-            // 数值行
+            // 数值行（骨骼块内）
             else if let Some(ref _name) = current_bone_name {
                 // 解析数值 (格式: 0.1,0.2,0.3; 或类似)
                 let clean = line.trim_end_matches(';').trim_end_matches('}');
@@ -154,18 +155,20 @@ impl VpdFile {
                     current_values.clear();
                 }
             }
-            // Morph 权重行
-            else if !morphs.is_empty() && line.contains(';') {
+            // Morph 权重行（显式追踪当前 Morph 索引）
+            else if let Some(morph_idx) = current_morph_index {
                 let clean = line.trim_end_matches(';').trim_end_matches('}');
                 if let Ok(weight) = clean.trim().parse::<f32>() {
-                    if let Some(morph) = morphs.last_mut() {
+                    if let Some(morph) = morphs.get_mut(morph_idx) {
                         morph.weight = weight;
                     }
                 }
+                current_morph_index = None;
             }
             // 块结束
             else if line.contains('}') {
                 current_bone_name = None;
+                current_morph_index = None;
                 current_values.clear();
             }
         }

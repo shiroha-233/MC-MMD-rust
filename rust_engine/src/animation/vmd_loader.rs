@@ -268,9 +268,11 @@ fn read_ik_keyframe<R: Read>(reader: &mut R) -> Result<Vec<IkKeyframe>> {
 ///   fov (u32, 4B)
 ///   is_perspective (u8, 1B)
 fn read_camera_keyframe<R: Read>(reader: &mut R) -> Result<CameraKeyframe> {
+    // 帧索引
     let frame_index = reader.read_u32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read camera frame index: {}", e)))?;
 
+    // 距离
     let distance = reader.read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read camera distance: {}", e)))?;
 
@@ -376,6 +378,7 @@ impl VmdAnimation {
 
     /// 获取相机帧变换
     pub fn get_camera_transform(&self, frame: f32) -> CameraFrameTransform {
+        let frame = frame.max(0.0);
         let frame_index = frame.floor() as u32;
         let amount = frame.fract();
         self.motion.find_camera_transform(frame_index, amount)
@@ -442,6 +445,7 @@ impl VmdAnimation {
         bone_manager: &mut BoneManager,
         morph_manager: &mut MorphManager,
     ) {
+        let frame = frame.max(0.0);
         let frame_index = frame.floor() as u32;
         let amount = frame.fract();
 

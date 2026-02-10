@@ -1135,4 +1135,37 @@ public class NativeFunc {
         boolean jointsEnabled,
         boolean debugLog
     );
+    
+    // ========== 第一人称模式相关 ==========
+    
+    /**
+     * 设置第一人称模式
+     * 启用时自动隐藏头部相关子网格（基于骨骼权重检测），禁用时恢复
+     * @param model 模型句柄
+     * @param enabled 是否启用
+     */
+    public native void SetFirstPersonMode(long model, boolean enabled);
+    
+    /**
+     * 获取第一人称模式是否启用
+     * @param model 模型句柄
+     * @return 是否启用
+     */
+    public native boolean IsFirstPersonMode(long model);
+    
+    /**
+     * 获取头部骨骼的静态 Y 坐标（模型局部空间）
+     * 用于第一人称模式下的相机高度计算
+     * @param model 模型句柄
+     * @return 头部骨骼 Y 坐标（模型局部空间），未找到头部骨骼时返回 0
+     */
+    public native float GetHeadBonePositionY(long model);
+    
+    /**
+     * 获取眼睛骨骼的当前动画位置（模型局部空间）
+     * 每帧调用，返回经过动画/物理更新后的实时位置
+     * @param model 模型句柄
+     * @param out 输出数组 [x, y, z]，长度至少为 3
+     */
+    public native void GetEyeBonePosition(long model, float[] out);
 }

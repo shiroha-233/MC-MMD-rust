@@ -94,6 +94,9 @@ public class ConfigData {
     // 调试
     public boolean physicsJointsEnabled = true;
     public boolean physicsDebugLog = false;
+
+    // 第一人称模型显示
+    public boolean firstPersonModelEnabled = false;
     
     /**
      * 从文件加载配置
@@ -195,5 +198,7 @@ public class ConfigData {
         other.physicsBustClampInward = this.physicsBustClampInward;
         other.physicsJointsEnabled = this.physicsJointsEnabled;
         other.physicsDebugLog = this.physicsDebugLog;
+        // 第一人称
+        other.firstPersonModelEnabled = this.firstPersonModelEnabled;
     }
 }

@@ -425,7 +425,7 @@ public class MMDModelGpuSkinning implements IMMDModel {
         // 初始化材质 Morph 结果缓冲区
         int matMorphCount = nf.GetMaterialMorphResultCount(model);
         if (matMorphCount > 0) {
-            int floatCount = matMorphCount * 28;
+            int floatCount = matMorphCount * 56;
             result.materialMorphResultCount = matMorphCount;
             result.materialMorphResultsBuffer = MemoryUtil.memAllocFloat(floatCount);
             result.materialMorphResultsByteBuffer = MemoryUtil.memAlloc(floatCount * 4);
@@ -781,7 +781,8 @@ public class MMDModelGpuSkinning implements IMMDModel {
             for (long i = 0; i < subMeshCount; ++i) {
                 int materialID = nf.GetSubMeshMaterialID(model, i);
                 if (!nf.IsMaterialVisible(model, materialID)) continue;
-                if (nf.GetMaterialAlpha(model, materialID) * getMaterialMorphAlpha(materialID) < 0.001f) continue;
+                float edgeAlpha = nf.GetMaterialAlpha(model, materialID);
+                if (getEffectiveMaterialAlpha(materialID, edgeAlpha) < 0.001f) continue;
                 
                 long startPos = (long) nf.GetSubMeshBeginIndex(model, i) * indexElementSize;
                 int count = nf.GetSubMeshVertexCount(model, i);
@@ -852,9 +853,8 @@ public class MMDModelGpuSkinning implements IMMDModel {
             if (!nf.IsMaterialVisible(model, materialID)) continue;
             
             float alpha = nf.GetMaterialAlpha(model, materialID);
-            // 应用材质 Morph 对 alpha 的调制
-            float morphAlpha = getMaterialMorphAlpha(materialID);
-            if (alpha * morphAlpha < 0.001f) continue;
+            // 应用材质 Morph 对 alpha 的调制（final = base * mul + add）
+            if (getEffectiveMaterialAlpha(materialID, alpha) < 0.001f) continue;
             
             if (nf.GetMaterialBothFace(model, materialID)) {
                 RenderSystem.disableCull();
@@ -988,17 +988,17 @@ public class MMDModelGpuSkinning implements IMMDModel {
     }
     
     /**
-     * 获取指定材质的 Morph diffuse alpha 乘数
-     * 用于渲染时调制材质透明度
+     * 计算材质经 Morph 变形后的有效 alpha
+     * 布局：每材质 56 float = mul(28) + add(28)，diffuse.w 在各组偏移 3
+     * 计算：effective = baseAlpha * mul + add
      */
-    private float getMaterialMorphAlpha(int materialIndex) {
-        if (materialMorphResultsBuffer == null || materialIndex >= materialMorphResultCount) return 1.0f;
-        // diffuse.w 位于每材质 28 float 块的第 3 个位置（index 3）
-        int offset = materialIndex * 28 + 3;
-        if (offset < materialMorphResultsBuffer.capacity()) {
-            return materialMorphResultsBuffer.get(offset);
-        }
-        return 1.0f;
+    private float getEffectiveMaterialAlpha(int materialIndex, float baseAlpha) {
+        if (materialMorphResultsBuffer == null || materialIndex >= materialMorphResultCount) return baseAlpha;
+        int mulOffset = materialIndex * 56 + 3;
+        int addOffset = materialIndex * 56 + 28 + 3;
+        float mulAlpha = (mulOffset < materialMorphResultsBuffer.capacity()) ? materialMorphResultsBuffer.get(mulOffset) : 1.0f;
+        float addAlpha = (addOffset < materialMorphResultsBuffer.capacity()) ? materialMorphResultsBuffer.get(addOffset) : 0.0f;
+        return baseAlpha * mulAlpha + addAlpha;
     }
     
     /**
