@@ -93,7 +93,14 @@ public class StageSelectScreen extends Screen {
         PathConstants.ensureStageAnimDir();
         
         // 扫描舞台包
-        stagePacks = StagePack.scan(PathConstants.getStageAnimDir());
+        stagePacks = StagePack.scan(PathConstants.getStageAnimDir(), path -> {
+            NativeFunc nf = NativeFunc.GetInst();
+            long tempAnim = nf.LoadAnimation(0, path);
+            if (tempAnim == 0) return null;
+            boolean[] result = { nf.HasCameraData(tempAnim), nf.HasBoneData(tempAnim), nf.HasMorphData(tempAnim) };
+            nf.DeleteAnimation(tempAnim);
+            return result;
+        });
         
         // 恢复上次选择
         restoreSelection(config);

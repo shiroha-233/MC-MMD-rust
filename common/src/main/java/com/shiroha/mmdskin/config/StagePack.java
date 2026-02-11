@@ -1,6 +1,5 @@
 package com.shiroha.mmdskin.config;
 
-import com.shiroha.mmdskin.NativeFunc;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -15,6 +14,16 @@ import java.util.List;
  */
 public class StagePack {
     private static final Logger logger = LogManager.getLogger();
+
+    /**
+     * VMD 文件检查接口（DIP：避免 config 层直接依赖 NativeFunc）
+     * 调用方通过 NativeFunc 实现此接口并传入 scan()。
+     */
+    @FunctionalInterface
+    public interface VmdFileInspector {
+        /** 检查 VMD 文件，返回 [hasCamera, hasBones, hasMorphs]；加载失败返回 null */
+        boolean[] inspect(String filePath);
+    }
     
     private final String name;
     private final String folderPath;
@@ -70,17 +79,15 @@ public class StagePack {
     /**
      * 扫描 StageAnim 目录下所有子文件夹，每个子文件夹生成一个 StagePack
      */
-    public static List<StagePack> scan(File stageAnimDir) {
+    public static List<StagePack> scan(File stageAnimDir, VmdFileInspector inspector) {
         List<StagePack> packs = new ArrayList<>();
         if (!stageAnimDir.exists() || !stageAnimDir.isDirectory()) return packs;
         
         File[] subDirs = stageAnimDir.listFiles(File::isDirectory);
         if (subDirs == null) return packs;
         
-        NativeFunc nf = NativeFunc.GetInst();
-        
         for (File dir : subDirs) {
-            List<VmdFileInfo> files = scanVmdFiles(dir, nf);
+            List<VmdFileInfo> files = scanVmdFiles(dir, inspector);
             List<AudioFileInfo> audios = scanAudioFiles(dir);
             if (!files.isEmpty()) {
                 packs.add(new StagePack(dir.getName(), dir.getAbsolutePath(), files, audios));
@@ -97,25 +104,17 @@ public class StagePack {
     /**
      * 扫描目录中的所有 VMD 文件，通过临时加载检测数据类型
      */
-    private static List<VmdFileInfo> scanVmdFiles(File dir, NativeFunc nf) {
+    private static List<VmdFileInfo> scanVmdFiles(File dir, VmdFileInspector inspector) {
         List<VmdFileInfo> results = new ArrayList<>();
         
         File[] files = dir.listFiles((d, name) -> name.toLowerCase().endsWith(PathConstants.VMD_EXTENSION));
         if (files == null) return results;
         
         for (File file : files) {
-            String path = file.getAbsolutePath();
+            boolean[] info = inspector.inspect(file.getAbsolutePath());
+            if (info == null) continue;
             
-            // 临时加载检测数据类型
-            long tempAnim = nf.LoadAnimation(0, path);
-            if (tempAnim == 0) continue;
-            
-            boolean hasCamera = nf.HasCameraData(tempAnim);
-            boolean hasBones = nf.HasBoneData(tempAnim);
-            boolean hasMorphs = nf.HasMorphData(tempAnim);
-            nf.DeleteAnimation(tempAnim);
-            
-            results.add(new VmdFileInfo(file.getName(), path, hasCamera, hasBones, hasMorphs));
+            results.add(new VmdFileInfo(file.getName(), file.getAbsolutePath(), info[0], info[1], info[2]));
         }
         
         // 按文件名排序
