@@ -1,10 +1,13 @@
 package com.shiroha.mmdskin.renderer.render;
 
 import com.shiroha.mmdskin.config.PathConstants;
+import com.shiroha.mmdskin.config.UIConstants;
 import com.shiroha.mmdskin.renderer.camera.StageAudioPlayer;
 import com.shiroha.mmdskin.renderer.core.IMMDModel;
 import com.shiroha.mmdskin.renderer.animation.MMDAnimManager;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager;
+import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
+import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -21,6 +24,18 @@ import java.io.File;
 public final class MmdSkinRendererPlayerHelper {
 
     private static final Logger logger = LogManager.getLogger();
+
+    /**
+     * 判断玩家是否正在使用 MMD 模型
+     */
+    public static boolean isUsingMmdModel(Player player) {
+        if (player == null) return false;
+        String playerName = player.getName().getString();
+        Minecraft mc = Minecraft.getInstance();
+        boolean isLocalPlayer = mc.player != null && mc.player.getUUID().equals(player.getUUID());
+        String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
+        return selectedModel != null && !selectedModel.isEmpty() && !selectedModel.equals(UIConstants.DEFAULT_MODEL_NAME);
+    }
 
     private MmdSkinRendererPlayerHelper() {
     }

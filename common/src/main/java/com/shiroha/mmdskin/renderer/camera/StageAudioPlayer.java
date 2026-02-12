@@ -148,8 +148,15 @@ public class StageAudioPlayer {
         if (filePath == null || filePath.isEmpty()) return false;
         
         File file = new File(filePath);
-        if (!file.exists()) {
-            logger.warn("[StageAudio] 文件不存在: {}", filePath);
+        
+        // 路径安全校验，防止路径遍历漏洞
+        try {
+            if (!file.exists() || !file.isFile()) {
+                logger.warn("[StageAudio] 文件不存在或不是文件: {}", filePath);
+                return false;
+            }
+        } catch (SecurityException e) {
+            logger.error("[StageAudio] 路径校验失败: {} - {}", filePath, e.getMessage());
             return false;
         }
         

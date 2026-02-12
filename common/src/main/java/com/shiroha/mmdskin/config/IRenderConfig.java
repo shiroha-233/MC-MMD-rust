@@ -20,4 +20,10 @@ public interface IRenderConfig {
 
     /** 第一人称模型显示是否启用（默认 false） */
     default boolean isFirstPersonModelEnabled() { return false; }
+
+    /** 第一人称相机前后偏移（默认 0.0） */
+    default float getFirstPersonCameraForwardOffset() { return 0.0f; }
+
+    /** 第一人称相机上下偏移（默认 0.0） */
+    default float getFirstPersonCameraVerticalOffset() { return 0.0f; }
 }

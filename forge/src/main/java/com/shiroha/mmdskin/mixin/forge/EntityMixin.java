@@ -1,7 +1,6 @@
 package com.shiroha.mmdskin.mixin.forge;
 
-import com.shiroha.mmdskin.config.ConfigData;
-import com.shiroha.mmdskin.forge.config.MmdSkinConfig;
+import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.renderer.core.FirstPersonManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
@@ -45,9 +44,8 @@ public abstract class EntityMixin {
                     float cosLookYaw = Mth.cos(lookYawRad);
                     float sinLookYaw = Mth.sin(lookYawRad);
 
-                    ConfigData config = MmdSkinConfig.getData();
-                    double forwardOffset = config.firstPersonCameraForwardOffset;
-                    double verticalOffset = config.firstPersonCameraVerticalOffset;
+                    double forwardOffset = ConfigManager.getFirstPersonCameraForwardOffset();
+                    double verticalOffset = ConfigManager.getFirstPersonCameraVerticalOffset();
 
                     double targetX = bonePos.x + (double) (sinLookYaw * cosLookPitch * (float) (-forwardOffset));
                     double targetY = bonePos.y + (double) (sinLookPitch * (float) (-forwardOffset)) + verticalOffset;

@@ -182,6 +182,20 @@ public class ConfigManager {
     public static boolean isFirstPersonModelEnabled() {
         return provider != null ? provider.isFirstPersonModelEnabled() : false;
     }
+
+    /**
+     * 获取第一人称相机前后偏移
+     */
+    public static float getFirstPersonCameraForwardOffset() {
+        return provider != null ? provider.getFirstPersonCameraForwardOffset() : 0.0f;
+    }
+
+    /**
+     * 获取第一人称相机上下偏移
+     */
+    public static float getFirstPersonCameraVerticalOffset() {
+        return provider != null ? provider.getFirstPersonCameraVerticalOffset() : 0.0f;
+    }
     
     /**
      * 配置提供者接口（组合接口）
