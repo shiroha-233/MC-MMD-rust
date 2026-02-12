@@ -14,7 +14,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 材质可见性控制界面 — 简约右侧面板风格
@@ -45,6 +47,7 @@ public class MaterialVisibilityScreen extends Screen {
     // 模型和材质数据
     private final long modelHandle;
     private final String modelName;
+    private final String configModelName; // 配置持久化用的模型文件夹名
     private final List<MaterialEntry> materials;
     
     // UI 状态
@@ -58,10 +61,11 @@ public class MaterialVisibilityScreen extends Screen {
     private int panelX, panelY, panelH;
     private int listTop, listBottom;
     
-    public MaterialVisibilityScreen(long modelHandle, String modelName) {
+    public MaterialVisibilityScreen(long modelHandle, String modelName, String configModelName) {
         super(Component.literal("材质可见性"));
         this.modelHandle = modelHandle;
         this.modelName = modelName;
+        this.configModelName = configModelName;
         this.materials = new ArrayList<>();
         loadMaterials();
     }
@@ -88,7 +92,7 @@ public class MaterialVisibilityScreen extends Screen {
         }
         
         if (model instanceof MMDModelManager.ModelWithEntityData mwed) {
-            return new MaterialVisibilityScreen(mwed.model.GetModelLong(), modelName);
+            return new MaterialVisibilityScreen(mwed.model.GetModelLong(), modelName, modelName);
         }
         
         return null;
@@ -108,7 +112,7 @@ public class MaterialVisibilityScreen extends Screen {
         
         if (model instanceof MMDModelManager.ModelWithEntityData mwed) {
             String displayName = maidName != null ? maidName : "女仆";
-            return new MaterialVisibilityScreen(mwed.model.GetModelLong(), displayName);
+            return new MaterialVisibilityScreen(mwed.model.GetModelLong(), displayName, model.getModelName());
         }
         
         return null;
@@ -199,16 +203,24 @@ public class MaterialVisibilityScreen extends Screen {
     @Override
     public void onClose() {
         // 保存材质可见性到模型配置
-        ModelConfigData config = ModelConfigManager.getConfig(modelName);
-        config.hiddenMaterials.clear();
-        for (MaterialEntry entry : materials) {
-            if (!entry.visible) {
-                config.hiddenMaterials.add(entry.index);
-            }
-        }
-        ModelConfigManager.saveConfig(modelName, config);
-        
+        saveMaterialVisibility();
         super.onClose();
+    }
+
+    private void saveMaterialVisibility() {
+        try {
+            ModelConfigData config = ModelConfigManager.getConfig(configModelName);
+            config.hiddenMaterials.clear();
+            for (MaterialEntry entry : materials) {
+                if (!entry.visible) {
+                    config.hiddenMaterials.add(entry.index);
+                }
+            }
+            ModelConfigManager.saveConfig(configModelName, config);
+            logger.info("已保存材质可见性配置: {}", configModelName);
+        } catch (Exception e) {
+            logger.warn("保存材质可见性配置失败: {}", configModelName, e);
+        }
     }
 
     @Override

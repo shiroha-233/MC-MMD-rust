@@ -7,6 +7,8 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * 单个模型的独立配置数据
@@ -28,8 +30,8 @@ public class ModelConfigData {
     public float modelScale = 1.0f;
     
     // ==================== 材质可见性 ====================
-    /** 隐藏材质索引列表 */
-    public java.util.List<Integer> hiddenMaterials = new java.util.ArrayList<>();
+    /** 隐藏的材质索引集合（未列出的材质默认可见） */
+    public Set<Integer> hiddenMaterials = new HashSet<>();
     
     /**
      * 从文件加载配置
@@ -59,7 +61,7 @@ public class ModelConfigData {
         c.eyeTrackingEnabled = this.eyeTrackingEnabled;
         c.eyeMaxAngle = this.eyeMaxAngle;
         c.modelScale = this.modelScale;
-        c.hiddenMaterials = new java.util.ArrayList<>(this.hiddenMaterials);
+        c.hiddenMaterials = new HashSet<>(this.hiddenMaterials);
         return c;
     }
     

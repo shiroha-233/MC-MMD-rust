@@ -443,20 +443,35 @@ public class MMDModelManager {
         m.modelName = modelName;
         m.entityData = new EntityAnimState(3);
         
-        // 恢复材质可见性设置
-        ModelConfigData config = ModelConfigManager.getConfig(modelName);
-        if (config != null && !config.hiddenMaterials.isEmpty()) {
-            NativeFunc nf = NativeFunc.GetInst();
-            long handle = model.GetModelLong();
-            for (int index : config.hiddenMaterials) {
-                nf.SetMaterialVisible(handle, index, false);
-            }
-            logger.info("已从配置中恢复 {} 个隐藏材质: {}", config.hiddenMaterials.size(), modelName);
-        }
+        // 恢复保存的材质可见性配置
+        applyMaterialVisibility(model.GetModelLong(), modelName);
         
         model.ResetPhysics();
         model.ChangeAnim(MMDAnimManager.GetAnimModel(model, "idle"), 0);
         return m;
+    }
+
+    /**
+     * 应用保存的材质可见性配置到模型
+     */
+    private static void applyMaterialVisibility(long modelHandle, String modelName) {
+        try {
+            ModelConfigData config = ModelConfigManager.getConfig(modelName);
+            if (config.hiddenMaterials.isEmpty()) return;
+            
+            NativeFunc nf = NativeFunc.GetInst();
+            int materialCount = (int) nf.GetMaterialCount(modelHandle);
+            
+            for (int index : config.hiddenMaterials) {
+                if (index >= 0 && index < materialCount) {
+                    nf.SetMaterialVisible(modelHandle, index, false);
+                }
+            }
+            
+            logger.debug("已恢复 {} 个隐藏材质: {}", config.hiddenMaterials.size(), modelName);
+        } catch (Exception e) {
+            logger.warn("恢复材质可见性失败: {}", modelName, e);
+        }
     }
     
     public static void ReloadModel() {
@@ -503,6 +518,11 @@ public class MMDModelManager {
         public IMMDModel model;
         String entityName;
         String modelName;
+
+        public String getModelName() {
+            return modelName;
+        }
+
         public Properties properties = new Properties();
         boolean isPropertiesLoaded = false;
 
