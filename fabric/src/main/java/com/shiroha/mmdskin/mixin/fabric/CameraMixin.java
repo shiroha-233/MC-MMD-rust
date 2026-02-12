@@ -1,6 +1,7 @@
 package com.shiroha.mmdskin.mixin.fabric;
 
 import com.shiroha.mmdskin.config.ConfigData;
+import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.fabric.YsmCompat;
 import com.shiroha.mmdskin.fabric.config.MmdSkinConfig;
 import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
@@ -64,9 +65,8 @@ public abstract class CameraMixin {
                 float cosLookYaw = Mth.cos(lookYawRad);
                 float sinLookYaw = Mth.sin(lookYawRad);
 
-                ConfigData config = MmdSkinConfig.getData();
-                double forwardOffset = config.firstPersonCameraForwardOffset;
-                double verticalOffset = config.firstPersonCameraVerticalOffset;
+                double forwardOffset = ConfigManager.getFirstPersonCameraForwardOffset();
+                double verticalOffset = ConfigManager.getFirstPersonCameraVerticalOffset();
 
                 double targetX = boneEyePos.x + (double) (sinLookYaw * cosLookPitch * (float) (-forwardOffset));
                 double targetY = boneEyePos.y + (double) (sinLookPitch * (float) (-forwardOffset)) + verticalOffset;

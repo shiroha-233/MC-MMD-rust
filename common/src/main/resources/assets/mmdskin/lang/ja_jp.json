@@ -112,6 +112,10 @@
 
   "gui.mmdskin.mod_settings.first_person_model": "一人称モデル表示",
   "gui.mmdskin.mod_settings.first_person_model.tooltip": "一人称視点でMMDモデルを表示（頭部自動非表示、カメラ高さをモデルの頭部に合わせる）",
+  "gui.mmdskin.mod_settings.first_person_camera_forward_offset": "一人称カメラ前後オフセット",
+  "gui.mmdskin.mod_settings.first_person_camera_forward_offset.tooltip": "一人称視点でのカメラの前後位置を調整します。値が大きいほどカメラが前に、小さいほど後ろに移動します。",
+  "gui.mmdskin.mod_settings.first_person_camera_vertical_offset": "一人称カメラ上下オフセット",
+  "gui.mmdskin.mod_settings.first_person_camera_vertical_offset.tooltip": "一人称視点でのカメラの上下位置を調整します。値が大きいほどカメラが上に、小さいほど下に移動します。",
 
   "gui.mmdskin.action_wheel": "アクションホイール",
   "gui.mmdskin.select_action": "アクションを選択",

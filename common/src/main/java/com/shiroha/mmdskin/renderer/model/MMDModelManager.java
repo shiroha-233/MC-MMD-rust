@@ -2,6 +2,8 @@ package com.shiroha.mmdskin.renderer.model;
 
 import com.shiroha.mmdskin.MmdSkinClient;
 import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.config.ModelConfigData;
+import com.shiroha.mmdskin.config.ModelConfigManager;
 import com.shiroha.mmdskin.renderer.animation.MMDAnimManager;
 import com.shiroha.mmdskin.renderer.core.EntityAnimState;
 import com.shiroha.mmdskin.renderer.core.IMMDModel;
@@ -441,9 +443,35 @@ public class MMDModelManager {
         m.modelName = modelName;
         m.entityData = new EntityAnimState(3);
         
+        // 恢复保存的材质可见性配置
+        applyMaterialVisibility(model.GetModelLong(), modelName);
+        
         model.ResetPhysics();
         model.ChangeAnim(MMDAnimManager.GetAnimModel(model, "idle"), 0);
         return m;
+    }
+
+    /**
+     * 应用保存的材质可见性配置到模型
+     */
+    private static void applyMaterialVisibility(long modelHandle, String modelName) {
+        try {
+            ModelConfigData config = ModelConfigManager.getConfig(modelName);
+            if (config.hiddenMaterials.isEmpty()) return;
+            
+            NativeFunc nf = NativeFunc.GetInst();
+            int materialCount = (int) nf.GetMaterialCount(modelHandle);
+            
+            for (int index : config.hiddenMaterials) {
+                if (index >= 0 && index < materialCount) {
+                    nf.SetMaterialVisible(modelHandle, index, false);
+                }
+            }
+            
+            logger.debug("已恢复 {} 个隐藏材质: {}", config.hiddenMaterials.size(), modelName);
+        } catch (Exception e) {
+            logger.warn("恢复材质可见性失败: {}", modelName, e);
+        }
     }
     
     public static void ReloadModel() {
@@ -490,6 +518,11 @@ public class MMDModelManager {
         public IMMDModel model;
         String entityName;
         String modelName;
+
+        public String getModelName() {
+            return modelName;
+        }
+
         public Properties properties = new Properties();
         boolean isPropertiesLoaded = false;
 

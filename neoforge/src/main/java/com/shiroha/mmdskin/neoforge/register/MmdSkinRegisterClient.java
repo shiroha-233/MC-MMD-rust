@@ -21,6 +21,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.neoforged.api.distmarker.Dist;
@@ -238,6 +239,13 @@ public class MmdSkinRegisterClient {
                 maidConfigWheelKeyWasDown = keyDown;
             } else {
                 maidConfigWheelKeyWasDown = false;
+            }
+
+            // 处理所有玩家（包括远程玩家）的 tick，用于音频音量衰减等
+            if (mc.level != null) {
+                for (Player player : mc.level.players()) {
+                    MmdSkinRendererPlayerHelper.tick(player);
+                }
             }
         }
         

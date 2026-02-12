@@ -23,6 +23,26 @@ public class MmdSkinRendererPlayerHelper {
     // 远程玩家舞台动画句柄（用于断线时清理）
     private static final Map<UUID, List<Long>> remoteStageAnims = new ConcurrentHashMap<>();
 
+    /**
+     * 每帧更新远程玩家音频的音量衰减
+     */
+    public static void tick(Player player) {
+        if (player == null) return;
+        StageAudioPlayer.updateRemoteVolume(player);
+    }
+
+    /**
+     * 判断玩家是否正在使用 MMD 模型
+     */
+    public static boolean isUsingMmdModel(Player player) {
+        if (player == null) return false;
+        String playerName = player.getName().getString();
+        Minecraft mc = Minecraft.getInstance();
+        boolean isLocalPlayer = mc.player != null && mc.player.getUUID().equals(player.getUUID());
+        String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
+        return selectedModel != null && !selectedModel.isEmpty() && !selectedModel.equals(UIConstants.DEFAULT_MODEL_NAME);
+    }
+
     MmdSkinRendererPlayerHelper() {
     }
 

@@ -163,6 +163,13 @@ public class MmdSkinRegisterClient {
                     maidConfigWheelKeyWasDown = false;
                 }
             }
+
+            // 处理所有玩家（包括远程玩家）的 tick，用于音频音量衰减等
+            if (client.level != null) {
+                for (net.minecraft.world.entity.player.Player player : client.level.players()) {
+                    MmdSkinRendererPlayerHelper.tick(player);
+                }
+            }
         });
 
         // 注册实体渲染器

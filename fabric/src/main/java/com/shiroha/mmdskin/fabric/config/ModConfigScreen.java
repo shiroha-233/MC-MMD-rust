@@ -56,6 +56,28 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.first_person_model.tooltip"))
             .setSaveConsumer(value -> data.firstPersonModelEnabled = value)
             .build());
+
+        renderCategory.addEntry(entryBuilder
+            .startIntSlider(
+                Component.translatable("gui.mmdskin.mod_settings.first_person_camera_forward_offset"),
+                (int)(data.firstPersonCameraForwardOffset * 1000.0F),
+                -100, 500)
+            .setDefaultValue(0)
+            .setTooltip(Component.translatable("gui.mmdskin.mod_settings.first_person_camera_forward_offset.tooltip"))
+            .setTextGetter(value -> Component.literal(String.format("%.3f", value.intValue() / 1000.0F)))
+            .setSaveConsumer(value -> data.firstPersonCameraForwardOffset = value.intValue() / 1000.0F)
+            .build());
+
+        renderCategory.addEntry(entryBuilder
+            .startIntSlider(
+                Component.translatable("gui.mmdskin.mod_settings.first_person_camera_vertical_offset"),
+                (int)(data.firstPersonCameraVerticalOffset * 1000.0F),
+                -500, 500)
+            .setDefaultValue(0)
+            .setTooltip(Component.translatable("gui.mmdskin.mod_settings.first_person_camera_vertical_offset.tooltip"))
+            .setTextGetter(value -> Component.literal(String.format("%.3f", value.intValue() / 1000.0F)))
+            .setSaveConsumer(value -> data.firstPersonCameraVerticalOffset = value.intValue() / 1000.0F)
+            .build());
         
         // 性能设置分类
         ConfigCategory performanceCategory = builder.getOrCreateCategory(

@@ -3,6 +3,7 @@ package com.shiroha.mmdskin.ui.network;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.shiroha.mmdskin.renderer.camera.StageAudioPlayer;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 
 import java.util.Map;
@@ -98,12 +99,16 @@ public class PlayerModelSyncManager {
     }
     
     /**
-     * 断开连接时清理所有远程玩家缓存
+     * 断开连接时清理所有远程玩家缓存和音频资源
      */
     public static void onDisconnect() {
         int count = remotePlayerModels.size();
         remotePlayerModels.clear();
         logger.info("已清理 {} 个远程玩家模型缓存", count);
+        
+        // 清理音频资源以防止 OpenAL 泄漏
+        StageAudioPlayer.cleanupAll();
+        logger.info("已清理所有 StageAudioPlayer 音频资源");
     }
     
     /**

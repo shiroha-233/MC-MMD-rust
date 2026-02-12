@@ -112,6 +112,10 @@
   
   "gui.mmdskin.mod_settings.first_person_model": "First Person Model",
   "gui.mmdskin.mod_settings.first_person_model.tooltip": "Show MMD model in first-person view (auto-hides head, camera height matches model head)",
+  "gui.mmdskin.mod_settings.first_person_camera_forward_offset": "First Person Camera Forward Offset",
+  "gui.mmdskin.mod_settings.first_person_camera_forward_offset.tooltip": "Adjust camera forward/backward position in first person. Higher values move camera forward, lower values move it backward. Drag to the right to fix seeing inside the model.",
+  "gui.mmdskin.mod_settings.first_person_camera_vertical_offset": "First Person Camera Vertical Offset",
+  "gui.mmdskin.mod_settings.first_person_camera_vertical_offset.tooltip": "Adjust camera vertical position in first person. Higher values move camera up, lower values move it down.",
   
   "gui.mmdskin.action_wheel": "Action Wheel",
   "gui.mmdskin.select_action": "Select Action",

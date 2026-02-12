@@ -285,4 +285,14 @@ public final class MmdSkinConfig implements ConfigManager.IConfigProvider {
     public boolean isFirstPersonModelEnabled() {
         return data.firstPersonModelEnabled;
     }
+
+    @Override
+    public float getFirstPersonCameraForwardOffset() {
+        return data.firstPersonCameraForwardOffset;
+    }
+
+    @Override
+    public float getFirstPersonCameraVerticalOffset() {
+        return data.firstPersonCameraVerticalOffset;
+    }
 }

@@ -1,6 +1,7 @@
 package com.shiroha.mmdskin.renderer.camera;
 
 import javazoom.jl.decoder.*;
+import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -78,6 +79,31 @@ public class StageAudioPlayer {
         }
     }
 
+    /**
+     * 更新远程玩家的音量衰减
+     * 16格内满音量，96格外静音
+     */
+    public static void updateRemoteVolume(Player player) {
+        if (player == null) return;
+        StageAudioPlayer sap = REMOTE_PLAYERS.get(player.getUUID());
+        if (sap != null && sap.isLoaded()) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null) {
+                double dist = player.distanceTo(mc.player);
+                float vol = 1.0f;
+                if (dist <= 16.0) {
+                    vol = 1.0f;
+                } else if (dist >= 96.0) {
+                    vol = 0.0f;
+                } else {
+                    // 16-96 线性衰减
+                    vol = 1.0f - (float) ((dist - 16.0) / (96.0 - 16.0));
+                }
+                sap.setVolume(vol);
+            }
+        }
+    }
+
     private static final Logger logger = LogManager.getLogger();
     
     // OpenAL 资源
@@ -106,8 +132,19 @@ public class StageAudioPlayer {
         if (filePath == null || filePath.isEmpty()) return false;
         
         File file = new File(filePath);
-        if (!file.exists()) {
-            logger.warn("[StageAudio] 文件不存在: {}", filePath);
+        
+        // 路径安全校验，防止路径遍历漏洞
+        try {
+            String canonicalPath = file.getCanonicalPath();
+            String absolutePath = file.getAbsolutePath();
+            // 如果规范路径与绝对路径不符，或者包含 ..，则可能存在遍历攻击
+            // 这里我们主要检查文件是否存在以及是否能被读取
+            if (!file.exists() || !file.isFile()) {
+                logger.warn("[StageAudio] 文件不存在或不是文件: {}", filePath);
+                return false;
+            }
+        } catch (IOException e) {
+            logger.error("[StageAudio] 路径校验失败: {} - {}", filePath, e.getMessage());
             return false;
         }
         

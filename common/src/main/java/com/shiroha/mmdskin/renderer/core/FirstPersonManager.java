@@ -2,11 +2,13 @@ package com.shiroha.mmdskin.renderer.core;
 
 import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.config.ConfigManager;
+import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -61,12 +63,19 @@ public final class FirstPersonManager {
 
     /**
      * 判断当前是否应该使用第一人称模型渲染
-     * 条件：配置启用 + 游戏处于第一人称视角
+     * 条件：配置启用 + 游戏处于第一人称视角 + 玩家正在使用 MMD 模型
      */
     public static boolean shouldRenderFirstPerson() {
         if (!ConfigManager.isFirstPersonModelEnabled()) return false;
         Minecraft mc = Minecraft.getInstance();
-        return mc.options.getCameraType() == CameraType.FIRST_PERSON;
+        if (mc.options.getCameraType() != CameraType.FIRST_PERSON) return false;
+        
+        // 如果玩家正在使用原版模型渲染，则不启用第一人称模型功能（不对摄像机做任何变动）
+        if (mc.player != null && !MmdSkinRendererPlayerHelper.isUsingMmdModel(mc.player)) {
+            return false;
+        }
+        
+        return true;
     }
 
     /**
@@ -155,9 +164,11 @@ public final class FirstPersonManager {
         double px = Mth.lerp(partialTick, entity.xo, entity.getX());
         double py = Mth.lerp(partialTick, entity.yo, entity.getY());
         double pz = Mth.lerp(partialTick, entity.zo, entity.getZ());
-        float bodyYaw = entity instanceof LivingEntity le
-                ? Mth.lerp(partialTick, le.yBodyRotO, le.yBodyRot)
-                : Mth.lerp(partialTick, entity.yRotO, entity.getYRot());
+        
+        // 修复：直接使用实体当前的 bodyYaw 而不是进行 lerp 插值，以解决相机抖动问题
+        // bodyYaw 的插值在某些情况下会产生微小的相位差，导致模型坐标与相机坐标不完全同步
+        float bodyYaw = entity instanceof LivingEntity le ? le.yBodyRot : entity.getYRot();
+        
         float yawRad = (float) Math.toRadians(bodyYaw);
         double sinYaw = Math.sin(yawRad);
         double cosYaw = Math.cos(yawRad);
