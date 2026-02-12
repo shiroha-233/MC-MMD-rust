@@ -1,635 +1,365 @@
 //! MMD 物理世界管理器
 //!
-//! 对应 C++ saba 的 MMDPhysics 类，使用 Rapier3D 实现。
-//!
-//! ## Bullet3 → Rapier 映射
-//! | Bullet3 | Rapier |
-//! |---------|--------|
-//! | btDiscreteDynamicsWorld | PhysicsPipeline + RigidBodySet + ColliderSet + ImpulseJointSet |
-//! | btDbvtBroadphase | BroadPhaseBvh |
-//! | btCollisionDispatcher | NarrowPhase |
-//! | btSequentialImpulseConstraintSolver | 内置于 PhysicsPipeline |
+//! 移植自 babylon-mmd，使用 Bullet3 引擎。
+//! 实现 commitBodyStates / syncBodies / stepSimulation / syncBones 全套流程。
+
+use std::collections::HashSet;
 
 use glam::{Mat4, Vec3};
-use rapier3d::prelude::*;
-use rapier3d::math::Real;
-use std::num::NonZeroUsize;
 
 use mmd::pmx::rigid_body::RigidBody as PmxRigidBody;
 use mmd::pmx::joint::Joint as PmxJoint;
 
-use super::mmd_rigid_body::{MMDRigidBody, RigidBodyType};
-use super::mmd_joint::MMDJoint;
+use super::bullet_ffi::{self, BulletWorld};
+use super::mmd_rigid_body::{MmdRigidBodyData, PhysicsMode};
+use super::mmd_joint::MmdJointData;
 use super::config::get_config;
 
-/// MMD 物理世界管理器
-/// 
-/// 对应 C++ saba 的 MMDPhysics 类，管理：
-/// - Rapier PhysicsPipeline (物理流水线)
-/// - RigidBodySet (刚体集合)
-/// - ColliderSet (碰撞体集合)
-/// - ImpulseJointSet (关节集合)
-/// - 地面刚体
+/// MMD 物理世界管理器（Bullet3 引擎）
+///
+/// 移植自 babylon-mmd，管理 Bullet3 世界、刚体、关节。
+/// 物理在模型局部空间运行（Minecraft 仅绕 Y 轴旋转，重力方向不变）。
+/// 流程：build_physics → 每帧 [sync_bodies → stepSimulation → sync_bones]
 pub struct MMDPhysics {
-    /// 物理流水线
-    pub physics_pipeline: PhysicsPipeline,
-    /// 积分参数
-    pub integration_parameters: IntegrationParameters,
-    /// 岛管理器
-    pub island_manager: IslandManager,
-    /// 宽相检测
-    pub broad_phase: DefaultBroadPhase,
-    /// 窄相检测
-    pub narrow_phase: NarrowPhase,
-    /// 刚体集合
-    pub rigid_body_set: RigidBodySet,
-    /// 碰撞体集合
-    pub collider_set: ColliderSet,
-    /// 关节集合
-    pub impulse_joint_set: ImpulseJointSet,
-    /// 多体关节集合
-    pub multibody_joint_set: MultibodyJointSet,
-    /// CCD 求解器
-    pub ccd_solver: CCDSolver,
-    /// 地面刚体句柄
-    pub ground_handle: Option<RigidBodyHandle>,
-    /// MMD 刚体列表
-    pub mmd_rigid_bodies: Vec<MMDRigidBody>,
-    /// MMD 关节列表
-    pub mmd_joints: Vec<MMDJoint>,
-    /// FPS（用于计算固定时间步长）
-    pub fps: f32,
+    /// MMD 关节数据列表（Drop 顺序：约束先于刚体先于世界）
+    joints: Vec<MmdJointData>,
+    /// MMD 刚体数据列表
+    pub rigid_bodies: Vec<MmdRigidBodyData>,
+    /// Bullet3 物理世界
+    world: BulletWorld,
+    /// 物理 FPS
+    fps: f32,
     /// 最大子步数
-    pub max_substep_count: i32,
-    /// 重力向量
-    pub gravity: Vector<Real>,
-    /// 是否启用关节（调试用）
-    pub joints_enabled: bool,
-    /// 上一帧的模型变换（用于计算模型整体移动速度）
-    pub prev_model_transform: Option<Mat4>,
-    /// 时间累积器（固定时间步模式）
-    accumulator: f32,
+    max_substep_count: i32,
+
+    // --- 预分配缓冲区（避免每帧堆分配） ---
+
+    /// 动态刚体关联的骨骼索引集合（构建时计算一次）
+    dynamic_bone_indices: HashSet<usize>,
+    /// 动态骨骼变换结果缓冲区（复用内存）
+    dynamic_bone_buf: Vec<(usize, Mat4)>,
 }
 
 impl MMDPhysics {
-    /// 创建新的物理世界
-    pub fn new() -> Self {
+    /// 创建新的物理世界（C++ OOM 时返回 None）
+    pub fn new() -> Option<Self> {
         let config = get_config();
-        
-        let mut rigid_body_set = RigidBodySet::new();
-        let mut collider_set = ColliderSet::new();
-        
-        // 创建地面（静态平面）
-        // 使用一个大的静态盒子作为地面
-        let ground = RigidBodyBuilder::fixed()
-            .translation(Vector::new(0.0, -50.0, 0.0))
-            .build();
-        let ground_handle = rigid_body_set.insert(ground);
-        
-        // 地面碰撞体（大盒子）
-        let ground_collider = ColliderBuilder::cuboid(1000.0, 50.0, 1000.0)
-            .build();
-        collider_set.insert_with_parent(ground_collider, ground_handle, &mut rigid_body_set);
-        
-        // 设置积分参数（从配置读取）
-        let mut integration_parameters = IntegrationParameters::default();
-        integration_parameters.dt = 1.0 / config.physics_fps;
-        integration_parameters.num_solver_iterations = NonZeroUsize::new(config.solver_iterations).unwrap_or(NonZeroUsize::new(4).unwrap());
-        integration_parameters.num_internal_pgs_iterations = config.pgs_iterations;
-        integration_parameters.normalized_max_corrective_velocity = config.max_corrective_velocity;
-        
+        let world = BulletWorld::new(0.0, config.gravity_y, 0.0)?;
+
         if config.debug_log {
-            log::info!("[物理配置] FPS={}, 重力Y={}, 求解器迭代={}, PGS迭代={}",
-                config.physics_fps, config.gravity_y, config.solver_iterations, config.pgs_iterations);
+            log::info!("[Bullet3] 物理世界创建: FPS={}, 重力Y={}", config.physics_fps, config.gravity_y);
         }
-        
-        Self {
-            physics_pipeline: PhysicsPipeline::new(),
-            integration_parameters,
-            island_manager: IslandManager::new(),
-            broad_phase: DefaultBroadPhase::new(),
-            narrow_phase: NarrowPhase::new(),
-            rigid_body_set,
-            collider_set,
-            impulse_joint_set: ImpulseJointSet::new(),
-            multibody_joint_set: MultibodyJointSet::new(),
-            ccd_solver: CCDSolver::new(),
-            ground_handle: Some(ground_handle),
-            mmd_rigid_bodies: Vec::new(),
-            mmd_joints: Vec::new(),
+
+        Some(Self {
+            joints: Vec::new(),
+            rigid_bodies: Vec::new(),
+            world,
             fps: config.physics_fps,
             max_substep_count: config.max_substep_count,
-            gravity: Vector::new(0.0, config.gravity_y, 0.0),
-            joints_enabled: config.joints_enabled,
-            prev_model_transform: None,
-            accumulator: 0.0,
-        }
-    }
-    
-    /// 设置 FPS
-    pub fn set_fps(&mut self, fps: f32) {
-        self.fps = fps;
-        self.integration_parameters.dt = 1.0 / fps;
-    }
-    
-    /// 获取 FPS
-    pub fn get_fps(&self) -> f32 {
-        self.fps
-    }
-    
-    /// 设置最大子步数
-    pub fn set_max_substep_count(&mut self, count: i32) {
-        self.max_substep_count = count;
-    }
-    
-    /// 获取最大子步数
-    pub fn get_max_substep_count(&self) -> i32 {
-        self.max_substep_count
-    }
-    
-    /// 设置重力
-    pub fn set_gravity(&mut self, gravity: Vec3) {
-        self.gravity = Vector::new(gravity.x, gravity.y, gravity.z);
-    }
-    
-    /// 从 PMX 数据添加刚体
-    /// 
-    /// # 参数
-    /// - `pmx_rb`: PMX 刚体数据
-    /// - `bone_global_transform`: 关联骨骼的全局变换
-    pub fn add_rigid_body(
-        &mut self,
-        pmx_rb: &PmxRigidBody,
-        bone_global_transform: Option<Mat4>,
-    ) -> usize {
-        let mut mmd_rb = MMDRigidBody::from_pmx(pmx_rb, bone_global_transform);
-        
-        // 创建 Rapier 刚体
-        let rb = mmd_rb.build_rigid_body();
-        let rb_handle = self.rigid_body_set.insert(rb);
-        mmd_rb.rigid_body_handle = Some(rb_handle);
-        
-        // 创建 Rapier 碰撞体
-        let collider = mmd_rb.build_collider(pmx_rb);
-        let collider_handle = self.collider_set.insert_with_parent(
-            collider,
-            rb_handle,
-            &mut self.rigid_body_set,
-        );
-        mmd_rb.collider_handle = Some(collider_handle);
-        
-        let index = self.mmd_rigid_bodies.len();
-        
-        // 调试：打印前几个刚体的信息
-        if get_config().debug_log && index < 5 {
-            let pos = mmd_rb.initial_transform.translation;
-            log::info!(
-                "[刚体调试] 刚体[{}] '{}': 类型={:?}, 骨骼={}, 质量={}, 初始位置=({:.2},{:.2},{:.2})",
-                index, mmd_rb.name, mmd_rb.body_type, mmd_rb.bone_index, mmd_rb.mass,
-                pos.x, pos.y, pos.z
-            );
-        }
-        
-        self.mmd_rigid_bodies.push(mmd_rb);
-        index
-    }
-    
-    /// 从 PMX 数据添加关节
-    /// 
-    /// # 参数
-    /// - `pmx_joint`: PMX 关节数据
-    pub fn add_joint(&mut self, pmx_joint: &PmxJoint) -> Option<usize> {
-        // 调试：如果禁用关节，跳过添加
-        if !self.joints_enabled {
-            return None;
-        }
-        
-        let rb_a_idx = pmx_joint.rigid_body_a_index as usize;
-        let rb_b_idx = pmx_joint.rigid_body_b_index as usize;
-        
-        if rb_a_idx >= self.mmd_rigid_bodies.len() || rb_b_idx >= self.mmd_rigid_bodies.len() {
-            return None;
-        }
-        
-        let rb_a_handle = self.mmd_rigid_bodies[rb_a_idx].rigid_body_handle?;
-        let rb_b_handle = self.mmd_rigid_bodies[rb_b_idx].rigid_body_handle?;
-        
-        // 获取刚体的世界变换
-        let rb_a = self.rigid_body_set.get(rb_a_handle)?;
-        let rb_b = self.rigid_body_set.get(rb_b_handle)?;
-        
-        let rb_a_transform = *rb_a.position();
-        let rb_b_transform = *rb_b.position();
-        
-        let mut mmd_joint = MMDJoint::from_pmx(pmx_joint, rb_a_transform, rb_b_transform);
-        
-        // 调试：打印关节限制（特别关注头发相关的关节）
-        let index = self.mmd_joints.len();
-        if get_config().debug_log {
-            let is_hair = mmd_joint.name.contains("髪") || mmd_joint.name.contains("hair") 
-                || mmd_joint.name.contains("Hair") || mmd_joint.name.contains("毛");
-            if index < 5 || is_hair {
-                log::info!(
-                    "[关节调试] 关节[{}] '{}': 刚体A={}, 刚体B={}",
-                    index, mmd_joint.name, rb_a_idx, rb_b_idx
-                );
-                log::info!(
-                    "  线性限制: ({:.4}~{:.4}, {:.4}~{:.4}, {:.4}~{:.4})",
-                    mmd_joint.linear_lower.x, mmd_joint.linear_upper.x,
-                    mmd_joint.linear_lower.y, mmd_joint.linear_upper.y,
-                    mmd_joint.linear_lower.z, mmd_joint.linear_upper.z,
-                );
-                log::info!(
-                    "  角度限制: ({:.4}~{:.4}, {:.4}~{:.4}, {:.4}~{:.4})",
-                    mmd_joint.angular_lower.x, mmd_joint.angular_upper.x,
-                    mmd_joint.angular_lower.y, mmd_joint.angular_upper.y,
-                    mmd_joint.angular_lower.z, mmd_joint.angular_upper.z,
-                );
-                log::info!(
-                    "  弹簧: 线性=({:.2}, {:.2}, {:.2}), 角度=({:.2}, {:.2}, {:.2})",
-                    mmd_joint.linear_spring.x, mmd_joint.linear_spring.y, mmd_joint.linear_spring.z,
-                    mmd_joint.angular_spring.x, mmd_joint.angular_spring.y, mmd_joint.angular_spring.z,
-                );
-            }
-        }
-        
-        // 创建 Rapier 关节（限制 + ForceBased motor 弹簧）
-        let joint = mmd_joint.build_joint();
-        let joint_handle = self.impulse_joint_set.insert(
-            rb_a_handle,
-            rb_b_handle,
-            joint,
-            true,
-        );
-        mmd_joint.joint_handle = Some(joint_handle);
-        
-        self.mmd_joints.push(mmd_joint);
-        Some(index)
+            dynamic_bone_indices: HashSet::new(),
+            dynamic_bone_buf: Vec::new(),
+        })
     }
 
-    /// 更新物理模拟
+    /// 构建物理系统（移植自 babylon-mmd buildPhysics）
     ///
-    /// 使用标准的 "Fix Your Timestep" 累积器模式：
-    /// 每次物理步进始终使用固定 dt，剩余不足一步的时间保留到下一帧。
-    /// 这保证了不同游戏帧率下物理行为完全一致。
-    /// 
-    /// # 参数
-    /// - `delta_time`: 经过的时间（秒）
-    pub fn update(&mut self, delta_time: f32) {
-        let fixed_dt = 1.0 / self.fps;
-        let max_steps = self.max_substep_count.max(1);
-        
-        // 累积本帧时间
-        self.accumulator += delta_time;
-        
-        // 防止螺旋死亡：如果累积时间过大，截断到最大可处理时间
-        let max_accumulator = fixed_dt * max_steps as f32;
-        if self.accumulator > max_accumulator {
-            self.accumulator = max_accumulator;
-        }
-        
-        // 以固定步长消耗累积时间
-        while self.accumulator >= fixed_dt {
-            self.step_once(fixed_dt);
-            self.accumulator -= fixed_dt;
-        }
-
-        let config = get_config();
-        self.clamp_velocities(config.max_linear_velocity, config.max_angular_velocity);
-    }
-
-    /// 执行一次物理步进
-    fn step_once(&mut self, dt: f32) {
-        self.integration_parameters.dt = dt;
-        self.physics_pipeline.step(
-            &self.gravity,
-            &self.integration_parameters,
-            &mut self.island_manager,
-            &mut self.broad_phase,
-            &mut self.narrow_phase,
-            &mut self.rigid_body_set,
-            &mut self.collider_set,
-            &mut self.impulse_joint_set,
-            &mut self.multibody_joint_set,
-            &mut self.ccd_solver,
-            None,
-            &(),
-            &(),
-        );
-    }
-    
-    /// 限制刚体速度，防止物理爆炸
-    /// 
-    /// MMD 物理中，当刚体穿透卡模时会产生极大的恢复力导致速度过高。
-    /// 通过限制最大速度可以防止这种情况。
-    fn clamp_velocities(&mut self, max_linear_velocity: f32, max_angular_velocity: f32) {
-        
-        for mmd_rb in &self.mmd_rigid_bodies {
-            if mmd_rb.body_type == RigidBodyType::Kinematic {
-                continue;
-            }
-            
-            if let Some(rb_handle) = mmd_rb.rigid_body_handle {
-                if let Some(rb) = self.rigid_body_set.get_mut(rb_handle) {
-                    // 限制线速度
-                    let linvel = rb.linvel();
-                    let linvel_mag = linvel.norm();
-                    if linvel_mag > max_linear_velocity {
-                        let scale = max_linear_velocity / linvel_mag;
-                        rb.set_linvel(linvel * scale, true);
-                    }
-                    
-                    // 限制角速度
-                    let angvel = rb.angvel();
-                    let angvel_mag = angvel.norm();
-                    if angvel_mag > max_angular_velocity {
-                        let scale = max_angular_velocity / angvel_mag;
-                        rb.set_angvel(angvel * scale, true);
-                    }
-                }
-            }
-        }
-    }
-    
-    /// 在物理更新前同步运动学刚体（跟随骨骼）
-    /// 
-    /// 关键改进：计算并设置运动学刚体的速度，使连接的动态刚体产生惯性
-    /// 
-    /// # 参数
-    /// - `bone_transforms`: 骨骼全局变换列表
-    /// - `delta_time`: 时间步长（秒）
-    pub fn sync_kinematic_bodies(&mut self, bone_transforms: &[Mat4], delta_time: f32) {
-        let dt = delta_time.max(0.001); // 防止除零
-        
-        for mmd_rb in &mut self.mmd_rigid_bodies {
-            if mmd_rb.body_type != RigidBodyType::Kinematic {
-                continue;
-            }
-            
-            if let Some(rb_handle) = mmd_rb.rigid_body_handle {
-                if let Some(rb) = self.rigid_body_set.get_mut(rb_handle) {
-                    let bone_idx = mmd_rb.bone_index;
-                    if bone_idx >= 0 && (bone_idx as usize) < bone_transforms.len() {
-                        let bone_transform = bone_transforms[bone_idx as usize];
-                        let new_pose = mmd_rb.compute_world_transform(bone_transform);
-                        
-                        // 计算速度（基于位置变化）
-                        if let Some(prev_pose) = mmd_rb.prev_transform {
-                            // 线速度 = (新位置 - 旧位置) / dt
-                            let delta_pos = new_pose.translation.vector - prev_pose.translation.vector;
-                            let linvel = delta_pos / dt;
-                            
-                            // 角速度计算：从四元数差计算
-                            // delta_rot = new_rot * prev_rot.inverse()
-                            let prev_rot = prev_pose.rotation;
-                            let new_rot = new_pose.rotation;
-                            let delta_rot = new_rot * prev_rot.inverse();
-                            
-                            // 从四元数提取角速度：
-                            // 对于小角度旋转，角速度 ≈ 2 * (qx, qy, qz) / dt
-                            // 修复四元数双重覆盖：q 和 -q 表示同一旋转，
-                            // 当 w < 0 时虚部方向翻转，需要取反以保证最短路径
-                            let sign = if delta_rot.coords[3] < 0.0 { -1.0 } else { 1.0 };
-                            let angvel = Vector::new(
-                                sign * 2.0 * delta_rot.coords[0] / dt,
-                                sign * 2.0 * delta_rot.coords[1] / dt,
-                                sign * 2.0 * delta_rot.coords[2] / dt,
-                            );
-                            
-                            // 设置速度（这会影响通过关节连接的动态刚体）
-                            rb.set_linvel(linvel, true);
-                            rb.set_angvel(angvel, true);
-                        }
-                        
-                        // 设置目标位置
-                        rb.set_next_kinematic_position(new_pose);
-                        
-                        // 保存当前变换用于下一帧
-                        mmd_rb.prev_transform = Some(new_pose);
-                    }
-                }
-            }
-        }
-    }
-    
-    /// 在物理更新前同步运动学刚体，同时考虑模型整体移动
-    /// 
-    /// 关键改进：直接给 Dynamic 刚体施加惯性速度，而不是依赖 Kinematic 传递
-    /// 
-    /// # 参数
-    /// - `bone_transforms`: 骨骼局部空间的全局变换列表
-    /// - `delta_time`: 时间步长（秒）
-    /// - `model_transform`: 当前模型的世界变换
-    pub fn sync_kinematic_bodies_with_model_velocity(
-        &mut self, 
-        bone_transforms: &[Mat4], 
-        delta_time: f32,
-        model_transform: Mat4,
+    /// 一次性创建所有刚体和关节，并添加到 Bullet3 世界。
+    /// 先将对象存入 Vec（所有权转移），再添加到世界，保证 panic 安全。
+    pub fn build_physics(
+        &mut self,
+        pmx_rigid_bodies: &[PmxRigidBody],
+        pmx_joints: &[PmxJoint],
+        bone_transforms: &[Mat4],
     ) {
-        let dt = delta_time.max(0.001);
-        
-        // 计算模型整体移动的速度（仅使用位置差）
-        let model_velocity = if let Some(prev_transform) = self.prev_model_transform {
-            let curr_pos = model_transform.w_axis.truncate();
-            let prev_pos = prev_transform.w_axis.truncate();
-            (curr_pos - prev_pos) / dt
-        } else {
-            Vec3::ZERO
-        };
-        
-        // 保存当前模型变换
-        self.prev_model_transform = Some(model_transform);
-        
-        // 模型速度（保留用于调试）
-        let _model_linvel = Vector::new(model_velocity.x, model_velocity.y, model_velocity.z);
-        
-        // 第一步：同步 Kinematic 刚体位置
-        for mmd_rb in &mut self.mmd_rigid_bodies {
-            if mmd_rb.body_type != RigidBodyType::Kinematic {
-                continue;
+        let config = get_config();
+
+        // 预分配容量
+        self.rigid_bodies.reserve(pmx_rigid_bodies.len());
+
+        // 第一步：创建所有刚体并存入 Vec（还未加入世界）
+        for pmx_rb in pmx_rigid_bodies {
+            let bone_transform = if pmx_rb.bone_index >= 0 && (pmx_rb.bone_index as usize) < bone_transforms.len() {
+                Some(bone_transforms[pmx_rb.bone_index as usize])
+            } else {
+                None
+            };
+
+            let mut rb_data = MmdRigidBodyData::from_pmx(pmx_rb, bone_transform);
+            let shape = MmdRigidBodyData::create_shape(pmx_rb);
+            let body = shape.as_ref().and_then(|s| rb_data.create_rigid_body(pmx_rb, s));
+
+            if shape.is_none() || body.is_none() {
+                log::warn!("[Bullet3] 刚体 '{}' 创建失败，跳过", rb_data.name);
             }
-            
-            if let Some(rb_handle) = mmd_rb.rigid_body_handle {
-                if let Some(rb) = self.rigid_body_set.get_mut(rb_handle) {
-                    let bone_idx = mmd_rb.bone_index;
-                    if bone_idx >= 0 && (bone_idx as usize) < bone_transforms.len() {
-                        let bone_transform = bone_transforms[bone_idx as usize];
-                        let new_pose = mmd_rb.compute_world_transform(bone_transform);
-                        
-                        // Kinematic 刚体：只设置位置，速度设置无意义
-                        rb.set_next_kinematic_position(new_pose);
-                        mmd_rb.prev_transform = Some(new_pose);
+
+            // 先转移所有权到 rb_data，再 push 到 Vec
+            rb_data.bullet_body = body;
+            rb_data.bullet_shape = shape;
+            self.rigid_bodies.push(rb_data);
+        }
+
+        // 第二步：统一将已存储的刚体添加到世界
+        // 此时所有权已在 self.rigid_bodies 中，panic 时 Drop 链会正确清理
+        for rb_data in &self.rigid_bodies {
+            if let Some(ref body) = rb_data.bullet_body {
+                let group = 1i32 << (rb_data.group.min(15) as i32);
+                let mask = rb_data.group_mask as i32;
+                self.world.add_rigid_body(body, group, mask);
+            }
+        }
+
+        // 第三步：创建关节并存入 Vec
+        if config.joints_enabled {
+            self.joints.reserve(pmx_joints.len());
+
+            for pmx_joint in pmx_joints {
+                let rb_a_idx = pmx_joint.rigid_body_a_index as usize;
+                let rb_b_idx = pmx_joint.rigid_body_b_index as usize;
+
+                if rb_a_idx >= self.rigid_bodies.len() || rb_b_idx >= self.rigid_bodies.len()
+                    || rb_a_idx == rb_b_idx
+                {
+                    continue;
+                }
+
+                let (rb_a_body, rb_b_body, rb_a_init, rb_b_init) = {
+                    let rb_a = &self.rigid_bodies[rb_a_idx];
+                    let rb_b = &self.rigid_bodies[rb_b_idx];
+                    match (&rb_a.bullet_body, &rb_b.bullet_body) {
+                        (Some(a), Some(b)) => (a, b, rb_a.initial_transform, rb_b.initial_transform),
+                        _ => continue,
                     }
+                };
+
+                let joint_data = MmdJointData::from_pmx(
+                    pmx_joint,
+                    rb_a_body,
+                    rb_b_body,
+                    rb_a_init,
+                    rb_b_init,
+                );
+
+                // 先存入 Vec，再添加到世界
+                self.joints.push(joint_data);
+            }
+
+            // 统一添加约束到世界
+            for joint_data in &self.joints {
+                if let Some(ref constraint) = joint_data.constraint {
+                    self.world.add_constraint(constraint, true);
                 }
             }
         }
-        
-        // 第二步：给 Dynamic 刚体施加惯性速度
-        // 关键：需要将世界空间的速度转换到模型局部空间
-        // 从 model_transform 提取旋转矩阵（3x3 部分）
-        let rot_col0 = model_transform.x_axis.truncate(); // 第一列
-        let rot_col1 = model_transform.y_axis.truncate(); // 第二列
-        let rot_col2 = model_transform.z_axis.truncate(); // 第三列
-        
-        // 将世界速度转换到模型局部空间：v_local = R^T * v_world
-        // R^T 的行就是 R 的列
-        let world_vel = model_velocity;
-        let local_vel_x = rot_col0.dot(world_vel);
-        let local_vel_y = rot_col1.dot(world_vel);
-        let local_vel_z = rot_col2.dot(world_vel);
-        
-        // 惯性速度（模型局部空间，反方向），乘以惯性强度系数
-        let strength = get_config().inertia_strength;
-        let inertia_velocity = Vector::new(
-            -local_vel_x * strength, 
-            -local_vel_y * strength, 
-            -local_vel_z * strength
-        );
-        
-        // 给 Dynamic 刚体施加惯性力（非速度累积）
-        // 使用 add_force 而非 set_linvel：力每帧重新设置，不会跨帧累积
-        // 模型什么速度就给多大的力（F = m * inertia_velocity）
-        for mmd_rb in &self.mmd_rigid_bodies {
-            if mmd_rb.body_type == RigidBodyType::Kinematic {
-                continue;
-            }
-            
-            if let Some(rb_handle) = mmd_rb.rigid_body_handle {
-                if let Some(rb) = self.rigid_body_set.get_mut(rb_handle) {
-                    let mass = rb.mass();
-                    // F = m * v / dt，将速度转换为力（冲量等效）
-                    // 这样在一个物理步内产生的速度变化 ≈ inertia_velocity
-                    let force = inertia_velocity * mass / dt;
-                    rb.reset_forces(false);
-                    rb.add_force(force, true);
-                }
-            }
-        }
-    }
-    
-    /// 在物理更新后将动态刚体的变换反映到骨骼
-    /// 
-    /// # 参数
-    /// - `bone_transforms`: 骨骼全局变换列表（会被修改）
-    pub fn reflect_to_bones(&self, bone_transforms: &mut [Mat4]) {
-        for mmd_rb in &self.mmd_rigid_bodies {
-            if mmd_rb.body_type == RigidBodyType::Kinematic {
-                continue;
-            }
-            
-            if let Some(rb_handle) = mmd_rb.rigid_body_handle {
-                if let Some(rb) = self.rigid_body_set.get(rb_handle) {
-                    let bone_idx = mmd_rb.bone_index;
-                    if bone_idx >= 0 && (bone_idx as usize) < bone_transforms.len() {
-                        let rb_pose = *rb.position();
-                        
-                        let new_bone_transform = match mmd_rb.body_type {
-                            RigidBodyType::Dynamic => {
-                                mmd_rb.compute_bone_transform(rb_pose)
-                            }
-                            RigidBodyType::DynamicWithBonePosition => {
-                                // 只应用旋转，保留原位置
-                                let current_pos = bone_transforms[bone_idx as usize]
-                                    .w_axis
-                                    .truncate();
-                                mmd_rb.compute_bone_transform_rotation_only(rb_pose, current_pos)
-                            }
-                            RigidBodyType::Kinematic => unreachable!(),
-                        };
-                        
-                        bone_transforms[bone_idx as usize] = new_bone_transform;
-                    }
-                }
-            }
-        }
-    }
-    
-    /// 重置所有刚体到初始状态
-    pub fn reset(&mut self) {
-        for mmd_rb in &mut self.mmd_rigid_bodies {
-            // 清除上一帧变换，防止重置后第一帧计算出巨大速度
-            mmd_rb.prev_transform = None;
-            if let Some(rb_handle) = mmd_rb.rigid_body_handle {
-                if let Some(rb) = self.rigid_body_set.get_mut(rb_handle) {
-                    // 重置位置
-                    rb.set_position(mmd_rb.initial_transform, true);
-                    // 重置速度
-                    rb.set_linvel(Vector::new(0.0, 0.0, 0.0), true);
-                    rb.set_angvel(Vector::new(0.0, 0.0, 0.0), true);
-                    // 清除残余力
-                    rb.reset_forces(true);
-                    // 唤醒刚体
-                    rb.wake_up(true);
-                }
-            }
-        }
-        // 清除模型变换状态和时间累积器
-        self.prev_model_transform = None;
-        self.accumulator = 0.0;
-    }
-    
-    /// 获取刚体数量
-    pub fn rigid_body_count(&self) -> usize {
-        self.mmd_rigid_bodies.len()
-    }
-    
-    /// 获取关节数量
-    pub fn joint_count(&self) -> usize {
-        self.mmd_joints.len()
-    }
-    
-    /// 获取动态刚体关联的骨骼变换列表
-    /// 
-    /// 返回 (骨骼索引, 新变换) 列表，按刚体顺序排列
-    /// 用于物理更新后只更新被物理驱动的骨骼
-    pub fn get_dynamic_bone_transforms(&self, current_bone_transforms: &[Mat4]) -> Vec<(usize, Mat4)> {
-        let mut result = Vec::new();
-        
-        for mmd_rb in &self.mmd_rigid_bodies {
-            if mmd_rb.body_type == RigidBodyType::Kinematic {
-                continue;
-            }
-            
-            if let Some(rb_handle) = mmd_rb.rigid_body_handle {
-                if let Some(rb) = self.rigid_body_set.get(rb_handle) {
-                    let bone_idx = mmd_rb.bone_index;
-                    if bone_idx >= 0 && (bone_idx as usize) < current_bone_transforms.len() {
-                        let rb_pose = *rb.position();
-                        
-                        let new_bone_transform = match mmd_rb.body_type {
-                            RigidBodyType::Dynamic => {
-                                mmd_rb.compute_bone_transform(rb_pose)
-                            }
-                            RigidBodyType::DynamicWithBonePosition => {
-                                let current_pos = current_bone_transforms[bone_idx as usize]
-                                    .w_axis
-                                    .truncate();
-                                mmd_rb.compute_bone_transform_rotation_only(rb_pose, current_pos)
-                            }
-                            RigidBodyType::Kinematic => unreachable!(),
-                        };
-                        
-                        result.push((bone_idx as usize, new_bone_transform));
-                    }
-                }
-            }
-        }
-        
-        result
-    }
-    
-    /// 获取所有动态刚体关联的骨骼索引集合
-    pub fn get_dynamic_bone_indices(&self) -> std::collections::HashSet<usize> {
-        self.mmd_rigid_bodies
-            .iter()
-            .filter(|rb| rb.body_type != RigidBodyType::Kinematic && rb.bone_index >= 0)
+
+        // 第四步：预计算动态骨骼索引集合（一次性，避免每帧重算）
+        self.dynamic_bone_indices = self.rigid_bodies.iter()
+            .filter(|rb| rb.physics_mode != PhysicsMode::FollowBone && rb.bone_index >= 0)
             .map(|rb| rb.bone_index as usize)
-            .collect()
+            .collect();
+
+        // 预分配动态骨骼缓冲区
+        self.dynamic_bone_buf.reserve(self.dynamic_bone_indices.len());
+
+        let kinematic_count = self.rigid_bodies.iter()
+            .filter(|rb| rb.physics_mode == PhysicsMode::FollowBone).count();
+        let dynamic_count = self.rigid_bodies.iter()
+            .filter(|rb| rb.physics_mode == PhysicsMode::Physics).count();
+        let dynamic_bone_count = self.rigid_bodies.iter()
+            .filter(|rb| rb.physics_mode == PhysicsMode::PhysicsWithBone).count();
+
+        log::info!(
+            "Bullet3 物理构建完成: {} 刚体 ({}跟骨 + {}物理 + {}物理跟骨), {} 关节",
+            self.rigid_bodies.len(),
+            kinematic_count, dynamic_count, dynamic_bone_count,
+            self.joints.len()
+        );
+    }
+
+    /// 同步运动学刚体位置（babylon-mmd syncBodies）
+    ///
+    /// 在每帧物理步进前调用。将 FollowBone 模式的刚体位置
+    /// 同步为骨骼变换推导的物理空间（左手）变换。
+    pub fn sync_bodies(&self, bone_transforms: &[Mat4]) {
+        for rb_data in &self.rigid_bodies {
+            if rb_data.physics_mode != PhysicsMode::FollowBone {
+                continue;
+            }
+            let bone_idx = rb_data.bone_index;
+            if bone_idx < 0 || (bone_idx as usize) >= bone_transforms.len() {
+                continue;
+            }
+            if let Some(ref body) = rb_data.bullet_body {
+                // 骨骼(右手) → inv_z → 左手，再计算刚体位置
+                let bone_left = super::inv_z(bone_transforms[bone_idx as usize]);
+                let body_matrix = rb_data.compute_body_matrix(bone_left);
+                body.set_transform(body_matrix);
+            }
+        }
+    }
+
+    /// 同步运动学刚体，供 update_physics 调用
+    pub fn sync_bodies_with_model_velocity(
+        &mut self,
+        bone_transforms: &[Mat4],
+        _delta_time: f32,
+        _model_transform: Mat4,
+    ) {
+        self.sync_bodies(bone_transforms);
+    }
+
+    /// 步进物理模拟（Bullet3 stepSimulation）
+    pub fn step_simulation(&self, delta_time: f32) {
+        let fixed_dt = 1.0 / self.fps;
+        self.world.step(delta_time, self.max_substep_count, fixed_dt);
+    }
+
+    /// 将动态刚体变换同步回骨骼（babylon-mmd syncBones）
+    ///
+    /// 从 Bullet3 读取左手空间变换，通过 inv_z 转回右手空间写入骨骼。
+    pub fn sync_bones(&self, bone_transforms: &mut [Mat4]) {
+        for rb_data in &self.rigid_bodies {
+            if rb_data.physics_mode == PhysicsMode::FollowBone {
+                continue;
+            }
+            let bone_idx = rb_data.bone_index;
+            if bone_idx < 0 || (bone_idx as usize) >= bone_transforms.len() {
+                continue;
+            }
+            if let Some(ref body) = rb_data.bullet_body {
+                let rb_matrix = body.get_transform();
+                let new_bone_left = match rb_data.physics_mode {
+                    PhysicsMode::Physics => {
+                        rb_data.compute_bone_matrix(rb_matrix)
+                    }
+                    PhysicsMode::PhysicsWithBone => {
+                        // 骨骼位置(右手) → inv_z → 左手
+                        let bone_right = bone_transforms[bone_idx as usize];
+                        let pos_left = Vec3::new(
+                            bone_right.w_axis.x,
+                            bone_right.w_axis.y,
+                            -bone_right.w_axis.z,
+                        );
+                        rb_data.compute_bone_matrix_rotation_only(rb_matrix, pos_left)
+                    }
+                    PhysicsMode::FollowBone => unreachable!(),
+                };
+                // 左手 → inv_z → 右手
+                bone_transforms[bone_idx as usize] = super::inv_z(new_bone_left);
+            }
+        }
+    }
+
+    /// 初始化物理（commitBodyStates 的初始版本）
+    ///
+    /// 在骨骼初始姿态确定后调用，将所有刚体设置到正确的初始位置（左手空间）。
+    pub fn initialize(&mut self, bone_transforms: &[Mat4]) {
+        for rb_data in &self.rigid_bodies {
+            let bone_idx = rb_data.bone_index;
+            if bone_idx < 0 || (bone_idx as usize) >= bone_transforms.len() {
+                continue;
+            }
+            if let Some(ref body) = rb_data.bullet_body {
+                // 骨骼(右手) → inv_z → 左手
+                let bone_left = super::inv_z(bone_transforms[bone_idx as usize]);
+                let body_matrix = rb_data.compute_body_matrix(bone_left);
+                body.set_transform(body_matrix);
+                body.set_linear_velocity(0.0, 0.0, 0.0);
+                body.set_angular_velocity(0.0, 0.0, 0.0);
+                body.clear_forces();
+            }
+        }
+    }
+
+    /// 重置物理系统
+    pub fn reset(&mut self) {
+        for rb_data in &self.rigid_bodies {
+            if let Some(ref body) = rb_data.bullet_body {
+                body.set_transform(rb_data.initial_transform);
+                body.set_linear_velocity(0.0, 0.0, 0.0);
+                body.set_angular_velocity(0.0, 0.0, 0.0);
+                body.clear_forces();
+            }
+        }
+    }
+
+    /// 设置重力
+    pub fn set_gravity(&self, x: f32, y: f32, z: f32) {
+        self.world.set_gravity(x, y, z);
+    }
+
+    pub fn rigid_body_count(&self) -> usize { self.rigid_bodies.len() }
+    pub fn joint_count(&self) -> usize { self.joints.len() }
+
+    /// 获取动态刚体关联的骨骼变换（复用内部缓冲区，零堆分配）
+    ///
+    /// 从 Bullet3 读取左手空间变换，通过 inv_z 转回右手空间返回。
+    pub fn get_dynamic_bone_transforms(&mut self, current_bone_transforms: &[Mat4]) -> &[(usize, Mat4)] {
+        self.dynamic_bone_buf.clear();
+        for rb_data in &self.rigid_bodies {
+            if rb_data.physics_mode == PhysicsMode::FollowBone {
+                continue;
+            }
+            let bone_idx = rb_data.bone_index;
+            if bone_idx < 0 || (bone_idx as usize) >= current_bone_transforms.len() {
+                continue;
+            }
+            if let Some(ref body) = rb_data.bullet_body {
+                let rb_matrix = body.get_transform();
+                let new_bone_left = match rb_data.physics_mode {
+                    PhysicsMode::Physics => rb_data.compute_bone_matrix(rb_matrix),
+                    PhysicsMode::PhysicsWithBone => {
+                        let bone_right = current_bone_transforms[bone_idx as usize];
+                        let pos_left = Vec3::new(
+                            bone_right.w_axis.x,
+                            bone_right.w_axis.y,
+                            -bone_right.w_axis.z,
+                        );
+                        rb_data.compute_bone_matrix_rotation_only(rb_matrix, pos_left)
+                    }
+                    PhysicsMode::FollowBone => unreachable!(),
+                };
+                self.dynamic_bone_buf.push((bone_idx as usize, super::inv_z(new_bone_left)));
+            }
+        }
+        &self.dynamic_bone_buf
+    }
+
+    /// 获取动态骨骼索引集合的引用（构建时已预计算，零分配）
+    pub fn get_dynamic_bone_indices(&self) -> &HashSet<usize> {
+        &self.dynamic_bone_indices
+    }
+
+    /// 获取 C++ 侧存活对象计数（调试用）
+    pub fn alloc_stats() -> bullet_ffi::BulletAllocStats {
+        bullet_ffi::get_alloc_stats()
     }
 }
 
-impl Default for MMDPhysics {
-    fn default() -> Self {
-        Self::new()
+impl Drop for MMDPhysics {
+    fn drop(&mut self) {
+        // Bullet3 要求：必须在 destroy 对象前先从世界中移除。
+        // Rust 默认按声明顺序 drop 字段（joints → rigid_bodies → world），
+        // 如果不先移除，bw_world_destroy 会访问已释放的指针导致崩溃。
+        for joint in &self.joints {
+            if let Some(ref constraint) = joint.constraint {
+                self.world.remove_constraint(constraint);
+            }
+        }
+        for rb in &self.rigid_bodies {
+            if let Some(ref body) = rb.bullet_body {
+                self.world.remove_rigid_body(body);
+            }
+        }
+        // 之后 Rust 自动 drop 各字段（约束/刚体/世界），此时世界已为空，安全释放
+
+        // 泄漏检测日志（仅在当前实例释放后检查全局计数）
+        let stats = bullet_ffi::get_alloc_stats();
+        if !stats.is_clean() {
+            log::warn!(
+                "[Bullet3] C++ 侧仍有存活对象: worlds={}, shapes={}, bodies={}, constraints={}, motionStates={}",
+                stats.worlds, stats.shapes, stats.rigid_bodies,
+                stats.constraints, stats.motion_states
+            );
+        }
     }
 }

@@ -1,306 +1,179 @@
-//! MMD 刚体封装
+//! MMD 刚体数据
 //!
-//! 对应 C++ saba 的 MMDRigidBody 类，使用 Rapier3D 实现。
+//! 移植自 babylon-mmd 的 MmdRigidBodyData。
+//! 使用 Bullet3 引擎，通过 inv_z 在骨骼（右手）与物理（左手）坐标系之间转换。
 
 use glam::{Mat4, Vec3, Quat};
-use rapier3d::prelude::*;
-use rapier3d::math::Real;
-
-/// Rapier Isometry 类型别名
-pub type Pose = rapier3d::math::Isometry<Real>;
 
 use mmd::pmx::rigid_body::{RigidBody as PmxRigidBody, RigidBodyShape, RigidBodyMode};
 
-use super::config::get_config;
+use super::bullet_ffi::{BulletShape, BulletRigidBody, RigidBodyInfo};
 
-/// 刚体类型
+/// 物理模式（对应 babylon-mmd 的 PhysicsMode）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RigidBodyType {
-    /// 静态/运动学刚体，跟随骨骼
-    Kinematic,
-    /// 动态刚体，完全由物理驱动
-    Dynamic,
-    /// 动态刚体，但位置跟随骨骼（只有旋转由物理驱动）
-    DynamicWithBonePosition,
+pub enum PhysicsMode {
+    /// 跟随骨骼（Kinematic）
+    FollowBone,
+    /// 完全物理驱动
+    Physics,
+    /// 物理驱动但位置跟随骨骼（仅旋转由物理控制）
+    PhysicsWithBone,
 }
 
-impl From<RigidBodyMode> for RigidBodyType {
+impl From<RigidBodyMode> for PhysicsMode {
     fn from(mode: RigidBodyMode) -> Self {
         match mode {
-            RigidBodyMode::Static => RigidBodyType::Kinematic,
-            RigidBodyMode::Dynamic => RigidBodyType::Dynamic,
-            RigidBodyMode::DynamicWithBonePosition => RigidBodyType::DynamicWithBonePosition,
+            RigidBodyMode::Static => PhysicsMode::FollowBone,
+            RigidBodyMode::Dynamic => PhysicsMode::Physics,
+            RigidBodyMode::DynamicWithBonePosition => PhysicsMode::PhysicsWithBone,
         }
     }
 }
 
-/// MMD 刚体
-/// 
-/// 封装 Rapier 的 RigidBody 和 Collider，对应 C++ saba 的 MMDRigidBody。
-pub struct MMDRigidBody {
+/// MMD 刚体数据（移植自 babylon-mmd MmdRigidBodyData）
+pub struct MmdRigidBodyData {
     /// 刚体名称
     pub name: String,
-    /// 关联的骨骼索引
+    /// 关联骨骼索引
     pub bone_index: i32,
-    /// 刚体类型
-    pub body_type: RigidBodyType,
+    /// 物理模式
+    pub physics_mode: PhysicsMode,
     /// 碰撞组
     pub group: u8,
     /// 碰撞掩码
     pub group_mask: u16,
-    /// 刚体句柄
-    pub rigid_body_handle: Option<RigidBodyHandle>,
-    /// 碰撞体句柄
-    pub collider_handle: Option<ColliderHandle>,
-    /// 刚体相对于骨骼的偏移矩阵
-    pub offset_matrix: Mat4,
-    /// 偏移矩阵的逆
-    pub inv_offset_matrix: Mat4,
-    /// 初始变换（用于重置）
-    pub initial_transform: Pose,
-    /// 上一帧的世界变换（用于计算速度）
-    pub prev_transform: Option<Pose>,
+    /// 偏移矩阵 = B0⁻¹ * R0（刚体在骨骼局部空间的变换，saba 右乘约定）
+    pub body_offset_matrix: Mat4,
+    /// 偏移矩阵的逆 = R0⁻¹ * B0
+    pub body_offset_matrix_inverse: Mat4,
+    /// 刚体初始世界变换（MMD 坐标空间）
+    pub initial_transform: Mat4,
+    /// Bullet3 刚体
+    pub bullet_body: Option<BulletRigidBody>,
+    /// Bullet3 碰撞形状（必须比刚体存活更久）
+    pub bullet_shape: Option<BulletShape>,
     /// 质量
     pub mass: f32,
-    /// 线性阻尼
-    pub linear_damping: f32,
-    /// 角阻尼
-    pub angular_damping: f32,
-    /// 弹性
-    pub restitution: f32,
-    /// 摩擦力
-    pub friction: f32,
-    /// 是否为头发刚体（通过名称自动识别）
-    pub is_hair: bool,
 }
 
-impl MMDRigidBody {
+impl MmdRigidBodyData {
     /// 从 PMX 刚体数据创建
-    /// 
-    /// # 参数
-    /// - `pmx_rb`: PMX 刚体数据
-    /// - `bone_global_transform`: 关联骨骼的全局变换（如果有）
+    ///
+    /// 骨骼(右手)通过 inv_z 转为左手后计算 offset = B0_left⁻¹ * R0_left。
     pub fn from_pmx(
         pmx_rb: &PmxRigidBody,
         bone_global_transform: Option<Mat4>,
     ) -> Self {
-        let body_type = RigidBodyType::from(pmx_rb.mode);
-        
-        // saba 的计算方式：
-        // rotMat = ry * rx * rz  (Y-X-Z 欧拉角顺序)
-        // translateMat = translate(m_translate)
-        // rbMat = InvZ(translateMat * rotMat)
-        // offsetMat = inverse(node->GetGlobalTransform()) * rbMat
-        
-        // 欧拉角转四元数（Y-X-Z 顺序，与 saba 一致）
-        let rx = Quat::from_rotation_x(pmx_rb.rotation[0]);
-        let ry = Quat::from_rotation_y(pmx_rb.rotation[1]);
-        let rz = Quat::from_rotation_z(pmx_rb.rotation[2]);
-        let rotation = ry * rx * rz;
-        
+        let physics_mode = PhysicsMode::from(pmx_rb.mode);
+
+        // 欧拉角 → 四元数（Y-X-Z 顺序，与 babylon-mmd FromEulerAngles 一致）
+        let rotation = Quat::from_euler(
+            glam::EulerRot::YXZ,
+            pmx_rb.rotation[1], // Y
+            pmx_rb.rotation[0], // X
+            pmx_rb.rotation[2], // Z
+        );
+
         let position = Vec3::new(
             pmx_rb.position[0],
             pmx_rb.position[1],
             pmx_rb.position[2],
         );
-        
-        // translateMat * rotMat
-        let rb_mat_mmd = Mat4::from_rotation_translation(rotation, position);
-        
-        // 应用 InvZ 变换: invZ * m * invZ
-        // InvZ 矩阵是 scale(1, 1, -1)
-        let rb_mat = inv_z(rb_mat_mmd);
-        
-        // 计算相对于骨骼的偏移矩阵
-        let offset_matrix = if let Some(bone_transform) = bone_global_transform {
-            bone_transform.inverse() * rb_mat
+
+        // 刚体世界变换（直接使用 MMD 坐标，无 inv_z）
+        let rb_world_matrix = Mat4::from_rotation_translation(rotation, position);
+
+        // saba 约定: offset = B0_left⁻¹ * R0_left
+        // 骨骼在右手坐标（Z 翻转），刚体在左手坐标（MMD 原生），需 InvZ 对齐
+        let body_offset_matrix = if let Some(bone_transform) = bone_global_transform {
+            let bone_left = super::inv_z(bone_transform);
+            bone_left.inverse() * rb_world_matrix
         } else {
-            rb_mat
+            rb_world_matrix
         };
-        
-        let inv_offset_matrix = offset_matrix.inverse();
-        
-        // 创建初始 Isometry
-        let initial_transform = mat4_to_isometry(rb_mat);
-        
-        let is_hair = is_hair_name(&pmx_rb.local_name);
-        
+        let body_offset_matrix_inverse = body_offset_matrix.inverse();
+
         Self {
             name: pmx_rb.local_name.clone(),
             bone_index: pmx_rb.bone_index,
-            body_type,
+            physics_mode,
             group: pmx_rb.group,
             group_mask: pmx_rb.un_collision_group_flag,
-            rigid_body_handle: None,
-            collider_handle: None,
-            offset_matrix,
-            inv_offset_matrix,
-            initial_transform,
-            prev_transform: None,
+            body_offset_matrix,
+            body_offset_matrix_inverse,
+            initial_transform: rb_world_matrix,
+            bullet_body: None,
+            bullet_shape: None,
+            mass: pmx_rb.mass,
+        }
+    }
+
+    /// 创建 Bullet3 碰撞形状（C++ OOM 时返回 None）
+    pub fn create_shape(pmx_rb: &PmxRigidBody) -> Option<BulletShape> {
+        match pmx_rb.shape {
+            RigidBodyShape::Sphere => BulletShape::sphere(pmx_rb.size[0]),
+            RigidBodyShape::Box => BulletShape::r#box(
+                pmx_rb.size[0],
+                pmx_rb.size[1],
+                pmx_rb.size[2],
+            ),
+            RigidBodyShape::Capsule => {
+                BulletShape::capsule(pmx_rb.size[0], pmx_rb.size[1])
+            }
+        }
+    }
+
+    /// 创建 Bullet3 刚体（C++ OOM 时返回 None）
+    pub fn create_rigid_body(
+        &self,
+        pmx_rb: &PmxRigidBody,
+        shape: &BulletShape,
+    ) -> Option<BulletRigidBody> {
+        let is_kinematic = self.physics_mode == PhysicsMode::FollowBone;
+
+        // 零体积检测
+        let is_zero_volume = match pmx_rb.shape {
+            RigidBodyShape::Sphere => pmx_rb.size[0] <= 0.0,
+            RigidBodyShape::Box => pmx_rb.size[0] <= 0.0 || pmx_rb.size[1] <= 0.0 || pmx_rb.size[2] <= 0.0,
+            RigidBodyShape::Capsule => pmx_rb.size[0] <= 0.0 || pmx_rb.size[1] <= 0.0,
+        };
+
+        let info = RigidBodyInfo {
             mass: pmx_rb.mass,
             linear_damping: pmx_rb.move_attenuation,
             angular_damping: pmx_rb.rotation_attenuation,
-            restitution: pmx_rb.repulsion,
             friction: pmx_rb.friction,
-            is_hair,
-        }
-    }
-    
-    /// 创建 Rapier 刚体
-    pub fn build_rigid_body(&self) -> RigidBody {
-        let config = get_config();
-        
-        let rb_type = match self.body_type {
-            RigidBodyType::Kinematic => rapier3d::dynamics::RigidBodyType::KinematicPositionBased,
-            RigidBodyType::Dynamic | RigidBodyType::DynamicWithBonePosition => {
-                rapier3d::dynamics::RigidBodyType::Dynamic
-            }
+            restitution: pmx_rb.repulsion,
+            additional_damping: true,
+            is_kinematic,
+            disable_deactivation: true,
+            no_contact_response: is_zero_volume,
+            initial_transform: self.initial_transform,
         };
-        
-        // Rapier 阻尼设为 0：我们自己实现 Bullet3 指数衰减阻尼
-        // PMX 原始阻尼值存储在 self.linear_damping / self.angular_damping 中
-        RigidBodyBuilder::new(rb_type)
-            .position(self.initial_transform)
-            .linear_damping(0.0)
-            .angular_damping(0.0)
-            .ccd_enabled(false)
-            .can_sleep(false) // MMD 物理不使用休眠
-            .build()
+
+        BulletRigidBody::new(&info, shape)
     }
-    
-    /// 创建 Rapier 碰撞体
-    pub fn build_collider(&self, pmx_rb: &PmxRigidBody) -> Collider {
-        let config = get_config();
-        
-        let shape = match pmx_rb.shape {
-            RigidBodyShape::Sphere => {
-                SharedShape::ball(pmx_rb.size[0])
-            }
-            RigidBodyShape::Box => {
-                SharedShape::cuboid(
-                    pmx_rb.size[0],
-                    pmx_rb.size[1],
-                    pmx_rb.size[2],
-                )
-            }
-            RigidBodyShape::Capsule => {
-                // Rapier capsule: 沿 Y 轴，半径 + 半高
-                let radius = pmx_rb.size[0];
-                let half_height = pmx_rb.size[1] / 2.0;
-                SharedShape::capsule_y(half_height, radius)
-            }
-        };
-        
-        // 碰撞组设置
-        let collision_groups = InteractionGroups::new(
-            Group::from_bits_truncate(1 << self.group),
-            Group::from_bits_truncate(self.group_mask as u32),
-        );
-        
-        let builder = ColliderBuilder::new(shape)
-            .restitution(self.restitution);
-        
-        let mass_scale = config.mass_scale;
-        let builder = if self.body_type == RigidBodyType::Kinematic {
-            builder.density(0.0)
-        } else {
-            builder.mass(self.mass * mass_scale)
-        };
-        
-        builder
-            .friction(self.friction)
-            .collision_groups(collision_groups)
-            .solver_groups(collision_groups)
-            .build()
+
+    /// 根据骨骼变换计算刚体世界变换: R = B * offset = B * B0⁻¹ * R0
+    pub fn compute_body_matrix(&self, bone_world_matrix: Mat4) -> Mat4 {
+        bone_world_matrix * self.body_offset_matrix
     }
-    
-    /// 根据骨骼全局变换计算刚体应有的世界变换
-    pub fn compute_world_transform(&self, bone_global_transform: Mat4) -> Pose {
-        let world_transform = bone_global_transform * self.offset_matrix;
-        mat4_to_isometry(world_transform)
+
+    /// 从刚体变换反推骨骼变换: B = R * offset⁻¹ = R * R0⁻¹ * B0
+    pub fn compute_bone_matrix(&self, rb_matrix: Mat4) -> Mat4 {
+        rb_matrix * self.body_offset_matrix_inverse
     }
-    
-    /// 从刚体的世界变换反推骨骼的全局变换
-    pub fn compute_bone_transform(&self, rb_world_transform: Pose) -> Mat4 {
-        let rb_mat = isometry_to_mat4(rb_world_transform);
-        rb_mat * self.inv_offset_matrix
-    }
-    
-    /// 从刚体的世界变换反推骨骼的全局变换（仅旋转，位置保留）
-    pub fn compute_bone_transform_rotation_only(
+
+    /// 从刚体变换反推骨骼变换（仅旋转，保留原位置）
+    pub fn compute_bone_matrix_rotation_only(
         &self,
-        rb_world_transform: Pose,
+        rb_matrix: Mat4,
         bone_position: Vec3,
     ) -> Mat4 {
-        let rb_mat = isometry_to_mat4(rb_world_transform);
-        let mut result = rb_mat * self.inv_offset_matrix;
-        // 保留原始位置
+        let mut result = rb_matrix * self.body_offset_matrix_inverse;
         result.w_axis.x = bone_position.x;
         result.w_axis.y = bone_position.y;
         result.w_axis.z = bone_position.z;
         result
     }
-    
-}
-
-/// InvZ 变换：将 MMD 左手坐标系转换为右手坐标系
-/// 
-/// saba 的实现：`invZ * m * invZ`，其中 invZ = scale(1, 1, -1)
-pub fn inv_z(m: Mat4) -> Mat4 {
-    let inv_z_mat = Mat4::from_scale(Vec3::new(1.0, 1.0, -1.0));
-    inv_z_mat * m * inv_z_mat
-}
-
-/// 将 glam Mat4 转换为 Rapier Isometry
-pub fn mat4_to_isometry(mat: Mat4) -> Pose {
-    let (_, rotation, translation) = mat.to_scale_rotation_translation();
-    // 钳位 w 到 [-1, 1]，防止浮点误差导致 acos 返回 NaN
-    let w = rotation.w.clamp(-1.0, 1.0);
-    let sin_half = (1.0 - w * w).sqrt().max(1e-6);
-    let angle = w.acos() * 2.0;
-    Isometry::new(
-        vector![translation.x, translation.y, translation.z],
-        vector![rotation.x, rotation.y, rotation.z] * angle / sin_half
-    )
-}
-
-/// 将 Rapier Isometry 转换为 glam Mat4
-pub fn isometry_to_mat4(iso: Pose) -> Mat4 {
-    let translation = Vec3::new(
-        iso.translation.x,
-        iso.translation.y,
-        iso.translation.z,
-    );
-    let rot = iso.rotation;
-    // UnitQuaternion: coords 包含 [i, j, k, w]
-    let rotation = Quat::from_xyzw(rot.coords[0], rot.coords[1], rot.coords[2], rot.coords[3]);
-    Mat4::from_rotation_translation(rotation, translation)
-}
-
-/// 将 glam Vec3 转换为 Rapier Vector
-#[allow(dead_code)]
-pub fn vec3_to_rapier(v: Vec3) -> Vector<Real> {
-    Vector::new(v.x, v.y, v.z)
-}
-
-/// 将 Rapier Vector 转换为 glam Vec3
-#[allow(dead_code)]
-pub fn rapier_to_vec3(v: Vector<Real>) -> Vec3 {
-    Vec3::new(v.x, v.y, v.z)
-}
-
-/// 判断刚体名称是否为头发相关
-/// 
-/// MMD 模型中头发刚体常见命名：
-/// - 日文：髪、ヘア、ツイン、ポニーテール、前髪、後髪、横髪
-/// - 英文：hair、Hair、twin、pony、tail
-fn is_hair_name(name: &str) -> bool {
-    let lower = name.to_lowercase();
-    lower.contains("髪")
-        || lower.contains("ヘア")
-        || lower.contains("hair")
-        || lower.contains("毛")
-        || lower.contains("ツイン")
-        || lower.contains("ポニー")
-        || lower.contains("テール")
 }

@@ -250,9 +250,9 @@ impl BoneSet {
     // 物理骨骼管理
     // ========================================
     
-    /// 设置物理骨骼索引集合
-    pub fn set_physics_bone_indices(&mut self, indices: HashSet<usize>) {
-        self.physics_bone_indices = indices;
+    /// 设置物理骨骼索引集合（接受引用，内部 clone）
+    pub fn set_physics_bone_indices(&mut self, indices: &HashSet<usize>) {
+        self.physics_bone_indices.clone_from(indices);
     }
     
     /// 清除物理骨骼索引集合

@@ -93,6 +93,8 @@ pub struct MmdModel {
     // 物理系统
     physics: Option<MMDPhysics>,
     physics_enabled: bool,
+    /// 骨骼变换缓冲区（避免每帧堆分配）
+    physics_bone_transforms_buf: Vec<Mat4>,
     
     // 材质可见性控制（用于脱外套等功能）
     material_visible: Vec<bool>,
@@ -206,6 +208,7 @@ impl MmdModel {
             model_transform: Mat4::IDENTITY,
             physics: None,
             physics_enabled: false,
+            physics_bone_transforms_buf: Vec::new(),
             material_visible: Vec::new(),
             bone_indices: Vec::new(),
             bone_weights: Vec::new(),
@@ -1774,49 +1777,32 @@ impl MmdModel {
     
     // ========== 物理系统方法 ==========
     
-    /// 初始化物理系统
+    /// 初始化物理系统（Bullet3）
     pub fn init_physics(&mut self) -> bool {
         if self.rigid_bodies.is_empty() {
             log::debug!("模型没有刚体数据，跳过物理初始化");
             return false;
         }
-        
-        let mut physics = MMDPhysics::new();
-        
-        // 添加刚体
-        for pmx_rb in &self.rigid_bodies {
-            let bone_transform = if pmx_rb.bone_index >= 0 {
-                Some(self.bone_manager.get_global_transform(pmx_rb.bone_index as usize))
-            } else {
-                None
-            };
-            physics.add_rigid_body(pmx_rb, bone_transform);
+
+        let mut physics = match MMDPhysics::new() {
+            Some(p) => p,
+            None => {
+                log::error!("[Bullet3] 物理世界创建失败，跳过物理初始化");
+                return false;
+            }
+        };
+
+        // 收集骨骼变换（复用缓冲区）
+        let bone_count = self.bone_manager.bone_count();
+        self.physics_bone_transforms_buf.clear();
+        self.physics_bone_transforms_buf.reserve(bone_count);
+        for i in 0..bone_count {
+            self.physics_bone_transforms_buf.push(self.bone_manager.get_global_transform(i));
         }
-        
-        // 添加关节
-        for pmx_joint in &self.joints {
-            physics.add_joint(pmx_joint);
-        }
-        
-        // 统计刚体类型
-        use crate::physics::RigidBodyType;
-        let kinematic_count = physics.mmd_rigid_bodies.iter()
-            .filter(|rb| rb.body_type == RigidBodyType::Kinematic)
-            .count();
-        let dynamic_count = physics.mmd_rigid_bodies.iter()
-            .filter(|rb| rb.body_type == RigidBodyType::Dynamic)
-            .count();
-        let dynamic_bone_count = physics.mmd_rigid_bodies.iter()
-            .filter(|rb| rb.body_type == RigidBodyType::DynamicWithBonePosition)
-            .count();
-        
-        log::info!(
-            "物理系统初始化完成: {} 个刚体 ({}运动学 + {}动态 + {}动态跟骨), {} 个关节",
-            physics.rigid_body_count(),
-            kinematic_count, dynamic_count, dynamic_bone_count,
-            physics.joint_count()
-        );
-        
+
+        physics.build_physics(&self.rigid_bodies, &self.joints, &self.physics_bone_transforms_buf);
+        physics.initialize(&self.physics_bone_transforms_buf);
+
         self.physics = Some(physics);
         self.physics_enabled = true;
         true
@@ -1844,46 +1830,50 @@ impl MmdModel {
         self.physics.is_some()
     }
     
-    /// 更新物理模拟
+    /// 更新物理模拟（Bullet3）
+    ///
+    /// 流程：sync_bodies → stepSimulation → sync_bones
+    /// 所有中间数据复用预分配缓冲区，零堆分配。
     pub fn update_physics(&mut self, delta_time: f32) {
-        if !self.physics_enabled {
+        if !self.physics_enabled || self.physics.is_none() {
             return;
         }
-        
-        if let Some(ref mut physics) = self.physics {
-            // 同步运动学刚体（跟随骨骼），传入 delta_time 用于计算速度
-            // 注意：骨骼变换保持在模型局部空间，不乘以 model_transform
-            // model_transform 的变化会通过 sync_kinematic_bodies 内部计算位置差来影响速度
-            let bone_transforms: Vec<Mat4> = (0..self.bone_manager.bone_count())
-                .map(|i| self.bone_manager.get_global_transform(i))
-                .collect();
-            
-            // 传入 model_transform 用于计算模型整体移动的速度
-            physics.sync_kinematic_bodies_with_model_velocity(&bone_transforms, delta_time, self.model_transform);
-            
-            // 更新物理模拟
-            physics.update(delta_time);
-            
-            // 获取当前骨骼变换
-            let current_bone_transforms: Vec<Mat4> = (0..self.bone_manager.bone_count())
-                .map(|i| self.bone_manager.get_global_transform(i))
-                .collect();
-            
-            // 获取动态刚体关联的骨骼变换和索引
-            let dynamic_bone_transforms = physics.get_dynamic_bone_transforms(&current_bone_transforms);
-            let physics_bone_indices = physics.get_dynamic_bone_indices();
-            
-            // 设置物理骨骼索引，防止后续骨骼更新覆盖物理变换
-            self.bone_manager.set_physics_bone_indices(physics_bone_indices.clone());
-            
-            // 只更新被物理驱动的骨骼
-            for (bone_idx, transform) in dynamic_bone_transforms {
-                self.bone_manager.set_global_transform_physics(bone_idx, transform);
-            }
-            
-            // 更新非物理骨骼的全局变换（它们可能是物理骨骼的子骨骼）
-            self.bone_manager.update_non_physics_children(&physics_bone_indices);
+
+        // 收集骨骼变换（复用缓冲区）
+        let bone_count = self.bone_manager.bone_count();
+        self.physics_bone_transforms_buf.clear();
+        for i in 0..bone_count {
+            self.physics_bone_transforms_buf.push(self.bone_manager.get_global_transform(i));
         }
+
+        let model_transform = self.model_transform;
+
+        // 拆分借用：先取出 physics 避免同时借用 self
+        let mut physics = self.physics.take().unwrap();
+
+        // 1. 同步运动学刚体
+        physics.sync_bodies_with_model_velocity(
+            &self.physics_bone_transforms_buf, delta_time, model_transform,
+        );
+
+        // 2. Bullet3 步进
+        physics.step_simulation(delta_time);
+
+        // 3. 同步物理结果回骨骼（复用内部缓冲区）
+        let dynamic_bone_transforms = physics.get_dynamic_bone_transforms(
+            &self.physics_bone_transforms_buf,
+        );
+
+        for &(bone_idx, transform) in dynamic_bone_transforms {
+            self.bone_manager.set_global_transform_physics(bone_idx, transform);
+        }
+
+        let physics_bone_indices = physics.get_dynamic_bone_indices();
+        self.bone_manager.set_physics_bone_indices(physics_bone_indices);
+        self.bone_manager.update_non_physics_children(physics_bone_indices);
+
+        // 归还所有权
+        self.physics = Some(physics);
     }
     
     /// 结束物理更新，清除物理骨骼保护
@@ -1894,76 +1884,45 @@ impl MmdModel {
     
     /// 获取物理调试信息（JSON 格式）
     pub fn get_physics_debug_info(&self) -> String {
-        use crate::physics::RigidBodyType;
-        
+        use crate::physics::PhysicsMode;
+
         if let Some(ref physics) = self.physics {
             let mut info = String::from("{\n");
-            
+
             // 刚体信息
             info.push_str("  \"rigid_bodies\": [\n");
-            for (i, rb) in physics.mmd_rigid_bodies.iter().enumerate() {
-                let type_str = match rb.body_type {
-                    RigidBodyType::Kinematic => "Kinematic",
-                    RigidBodyType::Dynamic => "Dynamic",
-                    RigidBodyType::DynamicWithBonePosition => "DynamicWithBonePosition",
+            for (i, rb) in physics.rigid_bodies.iter().enumerate() {
+                let type_str = match rb.physics_mode {
+                    PhysicsMode::FollowBone => "FollowBone",
+                    PhysicsMode::Physics => "Physics",
+                    PhysicsMode::PhysicsWithBone => "PhysicsWithBone",
                 };
                 let escaped_name = rb.name.replace('\\', "\\\\").replace('"', "\\\"");
                 info.push_str(&format!(
                     "    {{\"index\": {}, \"name\": \"{}\", \"type\": \"{}\", \"bone\": {}, \"mass\": {:.3}}}",
                     i, escaped_name, type_str, rb.bone_index, rb.mass
                 ));
-                if i < physics.mmd_rigid_bodies.len() - 1 {
+                if i < physics.rigid_bodies.len() - 1 {
                     info.push_str(",\n");
                 } else {
                     info.push_str("\n");
                 }
             }
             info.push_str("  ],\n");
-            
-            // 关节信息
-            info.push_str("  \"joints\": [\n");
-            for (i, joint) in physics.mmd_joints.iter().enumerate() {
-                let escaped_jname = joint.name.replace('\\', "\\\\").replace('"', "\\\"");
-                info.push_str(&format!(
-                    "    {{\"index\": {}, \"name\": \"{}\", \"rb_a\": {}, \"rb_b\": {}, ",
-                    i, escaped_jname, joint.rigid_body_a_index, joint.rigid_body_b_index
-                ));
-                info.push_str(&format!(
-                    "\"lin_lower\": [{:.3},{:.3},{:.3}], \"lin_upper\": [{:.3},{:.3},{:.3}], ",
-                    joint.linear_lower.x, joint.linear_lower.y, joint.linear_lower.z,
-                    joint.linear_upper.x, joint.linear_upper.y, joint.linear_upper.z
-                ));
-                info.push_str(&format!(
-                    "\"ang_lower\": [{:.3},{:.3},{:.3}], \"ang_upper\": [{:.3},{:.3},{:.3}], ",
-                    joint.angular_lower.x, joint.angular_lower.y, joint.angular_lower.z,
-                    joint.angular_upper.x, joint.angular_upper.y, joint.angular_upper.z
-                ));
-                info.push_str(&format!(
-                    "\"lin_spring\": [{:.3},{:.3},{:.3}], \"ang_spring\": [{:.3},{:.3},{:.3}]}}",
-                    joint.linear_spring.x, joint.linear_spring.y, joint.linear_spring.z,
-                    joint.angular_spring.x, joint.angular_spring.y, joint.angular_spring.z
-                ));
-                if i < physics.mmd_joints.len() - 1 {
-                    info.push_str(",\n");
-                } else {
-                    info.push_str("\n");
-                }
-            }
-            info.push_str("  ],\n");
-            
+
             // 统计信息
-            let kinematic_count = physics.mmd_rigid_bodies.iter()
-                .filter(|rb| rb.body_type == RigidBodyType::Kinematic).count();
-            let dynamic_count = physics.mmd_rigid_bodies.iter()
-                .filter(|rb| rb.body_type == RigidBodyType::Dynamic).count();
-            let dynamic_bone_count = physics.mmd_rigid_bodies.iter()
-                .filter(|rb| rb.body_type == RigidBodyType::DynamicWithBonePosition).count();
-            
+            let kinematic_count = physics.rigid_bodies.iter()
+                .filter(|rb| rb.physics_mode == PhysicsMode::FollowBone).count();
+            let dynamic_count = physics.rigid_bodies.iter()
+                .filter(|rb| rb.physics_mode == PhysicsMode::Physics).count();
+            let dynamic_bone_count = physics.rigid_bodies.iter()
+                .filter(|rb| rb.physics_mode == PhysicsMode::PhysicsWithBone).count();
+
             info.push_str(&format!(
                 "  \"stats\": {{\"total_rb\": {}, \"kinematic\": {}, \"dynamic\": {}, \"dynamic_bone\": {}, \"joints\": {}}}\n",
-                physics.mmd_rigid_bodies.len(), kinematic_count, dynamic_count, dynamic_bone_count, physics.mmd_joints.len()
+                physics.rigid_bodies.len(), kinematic_count, dynamic_count, dynamic_bone_count, physics.joint_count()
             ));
-            
+
             info.push_str("}");
             info
         } else {

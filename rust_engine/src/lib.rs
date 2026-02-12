@@ -20,7 +20,7 @@ pub mod texture;
 pub use animation::{VmdAnimation, VmdFile};
 pub use model::MmdModel;
 pub use morph::{Morph, MorphManager};
-pub use physics::{MMDPhysics, MMDRigidBody, MMDJoint};
+pub use physics::{MMDPhysics, MmdRigidBodyData, MmdJointData, PhysicsMode};
 pub use skeleton::{Bone, BoneManager, IkSolver};
 pub use texture::Texture;
 

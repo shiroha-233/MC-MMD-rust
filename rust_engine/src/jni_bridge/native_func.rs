@@ -2608,19 +2608,19 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetPhysicsConfig(
     gravity_y: jfloat,
     physics_fps: jfloat,
     max_substep_count: jint,
-    solver_iterations: jint,
-    pgs_iterations: jint,
-    max_corrective_velocity: jfloat,
-    linear_damping_scale: jfloat,
-    angular_damping_scale: jfloat,
-    mass_scale: jfloat,
-    linear_spring_stiffness_scale: jfloat,
+    _solver_iterations: jint,
+    _pgs_iterations: jint,
+    _max_corrective_velocity: jfloat,
+    _linear_damping_scale: jfloat,
+    _angular_damping_scale: jfloat,
+    _mass_scale: jfloat,
+    _linear_spring_stiffness_scale: jfloat,
     _angular_spring_stiffness_scale: jfloat,
     _linear_spring_damping_factor: jfloat,
     _angular_spring_damping_factor: jfloat,
     inertia_strength: jfloat,
-    max_linear_velocity: jfloat,
-    max_angular_velocity: jfloat,
+    _max_linear_velocity: jfloat,
+    _max_angular_velocity: jfloat,
     _bust_physics_enabled: jboolean,
     _bust_linear_damping_scale: jfloat,
     _bust_angular_damping_scale: jfloat,
@@ -2634,35 +2634,22 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetPhysicsConfig(
     debug_log: jboolean,
 ) {
     use crate::physics::config::{PhysicsConfig, set_config};
-    
-    // 旧参数映射：
-    // - linear_spring_stiffness_scale → spring_stiffness_scale
-    // - 其他弹簧/胸部参数均已废弃（胸部现在使用统一的 6DOF 弹簧系统）
+
+    // Bullet3 简化配置：大部分 Rapier 特定参数已废弃，由 Bullet3 内部处理
     let config = PhysicsConfig {
         gravity_y,
         physics_fps,
         max_substep_count: max_substep_count as i32,
-        solver_iterations: solver_iterations as usize,
-        pgs_iterations: pgs_iterations as usize,
-        max_corrective_velocity,
-        linear_damping_scale,
-        angular_damping_scale,
-        mass_scale,
-        spring_stiffness_scale: linear_spring_stiffness_scale,
         inertia_strength,
-        max_linear_velocity,
-        max_angular_velocity,
         joints_enabled: joints_enabled != 0,
         debug_log: debug_log != 0,
     };
-    
+
     set_config(config);
-    
+
     if debug_log != 0 {
-        log::info!("[物理配置] 已更新: 重力={}, FPS={}, 阻尼={}/{}, 弹簧缩放={}", 
-            gravity_y, physics_fps, 
-            linear_damping_scale, angular_damping_scale,
-            linear_spring_stiffness_scale);
+        log::info!("[Bullet3 物理配置] 重力={}, FPS={}, 惯性={}", 
+            gravity_y, physics_fps, inertia_strength);
     }
 }
 

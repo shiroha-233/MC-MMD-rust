@@ -13,7 +13,6 @@ crate-type = ["cdylib", "rlib"]
 # 本地依赖
 mmd = { path = "deps/mmd-rs", default-features = false, features = ["arrayvec"] }
 glam = { version = "0.29", features = ["std"] }
-rapier3d = { version = "0.22", default-features = false, features = ["dim3", "f32"] }
 jni = "0.21"
 
 # 外部依赖
@@ -25,7 +24,6 @@ log = "0.4"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "tga"] }
 once_cell = "1.19"
 vek = "0.17"
-nalgebra = "0.34"
 rayon = "1.11.0"
 
 # Viewer 依赖（仅用于开发测试）
@@ -44,6 +42,9 @@ viewer = ["glium", "winit", "glutin", "glutin-winit", "raw-window-handle", "env_
 name = "viewer"
 path = "src/bin/viewer/main.rs"
 required-features = ["viewer"]
+
+[build-dependencies]
+cc = "1.0"
 
 [profile.release]
 opt-level = 3
