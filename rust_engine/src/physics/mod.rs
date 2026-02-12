@@ -5,7 +5,6 @@
 use glam::{Mat4, Vec3};
 
 pub mod bullet_ffi;
-pub mod bullet;
 mod mmd_physics;
 mod mmd_rigid_body;
 mod mmd_joint;

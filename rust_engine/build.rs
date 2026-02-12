@@ -4,7 +4,7 @@
 /// 生成静态库链接到 Rust cdylib。
 
 fn main() {
-    let bullet3_dir = "deps/bullet3";
+    let bullet3_dir = "deps/bullet3/src";
     let wrapper_dir = "bullet_wrapper";
 
     // 收集所有 Bullet3 .cpp 文件

@@ -87,12 +87,14 @@ jobs:
       - name: Install cross-compilation tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
       - name: Build Linux ARM64 SO
         run: cargo build --release --manifest-path rust_engine/Cargo.toml --target aarch64-unknown-linux-gnu
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+          CXX_aarch64_unknown_linux_gnu: aarch64-linux-gnu-g++
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -115,9 +117,10 @@ jobs:
       - name: Install LoongArch64 cross-compilation tools
         run: |
           sudo apt-get update
-          sudo apt-get install gcc-14-loongarch64-linux-gnu -y
+          sudo apt-get install gcc-14-loongarch64-linux-gnu g++-14-loongarch64-linux-gnu -y
           sudo update-alternatives \
             --install /usr/bin/loongarch64-linux-gnu-gcc loongarch64-linux-gnu-gcc /usr/bin/loongarch64-linux-gnu-gcc-14 100 \
+            --slave /usr/bin/loongarch64-linux-gnu-g++ loongarch64-linux-gnu-g++ /usr/bin/loongarch64-linux-gnu-g++-14 \
             --slave /usr/bin/loongarch64-linux-gnu-gcc-ar loongarch64-linux-gnu-gcc-ar /usr/bin/loongarch64-linux-gnu-gcc-ar-14 \
             --slave /usr/bin/loongarch64-linux-gnu-gcc-nm loongarch64-linux-gnu-gcc-nm /usr/bin/loongarch64-linux-gnu-gcc-nm-14 \
             --slave /usr/bin/loongarch64-linux-gnu-gcc-ranlib loongarch64-linux-gnu-gcc-ranlib /usr/bin/loongarch64-linux-gnu-gcc-ranlib-14 \
@@ -130,6 +133,7 @@ jobs:
         env:
           CARGO_TARGET_LOONGARCH64_UNKNOWN_LINUX_GNU_LINKER: loongarch64-linux-gnu-gcc
           CC_loongarch64_unknown_linux_gnu: loongarch64-linux-gnu-gcc
+          CXX_loongarch64_unknown_linux_gnu: loongarch64-linux-gnu-g++
           AR_loongarch64_unknown_linux_gnu: loongarch64-linux-gnu-ar
 
       - name: Upload artifact
@@ -153,13 +157,14 @@ jobs:
       - name: Install RISC-V 64 cross-compilation tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-riscv64-linux-gnu
+          sudo apt-get install -y gcc-riscv64-linux-gnu g++-riscv64-linux-gnu
 
       - name: Build Linux RISC-V 64 SO
         run: cargo build --release --manifest-path rust_engine/Cargo.toml --target riscv64gc-unknown-linux-gnu
         env:
           CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER: riscv64-linux-gnu-gcc
           CC_riscv64gc_unknown_linux_gnu: riscv64-linux-gnu-gcc
+          CXX_riscv64gc_unknown_linux_gnu: riscv64-linux-gnu-g++
           AR_riscv64gc_unknown_linux_gnu: riscv64-linux-gnu-ar
 
       - name: Upload artifact
@@ -234,6 +239,7 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
           CC_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
+          CXX_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++
           AR_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
 
       - name: Upload artifact
