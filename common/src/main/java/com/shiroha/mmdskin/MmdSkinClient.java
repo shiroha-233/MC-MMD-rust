@@ -34,6 +34,12 @@ public class MmdSkinClient {
     //public static String[] debugStr = new String[10];
 
     public static void initClient() {
+        // 检查全局功能开关 - 如果禁用则不进行任何初始化
+        if (!com.shiroha.mmdskin.config.ConfigManager.isModEnabled()) {
+            logger.warn("全局功能开关已禁用，模组不会进行任何初始化");
+            return;
+        }
+
         check3DSkinFolder();
         extractDefaultAnimIfNeeded();
         MMDModelManager.Init();

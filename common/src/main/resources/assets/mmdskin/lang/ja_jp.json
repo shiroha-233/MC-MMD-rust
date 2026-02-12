@@ -18,6 +18,8 @@
 
   "gui.mmdskin.mod_settings.title": "MMDスキン - 設定",
   "gui.mmdskin.mod_settings.category.render": "レンダリング設定",
+  "gui.mmdskin.mod_settings.mod_enabled": "Modレンダリングを有効化",
+  "gui.mmdskin.mod_settings.mod_enabled.tooltip": "無効にするとModは完全に停止し",
   "gui.mmdskin.mod_settings.category.performance": "パフォーマンス設定",
   "gui.mmdskin.mod_settings.opengl_lighting": "OpenGLライティングを有効化",
   "gui.mmdskin.mod_settings.opengl_lighting.tooltip": "より良いビジュアルのためにOpenGLライティング効果を有効化",

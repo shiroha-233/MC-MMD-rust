@@ -25,6 +25,14 @@ public class ConfigManager {
     }
     
     /**
+     * 获取全局功能开关状态（调试用途）
+     * 当为 false 时，模组完全禁用
+     */
+    public static boolean isModEnabled() {
+        return provider != null ? provider.isModEnabled() : true;
+    }
+
+    /**
      * 获取 OpenGL 光照启用状态
      */
     public static boolean isOpenGLLightingEnabled() {
