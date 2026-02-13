@@ -153,6 +153,17 @@ public class MmdSkinRegisterClient {
             // 远程舞台音频距离衰减（每秒更新一次）
             StageAudioPlayer.tickRemoteAttenuation();
             
+            // 舞台模式死亡/复活检测
+            if (MCinstance.player != null) {
+                if (!MCinstance.player.isAlive()) {
+                    MMDCameraController controller = MMDCameraController.getInstance();
+                    if (controller.isInStageMode()) {
+                        logger.info("检测到玩家死亡，正在退出舞台模式以防止视角锁定");
+                        controller.exitStageMode();
+                    }
+                }
+            }
+
             // 主配置轮盘按键处理
             if (MCinstance.screen == null || MCinstance.screen instanceof ConfigWheelScreen) {
                 boolean keyDown = keyConfigWheel.isDown();

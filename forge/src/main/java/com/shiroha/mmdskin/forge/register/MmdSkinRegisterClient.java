@@ -37,6 +37,8 @@ import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.fml.common.Mod;
 
 
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.glfw.GLFW;
@@ -310,6 +312,36 @@ public class MmdSkinRegisterClient {
             MMDCameraController.getInstance().exitStageMode();
             PlayerModelSyncManager.onDisconnect();
             MmdSkinRendererPlayerHelper.onDisconnect();
+        }
+
+        /**
+         * 玩家死亡事件 - 退出舞台模式
+         */
+        @SubscribeEvent
+        public static void onPlayerDeath(LivingDeathEvent event) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null && event.getEntity().getUUID().equals(mc.player.getUUID())) {
+                MMDCameraController controller = MMDCameraController.getInstance();
+                if (controller.isInStageMode()) {
+                    logger.info("检测到玩家死亡，正在退出舞台模式以防止视角锁定");
+                    controller.exitStageMode();
+                }
+            }
+        }
+
+        /**
+         * 玩家复活事件 - 确保退出舞台模式
+         */
+        @SubscribeEvent
+        public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null && event.getEntity().getUUID().equals(mc.player.getUUID())) {
+                MMDCameraController controller = MMDCameraController.getInstance();
+                if (controller.isInStageMode()) {
+                    logger.info("检测到玩家复活，强制退出舞台模式");
+                    controller.exitStageMode();
+                }
+            }
         }
     }
 }
