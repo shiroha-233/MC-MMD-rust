@@ -114,6 +114,13 @@ public class MMDCameraController {
     public static MMDCameraController getInstance() {
         return INSTANCE;
     }
+
+    /**
+     * 判断当前是否处于舞台模式
+     */
+    public boolean isInStageMode() {
+        return state != StageState.INACTIVE;
+    }
     
     // ==================== 生命周期方法 ====================
     

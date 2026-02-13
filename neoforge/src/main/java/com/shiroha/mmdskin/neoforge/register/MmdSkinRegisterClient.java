@@ -33,6 +33,8 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -295,6 +297,36 @@ public class MmdSkinRegisterClient {
             MMDCameraController.getInstance().exitStageMode();
             PlayerModelSyncManager.onDisconnect();
             MmdSkinRendererPlayerHelper.onDisconnect();
+        }
+
+        /**
+         * 玩家死亡事件 - 退出舞台模式以防止视角锁定
+         */
+        @SubscribeEvent
+        public static void onPlayerDeath(LivingDeathEvent event) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null && event.getEntity().getUUID().equals(mc.player.getUUID())) {
+                MMDCameraController controller = MMDCameraController.getInstance();
+                if (controller.isInStageMode()) {
+                    logger.info("检测到玩家死亡，正在退出舞台模式以防止视角锁定");
+                    controller.exitStageMode();
+                }
+            }
+        }
+
+        /**
+         * 玩家复活事件 - 强制退出舞台模式
+         */
+        @SubscribeEvent
+        public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null && event.getEntity().getUUID().equals(mc.player.getUUID())) {
+                MMDCameraController controller = MMDCameraController.getInstance();
+                if (controller.isInStageMode()) {
+                    logger.info("检测到玩家复活，强制退出舞台模式");
+                    controller.exitStageMode();
+                }
+            }
         }
     }
 }
