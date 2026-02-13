@@ -15,9 +15,7 @@ public class YsmCompat {
     private static boolean ysmPresent = false;
 
     private static Method isModelActiveMethod = null;
-    private static Method getCapabilityMethod = null;
-    private static Object playerAnimatableCap = null;
-
+    
     // YSM 配置项字段
     private static Object disableSelfModelValue = null;
     private static Object disableOtherModelValue = null;
@@ -50,19 +48,15 @@ public class YsmCompat {
             ysmPresent = FabricLoader.getInstance().isModLoaded("yes_steve_model");
             if (ysmPresent) {
                 try {
-                    Class<?> entityWithCapsClass = Class.forName("com.elfmcys.yesstevemodel.ooO00oo00o0o0OoO0oO00oO");
-                    getCapabilityMethod = entityWithCapsClass.getMethod("oOO0000ooo0oOOo0OO0oo0Oo", Object.class);
-                    Class<?> capsClass = Class.forName("com.elfmcys.yesstevemodel.oO000o0O0O0Oo0o00o000oOo.Oo000Oo0oo0oOOOo00oOoOoo");
-                    Field capField = capsClass.getDeclaredField("ooO0000oO0o0o0o000Oooo0O");
-                    playerAnimatableCap = capField.get(null);
-                    Class<?> dataClass = Class.forName("com.elfmcys.yesstevemodel.oO000oOo0OoOOoooooO0oO00");
-                    isModelActiveMethod = dataClass.getMethod("OO0o0OOoOOO00OoOoOo0oOOO");
+                    Class<?> ysmConfigClass = Class.forName("com.elfmcys.yesstevemodel.O00OO0oOOO0OoO0OOOo0OooO");
+                    disableSelfModelValue = ysmConfigClass.getDeclaredField("oOooOoOO00OOooo0OooOO0o0").get(null);
+                    disableOtherModelValue = ysmConfigClass.getDeclaredField("oo0o0OO0Oo0oOOo00o00Ooo0").get(null);
+                    disableSelfHandsValue = ysmConfigClass.getDeclaredField("ooO00O0oOooO0OoOO000OoOo").get(null);
 
-                    Class<?> ysmConfigClass = Class.forName("com.elfmcys.yesstevemodel.oO0oo0oooOo0O0ooooOOooOo");
-                    disableSelfModelValue = ysmConfigClass.getDeclaredField("O0OOoooOOOO0oo0o0OoO0oO0").get(null);
-                    disableOtherModelValue = ysmConfigClass.getDeclaredField("oOO0ooO00OOooOO0oOo0oO0O").get(null);
-                    disableSelfHandsValue = ysmConfigClass.getDeclaredField("Oo0OoOO000OooOoooOoo0ooO").get(null);
-
+                    // 检查模型是否激活 (使用 YesSteveModel.isAvailable 作为通用判定)
+                    Class<?> ysmMainClass = Class.forName("com.elfmcys.yesstevemodel.YesSteveModel");
+                    isModelActiveMethod = ysmMainClass.getMethod("isAvailable");
+                    
                     if (disableSelfModelValue != null) {
                         booleanValueGetMethod = disableSelfModelValue.getClass().getMethod("get");
                     }
@@ -75,19 +69,9 @@ public class YsmCompat {
             ysmChecked = true;
         }
 
-        if (ysmPresent && getCapabilityMethod != null && playerAnimatableCap != null && isModelActiveMethod != null) {
+        if (ysmPresent && isModelActiveMethod != null) {
             try {
-                Object optional = getCapabilityMethod.invoke(entity, playerAnimatableCap);
-                if (optional != null) {
-                    Method isPresentMethod = optional.getClass().getMethod("isPresent");
-                    if ((Boolean) isPresentMethod.invoke(optional)) {
-                        Method getMethod = optional.getClass().getMethod("get");
-                        Object data = getMethod.invoke(optional);
-                        if (data != null) {
-                            return (Boolean) isModelActiveMethod.invoke(data);
-                        }
-                    }
-                }
+                return (Boolean) isModelActiveMethod.invoke(null);
             } catch (Exception e) {
                 // 忽略调用异常
             }

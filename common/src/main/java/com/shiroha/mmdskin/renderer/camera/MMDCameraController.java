@@ -649,6 +649,13 @@ public class MMDCameraController {
     }
     
     /**
+     * 判断是否处于舞台模式（INTRO, STANDBY, PLAYING, OUTRO）
+     */
+    public boolean isInStageMode() {
+        return state != StageState.INACTIVE;
+    }
+    
+    /**
      * 判断指定模型句柄是否正处于舞台播放状态
      * 用于渲染器在播放期间跳过玩家输入的头部角度和眼球追踪
      */
