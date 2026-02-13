@@ -2,7 +2,7 @@ package com.shiroha.mmdskin.fabric.register;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.shiroha.mmdskin.fabric.config.ModConfigScreen;
-import com.shiroha.mmdskin.mixin.KeyMappingAccessor;
+import com.shiroha.mmdskin.mixin.fabric.KeyMappingAccessor;
 import com.shiroha.mmdskin.fabric.maid.MaidCompatMixinPlugin;
 import com.shiroha.mmdskin.fabric.network.MmdSkinNetworkPack;
 import com.shiroha.mmdskin.maid.MaidActionNetworkHandler;

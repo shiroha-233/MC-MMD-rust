@@ -88,7 +88,6 @@ public abstract class FabricPlayerRendererMixin extends LivingEntityRenderer<Abs
         
         // 如果选择了默认渲染或未选择模型，或 YSM 模型处于活跃状态，或处于旁观模式，使用原版渲染
          if (selectedModel == null || selectedModel.isEmpty() || selectedModel.equals("默认 (原版渲染)") || YsmCompat.isYsmActive(player) || player.isSpectator()) {
-             super.render(player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight);
              return;
          }
         
