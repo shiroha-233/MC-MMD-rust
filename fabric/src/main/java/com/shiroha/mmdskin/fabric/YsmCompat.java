@@ -3,7 +3,6 @@ package com.shiroha.mmdskin.fabric;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.LivingEntity;
 import net.fabricmc.loader.api.FabricLoader;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 /**

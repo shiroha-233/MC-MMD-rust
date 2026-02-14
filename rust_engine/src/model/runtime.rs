@@ -4,7 +4,7 @@ use crate::animation::{VmdAnimation, AnimationLayerManager};
 use crate::morph::MorphManager;
 use crate::physics::MMDPhysics;
 use crate::skeleton::BoneManager;
-use glam::{Mat3, Mat4, Quat, Vec2, Vec3, Vec4};
+use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -1211,116 +1211,6 @@ impl MmdModel {
         }
         
         count
-    }
-    
-    // ========== NativeRender MC 顶点构建（P2-9 优化）==========
-    
-    /// 构建 MC NEW_ENTITY 格式的交错顶点数据（含矩阵变换）
-    ///
-    /// 将蒙皮后的 SoA 数据（分离的 pos/nor/uv 数组）按索引展开，
-    /// 应用 pose/normal 矩阵变换后，直接写入 MC 交错格式。
-    ///
-    /// 顶点布局（每顶点 36 字节）：
-    /// - Position: 3 × f32 (12 bytes, offset 0)
-    /// - Color:    4 × u8  (4 bytes,  offset 12)
-    /// - UV0:      2 × f32 (8 bytes,  offset 16)
-    /// - Overlay:  1 × u32 (4 bytes,  offset 24) — 打包的 2×i16
-    /// - UV2:      1 × u32 (4 bytes,  offset 28) — 打包的 2×i16
-    /// - Normal:   3 × i8 + 1 pad (4 bytes, offset 32)
-    pub fn build_mc_vertex_buffer(
-        &self,
-        sub_mesh_index: usize,
-        output: &mut [u8],
-        pose_matrix: &Mat4,
-        normal_matrix: &Mat3,
-        color_rgba: u32,
-        overlay_uv: u32,
-        packed_light: u32,
-    ) -> usize {
-        if sub_mesh_index >= self.submeshes.len() {
-            return 0;
-        }
-        
-        let submesh = &self.submeshes[sub_mesh_index];
-        let begin = submesh.begin_index as usize;
-        let count = submesh.index_count as usize;
-        let vertex_count = self.update_positions_raw.len() / 3;
-        
-        const STRIDE: usize = 36;
-        if output.len() < count * STRIDE {
-            log::warn!(
-                "BuildMCVertexBuffer: 输出缓冲区不足 (需要 {} 字节, 实际 {} 字节)",
-                count * STRIDE, output.len()
-            );
-            return 0;
-        }
-        
-        let positions = &self.update_positions_raw;
-        let normals = &self.update_normals_raw;
-        let uvs = &self.update_uvs_raw;
-        let indices = &self.indices;
-        
-        let mut written: usize = 0;
-        for i in 0..count {
-            let global_idx = begin + i;
-            if global_idx >= indices.len() {
-                break;
-            }
-            let idx = indices[global_idx] as usize;
-            if idx >= vertex_count {
-                // 索引越界：写入零顶点（避免输出缓冲区空洞）
-                unsafe {
-                    let p = output.as_mut_ptr().add(written * STRIDE);
-                    std::ptr::write_bytes(p, 0, STRIDE);
-                }
-                written += 1;
-                continue;
-            }
-            
-            let out_offset = written * STRIDE;
-            
-            // 读取蒙皮后的位置并应用 pose 矩阵变换
-            let px = positions[idx * 3];
-            let py = positions[idx * 3 + 1];
-            let pz = positions[idx * 3 + 2];
-            let pos = pose_matrix.transform_point3(Vec3::new(px, py, pz));
-            
-            // 读取蒙皮后的法线并应用 normal 矩阵变换
-            let nx = normals[idx * 3];
-            let ny = normals[idx * 3 + 1];
-            let nz = normals[idx * 3 + 2];
-            let nor = (*normal_matrix * Vec3::new(nx, ny, nz)).normalize_or_zero();
-            
-            // 读取 UV
-            let u = uvs[idx * 2];
-            let v = uvs[idx * 2 + 1];
-            
-            // 写入交错顶点数据（使用 unsafe 指针写入，避免逐字节 copy_from_slice 开销）
-            unsafe {
-                let p = output.as_mut_ptr().add(out_offset);
-                // Position: 3 × f32 (offset 0)
-                (p as *mut f32).write_unaligned(pos.x);
-                (p.add(4) as *mut f32).write_unaligned(pos.y);
-                (p.add(8) as *mut f32).write_unaligned(pos.z);
-                // Color: 4 × u8 (offset 12)
-                (p.add(12) as *mut u32).write_unaligned(color_rgba);
-                // UV0: 2 × f32 (offset 16)
-                (p.add(16) as *mut f32).write_unaligned(u);
-                (p.add(20) as *mut f32).write_unaligned(v);
-                // Overlay: u32 (offset 24)
-                (p.add(24) as *mut u32).write_unaligned(overlay_uv);
-                // UV2/Lightmap: u32 (offset 28)
-                (p.add(28) as *mut u32).write_unaligned(packed_light);
-                // Normal: 3 × i8 + 1 pad (offset 32)
-                *p.add(32) = (nor.x.clamp(-1.0, 1.0) * 127.0) as i8 as u8;
-                *p.add(33) = (nor.y.clamp(-1.0, 1.0) * 127.0) as i8 as u8;
-                *p.add(34) = (nor.z.clamp(-1.0, 1.0) * 127.0) as i8 as u8;
-                *p.add(35) = 0; // padding
-            }
-            written += 1;
-        }
-        
-        written
     }
     
     // ========== GPU 蒙皮相关方法 ==========

@@ -79,8 +79,6 @@ public class RenderModeManager {
      */
     private static void syncFactoryStates() {
         enabledStates.put(RenderCategory.GPU_SKINNING, ConfigManager.isGpuSkinningEnabled());
-        // NATIVE_RENDER 目前由运行时 setUseNativeRender() 控制，
-        // ConfigManager 尚未提供持久化配置项，后续添加时需在此同步
     }
     
     // ==================== 启用状态管理 ====================
@@ -106,14 +104,6 @@ public class RenderModeManager {
     
     public static boolean isUseGpuSkinning() {
         return isEnabled(RenderCategory.GPU_SKINNING);
-    }
-    
-    public static void setUseNativeRender(boolean enabled) {
-        setEnabled(RenderCategory.NATIVE_RENDER, enabled);
-    }
-    
-    public static boolean isUseNativeRender() {
-        return isEnabled(RenderCategory.NATIVE_RENDER);
     }
     
     // ==================== 工厂查询 ====================

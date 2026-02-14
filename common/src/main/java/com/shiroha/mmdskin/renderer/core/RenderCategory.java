@@ -7,7 +7,5 @@ public enum RenderCategory {
     /** CPU 蒙皮（基础回退模式） */
     CPU_SKINNING,
     /** GPU 蒙皮（Compute Shader） */
-    GPU_SKINNING,
-    /** 原生渲染（Iris 兼容） */
-    NATIVE_RENDER
+    GPU_SKINNING
 }

@@ -293,7 +293,7 @@ public abstract class AbstractMMDModel implements IMMDModel {
 
     /**
      * 子类可重写此方法，表示模型是否已完全初始化并可安全渲染。
-     * 默认返回 true（OpenGL/NativeRender 无额外初始化阶段）。
+     * 默认返回 true（OpenGL 无额外初始化阶段）。
      */
     protected boolean isReady() {
         return true;
