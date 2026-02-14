@@ -1,122 +1,159 @@
 package com.shiroha.mmdskin.forge;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.Direction;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraftforge.fml.ModList;
+import net.minecraftforge.common.capabilities.Capability;
+import net.minecraftforge.common.util.LazyOptional;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
-/**
- * YSM (Yes Steve Model) 兼容性辅助类 (Forge)
- * 通过反射访问 YSM 内部 API，用于检测玩家是否正在使用 YSM 模型
- */
 public class YsmCompat {
     private static boolean ysmChecked = false;
     private static boolean ysmPresent = false;
 
-    private static Method isModelActiveMethod = null;
-    private static Method getCapabilityMethod = null;
-    private static Object playerAnimatableCap = null;
+    private static Method ysmIsAvailableMethod = null;
+    private static final Map<Class<?>, Method> isYsmModelMethodCache = new ConcurrentHashMap<>();
 
-    // YSM 配置项字段
+    private static Capability<?> ysmPlayerModelCapability = null;
+    private static Capability<?> ysmEntityModelCapability = null;
+    private static Capability<?> ysmClientLazyCapability = null;
+
+    private static volatile Method ysmModelIdGetter = null;
+    private static volatile Method ysmModelDisabledGetter = null;
+    private static volatile Method ysmClientModelActiveGetter = null;
+    private static volatile Method ysmClientModelObjectGetter = null;
+    private static volatile Method ysmEntityCanRenderFlag1Getter = null;
+    private static volatile Method ysmEntityCanRenderFlag2Getter = null;
+
     private static Object disableSelfModelValue = null;
     private static Object disableOtherModelValue = null;
     private static Object disableSelfHandsValue = null;
-
     private static Method booleanValueGetMethod = null;
 
-    /**
-     * 综合判断：实体是否应显示 YSM 模型（而非原版/MMD）
-     */
     public static boolean isYsmActive(LivingEntity entity) {
-        if (!isYsmModelActive(entity)) {
-            return false;
-        }
-
+        if (!isYsmModelActive(entity)) return false;
         Minecraft mc = Minecraft.getInstance();
-        boolean isLocalPlayer = mc.player != null && mc.player.getUUID().equals(entity.getUUID());
-        if (isLocalPlayer) {
-            return !isDisableSelfModel();
-        } else {
-            return !isDisableOtherModel();
-        }
+        boolean isLocal = mc.player != null && mc.player.getUUID().equals(entity.getUUID());
+        return isLocal ? !isDisableSelfModel() : !isDisableOtherModel();
     }
 
-    /**
-     * 检查实体是否配置了 YSM 模型（无论当前是否显示）
-     */
     public static boolean isYsmModelActive(LivingEntity entity) {
-        if (!ysmChecked) {
-            ysmPresent = ModList.get().isLoaded("yes_steve_model");
-            if (ysmPresent) {
-                try {
-                    Class<?> entityWithCapsClass = Class.forName("com.elfmcys.yesstevemodel.ooO00oo00o0o0OoO0oO00oO");
-                    getCapabilityMethod = entityWithCapsClass.getMethod("oOO0000ooo0oOOo0OO0oo0Oo", Object.class);
-                    Class<?> capsClass = Class.forName("com.elfmcys.yesstevemodel.oO000o0O0O0Oo0o00o000oOo.Oo000Oo0oo0oOOOo00oOoOoo");
-                    Field capField = capsClass.getDeclaredField("ooO0000oO0o0o0o000Oooo0O");
-                    playerAnimatableCap = capField.get(null);
-                    Class<?> dataClass = Class.forName("com.elfmcys.yesstevemodel.oO000oOo0OoOOoooooO0oO00");
-                    isModelActiveMethod = dataClass.getMethod("OO0o0OOoOOO00OoOoOo0oOOO");
+        ensureInit();
+        if (!ysmPresent || !isYsmAvailable()) return false;
 
-                    Class<?> ysmConfigClass = Class.forName("com.elfmcys.yesstevemodel.oO0oo0oooOo0O0ooooOOooOo");
-                    disableSelfModelValue = ysmConfigClass.getDeclaredField("O0OOoooOOOO0oo0o0OoO0oO0").get(null);
-                    disableOtherModelValue = ysmConfigClass.getDeclaredField("oOO0ooO00OOooOO0oOo0oO0O").get(null);
-                    disableSelfHandsValue = ysmConfigClass.getDeclaredField("Oo0OoOO000OooOoooOoo0ooO").get(null);
-
-                    if (disableSelfModelValue != null) {
-                        booleanValueGetMethod = disableSelfModelValue.getClass().getMethod("get");
-                    }
-                } catch (Exception e) {
-                    System.err.println("[MMDSkin] Failed to initialize YSM Forge compatibility: " + e.getMessage());
-                    ysmPresent = false;
-                }
+        if (ysmClientLazyCapability != null) {
+            Object data = getCapData(entity, ysmClientLazyCapability);
+            if (data != null) {
+                if (invokeGetter(data, "Oooo0O0oo000OoOoO0ooooOo", () -> ysmClientModelObjectGetter, v -> ysmClientModelObjectGetter = v) != null) return true;
+                if (Boolean.TRUE.equals(invokeGetter(data, "o00oo0OO0OOOOO0OOo0oOOoO", () -> ysmClientModelActiveGetter, v -> ysmClientModelActiveGetter = v))) return true;
             }
-
-            ysmChecked = true;
         }
 
-        if (ysmPresent && getCapabilityMethod != null && playerAnimatableCap != null && isModelActiveMethod != null) {
-            try {
-                Object optional = getCapabilityMethod.invoke(entity, playerAnimatableCap);
-                if (optional != null) {
-                    Method isPresentMethod = optional.getClass().getMethod("isPresent");
-                    if ((Boolean) isPresentMethod.invoke(optional)) {
-                        Method getMethod = optional.getClass().getMethod("get");
-                        Object data = getMethod.invoke(optional);
-                        if (data != null) {
-                            return (Boolean) isModelActiveMethod.invoke(data);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                // 忽略调用异常
+        if (ysmEntityModelCapability != null) {
+            Object data = getCapData(entity, ysmEntityModelCapability);
+            if (data != null) {
+                Object f1 = invokeGetter(data, "oOoo0oO000Oo0OOoO0O00O0o", () -> ysmEntityCanRenderFlag1Getter, v -> ysmEntityCanRenderFlag1Getter = v);
+                Object f2 = invokeGetter(data, "Oo000oOoO000O0OOO0O0oOOo", () -> ysmEntityCanRenderFlag2Getter, v -> ysmEntityCanRenderFlag2Getter = v);
+                if (Boolean.TRUE.equals(f1) && Boolean.TRUE.equals(f2)) return true;
+            }
+        }
+
+        try {
+            Method m = isYsmModelMethodCache.computeIfAbsent(entity.getClass(), cls -> {
+                try { return cls.getMethod("isYsmModel"); } catch (NoSuchMethodException e) { return null; }
+            });
+            if (m != null && Boolean.TRUE.equals(m.invoke(entity))) return true;
+        } catch (Exception ignored) {}
+
+        if (ysmPlayerModelCapability != null) {
+            Object data = getCapData(entity, ysmPlayerModelCapability);
+            if (data != null) {
+                Object modelId = invokeGetter(data, "Oooo0O0oo000OoOoO0ooooOo", () -> ysmModelIdGetter, v -> ysmModelIdGetter = v);
+                Object disabled = invokeGetter(data, "ooOo0O0oooO00OoO0ooOO0O0", () -> ysmModelDisabledGetter, v -> ysmModelDisabledGetter = v);
+                if (modelId instanceof String && !((String) modelId).isEmpty() && !Boolean.TRUE.equals(disabled)) return true;
             }
         }
 
         return false;
     }
 
-    public static boolean isDisableSelfModel() {
-        return getBooleanValue(disableSelfModelValue);
+    private static void ensureInit() {
+        if (ysmChecked) return;
+        ysmChecked = true;
+        ysmPresent = ModList.get().isLoaded("yes_steve_model");
+        if (!ysmPresent) return;
+
+        try {
+            Class<?> ysmMainClass = Class.forName("com.elfmcys.yesstevemodel.YesSteveModel");
+            ysmIsAvailableMethod = ysmMainClass.getMethod("isAvailable");
+
+            Class<?> ysmConfigClass = Class.forName("com.elfmcys.yesstevemodel.o00oO00OOO00OOOOo00Oo00O");
+            disableSelfModelValue = getStaticFieldValue(ysmConfigClass, "Ooo0oooO0oOOo0o0o0oO0O0o");
+            disableOtherModelValue = getStaticFieldValue(ysmConfigClass, "oo00OO0o0oo00oO0O00ooooo");
+            disableSelfHandsValue = getStaticFieldValue(ysmConfigClass, "o0OoO0O0OoO0oOoOO0oOooO0");
+
+            if (disableSelfModelValue != null) booleanValueGetMethod = disableSelfModelValue.getClass().getMethod("get");
+
+            ysmPlayerModelCapability = resolveCap("com.elfmcys.yesstevemodel.o00oo0OO0OOOOO0OOo0oOOoO");
+            ysmClientLazyCapability = resolveCap("com.elfmcys.yesstevemodel.OoOOOoOOo0O00OO0OOOo0OOo");
+            ysmEntityModelCapability = resolveCap("com.elfmcys.yesstevemodel.oO0oOoOo0O0OooOOo0O00oOo");
+        } catch (Exception e) {
+            ysmPresent = false;
+        }
     }
 
-    public static boolean isDisableOtherModel() {
-        return getBooleanValue(disableOtherModelValue);
+    private static Capability<?> resolveCap(String className) {
+        try {
+            Class<?> clazz = Class.forName(className);
+            Object cap = getStaticFieldValue(clazz, "Ooo0oOo0oo0ooO0OO0oo000o");
+            return cap instanceof Capability ? (Capability<?>) cap : null;
+        } catch (Throwable e) { return null; }
     }
 
-    public static boolean isDisableSelfHands() {
-        return getBooleanValue(disableSelfHandsValue);
+    private static Object getStaticFieldValue(Class<?> clazz, String fieldName) throws Exception {
+        Field f = clazz.getDeclaredField(fieldName);
+        f.setAccessible(true);
+        return f.get(null);
     }
+
+    private static boolean isYsmAvailable() {
+        ensureInit();
+        if (!ysmPresent || ysmIsAvailableMethod == null) return false;
+        try { return (Boolean) ysmIsAvailableMethod.invoke(null); } catch (Exception e) { return false; }
+    }
+
+    private static Object getCapData(LivingEntity entity, Capability<?> cap) {
+        try {
+            LazyOptional<?> opt = entity.getCapability(cap, null);
+            return opt.isPresent() ? opt.orElse(null) : null;
+        } catch (Throwable e) { return null; }
+    }
+
+    private static Object invokeGetter(Object target, String name, java.util.function.Supplier<Method> getter, java.util.function.Consumer<Method> setter) {
+        try {
+            Method m = getter.get();
+            if (m == null) {
+                m = target.getClass().getMethod(name);
+                setter.accept(m);
+            }
+            return m.invoke(target);
+        } catch (Throwable e) { return null; }
+    }
+
+    public static boolean isDisableSelfModel() { return getBooleanValue(disableSelfModelValue); }
+    public static boolean isDisableOtherModel() { return getBooleanValue(disableOtherModelValue); }
+    public static boolean isDisableSelfHands() { return getBooleanValue(disableSelfHandsValue); }
 
     private static boolean getBooleanValue(Object valueObj) {
+        ensureInit();
         if (ysmPresent && valueObj != null && booleanValueGetMethod != null) {
-            try {
-                return (Boolean) booleanValueGetMethod.invoke(valueObj);
-            } catch (Exception e) {
-                return false;
-            }
-        } else {
-            return false;
+            try { return (Boolean) booleanValueGetMethod.invoke(valueObj); } catch (Exception e) {}
         }
+        return false;
     }
 }
