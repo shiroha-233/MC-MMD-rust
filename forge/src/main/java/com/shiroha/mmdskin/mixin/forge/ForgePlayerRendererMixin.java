@@ -76,9 +76,8 @@ public abstract class ForgePlayerRendererMixin extends LivingEntityRenderer<Abst
         }
 
         String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
-         
-        // 如果选择了默认渲染、未选择模型、YSM 激活或处于旁观者模式，则让渡渲染权给原版流程（包括 YSM）
-        // 注意：不要在此处调用 super.render()，否则会导致与原版/YSM 逻辑重叠触发双重渲染
+        
+        // 如果选择了默认渲染或未选择模型，或 YSM 激活，或旁观者，使用原版渲染
         if (selectedModel == null || selectedModel.isEmpty() || selectedModel.equals("默认 (原版渲染)") || YsmCompat.isYsmActive(player) || player.isSpectator()) {
             return;
         }
@@ -92,8 +91,8 @@ public abstract class ForgePlayerRendererMixin extends LivingEntityRenderer<Abst
                 ci.cancel();
                 return;
             }
-            // 非加载中（模型不存在或加载失败），让渡给原版流程处理
-            // 注意：不要在此处调用 super.render()，否则会导致与原版/YSM 逻辑重叠触发双重渲染
+            // 非加载中（模型不存在或加载失败），回退到原版渲染
+            super.render(player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight);
             return;
         }
         

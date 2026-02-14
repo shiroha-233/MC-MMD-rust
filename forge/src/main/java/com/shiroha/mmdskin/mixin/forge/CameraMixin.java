@@ -67,9 +67,12 @@ public abstract class CameraMixin {
                 double forwardOffset = ConfigManager.getFirstPersonCameraForwardOffset();
                 double verticalOffset = ConfigManager.getFirstPersonCameraVerticalOffset();
 
-                double targetX = boneEyePos.x + (double) (sinLookYaw * cosLookPitch * (float) (-forwardOffset));
-                double targetY = boneEyePos.y + (double) (sinLookPitch * (float) (-forwardOffset)) + verticalOffset;
-                double targetZ = boneEyePos.z + (double) (cosLookYaw * cosLookPitch * (float) forwardOffset);
+                double rotatedY = verticalOffset * cosLookPitch - forwardOffset * sinLookPitch;
+                double horizontalDist = verticalOffset * sinLookPitch + forwardOffset * cosLookPitch;
+
+                double targetX = boneEyePos.x + (double) (sinLookYaw * (float) (-horizontalDist));
+                double targetY = boneEyePos.y + (double) rotatedY;
+                double targetZ = boneEyePos.z + (double) (cosLookYaw * (float) horizontalDist);
 
                 Vec3 finalPos = new Vec3(targetX, targetY, targetZ);
                 FirstPersonManager.setLastCameraPos(finalPos);

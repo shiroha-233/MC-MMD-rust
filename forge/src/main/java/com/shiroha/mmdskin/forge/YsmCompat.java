@@ -68,7 +68,7 @@ public class YsmCompat {
                 try { return cls.getMethod("isYsmModel"); } catch (NoSuchMethodException e) { return null; }
             });
             if (m != null && Boolean.TRUE.equals(m.invoke(entity))) return true;
-        } catch (Exception ignored) {}
+        } catch (Exception e) {}
 
         if (ysmPlayerModelCapability != null) {
             Object data = getCapData(entity, ysmPlayerModelCapability);
