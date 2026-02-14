@@ -59,9 +59,9 @@ dependencies {
 	common(project(path: ":common", configuration: "namedElements")) { transitive = false }
 	shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive = false }
 	
-	// JLayer - MP3 解码器（舞台模式音频播放，shadow 打包进 JAR）
+	// JLayer - MP3 解码器（舞台模式音频播放，Fabric jar-in-jar 打包）
 	implementation("javazoom:jlayer:1.0.1")
-	shadowCommon("javazoom:jlayer:1.0.1")
+	include("javazoom:jlayer:1.0.1")
 	
 	// Fabric Loader
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"

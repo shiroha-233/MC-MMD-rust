@@ -110,9 +110,9 @@ dependencies {
 
     // JLayer - MP3 解码器（舞台模式音频播放）
     // common 配置使其在 dev 运行时可用（developmentForge extends common）
-    // shadowCommon 配置使其打包进生产 JAR
+    // include 配置使其以 Jar-in-Jar 内嵌到 mod JAR
     common("javazoom:jlayer:1.0.1") { transitive = false }
-    shadowCommon("javazoom:jlayer:1.0.1")
+    include("javazoom:jlayer:1.0.1")
 
     // Forge 平台
     forge "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
