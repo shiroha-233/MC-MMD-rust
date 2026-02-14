@@ -2757,6 +2757,118 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_BatchGetSubMeshData(
 }
 
 // ============================================================================
+// 公共 API 相关
+// ============================================================================
+
+/// 获取所有骨骼名称（JSON 数组格式）
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetBoneNames(
+    env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+) -> jstring {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let model = model_arc.lock().unwrap();
+        let bone_count = model.bone_manager.bone_count();
+        let mut names = Vec::with_capacity(bone_count);
+        for i in 0..bone_count {
+            if let Some(bone) = model.bone_manager.get_bone(i) {
+                names.push(format!("\"{}\"", bone.name.replace('"', "\\\"")));
+            }
+        }
+        let json = format!("[{}]", names.join(","));
+        if let Ok(s) = env.new_string(&json) {
+            return s.into_raw();
+        }
+    }
+    env.new_string("[]")
+        .map(|s| s.into_raw())
+        .unwrap_or(ptr::null_mut())
+}
+
+/// 复制所有骨骼的实时世界位置到 ByteBuffer
+/// 每个骨骼 3 个 float (x, y, z)，共 boneCount * 12 字节
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyBonePositionsToBuffer(
+    env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    buffer: JByteBuffer,
+) -> jint {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let model = model_arc.lock().unwrap();
+        let bone_count = model.bone_manager.bone_count();
+        if bone_count == 0 {
+            return 0;
+        }
+        
+        let byte_size = bone_count * 12; // 3 floats * 4 bytes
+        let dst = match env.get_direct_buffer_address(&buffer) {
+            Ok(p) => p,
+            Err(_) => return 0,
+        };
+        let capacity = env.get_direct_buffer_capacity(&buffer).unwrap_or(0);
+        if byte_size > capacity {
+            log::error!("CopyBonePositionsToBuffer: 需要 {} 字节, 容量 {}", byte_size, capacity);
+            return 0;
+        }
+        
+        // 逐骨骼写入位置
+        let dst_floats = unsafe { std::slice::from_raw_parts_mut(dst as *mut f32, bone_count * 3) };
+        for i in 0..bone_count {
+            if let Some(bone) = model.bone_manager.get_bone(i) {
+                let pos = bone.position();
+                dst_floats[i * 3] = pos.x;
+                dst_floats[i * 3 + 1] = pos.y;
+                dst_floats[i * 3 + 2] = pos.z;
+            }
+        }
+        return bone_count as jint;
+    }
+    0
+}
+
+/// 复制实时 UV 数据到 ByteBuffer（经过 UV Morph 变形后）
+/// 每个顶点 2 个 float (u, v)，共 vertexCount * 8 字节
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyRealtimeUVsToBuffer(
+    env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    buffer: JByteBuffer,
+) -> jint {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let model = model_arc.lock().unwrap();
+        let uv_raw = &model.update_uvs_raw;
+        if uv_raw.is_empty() {
+            return 0;
+        }
+        
+        let vertex_count = uv_raw.len() / 2;
+        let byte_size = uv_raw.len() * 4; // f32 = 4 bytes
+        let dst = match env.get_direct_buffer_address(&buffer) {
+            Ok(p) => p,
+            Err(_) => return 0,
+        };
+        let capacity = env.get_direct_buffer_capacity(&buffer).unwrap_or(0);
+        if byte_size > capacity {
+            log::error!("CopyRealtimeUVsToBuffer: 需要 {} 字节, 容量 {}", byte_size, capacity);
+            return 0;
+        }
+        
+        unsafe {
+            let src = uv_raw.as_ptr() as *const u8;
+            ptr::copy_nonoverlapping(src, dst, byte_size);
+        }
+        return vertex_count as jint;
+    }
+    0
+}
+
+// ============================================================================
 // 内存统计
 // ============================================================================
 

@@ -733,6 +733,33 @@ public class NativeFunc {
      */
     public native void GetEyeBonePosition(long model, float[] out);
     
+    // ==================== 公共 API 相关 ====================
+    
+    /**
+     * 获取所有骨骼名称（JSON 数组格式）
+     * @param model 模型句柄
+     * @return JSON 数组字符串，如 ["センター","上半身",...]
+     */
+    public native String GetBoneNames(long model);
+    
+    /**
+     * 复制所有骨骼的实时世界位置到 ByteBuffer
+     * 每个骨骼 3 个 float (x, y, z)，共 boneCount * 12 字节
+     * @param model 模型句柄
+     * @param buffer 目标缓冲区（需要 boneCount * 12 字节）
+     * @return 复制的骨骼数量
+     */
+    public native int CopyBonePositionsToBuffer(long model, java.nio.ByteBuffer buffer);
+    
+    /**
+     * 复制实时 UV 数据到 ByteBuffer（经过 UV Morph 变形后的坐标）
+     * 每个顶点 2 个 float (u, v)，共 vertexCount * 8 字节
+     * @param model 模型句柄
+     * @param buffer 目标缓冲区（需要 vertexCount * 8 字节）
+     * @return 复制的顶点数量
+     */
+    public native int CopyRealtimeUVsToBuffer(long model, java.nio.ByteBuffer buffer);
+    
     // ==================== 内存统计 ====================
     
     /**
