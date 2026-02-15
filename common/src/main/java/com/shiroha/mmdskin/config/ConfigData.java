@@ -19,6 +19,10 @@ public class ConfigData {
     private static final Logger logger = LogManager.getLogger();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     
+    // 全局功能开关（调试用途）
+    // 当此开关为 false 时，模组完全停止运作
+    public boolean modEnabled = true;
+
     // 渲染设置
     public boolean openGLEnableLighting = true;
     public int modelPoolMaxCount = 20;

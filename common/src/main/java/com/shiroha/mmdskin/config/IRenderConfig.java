@@ -9,6 +9,9 @@ public interface IRenderConfig {
     int getModelPoolMaxCount();
     boolean isMMDShaderEnabled();
 
+    /** 全局功能开关 - 为 false 时禁用 */
+    default boolean isModEnabled() { return true; }
+
     /** GPU 蒙皮启用状态（默认关闭） */
     default boolean isGpuSkinningEnabled() { return false; }
 

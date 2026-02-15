@@ -18,6 +18,8 @@
   
   "gui.mmdskin.mod_settings.title": "MMD Skin - Settings",
   "gui.mmdskin.mod_settings.category.render": "Render Settings",
+  "gui.mmdskin.mod_settings.mod_enabled": "Enable Mod Rendering",
+  "gui.mmdskin.mod_settings.mod_enabled.tooltip": "Disabling this option will cause the mod to stop working completely.",
   "gui.mmdskin.mod_settings.category.performance": "Performance Settings",
   "gui.mmdskin.mod_settings.opengl_lighting": "Enable OpenGL Lighting",
   "gui.mmdskin.mod_settings.opengl_lighting.tooltip": "Enable OpenGL lighting effects for better visuals",

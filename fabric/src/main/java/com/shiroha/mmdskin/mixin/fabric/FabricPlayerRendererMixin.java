@@ -54,6 +54,11 @@ public abstract class FabricPlayerRendererMixin extends LivingEntityRenderer<Abs
     @Inject(method = "render(Lnet/minecraft/client/player/AbstractClientPlayer;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("HEAD"), cancellable = true)
     public void onRender(AbstractClientPlayer player, float entityYaw, float tickDelta, PoseStack matrixStack, 
                       MultiBufferSource vertexConsumers, int packedLight, CallbackInfo ci) {
+        // 全局功能开关检查 - 如果模组已禁用，使用原版渲染
+        if (!com.shiroha.mmdskin.config.ConfigManager.isModEnabled()) {
+            return;
+        }
+
         // 获取玩家选择的模型（使用同步管理器，支持联机）
         String playerName = player.getName().getString();
         Minecraft mc = Minecraft.getInstance();

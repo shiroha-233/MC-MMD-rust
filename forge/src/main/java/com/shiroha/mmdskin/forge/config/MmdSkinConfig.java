@@ -43,6 +43,11 @@ public final class MmdSkinConfig implements ConfigManager.IConfigProvider {
     // ==================== IConfigProvider 实现 ====================
     
     @Override
+    public boolean isModEnabled() {
+        return data.modEnabled;
+    }
+
+    @Override
     public boolean isOpenGLLightingEnabled() {
         return data.openGLEnableLighting;
     }

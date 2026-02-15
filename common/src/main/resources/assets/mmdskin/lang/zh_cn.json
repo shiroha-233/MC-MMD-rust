@@ -18,6 +18,8 @@
   
   "gui.mmdskin.mod_settings.title": "MMD皮肤 - 设置",
   "gui.mmdskin.mod_settings.category.render": "渲染设置",
+  "gui.mmdskin.mod_settings.mod_enabled": "启用模组",
+  "gui.mmdskin.mod_settings.mod_enabled.tooltip": "关闭此选项后，模组将完全停止工作。",
   "gui.mmdskin.mod_settings.category.performance": "性能设置",
   "gui.mmdskin.mod_settings.opengl_lighting": "启用 OpenGL 光照",
   "gui.mmdskin.mod_settings.opengl_lighting.tooltip": "启用 OpenGL 光照效果以获得更好的视觉效果",

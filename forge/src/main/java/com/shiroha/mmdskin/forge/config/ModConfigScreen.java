@@ -28,7 +28,17 @@ public class ModConfigScreen {
         // 渲染设置分类
         ConfigCategory renderCategory = builder.getOrCreateCategory(
             Component.translatable("gui.mmdskin.mod_settings.category.render"));
-        
+
+        // 全局功能开关（第一项）
+        renderCategory.addEntry(entryBuilder
+            .startBooleanToggle(
+                Component.translatable("gui.mmdskin.mod_settings.mod_enabled"),
+                data.modEnabled)
+            .setDefaultValue(true)
+            .setTooltip(Component.translatable("gui.mmdskin.mod_settings.mod_enabled.tooltip"))
+            .setSaveConsumer(value -> data.modEnabled = value)
+            .build());
+
         renderCategory.addEntry(entryBuilder
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.opengl_lighting"),

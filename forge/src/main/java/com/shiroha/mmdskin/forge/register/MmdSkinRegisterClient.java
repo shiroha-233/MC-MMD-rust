@@ -308,6 +308,18 @@ public class MmdSkinRegisterClient {
             Entity target = entityHit.getEntity();
             
             String className = target.getClass().getName();
+
+            // 检查是否为玩家实体
+            if (target instanceof net.minecraft.world.entity.player.Player) {
+                net.minecraft.world.entity.player.Player player = (net.minecraft.world.entity.player.Player) target;
+                String playerName = player.getName().getString();
+                int keyCode = keyMaidConfigWheel.getKey().getValue();
+                mc.setScreen(new MaidConfigWheelScreen(target.getUUID(), target.getId(), playerName, keyCode));
+                logger.info("打开玩家模型配置轮盘: {} (ID: {})", playerName, target.getId());
+                return;
+            }
+
+            // 原有的女仆检测逻辑
             if (className.contains("EntityMaid") || className.contains("touhoulittlemaid")) {
                 String maidName = target.getName().getString();
                 mc.setScreen(new MaidConfigWheelScreen(target.getUUID(), target.getId(), maidName, keyMaidConfigWheel));
