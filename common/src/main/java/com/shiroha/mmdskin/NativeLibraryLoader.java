@@ -184,7 +184,7 @@ public final class NativeLibraryLoader {
     // ==================== Android 加载 ====================
 
     private static void loadAndroid() {
-        logger.info("Android Env Detected! Arch: arm64");
+        logger.info("Android Env Detected! Arch: a" + (isArm64 ? "rm" : "md") + "64");
         logger.info("  os.name=" + System.getProperty("os.name") + " os.arch=" + System.getProperty("os.arch"));
         logger.info("  FCL_NATIVEDIR=" + System.getenv("FCL_NATIVEDIR"));
         logger.info("  POJAV_NATIVEDIR=" + System.getenv("POJAV_NATIVEDIR"));
@@ -192,7 +192,7 @@ public final class NativeLibraryLoader {
         logger.info("  LD_LIBRARY_PATH=" + System.getenv("LD_LIBRARY_PATH"));
         logger.info("  gameDir=" + getGameDirectory());
 
-        String resourcePath = "/natives/android-arm64/libmmd_engine.so";
+        String resourcePath = "/natives/android-a" + (isArm64 ? "rm" : "md") + "64/libmmd_engine.so";
         String soFileName = "libmmd_engine.so";
 
         // 策略0: 写入 $JAVA_HOME/lib
@@ -285,7 +285,7 @@ public final class NativeLibraryLoader {
         }
 
         // 策略5: GitHub 下载
-        File downloaded = downloadNativeLibrary("libmmd_engine-android-arm64.so");
+        File downloaded = downloadNativeLibrary("libmmd_engine-android-a" + (isArm64 ? "rm" : "md") + "64.so");
         if (downloaded != null) {
             try {
                 logger.info("[Android] 策略5: 尝试加载下载的库 " + downloaded.getAbsolutePath());
@@ -299,7 +299,7 @@ public final class NativeLibraryLoader {
 
         throw new UnsatisfiedLinkError("[Android] 无法加载原生库 libmmd_engine.so，所有策略均失败。"
                 + "请检查日志获取详细信息，或从 " + RELEASE_BASE_URL + " 手动下载 "
-                + getVersionedFileName("libmmd_engine-android-arm64.so"));
+                + getVersionedFileName("libmmd_engine-android-a" + (isArm64 ? "rm" : "md") + "64.so"));
     }
 
     // ==================== 工具方法 ====================

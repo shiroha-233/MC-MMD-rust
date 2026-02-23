@@ -248,6 +248,39 @@ jobs:
           name: native-android-arm64
           path: rust_engine/target/aarch64-linux-android/release/libmmd_engine.so
 
+  build-rust-android-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-linux-android
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r27c
+
+      - name: Build Android AMD64 SO
+        run: cargo build --release --manifest-path rust_engine/Cargo.toml --target x86_64-linux-android
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang
+          CC_x86_64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang
+          CXX_x86_64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang++
+          AR_x86_64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-android-amd64
+          path: rust_engine/target/x86_64-linux-android/release/libmmd_engine.so
+
   # ==================== Java 模组构建（轻量版：仅包含常用平台） ====================
   build-java:
     needs: [build-rust-windows-x64, build-rust-linux-x64, build-rust-android-arm64]
@@ -316,7 +349,7 @@ jobs:
 
   # ==================== Java 模组构建（通用版：包含所有平台） ====================
   build-java-universal:
-    needs: [build-rust-windows-x64, build-rust-windows-arm64, build-rust-linux-x64, build-rust-linux-arm64, build-rust-linux-loongarch64, build-rust-linux-riscv64, build-rust-macos-x64, build-rust-macos-arm64, build-rust-android-arm64]
+    needs: [build-rust-windows-x64, build-rust-windows-arm64, build-rust-linux-x64, build-rust-linux-arm64, build-rust-linux-loongarch64, build-rust-linux-riscv64, build-rust-macos-x64, build-rust-macos-arm64, build-rust-android-arm64, build-rust-android-amd64]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -347,6 +380,7 @@ jobs:
           mkdir -p common/src/main/resources/natives/macos-x64
           mkdir -p common/src/main/resources/natives/macos-arm64
           mkdir -p common/src/main/resources/natives/android-arm64
+          mkdir -p common/src/main/resources/natives/android-amd64
           cp native-libs/native-windows-x64/mmd_engine.dll common/src/main/resources/natives/windows-x64/
           cp native-libs/native-windows-arm64/mmd_engine.dll common/src/main/resources/natives/windows-arm64/
           cp native-libs/native-linux-x64/libmmd_engine.so common/src/main/resources/natives/linux-x64/
@@ -356,6 +390,7 @@ jobs:
           cp native-libs/native-macos-x64/libmmd_engine.dylib common/src/main/resources/natives/macos-x64/
           cp native-libs/native-macos-arm64/libmmd_engine.dylib common/src/main/resources/natives/macos-arm64/
           cp native-libs/native-android-arm64/libmmd_engine.so common/src/main/resources/natives/android-arm64/
+          cp native-libs/native-android-amd64/libmmd_engine.so common/src/main/resources/natives/android-amd64/
 
       - name: Setup JDK 17
         uses: actions/setup-java@v4
@@ -403,7 +438,7 @@ jobs:
 
   # ==================== 统一发布 ====================
   release:
-    needs: [build-rust-windows-x64, build-rust-windows-arm64, build-rust-linux-x64, build-rust-linux-arm64, build-rust-macos-x64, build-rust-macos-arm64, build-rust-android-arm64, build-rust-linux-loongarch64, build-rust-linux-riscv64, build-java, build-java-universal]
+    needs: [build-rust-windows-x64, build-rust-windows-arm64, build-rust-linux-x64, build-rust-linux-arm64, build-rust-macos-x64, build-rust-macos-arm64, build-rust-android-arm64, build-rust-android-amd64, build-rust-linux-loongarch64, build-rust-linux-riscv64, build-java-universal]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -425,6 +460,7 @@ jobs:
           mv artifacts/native-macos-x64/libmmd_engine.dylib "artifacts/native-macos-x64/libmmd_engine-macos-x64_${GITHUB_REF_NAME}.dylib"
           mv artifacts/native-macos-arm64/libmmd_engine.dylib "artifacts/native-macos-arm64/libmmd_engine-macos-arm64_${GITHUB_REF_NAME}.dylib"
           mv artifacts/native-android-arm64/libmmd_engine.so "artifacts/native-android-arm64/libmmd_engine-android-arm64_${GITHUB_REF_NAME}.so"
+          mv artifacts/native-android-amd64/libmmd_engine.so "artifacts/native-android-amd64/libmmd_engine-android-amd64_${GITHUB_REF_NAME}.so"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -441,4 +477,5 @@ jobs:
             artifacts/native-macos-x64/*.dylib
             artifacts/native-macos-arm64/*.dylib
             artifacts/native-android-arm64/*.so
+            artifacts/native-android-amd64/*.so
           generate_release_notes: true
