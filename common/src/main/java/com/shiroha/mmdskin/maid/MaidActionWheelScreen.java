@@ -144,7 +144,6 @@ public class MaidActionWheelScreen extends AbstractWheelScreen {
         
         if (model != null) {
             model.model.changeAnim(MMDAnimManager.GetAnimModel(model.model, slot.animId), 0);
-            logger.info("女仆 {} 执行动作: {} ({})", maidName, slot.name, slot.animId);
         }
         
         MaidActionNetworkHandler.sendMaidAction(maidEntityId, slot.animId);

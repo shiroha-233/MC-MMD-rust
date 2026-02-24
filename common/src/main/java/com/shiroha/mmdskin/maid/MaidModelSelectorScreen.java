@@ -78,7 +78,6 @@ public class MaidModelSelectorScreen extends Screen {
             modelCards.add(new ModelCardEntry(info.getFolderName()));
         }
         
-        logger.info("女仆模型选择: 共加载 {} 个模型选项", modelCards.size());
     }
 
     @Override
@@ -115,7 +114,6 @@ public class MaidModelSelectorScreen extends Screen {
         scrollOffset = 0;
         this.clearWidgets();
         this.init();
-        logger.info("女仆模型列表已刷新");
     }
 
     private void selectModel(ModelCardEntry card) {
@@ -127,7 +125,6 @@ public class MaidModelSelectorScreen extends Screen {
         // 发送网络包同步到服务器
         MaidModelNetworkHandler.sendMaidModelChange(maidEntityId, card.displayName);
         
-        logger.info("女仆 {} 选择模型: {}", maidName, card.displayName);
     }
 
     @Override

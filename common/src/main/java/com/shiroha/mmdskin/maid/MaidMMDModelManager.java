@@ -31,7 +31,6 @@ public class MaidMMDModelManager {
      * 初始化管理器
      */
     public static void init() {
-        logger.info("女仆 MMD 模型管理器初始化完成");
     }
     
     /**
@@ -58,7 +57,6 @@ public class MaidMMDModelManager {
         }
         
         maidModelBindings.put(maidUUID, modelName);
-        logger.info("女仆 {} 绑定模型: {}", maidUUID, modelName);
     }
     
     /**
@@ -69,7 +67,6 @@ public class MaidMMDModelManager {
     public static void unbindModel(UUID maidUUID) {
         maidModelBindings.remove(maidUUID);
         loadedModels.remove(maidUUID);
-        logger.info("女仆 {} 解除模型绑定", maidUUID);
     }
     
     /**
@@ -120,7 +117,6 @@ public class MaidMMDModelManager {
         model = MMDModelManager.GetModel(modelName, cacheKey);
         if (model != null) {
             loadedModels.put(maidUUID, model);
-            logger.info("女仆 {} 模型加载成功: {}", maidUUID, modelName);
         }
         
         return model;
@@ -143,7 +139,6 @@ public class MaidMMDModelManager {
         long anim = MMDAnimManager.GetAnimModel(mmdModel, animId);
         if (anim != 0) {
             mmdModel.transitionAnim(anim, 0, 0.25f);
-            logger.info("女仆 {} 播放动画: {}", maidUUID, animId);
         } else {
             logger.warn("女仆 {} 动画未找到: {}", maidUUID, animId);
         }
@@ -167,7 +162,6 @@ public class MaidMMDModelManager {
     public static void invalidateLoadedModels() {
         if (!loadedModels.isEmpty()) {
             loadedModels.clear();
-            logger.info("女仆已加载模型缓存已失效，将在下次渲染时重新加载");
         }
     }
     
@@ -177,7 +171,6 @@ public class MaidMMDModelManager {
     public static void clearAll() {
         maidModelBindings.clear();
         loadedModels.clear();
-        logger.info("女仆模型绑定已清空");
     }
     
     /**

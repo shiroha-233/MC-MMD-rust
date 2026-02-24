@@ -35,40 +35,41 @@ public class MaidMMDRenderer {
      */
     public static boolean render(LivingEntity entity, UUID maidUUID, float entityYaw, 
                                   float partialTicks, PoseStack poseStack, int packedLight) {
-        // 检查是否有绑定的 MMD 模型
         if (!MaidMMDModelManager.hasMMDModel(maidUUID)) {
             return false;
         }
         
-        // 获取模型
         MMDModelManager.Model modelData = MaidMMDModelManager.getModel(maidUUID);
         if (modelData == null || modelData.model == null) {
             return false;
         }
         
         try {
-            // 加载模型属性
             modelData.loadModelProperties(false);
-            
-            // 更新动画状态
             updateAnimationState(entity, modelData);
             
-            // 计算渲染偏移
             Vector3f entityTrans = getEntityTranslation(modelData);
-            
-            // 女仆实体不使用 pitch 旋转整个模型（避免移动时倾斜）
-            // 只使用 yaw 控制朝向，pitch 保持 0
             float entityPitch = 0.0f;
             
-            // 应用模型缩放
             float modelSize = getModelSize(modelData);
             poseStack.scale(modelSize, modelSize, modelSize);
             
-            // 设置正确的 shader（避免使用 Orihime BedrockModel 留下的 shader 导致 flat shading）
-            RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
+            // 按模型缩放比例修正头部 pitch，防止小模型因 eyeHeight 不匹配而翻白眼
+            float originalXRot = entity.getXRot();
+            float originalXRotO = entity.xRotO;
+            if (modelSize != 1.0f && modelSize > 0.0f) {
+                entity.setXRot(originalXRot * modelSize);
+                entity.xRotO = originalXRotO * modelSize;
+            }
             
-            // 渲染模型
+            RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
             modelData.model.render(entity, entityYaw, entityPitch, entityTrans, partialTicks, poseStack, packedLight, RenderContext.WORLD);
+            
+            // 恢复 xRot
+            if (modelSize != 1.0f && modelSize > 0.0f) {
+                entity.setXRot(originalXRot);
+                entity.xRotO = originalXRotO;
+            }
             
             return true;
         } catch (Exception e) {
@@ -86,8 +87,6 @@ public class MaidMMDRenderer {
         }
         
         EntityAnimState entityData = modelData.entityData;
-        
-        // 简化的动画状态判断（针对女仆）
         EntityAnimState.State targetState;
         
         if (entity.getHealth() <= 0) {
@@ -108,7 +107,6 @@ public class MaidMMDRenderer {
             targetState = EntityAnimState.State.Idle;
         }
         
-        // 只在状态变化时切换动画
         if (entityData.stateLayers[0] != targetState) {
             entityData.stateLayers[0] = targetState;
             String animName = EntityAnimState.getPropertyName(targetState);
@@ -127,8 +125,6 @@ public class MaidMMDRenderer {
         float x = 0.0f;
         float y = 0.0f;
         float z = 0.0f;
-        
-        // 从模型属性读取偏移
         if (modelData.properties != null) {
             String transStr = modelData.properties.getProperty("entityTrans");
             if (transStr != null) {

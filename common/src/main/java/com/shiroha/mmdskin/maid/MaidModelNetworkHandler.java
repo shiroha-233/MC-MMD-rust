@@ -24,7 +24,6 @@ public class MaidModelNetworkHandler {
      */
     public static void setNetworkSender(BiConsumer<Integer, String> sender) {
         networkSender = sender;
-        logger.info("女仆模型网络发送器已设置");
     }
 
     /**

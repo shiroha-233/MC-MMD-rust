@@ -20,7 +20,6 @@ public class MaidActionNetworkHandler {
      */
     public static void setNetworkSender(BiConsumer<Integer, String> sender) {
         networkSender = sender;
-        logger.info("女仆动作网络发送器已设置");
     }
 
     /**
