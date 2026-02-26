@@ -1,5 +1,6 @@
 package com.shiroha.mmdskin.renderer.shader;
 
+import com.shiroha.mmdskin.util.AssetsUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.GL46C;
@@ -22,127 +23,11 @@ public abstract class ToonShaderBase {
     
     // ==================== 共享的片段着色器逻辑 ====================
     
-    /** 获取 GLSL 版本声明，子类可覆盖 */
-    protected String getGlslVersion() {
-        return "#version 330 core";
-    }
+    protected static final String MAIN_FRAGMENT_SHADER_BODY =
+            AssetsUtil.getAssetsAsString("shader/toon_main_body.frag.glsl");
     
-    /**
-     * 主着色器片段着色器核心逻辑（不含版本声明）
-     */
-    protected static final String MAIN_FRAGMENT_SHADER_BODY = """
-        
-        in vec2 texCoord0;
-        in vec3 viewNormal;
-        in vec3 viewPos;
-        
-        uniform sampler2D Sampler0;
-        uniform float LightIntensity;
-        uniform int ToonLevels;          // 色阶数量（2-5）
-        uniform float RimPower;          // 边缘光锐度
-        uniform float RimIntensity;      // 边缘光强度
-        uniform vec3 ShadowColor;        // 阴影色调
-        uniform float SpecularPower;     // 高光锐度
-        uniform float SpecularIntensity; // 高光强度
-        
-        // MRT 多输出：兼容 Iris G-buffer FBO
-        // location 0 → colortex0（漫反射色 + alpha）
-        // location 1 → colortex1（编码法线）
-        // location 2 → colortex2（光照图 / 高光数据）
-        // location 3 → colortex3（保留）
-        layout(location = 0) out vec4 fragColor;
-        layout(location = 1) out vec4 fragData1;
-        layout(location = 2) out vec4 fragData2;
-        layout(location = 3) out vec4 fragData3;
-        
-        // 色阶化函数
-        float toonify(float value, int levels) {
-            return floor(value * float(levels) + 0.5) / float(levels);
-        }
-        
-        void main() {
-            vec4 texColor = texture(Sampler0, texCoord0);
-            vec3 normal = normalize(viewNormal);
-            
-            // 主光源方向（视图空间）
-            vec3 lightDir = normalize(vec3(0.2, 1.0, -0.7));
-            vec3 viewDir = normalize(-viewPos);
-            
-            // === 漫反射（色阶化） ===
-            float NdotL = dot(normal, lightDir);
-            float diffuse = max(NdotL, 0.0);
-            float toonDiffuse = toonify(diffuse, ToonLevels);
-            
-            // === 高光（色阶化） ===
-            vec3 halfDir = normalize(lightDir + viewDir);
-            float NdotH = max(dot(normal, halfDir), 0.0);
-            float specular = pow(NdotH, SpecularPower);
-            // 卡通高光：硬边界
-            float toonSpecular = step(0.5, specular) * SpecularIntensity;
-            
-            // === 边缘光（Rim Light） ===
-            float rim = 1.0 - max(dot(viewDir, normal), 0.0);
-            rim = pow(rim, RimPower) * RimIntensity;
-            
-            // === 阴影混合 ===
-            // 亮部使用原色，暗部混合阴影色
-            vec3 litColor = texColor.rgb;
-            vec3 shadowedColor = texColor.rgb * ShadowColor;
-            vec3 baseColor = mix(shadowedColor, litColor, toonDiffuse);
-            
-            // === 最终合成 ===
-            vec3 finalColor = baseColor * LightIntensity;
-            finalColor += toonSpecular * vec3(1.0);  // 高光（白色）
-            finalColor += rim * texColor.rgb;         // 边缘光
-            
-            // 环境光保底
-            float ambient = 0.15;
-            finalColor = max(finalColor, texColor.rgb * ambient);
-            
-            if (texColor.a < 0.004) discard;
-            
-            // MRT 输出
-            fragColor  = vec4(finalColor, texColor.a);           // 漫反射色
-            fragData1  = vec4(normal * 0.5 + 0.5, 1.0);         // 编码法线 [-1,1]→[0,1]
-            fragData2  = vec4(0.0, 0.0, 0.0, 1.0);              // 光照图占位
-            fragData3  = vec4(0.0, 0.0, 0.0, 1.0);              // 保留
-        }
-        """;
-    
-    /**
-     * 描边片段着色器核心逻辑（不含版本声明）
-     */
-    protected static final String OUTLINE_FRAGMENT_SHADER_BODY = """
-        
-        in vec3 viewNormal;
-        in vec3 viewPos;
-        
-        uniform vec3 OutlineColor;
-        
-        // MRT 多输出：兼容 Iris G-buffer FBO
-        layout(location = 0) out vec4 fragColor;
-        layout(location = 1) out vec4 fragData1;
-        layout(location = 2) out vec4 fragData2;
-        layout(location = 3) out vec4 fragData3;
-        
-        void main() {
-            // 计算视线方向（从片段指向相机）
-            vec3 viewDir = normalize(-viewPos);
-            vec3 normal = normalize(viewNormal);
-            
-            // 法线朝向相机的区域不应该有描边（凹陷区域）
-            float NdotV = dot(normal, viewDir);
-            if (NdotV > 0.1) {
-                discard;
-            }
-            
-            // MRT 输出
-            fragColor  = vec4(OutlineColor, 1.0);                // 描边色
-            fragData1  = vec4(normal * 0.5 + 0.5, 1.0);         // 编码法线
-            fragData2  = vec4(0.0, 0.0, 0.0, 1.0);              // 光照图占位
-            fragData3  = vec4(0.0, 0.0, 0.0, 1.0);              // 保留
-        }
-        """;
+    protected static final String OUTLINE_FRAGMENT_SHADER_BODY =
+            AssetsUtil.getAssetsAsString("shader/toon_outline_body.frag.glsl");
     
     // ==================== 主着色器 Uniform locations ====================
     protected int projMatLocation = -1;
@@ -195,17 +80,13 @@ public abstract class ToonShaderBase {
         if (initialized) return true;
         
         try {
-            // 组装片段着色器（版本声明 + 核心逻辑）
-            String mainFragShader = getGlslVersion() + "\n" + MAIN_FRAGMENT_SHADER_BODY;
-            String outlineFragShader = getGlslVersion() + "\n" + OUTLINE_FRAGMENT_SHADER_BODY;
-            
             // 编译主着色器
-            mainProgram = compileProgram(getMainVertexShader(), mainFragShader, 
+            mainProgram = compileProgram(getMainVertexShader(), MAIN_FRAGMENT_SHADER_BODY, 
                                         getShaderName() + "主着色器");
             if (mainProgram == 0) return false;
             
             // 编译描边着色器
-            outlineProgram = compileProgram(getOutlineVertexShader(), outlineFragShader, 
+            outlineProgram = compileProgram(getOutlineVertexShader(), OUTLINE_FRAGMENT_SHADER_BODY, 
                                            getShaderName() + "描边着色器");
             if (outlineProgram == 0) {
                 GL46C.glDeleteProgram(mainProgram);
