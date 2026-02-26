@@ -28,14 +28,16 @@ public class ModelInfo {
     private final String modelFilePath;   // 模型文件完整路径
     private final String modelFileName;   // 模型文件名
     private final boolean isPMD;          // 是否为 PMD 格式
+    private final boolean isVRM;          // 是否为 VRM 格式
     private final long fileSize;          // 文件大小（字节）
     
-    public ModelInfo(String folderName, String folderPath, String modelFilePath, String modelFileName, boolean isPMD, long fileSize) {
+    public ModelInfo(String folderName, String folderPath, String modelFilePath, String modelFileName, boolean isPMD, boolean isVRM, long fileSize) {
         this.folderName = folderName;
         this.folderPath = folderPath;
         this.modelFilePath = modelFilePath;
         this.modelFileName = modelFileName;
         this.isPMD = isPMD;
+        this.isVRM = isVRM;
         this.fileSize = fileSize;
     }
     
@@ -44,6 +46,7 @@ public class ModelInfo {
     public String getModelFilePath() { return modelFilePath; }
     public String getModelFileName() { return modelFileName; }
     public boolean isPMD() { return isPMD; }
+    public boolean isVRM() { return isVRM; }
     public long getFileSize() { return fileSize; }
     
     /**
@@ -63,6 +66,7 @@ public class ModelInfo {
      * 获取模型格式描述
      */
     public String getFormatDescription() {
+        if (isVRM) return "VRM";
         return isPMD ? "PMD" : "PMX";
     }
     
@@ -121,39 +125,43 @@ public class ModelInfo {
      * 支持任意文件名
      */
     private static ModelInfo scanModelFolder(File modelDir) {
-        // 定义文件过滤器
         FileFilter pmxFilter = file -> file.isFile() && file.getName().toLowerCase().endsWith(".pmx");
         FileFilter pmdFilter = file -> file.isFile() && file.getName().toLowerCase().endsWith(".pmd");
-        
-        // 优先查找 PMX 文件
+        FileFilter vrmFilter = file -> file.isFile() && file.getName().toLowerCase().endsWith(".vrm");
+
+        // 优先 PMX
         File[] pmxFiles = modelDir.listFiles(pmxFilter);
         if (pmxFiles != null && pmxFiles.length > 0) {
-            // 如果有多个 PMX 文件，优先选择 model.pmx，否则选择第一个
             File selectedFile = findPreferredModel(pmxFiles);
             return new ModelInfo(
-                modelDir.getName(),
-                modelDir.getAbsolutePath(),
-                selectedFile.getAbsolutePath(),
-                selectedFile.getName(),
-                false,
-                selectedFile.length()
+                modelDir.getName(), modelDir.getAbsolutePath(),
+                selectedFile.getAbsolutePath(), selectedFile.getName(),
+                false, false, selectedFile.length()
             );
         }
-        
-        // 查找 PMD 文件
+
+        // 其次 PMD
         File[] pmdFiles = modelDir.listFiles(pmdFilter);
         if (pmdFiles != null && pmdFiles.length > 0) {
             File selectedFile = findPreferredModel(pmdFiles);
             return new ModelInfo(
-                modelDir.getName(),
-                modelDir.getAbsolutePath(),
-                selectedFile.getAbsolutePath(),
-                selectedFile.getName(),
-                true,
-                selectedFile.length()
+                modelDir.getName(), modelDir.getAbsolutePath(),
+                selectedFile.getAbsolutePath(), selectedFile.getName(),
+                true, false, selectedFile.length()
             );
         }
-        
+
+        // 最后 VRM
+        File[] vrmFiles = modelDir.listFiles(vrmFilter);
+        if (vrmFiles != null && vrmFiles.length > 0) {
+            File selectedFile = findPreferredModel(vrmFiles);
+            return new ModelInfo(
+                modelDir.getName(), modelDir.getAbsolutePath(),
+                selectedFile.getAbsolutePath(), selectedFile.getName(),
+                false, true, selectedFile.length()
+            );
+        }
+
         return null;
     }
     

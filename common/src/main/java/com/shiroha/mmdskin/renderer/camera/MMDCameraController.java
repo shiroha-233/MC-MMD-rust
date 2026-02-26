@@ -661,6 +661,12 @@ public class MMDCameraController {
         this.anchorYaw = host.getYRot();
         this.watchingHostUUID = hostUUID;
 
+        this.cinematicMode = com.shiroha.mmdskin.config.StageConfig.getInstance().cinematicMode;
+        if (this.cinematicMode) {
+            this.previousHideGui = mc.options.hideGui;
+            mc.options.hideGui = true;
+        }
+
         this.lastTickTimeNs = System.nanoTime();
         this.escWasPressed = false;
         this.mouseReleased = false;
@@ -668,6 +674,7 @@ public class MMDCameraController {
         this.currentFrame = 0.0f;
         this.state = StageState.WATCHING;
     }
+
 
     public void setWatchCamera(long cameraAnimHandle, float heightOffset) {
         if (state != StageState.WATCHING) return;
@@ -713,6 +720,10 @@ public class MMDCameraController {
         if (state != StageState.WATCHING) return;
 
         audioPlayer.cleanup();
+
+        if (cinematicMode) {
+            Minecraft.getInstance().options.hideGui = previousHideGui;
+        }
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {

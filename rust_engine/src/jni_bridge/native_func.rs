@@ -10,7 +10,7 @@ use std::ptr;
 use std::sync::Arc;
 
 use crate::animation::{VmdAnimation, VmdFile};
-use crate::model::load_pmx;
+use crate::model::{load_pmx, load_vrm};
 use crate::texture::load_texture;
 
 use super::{register_animation, register_model, register_texture, ANIMATIONS, MODELS, TEXTURES};
@@ -2968,5 +2968,28 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetVRHandMode(
     if let Some(model_arc) = models.get(&model) {
         let mut m = model_arc.lock().unwrap();
         m.set_vr_hand_mode(mode as u8);
+    }
+}
+
+/// 加载 VRM 模型
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_LoadModelVRM(
+    mut env: JNIEnv,
+    _class: JClass,
+    filename: JString,
+    _dir: JString,
+    _layer_count: jlong,
+) -> jlong {
+    let filename_str: String = match env.get_string(&filename) {
+        Ok(s) => s.into(),
+        Err(_) => return 0,
+    };
+
+    match load_vrm(&filename_str) {
+        Ok(model) => register_model(model),
+        Err(e) => {
+            log::error!("Failed to load VRM: {}", e);
+            0
+        }
     }
 }

@@ -173,7 +173,9 @@ public class MMDModelManager {
             long handle = 0;
             try {
                 NativeFunc nf = NativeFunc.GetInst();
-                if (modelInfo.isPMD()) {
+                if (modelInfo.isVRM()) {
+                    handle = nf.LoadModelVRM(modelInfo.getModelFilePath(), modelInfo.getFolderPath(), 3);
+                } else if (modelInfo.isPMD()) {
                     handle = nf.LoadModelPMD(modelInfo.getModelFilePath(), modelInfo.getFolderPath(), 3);
                 } else {
                     handle = nf.LoadModelPMX(modelInfo.getModelFilePath(), modelInfo.getFolderPath(), 3);

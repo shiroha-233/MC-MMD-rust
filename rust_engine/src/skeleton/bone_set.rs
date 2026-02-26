@@ -615,6 +615,14 @@ impl BoneSet {
         }
     }
     
+    /// 覆盖指定骨骼的逆绑定矩阵（VRM 加载时用 glTF IBM 替换纯平移版本）
+    #[inline]
+    pub fn set_inverse_init(&mut self, index: usize, matrix: Mat4) {
+        if let Some(bone) = self.links.get_mut(index) {
+            bone.inverse_init = matrix;
+        }
+    }
+    
     /// 更新蒙皮矩阵
     pub fn update_skinning_matrices(&mut self) {
         for i in 0..self.links.len() {
