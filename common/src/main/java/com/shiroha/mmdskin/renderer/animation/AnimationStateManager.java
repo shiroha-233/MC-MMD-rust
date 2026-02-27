@@ -2,28 +2,32 @@ package com.shiroha.mmdskin.renderer.animation;
 
 import com.shiroha.mmdskin.renderer.core.EntityAnimState;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager.Model;
+import com.shiroha.mmdskin.ui.network.ActionWheelNetworkHandler;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityType;
 
 /**
  * 动画状态管理器
- * 负责根据玩家状态切换动画
- * 
- * 设计原则：单一职责，只负责动画状态的判断和切换
+ * 根据玩家状态切换动画，区分本地/远程玩家的中断策略
  */
 public class AnimationStateManager {
     
-    private static final float TRANSITION_TIME = 0.25f; // 过渡时间（秒）
+    private static final float TRANSITION_TIME = 0.25f;
     
-    /**
-     * 更新玩家动画状态
-     */
     public static void updateAnimationState(AbstractClientPlayer player, Model model) {
         if (model.entityData.playCustomAnim) {
-            // 舞台动画不受移动/状态变化影响，只有 StageAnimEnd 才能结束
-            if (!model.entityData.playStageAnim && shouldStopCustomAnimation(player)) {
-                model.entityData.playCustomAnim = false;
+            // 舞台动画只能由网络包 STAGE_END 结束，不做本地判断
+            if (!model.entityData.playStageAnim) {
+                boolean local = isLocalPlayer(player);
+                if (local && shouldStopCustomAnimation(player)) {
+                    // 本地玩家：检测到移动/状态变化时中断，并通知服务器
+                    stopCustomAnim(model);
+                    ActionWheelNetworkHandler.sendAnimStopToServer();
+                }
+                // 远程玩家的自定义动画中断完全依赖网络包 RESET_PHYSICS，
+                // 不在此处做本地猜测，避免插值抖动导致误判
             }
         }
         
@@ -50,6 +54,24 @@ public class AnimationStateManager {
         return player.getX() - player.xo != 0.0f || player.getZ() - player.zo != 0.0f;
     }
     
+    /**
+     * 中断自定义动画并恢复 idle
+     */
+    private static void stopCustomAnim(Model model) {
+        model.entityData.playCustomAnim = false;
+        model.entityData.playStageAnim = false;
+        model.model.changeAnim(MMDAnimManager.GetAnimModel(model.model, "idle"), 0);
+        model.model.setLayerLoop(1, true);
+        model.model.changeAnim(0, 1);
+        model.model.changeAnim(0, 2);
+        model.entityData.invalidateStateLayers();
+    }
+    
+    private static boolean isLocalPlayer(AbstractClientPlayer player) {
+        Minecraft mc = Minecraft.getInstance();
+        return mc.player != null && mc.player.getUUID().equals(player.getUUID());
+    }
+
     private static void updateLayer0Animation(AbstractClientPlayer player, Model model) {
         if (player.getHealth() == 0.0f) {
             changeAnimationOnce(model, EntityAnimState.State.Die, 0);
@@ -83,7 +105,7 @@ public class AnimationStateManager {
         }
     }
 
-    /** 判断是否为马科坐骑（共用骑马奔跑动画） */
+    
     private static boolean isHorselike(EntityType<?> type) {
         return type == EntityType.HORSE
             || type == EntityType.DONKEY
@@ -115,7 +137,7 @@ public class AnimationStateManager {
         if ((!player.isUsingItem() && !player.swinging) || player.isSleeping()) {
             if (model.entityData.stateLayers[1] != EntityAnimState.State.Idle) {
                 model.entityData.stateLayers[1] = EntityAnimState.State.Idle;
-                model.model.setLayerLoop(1, true); // 恢复循环
+                model.model.setLayerLoop(1, true);
                 model.model.transitionAnim(0, 1, TRANSITION_TIME);
             }
         } else {
@@ -151,16 +173,15 @@ public class AnimationStateManager {
     }
     
     private static void changeAnimationOnce(Model model, EntityAnimState.State targetState, int layer) {
-        String property = EntityAnimState.getPropertyName(targetState);
         if (model.entityData.stateLayers[layer] != targetState) {
             model.entityData.stateLayers[layer] = targetState;
-            model.model.transitionAnim(MMDAnimManager.GetAnimModel(model.model, property), layer, TRANSITION_TIME);
+            model.model.transitionAnim(
+                MMDAnimManager.GetAnimModel(model.model, targetState.propertyName), layer, TRANSITION_TIME);
         }
     }
     
     private static void applyCustomItemAnimation(Model model, EntityAnimState.State targetState, 
                                                   String itemName, String activeHand, String handState, int layer) {
-        // 物品使用(using)动画不循环（如拉弓），挥手(swinging)动画循环
         boolean shouldLoop = !"using".equals(handState);
         
         long anim = MMDAnimManager.GetAnimModel(model.model, 
@@ -175,7 +196,6 @@ public class AnimationStateManager {
             return;
         }
         
-        // 回退到通用挥手动画，仅在状态变化时设置循环模式
         if (targetState == EntityAnimState.State.ItemRight || targetState == EntityAnimState.State.SwingRight) {
             if (model.entityData.stateLayers[layer] != EntityAnimState.State.SwingRight) {
                 model.model.setLayerLoop(layer, shouldLoop);

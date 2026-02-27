@@ -29,7 +29,7 @@ import org.apache.logging.log4j.Logger;
  * 3. 模型根目录同名匹配（向后兼容）
  * 4. CustomAnim 目录
  * 5. DefaultAnim 目录
- *
+ * 
  * 线程安全：使用 ConcurrentHashMap 保证多线程访问安全
  */
 public class MMDAnimManager {
@@ -55,10 +55,6 @@ public class MMDAnimManager {
         
         // 确保目录存在
         ensureDirectoriesExist();
-        
-        logger.info("MMDAnimManager 初始化完成 (使用 ConcurrentHashMap)");
-        logger.info("默认动画目录: " + defaultAnimDir);
-        logger.info("自定义动画目录: " + customAnimDir);
     }
 
     /**
@@ -69,11 +65,9 @@ public class MMDAnimManager {
         File customDir = PathConstants.getCustomAnimDir();
         
         if (PathConstants.ensureDirectoryExists(defaultDir)) {
-            logger.info("创建默认动画目录: " + defaultAnimDir);
         }
         
         if (PathConstants.ensureDirectoryExists(customDir)) {
-            logger.info("创建自定义动画目录: " + customAnimDir);
         }
     }
 
@@ -106,11 +100,11 @@ public class MMDAnimManager {
         if (cached != null) {
             return cached;
         }
-
+        
         String modelDir = model.getModelDir();
         long anim = 0;
         String loadedFrom = null;
-
+        
         // 1. 最高优先：animations.json 显式映射
         if (anim == 0 && modelDir != null) {
             String mappedFile = ModelAnimConfig.getMappedFile(modelDir, animName);
@@ -138,7 +132,7 @@ public class MMDAnimManager {
                 loadedFrom = "模型根目录";
             }
         }
-
+        
         // 4. 自定义动画目录
         if (anim == 0) {
             anim = tryLoadFromDir(model, customAnimDir, animName);
@@ -146,7 +140,7 @@ public class MMDAnimManager {
                 loadedFrom = "自定义目录";
             }
         }
-
+        
         // 5. 默认动画目录
         if (anim == 0) {
             anim = tryLoadFromDir(model, defaultAnimDir, animName);
@@ -154,17 +148,16 @@ public class MMDAnimManager {
                 loadedFrom = "默认目录";
             }
         }
-
+        
         // 记录加载结果
         if (anim != 0) {
             sub.put(animName, anim);
-            logger.info("加载动画 '{}' 成功，来源: {}", animName, loadedFrom);
         } else {
             if (warnedAnimations.add(animName)) {
                 logger.warn("未找到动画文件: {}", animName);
             }
         }
-
+        
         return anim;
     }
     
@@ -180,10 +173,12 @@ public class MMDAnimManager {
     }
     
     /**
-     * 根据映射配置加载动画，mappedFile 仅允许纯文件名（防止路径穿越）
+     * 根据映射配置加载动画
+     * mappedFile 仅允许纯文件名（禁止路径分隔符，防止穿越）
      */
     private static long tryLoadAnimation(IMMDModel model, String modelDir, 
                                           String mappedFile, String animName) {
+        // 安全检查：防止路径穿越
         if (mappedFile.contains("..") || mappedFile.contains("/") || mappedFile.contains("\\")) {
             logger.warn("动画映射文件名包含非法字符，已忽略: {} (槽位: {})", mappedFile, animName);
             return 0;
@@ -208,6 +203,7 @@ public class MMDAnimManager {
     
     /**
      * 清除指定模型的动画缓存（动画映射变更时调用）
+     * 下次 GetAnimModel 会重新按优先级加载
      */
     public static void invalidateAnimCache(IMMDModel model) {
         Map<String, Long> sub = animModel.get(model);
@@ -216,7 +212,6 @@ public class MMDAnimManager {
                 nf.DeleteAnimation(handle);
             }
             sub.clear();
-            logger.info("模型动画缓存已清除");
         }
     }
 
