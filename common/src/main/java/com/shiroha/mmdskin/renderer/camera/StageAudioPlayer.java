@@ -68,6 +68,16 @@ public class StageAudioPlayer {
         }
     }
 
+    public static void syncRemoteAudioPosition(UUID uuid, float seconds) {
+        StageAudioPlayer sap = REMOTE_PLAYERS.get(uuid);
+        if (sap != null && sap.isPlaying()) {
+            float current = sap.getPlaybackPosition();
+            if (Math.abs(current - seconds) > 0.15f) {
+                sap.setPlaybackPosition(seconds);
+            }
+        }
+    }
+
     /** 清理所有远程玩家的音频 */
     public static void cleanupAll() {
         REMOTE_PLAYERS.values().forEach(StageAudioPlayer::cleanup);
@@ -226,8 +236,6 @@ public class StageAudioPlayer {
         this.audioPath = filePath;
         this.initialized = true;
         
-        logger.info("[StageAudio] 加载成功: {} ({}s, {}Hz, {}ch)", 
-                    file.getName(), String.format("%.1f", durationSeconds), pcm.sampleRate, pcm.channels);
         return true;
     }
     
