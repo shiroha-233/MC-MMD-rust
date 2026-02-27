@@ -36,7 +36,6 @@ public class PlayerModelSyncManager {
      */
     public static void setNetworkBroadcaster(BiConsumer<UUID, String> broadcaster) {
         networkBroadcaster = broadcaster;
-        logger.info("玩家模型同步网络广播器已设置");
     }
     
     /**
@@ -45,9 +44,7 @@ public class PlayerModelSyncManager {
     public static void broadcastLocalModelSelection(UUID playerUUID, String modelName) {
         if (networkBroadcaster != null) {
             networkBroadcaster.accept(playerUUID, modelName);
-            logger.info("广播模型选择: {} -> {}", playerUUID, modelName);
         } else {
-            logger.debug("网络广播器未设置，跳过广播（单人模式）");
         }
     }
     
@@ -57,10 +54,8 @@ public class PlayerModelSyncManager {
     public static void onRemotePlayerModelReceived(UUID playerUUID, String modelName) {
         if (modelName == null || modelName.isEmpty()) {
             remotePlayerModels.remove(playerUUID);
-            logger.info("远程玩家 {} 清除模型选择", playerUUID);
         } else {
             remotePlayerModels.put(playerUUID, modelName);
-            logger.info("远程玩家 {} 模型选择: {}", playerUUID, modelName);
         }
     }
     
@@ -102,7 +97,6 @@ public class PlayerModelSyncManager {
     public static void onDisconnect() {
         int count = remotePlayerModels.size();
         remotePlayerModels.clear();
-        logger.info("已清理 {} 个远程玩家模型缓存", count);
     }
     
     /**

@@ -18,7 +18,6 @@ public class ModelSelectorNetworkHandler {
      */
     public static void setNetworkSender(Consumer<String> sender) {
         networkSender = sender;
-        logger.info("模型选择网络发送器已设置");
     }
 
     /**
