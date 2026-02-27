@@ -11,13 +11,21 @@ mod ffi {
     use std::os::raw::{c_float, c_int};
 
     #[repr(C)]
-    pub struct BW_World { _private: [u8; 0] }
+    pub struct BW_World {
+        _private: [u8; 0],
+    }
     #[repr(C)]
-    pub struct BW_Shape { _private: [u8; 0] }
+    pub struct BW_Shape {
+        _private: [u8; 0],
+    }
     #[repr(C)]
-    pub struct BW_RigidBody { _private: [u8; 0] }
+    pub struct BW_RigidBody {
+        _private: [u8; 0],
+    }
     #[repr(C)]
-    pub struct BW_Constraint { _private: [u8; 0] }
+    pub struct BW_Constraint {
+        _private: [u8; 0],
+    }
 
     /// C++ 分配计数器
     #[repr(C)]
@@ -52,12 +60,27 @@ mod ffi {
         // 物理世界
         pub fn bw_world_create(gx: c_float, gy: c_float, gz: c_float) -> *mut BW_World;
         pub fn bw_world_destroy(world: *mut BW_World);
-        pub fn bw_world_step(world: *mut BW_World, dt: c_float, max_substeps: c_int, fixed_dt: c_float);
+        pub fn bw_world_step(
+            world: *mut BW_World,
+            dt: c_float,
+            max_substeps: c_int,
+            fixed_dt: c_float,
+        );
         pub fn bw_world_set_gravity(world: *mut BW_World, x: c_float, y: c_float, z: c_float);
-        pub fn bw_world_add_rigid_body(world: *mut BW_World, rb: *mut BW_RigidBody, group: c_int, mask: c_int);
+        pub fn bw_world_add_rigid_body(
+            world: *mut BW_World,
+            rb: *mut BW_RigidBody,
+            group: c_int,
+            mask: c_int,
+        );
         pub fn bw_world_remove_rigid_body(world: *mut BW_World, rb: *mut BW_RigidBody);
-        pub fn bw_world_add_constraint(world: *mut BW_World, c: *mut BW_Constraint, disable_collision: bool);
+        pub fn bw_world_add_constraint(
+            world: *mut BW_World,
+            c: *mut BW_Constraint,
+            disable_collision: bool,
+        );
         pub fn bw_world_remove_constraint(world: *mut BW_World, c: *mut BW_Constraint);
+        pub fn bw_world_set_kinematic_filter(world: *mut BW_World, enabled: bool);
 
         // 碰撞形状
         pub fn bw_shape_sphere(radius: c_float) -> *mut BW_Shape;
@@ -70,12 +93,43 @@ mod ffi {
         pub fn bw_rigid_body_destroy(rb: *mut BW_RigidBody);
         pub fn bw_rigid_body_get_transform(rb: *mut BW_RigidBody, matrix4x4: *mut c_float);
         pub fn bw_rigid_body_set_transform(rb: *mut BW_RigidBody, matrix4x4: *const c_float);
-        pub fn bw_rigid_body_get_position(rb: *mut BW_RigidBody, x: *mut c_float, y: *mut c_float, z: *mut c_float);
-        pub fn bw_rigid_body_get_rotation(rb: *mut BW_RigidBody, x: *mut c_float, y: *mut c_float, z: *mut c_float, w: *mut c_float);
-        pub fn bw_rigid_body_set_linear_velocity(rb: *mut BW_RigidBody, x: c_float, y: c_float, z: c_float);
-        pub fn bw_rigid_body_set_angular_velocity(rb: *mut BW_RigidBody, x: c_float, y: c_float, z: c_float);
-        pub fn bw_rigid_body_get_linear_velocity(rb: *mut BW_RigidBody, x: *mut c_float, y: *mut c_float, z: *mut c_float);
-        pub fn bw_rigid_body_get_angular_velocity(rb: *mut BW_RigidBody, x: *mut c_float, y: *mut c_float, z: *mut c_float);
+        pub fn bw_rigid_body_get_position(
+            rb: *mut BW_RigidBody,
+            x: *mut c_float,
+            y: *mut c_float,
+            z: *mut c_float,
+        );
+        pub fn bw_rigid_body_get_rotation(
+            rb: *mut BW_RigidBody,
+            x: *mut c_float,
+            y: *mut c_float,
+            z: *mut c_float,
+            w: *mut c_float,
+        );
+        pub fn bw_rigid_body_set_linear_velocity(
+            rb: *mut BW_RigidBody,
+            x: c_float,
+            y: c_float,
+            z: c_float,
+        );
+        pub fn bw_rigid_body_set_angular_velocity(
+            rb: *mut BW_RigidBody,
+            x: c_float,
+            y: c_float,
+            z: c_float,
+        );
+        pub fn bw_rigid_body_get_linear_velocity(
+            rb: *mut BW_RigidBody,
+            x: *mut c_float,
+            y: *mut c_float,
+            z: *mut c_float,
+        );
+        pub fn bw_rigid_body_get_angular_velocity(
+            rb: *mut BW_RigidBody,
+            x: *mut c_float,
+            y: *mut c_float,
+            z: *mut c_float,
+        );
         pub fn bw_rigid_body_set_damping(rb: *mut BW_RigidBody, linear: c_float, angular: c_float);
         pub fn bw_rigid_body_set_friction(rb: *mut BW_RigidBody, friction: c_float);
         pub fn bw_rigid_body_set_restitution(rb: *mut BW_RigidBody, restitution: c_float);
@@ -84,24 +138,60 @@ mod ffi {
         pub fn bw_rigid_body_set_kinematic(rb: *mut BW_RigidBody, kinematic: bool);
         pub fn bw_rigid_body_get_mass(rb: *mut BW_RigidBody) -> c_float;
         pub fn bw_rigid_body_clear_forces(rb: *mut BW_RigidBody);
-        pub fn bw_rigid_body_apply_central_force(rb: *mut BW_RigidBody, x: c_float, y: c_float, z: c_float);
+        pub fn bw_rigid_body_apply_central_force(
+            rb: *mut BW_RigidBody,
+            x: c_float,
+            y: c_float,
+            z: c_float,
+        );
 
         // 6DOF 弹簧约束
         pub fn bw_6dof_spring_create(
-            a: *mut BW_RigidBody, b: *mut BW_RigidBody,
-            frame_a: *const c_float, frame_b: *const c_float,
+            a: *mut BW_RigidBody,
+            b: *mut BW_RigidBody,
+            frame_a: *const c_float,
+            frame_b: *const c_float,
             use_linear_ref_a: bool,
         ) -> *mut BW_Constraint;
         pub fn bw_constraint_destroy(c: *mut BW_Constraint);
-        pub fn bw_6dof_spring_set_linear_lower_limit(c: *mut BW_Constraint, x: c_float, y: c_float, z: c_float);
-        pub fn bw_6dof_spring_set_linear_upper_limit(c: *mut BW_Constraint, x: c_float, y: c_float, z: c_float);
-        pub fn bw_6dof_spring_set_angular_lower_limit(c: *mut BW_Constraint, x: c_float, y: c_float, z: c_float);
-        pub fn bw_6dof_spring_set_angular_upper_limit(c: *mut BW_Constraint, x: c_float, y: c_float, z: c_float);
+        pub fn bw_6dof_spring_set_linear_lower_limit(
+            c: *mut BW_Constraint,
+            x: c_float,
+            y: c_float,
+            z: c_float,
+        );
+        pub fn bw_6dof_spring_set_linear_upper_limit(
+            c: *mut BW_Constraint,
+            x: c_float,
+            y: c_float,
+            z: c_float,
+        );
+        pub fn bw_6dof_spring_set_angular_lower_limit(
+            c: *mut BW_Constraint,
+            x: c_float,
+            y: c_float,
+            z: c_float,
+        );
+        pub fn bw_6dof_spring_set_angular_upper_limit(
+            c: *mut BW_Constraint,
+            x: c_float,
+            y: c_float,
+            z: c_float,
+        );
         pub fn bw_6dof_spring_enable_spring(c: *mut BW_Constraint, index: c_int, on: bool);
-        pub fn bw_6dof_spring_set_stiffness(c: *mut BW_Constraint, index: c_int, stiffness: c_float);
+        pub fn bw_6dof_spring_set_stiffness(
+            c: *mut BW_Constraint,
+            index: c_int,
+            stiffness: c_float,
+        );
         pub fn bw_6dof_spring_set_damping(c: *mut BW_Constraint, index: c_int, damping: c_float);
         pub fn bw_6dof_spring_set_equilibrium_point(c: *mut BW_Constraint);
-        pub fn bw_6dof_spring_set_param(c: *mut BW_Constraint, param: c_int, value: c_float, axis: c_int);
+        pub fn bw_6dof_spring_set_param(
+            c: *mut BW_Constraint,
+            param: c_int,
+            value: c_float,
+            axis: c_int,
+        );
         pub fn bw_6dof_spring_use_frame_offset(c: *mut BW_Constraint, on: bool);
     }
 }
@@ -160,6 +250,10 @@ impl BulletWorld {
     pub fn remove_constraint(&self, constraint: &BulletConstraint) {
         unsafe { ffi::bw_world_remove_constraint(self.ptr, constraint.ptr) }
     }
+
+    pub fn set_kinematic_filter(&self, enabled: bool) {
+        unsafe { ffi::bw_world_set_kinematic_filter(self.ptr, enabled) }
+    }
 }
 
 impl Drop for BulletWorld {
@@ -178,19 +272,25 @@ unsafe impl Send for BulletShape {}
 impl BulletShape {
     pub fn sphere(radius: f32) -> Option<Self> {
         let ptr = unsafe { ffi::bw_shape_sphere(radius) };
-        if ptr.is_null() { return None; }
+        if ptr.is_null() {
+            return None;
+        }
         Some(Self { ptr })
     }
 
     pub fn r#box(hx: f32, hy: f32, hz: f32) -> Option<Self> {
         let ptr = unsafe { ffi::bw_shape_box(hx, hy, hz) };
-        if ptr.is_null() { return None; }
+        if ptr.is_null() {
+            return None;
+        }
         Some(Self { ptr })
     }
 
     pub fn capsule(radius: f32, height: f32) -> Option<Self> {
         let ptr = unsafe { ffi::bw_shape_capsule(radius, height) };
-        if ptr.is_null() { return None; }
+        if ptr.is_null() {
+            return None;
+        }
         Some(Self { ptr })
     }
 
@@ -355,8 +455,10 @@ impl BulletConstraint {
         let fb = mat4_to_col_major(frame_b);
         let ptr = unsafe {
             ffi::bw_6dof_spring_create(
-                rb_a.as_ptr(), rb_b.as_ptr(),
-                fa.as_ptr(), fb.as_ptr(),
+                rb_a.as_ptr(),
+                rb_b.as_ptr(),
+                fa.as_ptr(),
+                fb.as_ptr(),
                 use_linear_ref_a,
             )
         };

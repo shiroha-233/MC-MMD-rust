@@ -67,6 +67,7 @@ void bw_world_add_rigid_body(BW_World* world, BW_RigidBody* rb, int group, int m
 void bw_world_remove_rigid_body(BW_World* world, BW_RigidBody* rb);
 void bw_world_add_constraint(BW_World* world, BW_Constraint* c, bool disable_collision);
 void bw_world_remove_constraint(BW_World* world, BW_Constraint* c);
+void bw_world_set_kinematic_filter(BW_World* world, bool enabled);
 
 /* ===== 碰撞形状 ===== */
 BW_Shape* bw_shape_sphere(float radius);

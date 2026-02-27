@@ -1,14 +1,14 @@
 //! MMD 运行时模型
 
-use crate::animation::{VmdAnimation, AnimationLayerManager};
+use crate::animation::{AnimationLayerManager, VmdAnimation};
 use crate::morph::MorphManager;
 use crate::physics::MMDPhysics;
 use crate::skeleton::BoneManager;
 use glam::{Mat3, Mat4, Quat, Vec2, Vec3, Vec4};
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::{MmdMaterial, RuntimeVertex, SubMesh, VertexWeight};
@@ -62,43 +62,43 @@ pub struct MmdModel {
 
     // 动画层系统（支持多轨并行动画）
     animation_layer_manager: AnimationLayerManager,
-    
+
     // 头部旋转
     head_angle_x: f32,
     head_angle_y: f32,
     head_angle_z: f32,
-    
+
     // 眼球追踪（看向摄像头）
     eye_angle_x: f32,
     eye_angle_y: f32,
     eye_tracking_enabled: bool,
-    eye_bone_left: Option<usize>,   // 缓存左眼骨骼索引
-    eye_bone_right: Option<usize>,  // 缓存右眼骨骼索引
-    eye_max_angle: f32,             // 最大眼球角度（弧度）
-    
+    eye_bone_left: Option<usize>,  // 缓存左眼骨骼索引
+    eye_bone_right: Option<usize>, // 缓存右眼骨骼索引
+    eye_max_angle: f32,            // 最大眼球角度（弧度）
+
     // 自动眨眼
     auto_blink_enabled: bool,
-    blink_timer: f32,           // 当前计时器
-    blink_interval: f32,        // 眨眼间隔（秒）
-    blink_duration: f32,        // 眨眼持续时间（秒）
-    blink_phase: f32,           // 眨眼进度 0-1（0=督开, 0.5=闭眼, 1=督开）
-    is_blinking: bool,          // 是否正在眨眼
+    blink_timer: f32,                 // 当前计时器
+    blink_interval: f32,              // 眨眼间隔（秒）
+    blink_duration: f32,              // 眨眼持续时间（秒）
+    blink_phase: f32,                 // 眨眼进度 0-1（0=督开, 0.5=闭眼, 1=督开）
+    is_blinking: bool,                // 是否正在眨眼
     blink_morph_index: Option<usize>, // 缓存眨眼 Morph 索引
-    
+
     debug_logged: bool,
-    
+
     // 模型全局变换
     model_transform: Mat4,
-    
+
     // 物理系统
     physics: Option<MMDPhysics>,
     physics_enabled: bool,
     /// 骨骼变换缓冲区（避免每帧堆分配）
     physics_bone_transforms_buf: Vec<Mat4>,
-    
+
     // 材质可见性控制（用于脱外套等功能）
     material_visible: Vec<bool>,
-    
+
     // GPU 蒙皮数据缓冲区
     /// 骨骼索引（ivec4 格式，每顶点 4 个索引）
     bone_indices: Vec<i32>,
@@ -108,7 +108,7 @@ pub struct MmdModel {
     original_positions: Vec<f32>,
     /// 原始法线（未蒙皮，用于 GPU 蒙皮）
     original_normals: Vec<f32>,
-    
+
     // GPU Morph 数据缓冲区
     /// 顶点 Morph 偏移数据（密集格式：morph_count * vertex_count * 3）
     gpu_morph_offsets: Vec<f32>,
@@ -120,7 +120,7 @@ pub struct MmdModel {
     vertex_morph_count: usize,
     /// GPU Morph 数据是否已初始化
     gpu_morph_initialized: bool,
-    
+
     // GPU UV Morph 数据缓冲区
     /// UV Morph 偏移数据（密集格式：uv_morph_count * vertex_count * 2）
     gpu_uv_morph_offsets: Vec<f32>,
@@ -132,13 +132,16 @@ pub struct MmdModel {
     uv_morph_count: usize,
     /// GPU UV Morph 数据是否已初始化
     gpu_uv_morph_initialized: bool,
-    
+
+    /// Group/Flip Morph 递归展开后的有效权重缓冲区（每帧复用，避免分配）
+    effective_weights_buf: Vec<f32>,
+
     /// 材质 Morph 结果展平缓存（避免每帧分配）
     material_morph_results_flat_cache: Vec<f32>,
-    
+
     // VPD 骨骼姿势覆盖（骨骼索引 -> (位移, 旋转)）
     vpd_bone_overrides: HashMap<usize, (Vec3, Quat)>,
-    
+
     // ======== 第一人称模式 ========
     /// 第一人称模式是否启用
     first_person_enabled: bool,
@@ -154,7 +157,7 @@ pub struct MmdModel {
     eye_bone_index: Option<usize>,
     /// 左/右目的索引（用于取中点）
     eye_bone_pair: Option<(usize, usize)>,
-    
+
     // ======== 矩阵插值过渡 ========
     /// 缓存的蒙皮矩阵（过渡开始时的状态）
     transition_matrices: Vec<Mat4>,
@@ -196,11 +199,11 @@ impl MmdModel {
             eye_tracking_enabled: false,
             eye_bone_left: None,
             eye_bone_right: None,
-            eye_max_angle: 0.35,  // 默认约 20 度
+            eye_max_angle: 0.35, // 默认约 20 度
             auto_blink_enabled: false,
             blink_timer: 0.0,
-            blink_interval: 4.0,      // 默认 4 秒眨一次
-            blink_duration: 0.15,     // 眨眼持续 0.15 秒
+            blink_interval: 4.0,  // 默认 4 秒眨一次
+            blink_duration: 0.15, // 眨眼持续 0.15 秒
             blink_phase: 0.0,
             is_blinking: false,
             blink_morph_index: None,
@@ -224,6 +227,7 @@ impl MmdModel {
             uv_morph_indices: Vec::new(),
             uv_morph_count: 0,
             gpu_uv_morph_initialized: false,
+            effective_weights_buf: Vec::new(),
             material_morph_results_flat_cache: Vec::new(),
             vpd_bone_overrides: HashMap::new(),
             transition_matrices: Vec::new(),
@@ -259,26 +263,26 @@ impl MmdModel {
     pub fn submesh_count(&self) -> usize {
         self.submeshes.len()
     }
-    
+
     // ========== 材质可见性控制 ==========
-    
+
     /// 初始化材质可见性（默认全部可见）
     pub fn init_material_visibility(&mut self) {
         self.material_visible = vec![true; self.materials.len()];
     }
-    
+
     /// 获取材质是否可见
     pub fn is_material_visible(&self, index: usize) -> bool {
         self.material_visible.get(index).copied().unwrap_or(true)
     }
-    
+
     /// 设置材质可见性
     pub fn set_material_visible(&mut self, index: usize, visible: bool) {
         if index < self.material_visible.len() {
             self.material_visible[index] = visible;
         }
     }
-    
+
     /// 根据材质名称设置可见性（支持部分匹配）
     pub fn set_material_visible_by_name(&mut self, name: &str, visible: bool) -> usize {
         let mut count = 0;
@@ -292,26 +296,26 @@ impl MmdModel {
         }
         count
     }
-    
+
     /// 设置所有材质可见性
     pub fn set_all_materials_visible(&mut self, visible: bool) {
         for v in &mut self.material_visible {
             *v = visible;
         }
     }
-    
+
     /// 获取材质名称
     pub fn get_material_name(&self, index: usize) -> Option<&str> {
         self.materials.get(index).map(|m| m.name.as_str())
     }
-    
+
     /// 获取所有材质名称列表
     pub fn get_material_names(&self) -> Vec<String> {
         self.materials.iter().map(|m| m.name.clone()).collect()
     }
-    
+
     // ========== 第一人称模式 ==========
-    
+
     /// 初始化头部检测（模型加载后调用一次）
     /// 基于顶点位置判断：颈部骨骼 Y 坐标以上的子网格标记为头部
     pub fn init_head_detection(&mut self) {
@@ -319,7 +323,7 @@ impl MmdModel {
             return;
         }
         self.head_detection_initialized = true;
-        
+
         // 1. 查找头部骨骼（眼睛骨骼 fallback 用）
         let head_names = ["頭", "head", "Head", "あたま"];
         self.head_bone_index = None;
@@ -329,7 +333,7 @@ impl MmdModel {
                 break;
             }
         }
-        
+
         // 2. 确定颈部分界线 Y 坐标（优先颈部骨骼，fallback 到头部骨骼）
         let neck_names = ["首", "neck", "Neck"];
         let mut neck_y: Option<f32> = None;
@@ -337,7 +341,11 @@ impl MmdModel {
             if let Some(idx) = self.bone_manager.find_bone_by_name(name) {
                 if let Some(bone) = self.bone_manager.get_bone(idx) {
                     neck_y = Some(bone.initial_position.y);
-                    log::info!("第一人称分界线: 使用颈部骨骼 '{}' Y={:.2}", name, bone.initial_position.y);
+                    log::info!(
+                        "第一人称分界线: 使用颈部骨骼 '{}' Y={:.2}",
+                        name,
+                        bone.initial_position.y
+                    );
                 }
                 break;
             }
@@ -346,11 +354,14 @@ impl MmdModel {
             if let Some(idx) = self.head_bone_index {
                 if let Some(bone) = self.bone_manager.get_bone(idx) {
                     neck_y = Some(bone.initial_position.y);
-                    log::info!("第一人称分界线: 颈部骨骼未找到，fallback 到头部骨骼 Y={:.2}", bone.initial_position.y);
+                    log::info!(
+                        "第一人称分界线: 颈部骨骼未找到，fallback 到头部骨骼 Y={:.2}",
+                        bone.initial_position.y
+                    );
                 }
             }
         }
-        
+
         let cutoff_y = match neck_y {
             Some(y) => y,
             None => {
@@ -359,22 +370,22 @@ impl MmdModel {
                 return;
             }
         };
-        
+
         // 3. 对每个子网格，按顶点位置判断是否在脖子以上
         self.head_submesh_flags = Vec::with_capacity(self.submeshes.len());
-        
+
         for submesh in &self.submeshes {
             let begin = submesh.begin_index as usize;
             let count = submesh.index_count as usize;
-            
+
             if count == 0 {
                 self.head_submesh_flags.push(false);
                 continue;
             }
-            
+
             let mut above_count: usize = 0;
             let mut total_count: usize = 0;
-            
+
             for idx_offset in 0..count {
                 let index_pos = begin + idx_offset;
                 if index_pos >= self.indices.len() {
@@ -384,35 +395,49 @@ impl MmdModel {
                 if vertex_idx >= self.vertices.len() {
                     continue;
                 }
-                
+
                 total_count += 1;
                 if self.vertices[vertex_idx].position.y >= cutoff_y {
                     above_count += 1;
                 }
             }
-            
-            let ratio = if total_count > 0 { above_count as f32 / total_count as f32 } else { 0.0 };
+
+            let ratio = if total_count > 0 {
+                above_count as f32 / total_count as f32
+            } else {
+                0.0
+            };
             let is_head = ratio > 0.5;
             self.head_submesh_flags.push(is_head);
-            
-            let mat_name = self.materials.get(submesh.material_id as usize)
+
+            let mat_name = self
+                .materials
+                .get(submesh.material_id as usize)
                 .map(|m| m.name.as_str())
                 .unwrap_or("?");
             if is_head {
-                log::info!("  [HEAD] submesh={}, material={}, 脖子以上顶点={:.1}%", 
-                    self.head_submesh_flags.len() - 1, mat_name, ratio * 100.0);
+                log::info!(
+                    "  [HEAD] submesh={}, material={}, 脖子以上顶点={:.1}%",
+                    self.head_submesh_flags.len() - 1,
+                    mat_name,
+                    ratio * 100.0
+                );
             } else if ratio > 0.1 {
-                log::info!("  [BODY] submesh={}, material={}, 脖子以上顶点={:.1}%", 
-                    self.head_submesh_flags.len() - 1, mat_name, ratio * 100.0);
+                log::info!(
+                    "  [BODY] submesh={}, material={}, 脖子以上顶点={:.1}%",
+                    self.head_submesh_flags.len() - 1,
+                    mat_name,
+                    ratio * 100.0
+                );
             }
         }
-        
+
         // 4. 查找眼睛骨骼（用于第一人称相机位置）
         //    优先级：両目 > 目 > 左目+右目中点 > 头部 fallback
         let single_eye_names = ["両目", "目", "eye", "Eye", "Eyes", "eyes"];
         self.eye_bone_index = None;
         self.eye_bone_pair = None;
-        
+
         for name in &single_eye_names {
             if let Some(idx) = self.bone_manager.find_bone_by_name(name) {
                 self.eye_bone_index = Some(idx);
@@ -420,7 +445,7 @@ impl MmdModel {
                 break;
             }
         }
-        
+
         if self.eye_bone_index.is_none() {
             // 尝试左目+右目
             let left_names = ["左目", "eye_L", "Eye_L", "LeftEye"];
@@ -455,52 +480,64 @@ impl MmdModel {
             }
         }
     }
-    
+
     /// 设置第一人称模式
     /// 启用时隐藏头部相关子网格的材质，禁用时恢复
     pub fn set_first_person_mode(&mut self, enabled: bool) {
         if self.first_person_enabled == enabled {
             return;
         }
-        
+
         // 确保头部检测已初始化
         if !self.head_detection_initialized {
             self.init_head_detection();
         }
-        
+
         self.first_person_enabled = enabled;
-        
+
         if enabled {
             // 备份当前材质可见性
             self.material_visible_backup = self.material_visible.clone();
-            
+
             // 收集非头部子网格使用的材质 ID（共享材质不能隐藏）
-            let mut body_material_ids: std::collections::HashSet<usize> = std::collections::HashSet::new();
+            let mut body_material_ids: std::collections::HashSet<usize> =
+                std::collections::HashSet::new();
             for (i, submesh) in self.submeshes.iter().enumerate() {
                 let is_head = i < self.head_submesh_flags.len() && self.head_submesh_flags[i];
                 if !is_head {
                     body_material_ids.insert(submesh.material_id as usize);
                 }
             }
-            
+
             // 仅隐藏只被头部子网格使用的材质
             let mut hidden_count = 0;
             for (i, submesh) in self.submeshes.iter().enumerate() {
                 if i < self.head_submesh_flags.len() && self.head_submesh_flags[i] {
                     let mat_id = submesh.material_id as usize;
-                    let mat_name = self.materials.get(mat_id)
-                        .map(|m| m.name.as_str()).unwrap_or("?");
-                    if mat_id < self.material_visible.len() && !body_material_ids.contains(&mat_id) {
+                    let mat_name = self
+                        .materials
+                        .get(mat_id)
+                        .map(|m| m.name.as_str())
+                        .unwrap_or("?");
+                    if mat_id < self.material_visible.len() && !body_material_ids.contains(&mat_id)
+                    {
                         self.material_visible[mat_id] = false;
                         hidden_count += 1;
                         log::info!("  第一人称隐藏材质: [{}] {}", mat_id, mat_name);
                     } else if body_material_ids.contains(&mat_id) {
-                        log::info!("  第一人称跳过共享材质: [{}] {} (身体也在使用)", mat_id, mat_name);
+                        log::info!(
+                            "  第一人称跳过共享材质: [{}] {} (身体也在使用)",
+                            mat_id,
+                            mat_name
+                        );
                     }
                 }
             }
-            log::info!("第一人称模式启用: 隐藏 {} 个材质, 头部子网格 {} 个", 
-                hidden_count, self.head_submesh_flags.iter().filter(|&&x| x).count());
+            log::info!(
+                "第一人称模式启用: 隐藏 {} 个材质, 头部子网格 {} 个",
+                hidden_count,
+                self.head_submesh_flags.iter().filter(|&&x| x).count()
+            );
         } else {
             // 恢复材质可见性
             if !self.material_visible_backup.is_empty() {
@@ -509,12 +546,12 @@ impl MmdModel {
             }
         }
     }
-    
+
     /// 获取第一人称模式是否启用
     pub fn is_first_person_enabled(&self) -> bool {
         self.first_person_enabled
     }
-    
+
     /// 获取头部骨骼的初始 Y 坐标（静态休息姿势，用于相机高度）
     /// 返回值为模型局部空间的 Y 坐标
     pub fn get_head_bone_rest_position_y(&mut self) -> f32 {
@@ -522,7 +559,7 @@ impl MmdModel {
         if !self.head_detection_initialized {
             self.init_head_detection();
         }
-        
+
         match self.head_bone_index {
             Some(idx) => {
                 if let Some(bone) = self.bone_manager.get_bone(idx) {
@@ -534,7 +571,7 @@ impl MmdModel {
             None => 0.0,
         }
     }
-    
+
     /// 获取眼睛骨骼的当前动画位置（模型局部空间）
     /// 每帧调用，返回经过动画/物理更新后的实时位置 [x, y, z]
     /// 用于第一人称模式下的相机跟踪
@@ -542,25 +579,31 @@ impl MmdModel {
         if !self.head_detection_initialized {
             self.init_head_detection();
         }
-        
+
         // 优先使用左右眼中点
         if let Some((left, right)) = self.eye_bone_pair {
-            let left_pos = self.bone_manager.get_bone(left)
+            let left_pos = self
+                .bone_manager
+                .get_bone(left)
                 .map(|b| b.position())
                 .unwrap_or(Vec3::ZERO);
-            let right_pos = self.bone_manager.get_bone(right)
+            let right_pos = self
+                .bone_manager
+                .get_bone(right)
                 .map(|b| b.position())
                 .unwrap_or(Vec3::ZERO);
             return (left_pos + right_pos) * 0.5;
         }
-        
+
         // 单一眼睛骨骼
         if let Some(idx) = self.eye_bone_index {
-            return self.bone_manager.get_bone(idx)
+            return self
+                .bone_manager
+                .get_bone(idx)
                 .map(|b| b.position())
                 .unwrap_or(Vec3::ZERO);
         }
-        
+
         Vec3::ZERO
     }
 
@@ -591,7 +634,7 @@ impl MmdModel {
         // 应用所有 Morph 变形（顶点/骨骼/材质/UV/Group）
         self.morph_manager
             .apply_morphs(&mut self.bone_manager, &mut self.update_positions);
-        
+
         // 将 UV Morph 偏移应用到 UV 缓冲区
         let uv_deltas = self.morph_manager.get_uv_morph_deltas();
         if !uv_deltas.is_empty() {
@@ -623,7 +666,7 @@ impl MmdModel {
         if self.update_uvs_raw.len() != self.update_uvs.len() * 2 {
             self.update_uvs_raw.resize(self.update_uvs.len() * 2, 0.0);
         }
-        
+
         // UV 拷贝（并行）
         self.update_uvs_raw
             .par_chunks_mut(2)
@@ -636,13 +679,13 @@ impl MmdModel {
         // 并行蒙皮计算
         let vertices = &self.vertices;
         let weights = &self.weights;
-        
+
         // 将输出切片分块，每个顶点对应 3 个 f32
         let pos_raw = &mut self.update_positions_raw;
         let norm_raw = &mut self.update_normals_raw;
         let positions = &mut self.update_positions;
         let normals = &mut self.update_normals;
-        
+
         // 并行计算所有顶点（使用已应用 Morph 的 update_positions）
         positions
             .par_iter_mut()
@@ -651,26 +694,28 @@ impl MmdModel {
             .zip(norm_raw.par_chunks_mut(3))
             .zip(vertices.par_iter())
             .zip(weights.par_iter())
-            .for_each(|(((((pos_out, norm_out), pos_chunk), norm_chunk), vertex), weight)| {
-                // 使用 pos_out（即 update_positions，已应用 Morph）作为蒙皮输入
-                let morph_position = *pos_out;
-                let (pos, norm) = compute_vertex_skinning(
-                    morph_position,  // 使用已应用 Morph 的位置
-                    vertex.normal,
-                    weight,
-                    &bone_matrices,
-                );
-                
-                *pos_out = pos;
-                *norm_out = norm;
-                
-                pos_chunk[0] = pos.x;
-                pos_chunk[1] = pos.y;
-                pos_chunk[2] = pos.z;
-                norm_chunk[0] = norm.x;
-                norm_chunk[1] = norm.y;
-                norm_chunk[2] = norm.z;
-            });
+            .for_each(
+                |(((((pos_out, norm_out), pos_chunk), norm_chunk), vertex), weight)| {
+                    // 使用 pos_out（即 update_positions，已应用 Morph）作为蒙皮输入
+                    let morph_position = *pos_out;
+                    let (pos, norm) = compute_vertex_skinning(
+                        morph_position, // 使用已应用 Morph 的位置
+                        vertex.normal,
+                        weight,
+                        &bone_matrices,
+                    );
+
+                    *pos_out = pos;
+                    *norm_out = norm;
+
+                    pos_chunk[0] = pos.x;
+                    pos_chunk[1] = pos.y;
+                    pos_chunk[2] = pos.z;
+                    norm_chunk[0] = norm.x;
+                    norm_chunk[1] = norm.y;
+                    norm_chunk[2] = norm.z;
+                },
+            );
 
         // 调试日志（只在首次执行）
         if !self.debug_logged {
@@ -717,8 +762,9 @@ impl MmdModel {
                 self.end_animation();
             }
         }
-        
-        self.animation_layer_manager.set_layer_animation(layer_id, animation);
+
+        self.animation_layer_manager
+            .set_layer_animation(layer_id, animation);
     }
 
     /// 播放指定层的动画
@@ -743,12 +789,14 @@ impl MmdModel {
 
     /// 设置层权重
     pub fn set_layer_weight(&mut self, layer_id: usize, weight: f32) {
-        self.animation_layer_manager.set_layer_weight(layer_id, weight);
+        self.animation_layer_manager
+            .set_layer_weight(layer_id, weight);
     }
 
     /// 设置层播放速度
     pub fn set_layer_speed(&mut self, layer_id: usize, speed: f32) {
-        self.animation_layer_manager.set_layer_speed(layer_id, speed);
+        self.animation_layer_manager
+            .set_layer_speed(layer_id, speed);
     }
 
     /// 跳转到指定帧
@@ -758,29 +806,36 @@ impl MmdModel {
 
     /// 设置层淡入淡出时间
     pub fn set_layer_fade_times(&mut self, layer_id: usize, fade_in: f32, fade_out: f32) {
-        self.animation_layer_manager.set_layer_fade_times(layer_id, fade_in, fade_out);
+        self.animation_layer_manager
+            .set_layer_fade_times(layer_id, fade_in, fade_out);
     }
-    
+
     /// 带过渡地切换层动画（矩阵插值过渡）
-    /// 
+    ///
     /// 从当前骨骼姿态平滑过渡到新动画的第一帧，避免动作切换时的突兀感。
-    /// 
+    ///
     /// # 参数
     /// - `layer_id`: 层 ID
     /// - `animation`: 新动画
     /// - `transition_time`: 过渡时间（秒），推荐 0.2 ~ 0.5 秒
-    pub fn transition_layer_to(&mut self, layer_id: usize, animation: Option<Arc<VmdAnimation>>, transition_time: f32) {
+    pub fn transition_layer_to(
+        &mut self,
+        layer_id: usize,
+        animation: Option<Arc<VmdAnimation>>,
+        transition_time: f32,
+    ) {
         if transition_time > 0.0 {
             self.transition_matrices = self.bone_manager.get_skinning_matrices().to_vec();
             self.transition_duration = transition_time;
             self.transition_progress = 0.0;
             self.is_transitioning = true;
         }
-        
-        self.animation_layer_manager.set_layer_animation(layer_id, animation);
+
+        self.animation_layer_manager
+            .set_layer_animation(layer_id, animation);
         self.animation_layer_manager.play_layer(layer_id);
     }
-    
+
     /// 获取指定层的最大帧数
     pub fn get_layer_max_frame(&self, layer_id: usize) -> u32 {
         self.animation_layer_manager
@@ -806,55 +861,53 @@ impl MmdModel {
         self.begin_animation();
 
         // 评估所有层并混合结果
-        self.animation_layer_manager.evaluate_normalized(
-            &mut self.bone_manager,
-            &mut self.morph_manager,
-        );
+        self.animation_layer_manager
+            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager);
 
         // 应用 VPD 骨骼姿势覆盖（在动画评估后）
         self.apply_vpd_bone_overrides();
-        
+
         // 自动眨眼
         self.update_auto_blink(elapsed);
 
         self.apply_head_rotation();
         self.update_morph_animation();
-        
+
         // 骨骼更新（物理前）
         self.update_node_animation(false);
-        
+
         // 物理更新
         self.update_physics(elapsed);
-        
+
         // 骨骼更新（物理后）
         self.update_node_animation(true);
-        
+
         // 清除物理骨骼保护（允许下一帧重新计算）
         self.end_physics_update();
 
         self.end_animation();
-        
+
         // 应用矩阵插值过渡
         self.apply_transition_blend(elapsed);
-        
+
         self.update();
     }
-    
+
     /// 应用矩阵插值过渡
     fn apply_transition_blend(&mut self, elapsed: f32) {
         if !self.is_transitioning {
             return;
         }
-        
+
         // 检查过渡矩阵是否有效
         if self.transition_matrices.is_empty() {
             self.is_transitioning = false;
             return;
         }
-        
+
         // 更新过渡进度
         self.transition_progress += elapsed / self.transition_duration;
-        
+
         if self.transition_progress >= 1.0 {
             // 过渡完成，不再修改矩阵
             self.transition_progress = 1.0;
@@ -862,26 +915,26 @@ impl MmdModel {
             self.transition_matrices.clear();
             return;
         }
-        
+
         // 平滑过渡曲线 (smoothstep)
         let t = self.transition_progress;
         let smooth_t = t * t * (3.0 - 2.0 * t);
-        
+
         // 先复制当前蒙皮矩阵（避免借用冲突）
         let new_matrices: Vec<Mat4> = self.bone_manager.get_skinning_matrices().to_vec();
         let bone_count = self.transition_matrices.len().min(new_matrices.len());
-        
+
         for i in 0..bone_count {
             let old_mat = self.transition_matrices[i];
             let new_mat = new_matrices[i];
-            
+
             // 简单的矩阵线性插值（LERP），避免分解失败导致的拉扯
             // 对于蒙皮矩阵，直接插值通常比分解更稳定
             let blended_mat = Self::lerp_matrix(old_mat, new_mat, smooth_t);
             self.bone_manager.set_skinning_matrix(i, blended_mat);
         }
     }
-    
+
     /// 矩阵线性插值
     fn lerp_matrix(a: Mat4, b: Mat4, t: f32) -> Mat4 {
         // 分量线性插值
@@ -918,23 +971,23 @@ impl MmdModel {
                 break;
             }
         }
-        
+
         // 应用眼球追踪
         self.apply_eye_rotation();
     }
-    
+
     /// 设置眼球追踪角度（会自动限制在最大角度内）
     pub fn set_eye_angle(&mut self, x: f32, y: f32) {
         // 限制在最大角度范围内
         self.eye_angle_x = x.clamp(-self.eye_max_angle, self.eye_max_angle);
         self.eye_angle_y = y.clamp(-self.eye_max_angle, self.eye_max_angle);
     }
-    
+
     /// 设置眼球最大转动角度（弧度）
     pub fn set_eye_max_angle(&mut self, max_angle: f32) {
         self.eye_max_angle = max_angle.clamp(0.1, 1.0); // 约 5.7° - 57°
     }
-    
+
     /// 启用/禁用眼球追踪
     pub fn set_eye_tracking_enabled(&mut self, enabled: bool) {
         self.eye_tracking_enabled = enabled;
@@ -943,24 +996,34 @@ impl MmdModel {
             self.find_eye_bones();
         }
     }
-    
+
     /// 获取眼球追踪是否启用
     pub fn is_eye_tracking_enabled(&self) -> bool {
         self.eye_tracking_enabled
     }
-    
+
     /// 查找眼睛骨骼并缓存索引
     fn find_eye_bones(&mut self) {
         // 扩展的眼睛骨骼名称列表
         let left_eye_names = [
-            "左目", "eye_L", "Eye_L", "LeftEye", "left_eye", "Left_Eye",
-            "eyeL", "EyeL", "左眼", "L_Eye", "eye.L", "Eye.L"
+            "左目", "eye_L", "Eye_L", "LeftEye", "left_eye", "Left_Eye", "eyeL", "EyeL", "左眼",
+            "L_Eye", "eye.L", "Eye.L",
         ];
         let right_eye_names = [
-            "右目", "eye_R", "Eye_R", "RightEye", "right_eye", "Right_Eye",
-            "eyeR", "EyeR", "右眼", "R_Eye", "eye.R", "Eye.R"
+            "右目",
+            "eye_R",
+            "Eye_R",
+            "RightEye",
+            "right_eye",
+            "Right_Eye",
+            "eyeR",
+            "EyeR",
+            "右眼",
+            "R_Eye",
+            "eye.R",
+            "Eye.R",
         ];
-        
+
         // 查找左眼
         self.eye_bone_left = None;
         for name in &left_eye_names {
@@ -969,7 +1032,7 @@ impl MmdModel {
                 break;
             }
         }
-        
+
         // 查找右眼
         self.eye_bone_right = None;
         for name in &right_eye_names {
@@ -979,43 +1042,39 @@ impl MmdModel {
             }
         }
     }
-    
+
     /// 应用眼球旋转到骨骼（左目、右目）
     fn apply_eye_rotation(&mut self) {
         if !self.eye_tracking_enabled {
             return;
         }
-        
+
         // 使用缓存的骨骼索引
         let left_idx = self.eye_bone_left;
         let right_idx = self.eye_bone_right;
-        
+
         if left_idx.is_none() && right_idx.is_none() {
             return;
         }
-        
+
         // 眼球旋转（上下左右看）
         // 直接使用眼球追踪角度覆盖动画旋转，确保实时响应
-        let rotation = glam::Quat::from_euler(
-            glam::EulerRot::XYZ,
-            self.eye_angle_x,
-            self.eye_angle_y,
-            0.0,
-        );
-        
+        let rotation =
+            glam::Quat::from_euler(glam::EulerRot::XYZ, self.eye_angle_x, self.eye_angle_y, 0.0);
+
         // 在动画旋转基础上叠加眼球追踪旋转
         if let Some(idx) = left_idx {
             self.bone_manager.add_bone_rotation(idx, rotation);
         }
-        
+
         // 应用到右眼
         if let Some(idx) = right_idx {
             self.bone_manager.add_bone_rotation(idx, rotation);
         }
     }
-    
+
     // ========== 自动眨眼 ==========
-    
+
     /// 启用/禁用自动眨眼
     pub fn set_auto_blink_enabled(&mut self, enabled: bool) {
         self.auto_blink_enabled = enabled;
@@ -1026,23 +1085,31 @@ impl MmdModel {
             self.blink_timer = rand_float() * self.blink_interval;
         }
     }
-    
+
     /// 获取自动眨眼是否启用
     pub fn is_auto_blink_enabled(&self) -> bool {
         self.auto_blink_enabled
     }
-    
+
     /// 设置眨眼参数
     pub fn set_blink_params(&mut self, interval: f32, duration: f32) {
         self.blink_interval = interval.max(0.5); // 最小 0.5 秒间隔
         self.blink_duration = duration.clamp(0.05, 0.5); // 0.05-0.5 秒
     }
-    
+
     /// 查找眨眼 Morph 索引
     fn find_blink_morph(&mut self) {
         // 常见眨眼 Morph 名称
-        let blink_names = ["まばたき", "眨眼", "blink", "Blink", "まばたき両目", "ウィンク", "wink"];
-        
+        let blink_names = [
+            "まばたき",
+            "眨眼",
+            "blink",
+            "Blink",
+            "まばたき両目",
+            "ウィンク",
+            "wink",
+        ];
+
         for name in &blink_names {
             if let Some(idx) = self.morph_manager.find_morph_by_name(name) {
                 self.blink_morph_index = Some(idx);
@@ -1051,25 +1118,25 @@ impl MmdModel {
         }
         self.blink_morph_index = None;
     }
-    
+
     /// 更新自动眨眼（每帧调用）
     /// 返回是否需要同步 GPU Morph 权重
     fn update_auto_blink(&mut self, delta_time: f32) -> bool {
         if !self.auto_blink_enabled {
             return false;
         }
-        
+
         let morph_idx = match self.blink_morph_index {
             Some(idx) => idx,
             None => return false,
         };
-        
+
         let mut needs_sync = false;
-        
+
         if self.is_blinking {
             // 正在眨眼，更新进度
             self.blink_phase += delta_time / self.blink_duration;
-            
+
             if self.blink_phase >= 1.0 {
                 // 眨眼结束
                 self.is_blinking = false;
@@ -1087,22 +1154,22 @@ impl MmdModel {
         } else {
             // 等待下次眨眼
             self.blink_timer -= delta_time;
-            
+
             if self.blink_timer <= 0.0 {
                 // 开始眨眼
                 self.is_blinking = true;
                 self.blink_phase = 0.0;
             }
         }
-        
+
         needs_sync
     }
-    
+
     /// 设置模型全局变换
     pub fn set_model_transform(&mut self, transform: Mat4) {
         self.model_transform = transform;
     }
-    
+
     /// 设置模型位置和朝向（用于惯性计算）
     /// 位置用于计算速度，yaw 用于将世界速度转换到模型局部空间
     pub fn set_model_position_and_yaw(&mut self, x: f32, y: f32, z: f32, yaw: f32) {
@@ -1117,7 +1184,7 @@ impl MmdModel {
             Vec4::new(x, y, z, 1.0),
         );
     }
-    
+
     /// 获取模型全局变换
     pub fn model_transform(&self) -> Mat4 {
         self.model_transform
@@ -1164,9 +1231,9 @@ impl MmdModel {
     pub fn get_indices_ptr(&self) -> *const u32 {
         self.indices.as_ptr()
     }
-    
+
     // ========== 批量子网格元数据（G3 优化）==========
-    
+
     /// 批量获取所有子网格的渲染元数据，避免 Java 侧逐子网格 JNI 调用
     ///
     /// 输出布局（每子网格 20 字节）：
@@ -1185,19 +1252,27 @@ impl MmdModel {
         if output.len() < count * STRIDE {
             return 0;
         }
-        
+
         for (i, submesh) in self.submeshes.iter().enumerate() {
             let mat_id = submesh.material_id as i32;
             let begin = submesh.begin_index as i32;
             let vert_count = submesh.index_count as i32;
-            let alpha = self.materials.get(submesh.material_id as usize)
+            let alpha = self
+                .materials
+                .get(submesh.material_id as usize)
                 .map(|m| m.diffuse.w)
                 .unwrap_or(1.0f32);
-            let visible: u8 = if self.is_material_visible(submesh.material_id as usize) { 1 } else { 0 };
-            let both_face: u8 = self.materials.get(submesh.material_id as usize)
+            let visible: u8 = if self.is_material_visible(submesh.material_id as usize) {
+                1
+            } else {
+                0
+            };
+            let both_face: u8 = self
+                .materials
+                .get(submesh.material_id as usize)
                 .map(|m| if m.is_double_sided() { 1u8 } else { 0u8 })
                 .unwrap_or(0u8);
-            
+
             unsafe {
                 let p = output.as_mut_ptr().add(i * STRIDE);
                 (p as *mut i32).write_unaligned(mat_id);
@@ -1209,12 +1284,12 @@ impl MmdModel {
                 // padding bytes 18-19 left as-is
             }
         }
-        
+
         count
     }
-    
+
     // ========== NativeRender MC 顶点构建（P2-9 优化）==========
-    
+
     /// 构建 MC NEW_ENTITY 格式的交错顶点数据（含矩阵变换）
     ///
     /// 将蒙皮后的 SoA 数据（分离的 pos/nor/uv 数组）按索引展开，
@@ -1240,26 +1315,27 @@ impl MmdModel {
         if sub_mesh_index >= self.submeshes.len() {
             return 0;
         }
-        
+
         let submesh = &self.submeshes[sub_mesh_index];
         let begin = submesh.begin_index as usize;
         let count = submesh.index_count as usize;
         let vertex_count = self.update_positions_raw.len() / 3;
-        
+
         const STRIDE: usize = 36;
         if output.len() < count * STRIDE {
             log::warn!(
                 "BuildMCVertexBuffer: 输出缓冲区不足 (需要 {} 字节, 实际 {} 字节)",
-                count * STRIDE, output.len()
+                count * STRIDE,
+                output.len()
             );
             return 0;
         }
-        
+
         let positions = &self.update_positions_raw;
         let normals = &self.update_normals_raw;
         let uvs = &self.update_uvs_raw;
         let indices = &self.indices;
-        
+
         let mut written: usize = 0;
         for i in 0..count {
             let global_idx = begin + i;
@@ -1276,25 +1352,25 @@ impl MmdModel {
                 written += 1;
                 continue;
             }
-            
+
             let out_offset = written * STRIDE;
-            
+
             // 读取蒙皮后的位置并应用 pose 矩阵变换
             let px = positions[idx * 3];
             let py = positions[idx * 3 + 1];
             let pz = positions[idx * 3 + 2];
             let pos = pose_matrix.transform_point3(Vec3::new(px, py, pz));
-            
+
             // 读取蒙皮后的法线并应用 normal 矩阵变换
             let nx = normals[idx * 3];
             let ny = normals[idx * 3 + 1];
             let nz = normals[idx * 3 + 2];
             let nor = (*normal_matrix * Vec3::new(nx, ny, nz)).normalize_or_zero();
-            
+
             // 读取 UV
             let u = uvs[idx * 2];
             let v = uvs[idx * 2 + 1];
-            
+
             // 写入交错顶点数据（使用 unsafe 指针写入，避免逐字节 copy_from_slice 开销）
             unsafe {
                 let p = output.as_mut_ptr().add(out_offset);
@@ -1319,20 +1395,20 @@ impl MmdModel {
             }
             written += 1;
         }
-        
+
         written
     }
-    
+
     // ========== GPU 蒙皮相关方法 ==========
-    
+
     /// 初始化 GPU 蒙皮数据（模型加载后调用）
     pub fn init_gpu_skinning_data(&mut self) {
         let vertex_count = self.vertices.len();
-        
+
         // 初始化骨骼索引和权重缓冲区（每顶点 4 个）
         self.bone_indices = vec![-1; vertex_count * 4];
         self.bone_weights = vec![0.0; vertex_count * 4];
-        
+
         // 从权重数据填充
         for (i, weight) in self.weights.iter().enumerate() {
             let base = i * 4;
@@ -1368,11 +1444,11 @@ impl MmdModel {
                 }
             }
         }
-        
+
         // 初始化原始顶点数据（未蒙皮）
         self.original_positions = Vec::with_capacity(vertex_count * 3);
         self.original_normals = Vec::with_capacity(vertex_count * 3);
-        
+
         for vertex in &self.vertices {
             self.original_positions.push(vertex.position.x);
             self.original_positions.push(vertex.position.y);
@@ -1381,22 +1457,22 @@ impl MmdModel {
             self.original_normals.push(vertex.normal.y);
             self.original_normals.push(vertex.normal.z);
         }
-        
+
         // 调试：检查骨骼索引范围和权重
         let bone_count = self.bone_manager.bone_count();
         let mut max_bone_idx = -1i32;
         let mut invalid_idx_count = 0usize;
         let mut zero_weight_count = 0usize;
-        
+
         for i in 0..vertex_count {
             let base = i * 4;
             let mut total_weight = 0.0f32;
             let mut valid_bones = 0;
-            
+
             for j in 0..4 {
                 let idx = self.bone_indices[base + j];
                 let weight = self.bone_weights[base + j];
-                
+
                 if idx > max_bone_idx {
                     max_bone_idx = idx;
                 }
@@ -1407,43 +1483,51 @@ impl MmdModel {
                     invalid_idx_count += 1;
                 }
             }
-            
+
             if valid_bones > 0 && total_weight < 0.001 {
                 zero_weight_count += 1;
             }
         }
-        
+
         if invalid_idx_count > 0 {
-            log::warn!("GPU 蒙皮: 发现 {} 个无效骨骼索引 (>= {})", invalid_idx_count, bone_count);
+            log::warn!(
+                "GPU 蒙皮: 发现 {} 个无效骨骼索引 (>= {})",
+                invalid_idx_count,
+                bone_count
+            );
         }
         if zero_weight_count > 0 {
             log::warn!("GPU 蒙皮: 发现 {} 个顶点权重为0", zero_weight_count);
         }
-        
-        log::info!("GPU 蒙皮数据初始化完成: {} 顶点, {} 骨骼, 最大骨骼索引: {}", 
-            vertex_count, bone_count, max_bone_idx);
+
+        log::info!(
+            "GPU 蒙皮数据初始化完成: {} 顶点, {} 骨骼, 最大骨骼索引: {}",
+            vertex_count,
+            bone_count,
+            max_bone_idx
+        );
     }
-    
+
     /// 获取骨骼索引数据指针
     pub fn get_bone_indices_ptr(&self) -> *const i32 {
         self.bone_indices.as_ptr()
     }
-    
+
     /// 获取骨骼索引数据引用
     pub fn get_bone_indices(&self) -> &[i32] {
         &self.bone_indices
     }
-    
+
     /// 获取骨骼权重数据指针
     pub fn get_bone_weights_ptr(&self) -> *const f32 {
         self.bone_weights.as_ptr()
     }
-    
+
     /// 获取骨骼权重数据引用
     pub fn get_bone_weights(&self) -> &[f32] {
         &self.bone_weights
     }
-    
+
     /// 获取物理系统动态骨骼数量
     pub fn get_dynamic_bone_count(&self) -> usize {
         if let Some(ref physics) = self.physics {
@@ -1452,53 +1536,54 @@ impl MmdModel {
             0
         }
     }
-    
+
     /// 获取原始顶点位置数据指针
     pub fn get_original_positions_ptr(&self) -> *const f32 {
         self.original_positions.as_ptr()
     }
-    
+
     /// 获取原始法线数据指针
     pub fn get_original_normals_ptr(&self) -> *const f32 {
         self.original_normals.as_ptr()
     }
-    
-    // ========== GPU Morph 相关方法 ==========
-    
-    /// 初始化 GPU Morph 数据
-    /// 将稀疏的顶点 Morph 偏移转换为密集格式，供 GPU Compute Shader 使用
+
+    // ========== GPU Morph ==========
+
+    /// 初始化 GPU 顶点 Morph 数据（稀疏→密集格式）
     pub fn init_gpu_morph_data(&mut self) {
         if self.gpu_morph_initialized {
             return;
         }
-        
+
         let vertex_count = self.vertices.len();
-        
+
         // 收集所有顶点类型的 Morph 索引
         self.vertex_morph_indices = (0..self.morph_manager.morph_count())
             .filter_map(|i| {
                 let morph = self.morph_manager.get_morph(i)?;
-                if morph.morph_type == crate::morph::MorphType::Vertex && !morph.vertex_offsets.is_empty() {
+                if morph.morph_type == crate::morph::MorphType::Vertex
+                    && !morph.vertex_offsets.is_empty()
+                {
                     Some(i)
                 } else {
                     None
                 }
             })
             .collect();
-        
+
         self.vertex_morph_count = self.vertex_morph_indices.len();
-        
+
         if self.vertex_morph_count == 0 {
             log::info!("模型没有顶点 Morph，跳过 GPU Morph 初始化");
             self.gpu_morph_initialized = true;
             return;
         }
-        
+
         // 分配密集格式的偏移数据：morph_count * vertex_count * 3 (xyz)
         let total_floats = self.vertex_morph_count * vertex_count * 3;
         self.gpu_morph_offsets = vec![0.0f32; total_floats];
         self.gpu_morph_weights = vec![0.0f32; self.vertex_morph_count];
-        
+
         // 填充稀疏数据到密集格式
         for (morph_idx, &global_morph_idx) in self.vertex_morph_indices.iter().enumerate() {
             if let Some(morph) = self.morph_manager.get_morph(global_morph_idx) {
@@ -1514,7 +1599,7 @@ impl MmdModel {
                 }
             }
         }
-        
+
         self.gpu_morph_initialized = true;
         log::info!(
             "GPU Morph 数据初始化完成: {} 个顶点 Morph, 数据大小 {:.2} MB",
@@ -1522,59 +1607,133 @@ impl MmdModel {
             (total_floats * 4) as f64 / 1024.0 / 1024.0
         );
     }
-    
-    /// 更新 GPU Morph 权重数组（从 MorphManager 同步）
-    pub fn sync_gpu_morph_weights(&mut self) {
-        if !self.gpu_morph_initialized || self.vertex_morph_count == 0 {
+
+    // ========== GPU Morph ==========
+
+    /// 初始化 GPU 顶点 Morph 数据（稀疏→密集格式）
+    pub fn init_gpu_morph_data(&mut self) {
+        if self.gpu_morph_initialized {
             return;
         }
-        
-        // 使用保存的索引映射同步权重
-        for (gpu_idx, &morph_idx) in self.vertex_morph_indices.iter().enumerate() {
-            if gpu_idx < self.gpu_morph_weights.len() {
-                if let Some(morph) = self.morph_manager.get_morph(morph_idx) {
-                    self.gpu_morph_weights[gpu_idx] = morph.weight;
+
+        let vertex_count = self.vertices.len();
+
+        // 收集所有顶点类型的 Morph 索引
+        self.vertex_morph_indices = (0..self.morph_manager.morph_count())
+            .filter_map(|i| {
+                let morph = self.morph_manager.get_morph(i)?;
+                if morph.morph_type == crate::morph::MorphType::Vertex
+                    && !morph.vertex_offsets.is_empty()
+                {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        self.vertex_morph_count = self.vertex_morph_indices.len();
+
+        if self.vertex_morph_count == 0 {
+            log::info!("模型没有顶点 Morph，跳过 GPU Morph 初始化");
+            self.gpu_morph_initialized = true;
+            return;
+        }
+
+        // 分配密集格式的偏移数据：morph_count * vertex_count * 3 (xyz)
+        let total_floats = self.vertex_morph_count * vertex_count * 3;
+        self.gpu_morph_offsets = vec![0.0f32; total_floats];
+        self.gpu_morph_weights = vec![0.0f32; self.vertex_morph_count];
+
+        // 填充稀疏数据到密集格式
+        for (morph_idx, &global_morph_idx) in self.vertex_morph_indices.iter().enumerate() {
+            if let Some(morph) = self.morph_manager.get_morph(global_morph_idx) {
+                let base_offset = morph_idx * vertex_count * 3;
+                for offset in &morph.vertex_offsets {
+                    let vid = offset.vertex_index as usize;
+                    if vid < vertex_count {
+                        let idx = base_offset + vid * 3;
+                        self.gpu_morph_offsets[idx] = offset.offset.x;
+                        self.gpu_morph_offsets[idx + 1] = offset.offset.y;
+                        self.gpu_morph_offsets[idx + 2] = offset.offset.z;
+                    }
                 }
             }
         }
+
+        self.gpu_morph_initialized = true;
+        log::info!(
+            "GPU Morph 数据初始化完成: {} 个顶点 Morph, 数据大小 {:.2} MB",
+            self.vertex_morph_count,
+            (total_floats * 4) as f64 / 1024.0 / 1024.0
+        );
     }
-    
-    /// 获取顶点 Morph 数量
+
+    /// 计算并缓存所有 Morph 的有效权重（递归展开 Group/Flip）
+    fn compute_and_cache_effective_weights(&mut self) {
+        let morph_count = self.morph_manager.morph_count();
+        if morph_count == 0 {
+            return;
+        }
+        self.effective_weights_buf.resize(morph_count, 0.0);
+        for w in self.effective_weights_buf.iter_mut() {
+            *w = 0.0;
+        }
+        self.morph_manager
+            .compute_effective_weights_into(&mut self.effective_weights_buf);
+    }
+
+    /// 同步 GPU Morph 权重（公共接口，供 JNI 调用）
+    pub fn sync_gpu_morph_weights(&mut self) {
+        self.compute_and_cache_effective_weights();
+        self.sync_gpu_morph_weights_from_cache();
+        self.sync_gpu_uv_morph_weights_from_cache();
+    }
+
+    /// 同步 GPU 顶点 Morph 有效权重（从已缓存的有效权重读取）
+    fn sync_gpu_morph_weights_from_cache(&mut self) {
+        if !self.gpu_morph_initialized || self.vertex_morph_count == 0 {
+            return;
+        }
+        for (gpu_idx, &morph_idx) in self.vertex_morph_indices.iter().enumerate() {
+            if gpu_idx < self.gpu_morph_weights.len()
+                && morph_idx < self.effective_weights_buf.len()
+            {
+                self.gpu_morph_weights[gpu_idx] = self.effective_weights_buf[morph_idx];
+            }
+        }
+    }
+
     pub fn get_vertex_morph_count(&self) -> usize {
         self.vertex_morph_count
     }
-    
-    /// 获取 GPU Morph 偏移数据指针
+
     pub fn get_gpu_morph_offsets_ptr(&self) -> *const f32 {
         self.gpu_morph_offsets.as_ptr()
     }
-    
-    /// 获取 GPU Morph 偏移数据大小（字节）
+
     pub fn get_gpu_morph_offsets_size(&self) -> usize {
         self.gpu_morph_offsets.len() * 4
     }
-    
-    /// 获取 GPU Morph 权重数据指针
+
     pub fn get_gpu_morph_weights_ptr(&self) -> *const f32 {
         self.gpu_morph_weights.as_ptr()
     }
-    
-    /// 获取 GPU Morph 是否已初始化
+
     pub fn is_gpu_morph_initialized(&self) -> bool {
         self.gpu_morph_initialized
     }
-    
-    // ========== GPU UV Morph 相关方法 ==========
-    
-    /// 初始化 GPU UV Morph 数据
-    /// 将稀疏的 UV Morph 偏移转换为密集格式，供 GPU Compute Shader 使用
+
+    // ========== GPU UV Morph ==========
+
+    /// 初始化 GPU UV Morph 数据（稀疏→密集格式）
     pub fn init_gpu_uv_morph_data(&mut self) {
         if self.gpu_uv_morph_initialized {
             return;
         }
-        
+
         let vertex_count = self.vertices.len();
-        
+
         // 收集所有 UV 类型的 Morph 索引
         self.uv_morph_indices = (0..self.morph_manager.morph_count())
             .filter_map(|i| {
@@ -1589,20 +1748,20 @@ impl MmdModel {
                 }
             })
             .collect();
-        
+
         self.uv_morph_count = self.uv_morph_indices.len();
-        
+
         if self.uv_morph_count == 0 {
             log::info!("模型没有 UV Morph，跳过 GPU UV Morph 初始化");
             self.gpu_uv_morph_initialized = true;
             return;
         }
-        
+
         // 分配密集格式的偏移数据：uv_morph_count * vertex_count * 2 (uv)
         let total_floats = self.uv_morph_count * vertex_count * 2;
         self.gpu_uv_morph_offsets = vec![0.0f32; total_floats];
         self.gpu_uv_morph_weights = vec![0.0f32; self.uv_morph_count];
-        
+
         // 填充稀疏数据到密集格式
         for (morph_idx, &global_morph_idx) in self.uv_morph_indices.iter().enumerate() {
             if let Some(morph) = self.morph_manager.get_morph(global_morph_idx) {
@@ -1617,7 +1776,7 @@ impl MmdModel {
                 }
             }
         }
-        
+
         self.gpu_uv_morph_initialized = true;
         log::info!(
             "GPU UV Morph 数据初始化完成: {} 个 UV Morph, 数据大小 {:.2} KB",
@@ -1625,53 +1784,53 @@ impl MmdModel {
             (total_floats * 4) as f64 / 1024.0
         );
     }
-    
-    /// 同步 GPU UV Morph 权重
-    pub fn sync_gpu_uv_morph_weights(&mut self) {
+
+    /// 同步 GPU UV Morph 有效权重（从已缓存的有效权重读取）
+    fn sync_gpu_uv_morph_weights_from_cache(&mut self) {
         if !self.gpu_uv_morph_initialized || self.uv_morph_count == 0 {
             return;
         }
         for (gpu_idx, &morph_idx) in self.uv_morph_indices.iter().enumerate() {
-            if gpu_idx < self.gpu_uv_morph_weights.len() {
-                if let Some(morph) = self.morph_manager.get_morph(morph_idx) {
-                    self.gpu_uv_morph_weights[gpu_idx] = morph.weight;
-                }
+            if gpu_idx < self.gpu_uv_morph_weights.len()
+                && morph_idx < self.effective_weights_buf.len()
+            {
+                self.gpu_uv_morph_weights[gpu_idx] = self.effective_weights_buf[morph_idx];
             }
         }
     }
-    
+
     /// 获取 UV Morph 数量
     pub fn get_uv_morph_count(&self) -> usize {
         self.uv_morph_count
     }
-    
+
     /// 获取 GPU UV Morph 偏移数据指针
     pub fn get_gpu_uv_morph_offsets_ptr(&self) -> *const f32 {
         self.gpu_uv_morph_offsets.as_ptr()
     }
-    
+
     /// 获取 GPU UV Morph 偏移数据大小（字节）
     pub fn get_gpu_uv_morph_offsets_size(&self) -> usize {
         self.gpu_uv_morph_offsets.len() * 4
     }
-    
+
     /// 获取 GPU UV Morph 权重数据指针
     pub fn get_gpu_uv_morph_weights_ptr(&self) -> *const f32 {
         self.gpu_uv_morph_weights.as_ptr()
     }
-    
+
     /// GPU UV Morph 是否已初始化
     pub fn is_gpu_uv_morph_initialized(&self) -> bool {
         self.gpu_uv_morph_initialized
     }
-    
+
     // ========== 材质 Morph 结果访问 ==========
-    
+
     /// 获取材质 Morph 结果数量
     pub fn get_material_morph_result_count(&self) -> usize {
         self.morph_manager.get_material_morph_results().len()
     }
-    
+
     /// 获取材质 Morph 结果展平数据（每材质 56 个 float）
     /// 布局：mul[diffuse(4) + specular(3) + specular_strength(1) +
     ///        ambient(3) + edge_color(4) + edge_size(1) + texture_tint(4) +
@@ -1685,85 +1844,154 @@ impl MmdModel {
         self.material_morph_results_flat_cache.reserve(expected_len);
         for r in results {
             // 乘算部分 (28 floats)
-            self.material_morph_results_flat_cache.extend_from_slice(&[r.mul.diffuse.x, r.mul.diffuse.y, r.mul.diffuse.z, r.mul.diffuse.w]);
-            self.material_morph_results_flat_cache.extend_from_slice(&[r.mul.specular.x, r.mul.specular.y, r.mul.specular.z]);
-            self.material_morph_results_flat_cache.push(r.mul.specular_strength);
-            self.material_morph_results_flat_cache.extend_from_slice(&[r.mul.ambient.x, r.mul.ambient.y, r.mul.ambient.z]);
-            self.material_morph_results_flat_cache.extend_from_slice(&[r.mul.edge_color.x, r.mul.edge_color.y, r.mul.edge_color.z, r.mul.edge_color.w]);
+            self.material_morph_results_flat_cache.extend_from_slice(&[
+                r.mul.diffuse.x,
+                r.mul.diffuse.y,
+                r.mul.diffuse.z,
+                r.mul.diffuse.w,
+            ]);
+            self.material_morph_results_flat_cache.extend_from_slice(&[
+                r.mul.specular.x,
+                r.mul.specular.y,
+                r.mul.specular.z,
+            ]);
+            self.material_morph_results_flat_cache
+                .push(r.mul.specular_strength);
+            self.material_morph_results_flat_cache.extend_from_slice(&[
+                r.mul.ambient.x,
+                r.mul.ambient.y,
+                r.mul.ambient.z,
+            ]);
+            self.material_morph_results_flat_cache.extend_from_slice(&[
+                r.mul.edge_color.x,
+                r.mul.edge_color.y,
+                r.mul.edge_color.z,
+                r.mul.edge_color.w,
+            ]);
             self.material_morph_results_flat_cache.push(r.mul.edge_size);
-            self.material_morph_results_flat_cache.extend_from_slice(&[r.mul.texture_tint.x, r.mul.texture_tint.y, r.mul.texture_tint.z, r.mul.texture_tint.w]);
-            self.material_morph_results_flat_cache.extend_from_slice(&[r.mul.environment_tint.x, r.mul.environment_tint.y, r.mul.environment_tint.z, r.mul.environment_tint.w]);
-            self.material_morph_results_flat_cache.extend_from_slice(&[r.mul.toon_tint.x, r.mul.toon_tint.y, r.mul.toon_tint.z, r.mul.toon_tint.w]);
+            self.material_morph_results_flat_cache.extend_from_slice(&[
+                r.mul.texture_tint.x,
+                r.mul.texture_tint.y,
+                r.mul.texture_tint.z,
+                r.mul.texture_tint.w,
+            ]);
+            self.material_morph_results_flat_cache.extend_from_slice(&[
+                r.mul.environment_tint.x,
+                r.mul.environment_tint.y,
+                r.mul.environment_tint.z,
+                r.mul.environment_tint.w,
+            ]);
+            self.material_morph_results_flat_cache.extend_from_slice(&[
+                r.mul.toon_tint.x,
+                r.mul.toon_tint.y,
+                r.mul.toon_tint.z,
+                r.mul.toon_tint.w,
+            ]);
             // 加算部分 (28 floats)
-            self.material_morph_results_flat_cache.extend_from_slice(&[r.add.diffuse.x, r.add.diffuse.y, r.add.diffuse.z, r.add.diffuse.w]);
-            self.material_morph_results_flat_cache.extend_from_slice(&[r.add.specular.x, r.add.specular.y, r.add.specular.z]);
-            self.material_morph_results_flat_cache.push(r.add.specular_strength);
-            self.material_morph_results_flat_cache.extend_from_slice(&[r.add.ambient.x, r.add.ambient.y, r.add.ambient.z]);
-            self.material_morph_results_flat_cache.extend_from_slice(&[r.add.edge_color.x, r.add.edge_color.y, r.add.edge_color.z, r.add.edge_color.w]);
+            self.material_morph_results_flat_cache.extend_from_slice(&[
+                r.add.diffuse.x,
+                r.add.diffuse.y,
+                r.add.diffuse.z,
+                r.add.diffuse.w,
+            ]);
+            self.material_morph_results_flat_cache.extend_from_slice(&[
+                r.add.specular.x,
+                r.add.specular.y,
+                r.add.specular.z,
+            ]);
+            self.material_morph_results_flat_cache
+                .push(r.add.specular_strength);
+            self.material_morph_results_flat_cache.extend_from_slice(&[
+                r.add.ambient.x,
+                r.add.ambient.y,
+                r.add.ambient.z,
+            ]);
+            self.material_morph_results_flat_cache.extend_from_slice(&[
+                r.add.edge_color.x,
+                r.add.edge_color.y,
+                r.add.edge_color.z,
+                r.add.edge_color.w,
+            ]);
             self.material_morph_results_flat_cache.push(r.add.edge_size);
-            self.material_morph_results_flat_cache.extend_from_slice(&[r.add.texture_tint.x, r.add.texture_tint.y, r.add.texture_tint.z, r.add.texture_tint.w]);
-            self.material_morph_results_flat_cache.extend_from_slice(&[r.add.environment_tint.x, r.add.environment_tint.y, r.add.environment_tint.z, r.add.environment_tint.w]);
-            self.material_morph_results_flat_cache.extend_from_slice(&[r.add.toon_tint.x, r.add.toon_tint.y, r.add.toon_tint.z, r.add.toon_tint.w]);
+            self.material_morph_results_flat_cache.extend_from_slice(&[
+                r.add.texture_tint.x,
+                r.add.texture_tint.y,
+                r.add.texture_tint.z,
+                r.add.texture_tint.w,
+            ]);
+            self.material_morph_results_flat_cache.extend_from_slice(&[
+                r.add.environment_tint.x,
+                r.add.environment_tint.y,
+                r.add.environment_tint.z,
+                r.add.environment_tint.w,
+            ]);
+            self.material_morph_results_flat_cache.extend_from_slice(&[
+                r.add.toon_tint.x,
+                r.add.toon_tint.y,
+                r.add.toon_tint.z,
+                r.add.toon_tint.w,
+            ]);
         }
         &self.material_morph_results_flat_cache
     }
-    
+
     // ========== VPD 骨骼姿势覆盖 ==========
-    
+
     /// 设置 VPD 骨骼姿势覆盖
     pub fn set_vpd_bone_override(&mut self, bone_index: usize, translation: Vec3, rotation: Quat) {
-        self.vpd_bone_overrides.insert(bone_index, (translation, rotation));
+        self.vpd_bone_overrides
+            .insert(bone_index, (translation, rotation));
     }
-    
+
     /// 清除所有 VPD 骨骼姿势覆盖
     pub fn clear_vpd_bone_overrides(&mut self) {
         self.vpd_bone_overrides.clear();
     }
-    
+
     /// 应用 VPD 骨骼姿势覆盖到 BoneManager
     fn apply_vpd_bone_overrides(&mut self) {
         for (&bone_index, &(translation, rotation)) in &self.vpd_bone_overrides {
-            self.bone_manager.set_bone_translation(bone_index, translation);
+            self.bone_manager
+                .set_bone_translation(bone_index, translation);
             self.bone_manager.set_bone_rotation(bone_index, rotation);
         }
     }
-    
+
     /// 仅更新动画（不执行 CPU 蒙皮，用于 GPU 蒙皮模式）
     pub fn tick_animation_no_skinning(&mut self, elapsed: f32) {
         self.animation_layer_manager.update(elapsed);
         self.begin_animation();
-        
-        self.animation_layer_manager.evaluate_normalized(
-            &mut self.bone_manager,
-            &mut self.morph_manager,
-        );
-        
+
+        self.animation_layer_manager
+            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager);
+
         // 应用 VPD 骨骼姿势覆盖（在动画评估后）
         self.apply_vpd_bone_overrides();
-        
+
         // 自动眨眼
         self.update_auto_blink(elapsed);
-        
+
         self.apply_head_rotation();
         self.update_morph_animation();
-        
-        // Morph 应用后同步 GPU 权重（顶点 Morph + UV Morph）
-        self.sync_gpu_morph_weights();
-        self.sync_gpu_uv_morph_weights();
-        
+
+        // 一次性计算所有 Morph 有效权重，供顶点和 UV Morph 同步使用
+        self.compute_and_cache_effective_weights();
+        self.sync_gpu_morph_weights_from_cache();
+        self.sync_gpu_uv_morph_weights_from_cache();
+
         self.update_node_animation(false);
-        
+
         // 记录物理更新前的动态骨骼数量
         let physics_enabled = self.physics_enabled && self.physics.is_some();
-        
+
         self.update_physics(elapsed);
         self.update_node_animation(true);
         self.end_physics_update();
         self.end_animation();
-        
+
         // 应用矩阵插值过渡（GPU蒙皮模式也需要）
         self.apply_transition_blend(elapsed);
-        
+
         // 调试日志（仅首次）
         if !self.debug_logged && physics_enabled {
             self.debug_logged = true;
@@ -1774,9 +2002,9 @@ impl MmdModel {
         }
         // 注意：不调用 self.update()，跳过 CPU 蒙皮
     }
-    
+
     // ========== 物理系统方法 ==========
-    
+
     /// 初始化物理系统（Bullet3）
     pub fn init_physics(&mut self) -> bool {
         if self.rigid_bodies.is_empty() {
@@ -1797,39 +2025,44 @@ impl MmdModel {
         self.physics_bone_transforms_buf.clear();
         self.physics_bone_transforms_buf.reserve(bone_count);
         for i in 0..bone_count {
-            self.physics_bone_transforms_buf.push(self.bone_manager.get_global_transform(i));
+            self.physics_bone_transforms_buf
+                .push(self.bone_manager.get_global_transform(i));
         }
 
-        physics.build_physics(&self.rigid_bodies, &self.joints, &self.physics_bone_transforms_buf);
+        physics.build_physics(
+            &self.rigid_bodies,
+            &self.joints,
+            &self.physics_bone_transforms_buf,
+        );
         physics.initialize(&self.physics_bone_transforms_buf);
 
         self.physics = Some(physics);
         self.physics_enabled = true;
         true
     }
-    
+
     /// 重置物理系统
     pub fn reset_physics(&mut self) {
         if let Some(ref mut physics) = self.physics {
             physics.reset();
         }
     }
-    
+
     /// 启用/禁用物理
     pub fn set_physics_enabled(&mut self, enabled: bool) {
         self.physics_enabled = enabled;
     }
-    
+
     /// 获取物理是否启用
     pub fn is_physics_enabled(&self) -> bool {
         self.physics_enabled && self.physics.is_some()
     }
-    
+
     /// 获取物理系统是否已初始化
     pub fn has_physics(&self) -> bool {
         self.physics.is_some()
     }
-    
+
     /// 更新物理模拟（Bullet3）
     ///
     /// 流程：sync_bodies → stepSimulation → sync_bones
@@ -1847,7 +2080,8 @@ impl MmdModel {
         let bone_count = self.bone_manager.bone_count();
         self.physics_bone_transforms_buf.clear();
         for i in 0..bone_count {
-            self.physics_bone_transforms_buf.push(self.bone_manager.get_global_transform(i));
+            self.physics_bone_transforms_buf
+                .push(self.bone_manager.get_global_transform(i));
         }
 
         let model_transform = self.model_transform;
@@ -1857,35 +2091,39 @@ impl MmdModel {
 
         // 1. 同步运动学刚体
         physics.sync_bodies_with_model_velocity(
-            &self.physics_bone_transforms_buf, delta_time, model_transform,
+            &self.physics_bone_transforms_buf,
+            delta_time,
+            model_transform,
         );
 
         // 2. Bullet3 步进
         physics.step_simulation(delta_time);
 
         // 3. 同步物理结果回骨骼（复用内部缓冲区）
-        let dynamic_bone_transforms = physics.get_dynamic_bone_transforms(
-            &self.physics_bone_transforms_buf,
-        );
+        let dynamic_bone_transforms =
+            physics.get_dynamic_bone_transforms(&self.physics_bone_transforms_buf);
 
         for &(bone_idx, transform) in dynamic_bone_transforms {
-            self.bone_manager.set_global_transform_physics(bone_idx, transform);
+            self.bone_manager
+                .set_global_transform_physics(bone_idx, transform);
         }
 
         let physics_bone_indices = physics.get_dynamic_bone_indices();
-        self.bone_manager.set_physics_bone_indices(physics_bone_indices);
-        self.bone_manager.update_non_physics_children(physics_bone_indices);
+        self.bone_manager
+            .set_physics_bone_indices(physics_bone_indices);
+        self.bone_manager
+            .update_non_physics_children(physics_bone_indices);
 
         // 归还所有权
         self.physics = Some(physics);
     }
-    
+
     /// 结束物理更新，清除物理骨骼保护
     /// 在 tick_animation 结束时调用
     fn end_physics_update(&mut self) {
         self.bone_manager.clear_physics_bone_indices();
     }
-    
+
     /// 获取物理调试信息（JSON 格式）
     pub fn get_physics_debug_info(&self) -> String {
         use crate::physics::PhysicsMode;
@@ -1915,12 +2153,21 @@ impl MmdModel {
             info.push_str("  ],\n");
 
             // 统计信息
-            let kinematic_count = physics.rigid_bodies.iter()
-                .filter(|rb| rb.physics_mode == PhysicsMode::FollowBone).count();
-            let dynamic_count = physics.rigid_bodies.iter()
-                .filter(|rb| rb.physics_mode == PhysicsMode::Physics).count();
-            let dynamic_bone_count = physics.rigid_bodies.iter()
-                .filter(|rb| rb.physics_mode == PhysicsMode::PhysicsWithBone).count();
+            let kinematic_count = physics
+                .rigid_bodies
+                .iter()
+                .filter(|rb| rb.physics_mode == PhysicsMode::FollowBone)
+                .count();
+            let dynamic_count = physics
+                .rigid_bodies
+                .iter()
+                .filter(|rb| rb.physics_mode == PhysicsMode::Physics)
+                .count();
+            let dynamic_bone_count = physics
+                .rigid_bodies
+                .iter()
+                .filter(|rb| rb.physics_mode == PhysicsMode::PhysicsWithBone)
+                .count();
 
             info.push_str(&format!(
                 "  \"stats\": {{\"total_rb\": {}, \"kinematic\": {}, \"dynamic\": {}, \"dynamic_bone\": {}, \"joints\": {}}}\n",
@@ -1971,8 +2218,8 @@ fn compute_vertex_skinning(
             let w1 = 1.0 - w0;
 
             let pos = m0.transform_point3(position) * w0 + m1.transform_point3(position) * w1;
-            let norm =
-                (m0.transform_vector3(normal) * w0 + m1.transform_vector3(normal) * w1).normalize_or_zero();
+            let norm = (m0.transform_vector3(normal) * w0 + m1.transform_vector3(normal) * w1)
+                .normalize_or_zero();
             (pos, norm)
         }
         VertexWeight::Bdef4 { bones, weights } => {
@@ -2012,8 +2259,8 @@ fn compute_vertex_skinning(
 
             // 简化实现：退化为 BDEF2
             let pos = m0.transform_point3(position) * w0 + m1.transform_point3(position) * w1;
-            let norm =
-                (m0.transform_vector3(normal) * w0 + m1.transform_vector3(normal) * w1).normalize_or_zero();
+            let norm = (m0.transform_vector3(normal) * w0 + m1.transform_vector3(normal) * w1)
+                .normalize_or_zero();
             (pos, norm)
         }
         VertexWeight::Qdef { bones, weights } => {

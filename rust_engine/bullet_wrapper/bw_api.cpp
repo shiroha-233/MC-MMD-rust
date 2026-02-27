@@ -88,12 +88,32 @@ static void bt_to_mat4(const btTransform& t, float* m) {
 
 /* ===== 物理世界 ===== */
 
+// 运动学-动态碰撞过滤回调（宽相阶段拦截，解决头发穿透胸部抖动）
+struct KinematicDynamicFilter : public btOverlapFilterCallback {
+    bool needBroadphaseCollision(btBroadphaseProxy* proxy0, btBroadphaseProxy* proxy1) const override {
+        bool collides = (proxy0->m_collisionFilterGroup & proxy1->m_collisionFilterMask) != 0;
+        collides = collides && (proxy1->m_collisionFilterGroup & proxy0->m_collisionFilterMask) != 0;
+        if (!collides) return false;
+
+        auto* obj0 = static_cast<btCollisionObject*>(proxy0->m_clientObject);
+        auto* obj1 = static_cast<btCollisionObject*>(proxy1->m_clientObject);
+        if (!obj0 || !obj1) return true;
+
+        bool k0 = obj0->isKinematicObject();
+        bool k1 = obj1->isKinematicObject();
+        if (k0 != k1) return false;
+
+        return true;
+    }
+};
+
 struct BW_World {
     btDefaultCollisionConfiguration* config;
     btCollisionDispatcher* dispatcher;
     btDbvtBroadphase* broadphase;
     btSequentialImpulseConstraintSolver* solver;
     btDiscreteDynamicsWorld* world;
+    KinematicDynamicFilter* kinematicFilter;
 };
 
 BW_World* bw_world_create(float gravity_x, float gravity_y, float gravity_z) {
@@ -106,6 +126,7 @@ BW_World* bw_world_create(float gravity_x, float gravity_y, float gravity_z) {
     w->world      = new btDiscreteDynamicsWorld(
         w->dispatcher, w->broadphase, w->solver, w->config);
     w->world->setGravity(btVector3(gravity_x, gravity_y, gravity_z));
+    w->kinematicFilter = nullptr;
     g_alloc_worlds.fetch_add(1, std::memory_order_relaxed);
     return w;
     BW_CATCH_NULL
@@ -113,8 +134,7 @@ BW_World* bw_world_create(float gravity_x, float gravity_y, float gravity_z) {
 
 void bw_world_destroy(BW_World* w) {
     if (!w) return;
-    // 注意：Rust 侧 MMDPhysics::Drop 已保证移除所有约束/刚体，
-    // 此处仅负责释放世界基础设施。
+    delete w->kinematicFilter;
     delete w->world;
     delete w->solver;
     delete w->broadphase;
@@ -156,6 +176,20 @@ void bw_world_remove_constraint(BW_World* w, BW_Constraint* c) {
     if (!w || !c) return;
     btTypedConstraint* constraint = (btTypedConstraint*)c;
     w->world->removeConstraint(constraint);
+}
+
+void bw_world_set_kinematic_filter(BW_World* w, bool enabled) {
+    if (!w) return;
+    if (enabled) {
+        if (!w->kinematicFilter) {
+            w->kinematicFilter = new KinematicDynamicFilter();
+        }
+        w->world->getPairCache()->setOverlapFilterCallback(w->kinematicFilter);
+    } else {
+        w->world->getPairCache()->setOverlapFilterCallback(nullptr);
+        delete w->kinematicFilter;
+        w->kinematicFilter = nullptr;
+    }
 }
 
 /* ===== 碰撞形状 ===== */
