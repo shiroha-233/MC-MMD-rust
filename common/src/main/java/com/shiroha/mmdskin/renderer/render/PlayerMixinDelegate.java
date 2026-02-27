@@ -7,6 +7,7 @@ import com.shiroha.mmdskin.compat.vr.VRArmHider;
 import com.shiroha.mmdskin.compat.vr.VRBoneDriver;
 import com.shiroha.mmdskin.config.ModelConfigManager;
 import com.shiroha.mmdskin.renderer.animation.AnimationStateManager;
+import com.shiroha.mmdskin.renderer.animation.PendingAnimSignalCache;
 import com.shiroha.mmdskin.renderer.core.FirstPersonManager;
 import com.shiroha.mmdskin.renderer.core.IMMDModel;
 import com.shiroha.mmdskin.renderer.core.RenderContext;
@@ -105,6 +106,18 @@ public final class PlayerMixinDelegate {
         boolean isFirstPerson = !isVR && isLocalPlayer && FirstPersonManager.isActive();
 
         AnimationStateManager.updateAnimationState(player, modelData);
+
+        // 远程玩家：消费延迟的动画中断信号（target 不在渲染范围时缓存的）
+        if (!isLocalPlayer) {
+            PendingAnimSignalCache.SignalType signal = PendingAnimSignalCache.consume(player.getUUID());
+            if (signal != null) {
+                switch (signal) {
+                    case RESET -> MmdSkinRendererPlayerHelper.ResetPhysics(player);
+                    case STAGE_END -> StageAnimSyncHelper.endStageAnim(player);
+                }
+            }
+        }
+
         RenderParams params = PlayerRenderHelper.calculateRenderParams(player, modelData, tickDelta);
 
         matrixStack.pushPose();

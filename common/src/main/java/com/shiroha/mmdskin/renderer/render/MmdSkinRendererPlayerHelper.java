@@ -5,6 +5,7 @@ import com.shiroha.mmdskin.config.UIConstants;
 import com.shiroha.mmdskin.renderer.camera.StageAudioPlayer;
 import com.shiroha.mmdskin.renderer.core.IMMDModel;
 import com.shiroha.mmdskin.renderer.animation.MMDAnimManager;
+import com.shiroha.mmdskin.renderer.animation.PendingAnimSignalCache;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import net.minecraft.client.Minecraft;
@@ -15,19 +16,13 @@ import org.apache.logging.log4j.Logger;
 import java.io.File;
 
 /**
- * 玩家动画控制辅助类 (SRP - 单一职责原则)
- * 
- * 仅负责玩家的自定义动画播放和物理重置。
- * 舞台动画同步委托给 {@link StageAnimSyncHelper}，
- * 表情同步委托给 {@link MorphSyncHelper}。
+ * 玩家动画控制辅助类
+ * 负责自定义动画播放和物理重置
  */
 public final class MmdSkinRendererPlayerHelper {
 
     private static final Logger logger = LogManager.getLogger();
 
-    /**
-     * 判断玩家是否正在使用 MMD 模型
-     */
     public static boolean isUsingMmdModel(Player player) {
         if (player == null) return false;
         String playerName = player.getName().getString();
@@ -40,9 +35,6 @@ public final class MmdSkinRendererPlayerHelper {
     private MmdSkinRendererPlayerHelper() {
     }
 
-    /**
-     * 重置玩家物理和动画状态
-     */
     public static void ResetPhysics(Player player) {
         PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
         if (resolved == null) return;
@@ -50,16 +42,15 @@ public final class MmdSkinRendererPlayerHelper {
         MMDModelManager.Model mwed = resolved.model();
         IMMDModel model = mwed.model;
         mwed.entityData.playCustomAnim = false;
+        mwed.entityData.playStageAnim = false;
         model.changeAnim(MMDAnimManager.GetAnimModel(model, "idle"), 0);
         model.setLayerLoop(1, true);
         model.changeAnim(0, 1);
         model.changeAnim(0, 2);
         model.resetPhysics();
+        mwed.entityData.invalidateStateLayers();
     }
 
-    /**
-     * 播放自定义动画
-     */
     public static void CustomAnim(Player player, String id) {
         PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
         if (resolved == null) return;
@@ -67,6 +58,8 @@ public final class MmdSkinRendererPlayerHelper {
         MMDModelManager.Model mwed = resolved.model();
         IMMDModel model = mwed.model;
         mwed.entityData.playCustomAnim = true;
+        // 标记脏状态，确保动画中断后 changeAnimationOnce 不会因状态相同而跳过
+        mwed.entityData.invalidateStateLayers();
         model.changeAnim(MMDAnimManager.GetAnimModel(model, id), 0);
         model.setLayerLoop(1, true);
         model.changeAnim(0, 1);
@@ -90,7 +83,6 @@ public final class MmdSkinRendererPlayerHelper {
             }
             String audioPath = new File(PathConstants.getStageAnimDir(), packName + File.separator + audioName).getAbsolutePath();
             StageAudioPlayer.playRemoteAudio(player, audioPath);
-            logger.info("[舞台同步] 远程玩家 {} 舞台音频已开始: {}/{}", player.getName().getString(), packName, audioName);
         }
     }
 
@@ -98,12 +90,9 @@ public final class MmdSkinRendererPlayerHelper {
         return !name.contains("..") && !name.contains("/") && !name.contains("\\");
     }
 
-    /**
-     * 断线时清理所有远程同步状态
-     * 由 Fabric/Forge 的 DISCONNECT 事件处理器调用
-     */
     public static void onDisconnect() {
         StageAnimSyncHelper.onDisconnect();
         StageAudioPlayer.cleanupAll();
+        PendingAnimSignalCache.onDisconnect();
     }
 }

@@ -41,7 +41,6 @@ public final class MorphSyncHelper {
         
         if (RESET_TOKEN.equals(morphName)) {
             nf.ResetAllMorphs(modelHandle);
-            logger.info("[表情同步] 远程玩家 {} 重置所有表情", resolved.playerName());
         } else {
             applyMorphFromFile(nf, modelHandle, morphName, resolved.playerName(),
                     resolved.model().model.getModelName());
@@ -59,9 +58,7 @@ public final class MorphSyncHelper {
         String vpdPath = findVpdFile(morphName, modelName);
         if (vpdPath != null) {
             int result = nf.ApplyVpdMorph(modelHandle, vpdPath);
-            if (result >= 0) {
-                logger.info("[表情同步] 远程玩家 {} 应用表情: {}", playerName, morphName);
-            } else {
+            if (result < 0) {
                 logger.warn("[表情同步] 远程玩家 {} 表情应用失败: {} ({})", playerName, morphName, result);
             }
         } else {
