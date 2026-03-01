@@ -760,7 +760,18 @@ public class StageSelectScreen extends Screen {
     public void onClose() {
         // 未启动播放时退出舞台模式（恢复视角）
         if (!stageStarted) {
-            MMDCameraController.getInstance().exitStageMode();
+            MMDCameraController ctrl = MMDCameraController.getInstance();
+            if (ctrl.isWaitingForHost()) {
+                UUID hostUUID = StageInviteManager.getInstance().getWatchingHostUUID();
+                if (hostUUID != null) {
+                    StageNetworkHandler.sendLeave(hostUUID);
+                }
+                ctrl.setWaitingForHost(false);
+                ctrl.exitStageMode();
+                StageInviteManager.getInstance().stopWatching();
+            } else {
+                ctrl.exitStageMode();
+            }
         }
         super.onClose();
     }

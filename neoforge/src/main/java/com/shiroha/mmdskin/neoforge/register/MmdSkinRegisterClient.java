@@ -247,6 +247,8 @@ public class MmdSkinRegisterClient {
             if (mc.player == null) return;
             
             MMDModelManager.tick();
+            
+            com.shiroha.mmdskin.renderer.render.StageAnimSyncHelper.tickPending();
 
             StageAudioPlayer.tickRemoteAttenuation();
             

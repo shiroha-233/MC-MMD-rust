@@ -63,6 +63,10 @@ public final class StageInviteManager {
         memberStates.put(memberUUID, MemberState.READY);
     }
 
+    public void onMemberLeft(UUID memberUUID) {
+        memberStates.put(memberUUID, MemberState.NONE);
+    }
+
     private volatile boolean useHostCamera = true;
 
     public boolean isUseHostCamera() { return useHostCamera; }

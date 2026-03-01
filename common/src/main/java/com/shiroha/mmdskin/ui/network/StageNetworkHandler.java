@@ -52,6 +52,10 @@ public class StageNetworkHandler {
         sendMulti("WATCH_END|" + targetUUID);
     }
 
+    public static void sendLeave(UUID hostUUID) {
+        sendMulti("LEAVE|" + hostUUID);
+    }
+
     public static void sendFrameSync(float currentFrame) {
         sendMulti("SYNC_FRAME|" + currentFrame);
     }

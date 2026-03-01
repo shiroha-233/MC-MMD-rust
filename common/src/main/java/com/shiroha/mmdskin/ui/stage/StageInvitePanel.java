@@ -112,7 +112,9 @@ public class StageInvitePanel {
         UUID uuid = player.getUUID();
         StageInviteManager mgr = StageInviteManager.getInstance();
 
-        if (mgr.getMemberState(uuid) == StageInviteManager.MemberState.NONE) {
+        StageInviteManager.MemberState state = mgr.getMemberState(uuid);
+        if (state == StageInviteManager.MemberState.NONE
+                || state == StageInviteManager.MemberState.DECLINED) {
             mgr.sendInvite(uuid);
             return true;
         }

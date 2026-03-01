@@ -61,6 +61,9 @@ public final class StageMultiHandler {
             case "READY":
                 mgr.onMemberReady(senderUUID);
                 break;
+            case "LEAVE":
+                mgr.onMemberLeft(senderUUID);
+                break;
             case "WATCH_START":
                 if (parts.length >= 3) handleWatchStart(senderUUID, parts[2]);
                 break;
@@ -134,10 +137,6 @@ public final class StageMultiHandler {
             : com.shiroha.mmdskin.config.StageConfig.getInstance().cameraHeightOffset;
         
         loadAndStartAsGuest(cleanStageData, controller, mc, effectiveHeight, mgr.isUseHostCamera());
-
-        if (mc.player != null) {
-            StageAnimSyncHelper.startStageAnim(mc.player, cleanStageData);
-        }
 
         StageNetworkHandler.sendStageStart(cleanStageData);
 
@@ -225,17 +224,28 @@ public final class StageMultiHandler {
         }
 
         String audioPath = findAudioInPack(stageDir);
+        StageInviteManager mgr = StageInviteManager.getInstance();
 
-        boolean started = controller.startStage(
-                mergedAnim != 0 ? mergedAnim : cameraAnim,
-                cameraAnim,
-                com.shiroha.mmdskin.config.StageConfig.getInstance().cinematicMode,
-                modelHandle, modelName, audioPath, heightOffset);
+        if (useHostCamera) {
+            controller.enterWatchMode(mgr.getWatchingHostUUID());
+            controller.setWatchCamera(cameraAnim, heightOffset);
+            controller.setWatchMotion(mergedAnim, modelHandle, modelName);
 
-        if (!started) {
-            if (mergedAnim != 0) nf.DeleteAnimation(mergedAnim);
-            if (cameraAnim != 0 && cameraAnim != mergedAnim) nf.DeleteAnimation(cameraAnim);
-            logger.warn("[被邀请者] startStage 失败");
+            if (audioPath != null && !audioPath.isEmpty()) {
+                controller.loadWatchAudio(audioPath);
+            }
+        } else {
+            boolean started = controller.startStage(
+                    mergedAnim != 0 ? mergedAnim : cameraAnim,
+                    cameraAnim,
+                    com.shiroha.mmdskin.config.StageConfig.getInstance().cinematicMode,
+                    modelHandle, modelName, audioPath, heightOffset);
+
+            if (!started) {
+                if (mergedAnim != 0) nf.DeleteAnimation(mergedAnim);
+                if (cameraAnim != 0 && cameraAnim != mergedAnim) nf.DeleteAnimation(cameraAnim);
+                logger.warn("[被邀请者] startStage 失败");
+            }
         }
     }
 

@@ -25,6 +25,21 @@ public final class StageAnimSyncHelper {
     private static final Map<UUID, List<Long>> remoteStageAnims = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> remoteStageModels = new ConcurrentHashMap<>();
     
+    private static final Map<UUID, PendingStageAnim> pendingAnims = new ConcurrentHashMap<>();
+    private static final int MAX_RETRY_TICKS = 100;
+    
+    private static final class PendingStageAnim {
+        final UUID playerUUID;
+        final String stageData;
+        int ticksWaited;
+        
+        PendingStageAnim(UUID playerUUID, String stageData) {
+            this.playerUUID = playerUUID;
+            this.stageData = stageData;
+            this.ticksWaited = 0;
+        }
+    }
+    
     private StageAnimSyncHelper() {
     }
     
@@ -46,12 +61,20 @@ public final class StageAnimSyncHelper {
         
         PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
         if (resolved == null) {
-            logger.warn("[舞台同步] 远程玩家 {} 没有 MMD 模型", player.getName().getString());
+            pendingAnims.put(player.getUUID(), new PendingStageAnim(player.getUUID(), stageData));
+            logger.info("[舞台同步] 远程玩家 {} 模型加载中，已加入待处理队列", player.getName().getString());
             return;
         }
         
-        cleanupRemoteStageAnim(player.getUUID());
+        pendingAnims.remove(player.getUUID());
+        applyStageAnim(player.getUUID(), resolved, stageData, parts);
+    }
+    
+    private static void applyStageAnim(UUID playerUUID, PlayerModelResolver.Result resolved,
+                                        String stageData, String[] parts) {
+        cleanupRemoteStageAnim(playerUUID);
         
+        String packName = parts[0];
         File stageDir = new File(PathConstants.getStageAnimDir(), packName);
         if (!stageDir.exists() || !stageDir.isDirectory()) {
             logger.warn("[舞台同步] 本地没有舞台包: {}", packName);
@@ -68,14 +91,49 @@ public final class StageAnimSyncHelper {
         mwed.model.setLayerLoop(1, true);
         mwed.model.changeAnim(0, 1);
         mwed.model.changeAnim(0, 2);
+        mwed.model.resetPhysics();
         mwed.entityData.playCustomAnim = true;
         mwed.entityData.playStageAnim = true;
         mwed.entityData.invalidateStateLayers();
         
         List<Long> tracked = new CopyOnWriteArrayList<>();
         tracked.add(mergedAnim);
-        remoteStageAnims.put(player.getUUID(), tracked);
-        remoteStageModels.put(player.getUUID(), modelHandle);
+        remoteStageAnims.put(playerUUID, tracked);
+        remoteStageModels.put(playerUUID, modelHandle);
+    }
+    
+    public static void tickPending() {
+        if (pendingAnims.isEmpty()) return;
+        
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.level == null) return;
+        
+        var it = pendingAnims.entrySet().iterator();
+        while (it.hasNext()) {
+            var entry = it.next();
+            PendingStageAnim pending = entry.getValue();
+            pending.ticksWaited++;
+            
+            if (pending.ticksWaited > MAX_RETRY_TICKS) {
+                logger.warn("[舞台同步] 玩家 {} 模型加载超时，放弃重试", pending.playerUUID);
+                it.remove();
+                continue;
+            }
+            
+            Player player = mc.level.getPlayerByUUID(pending.playerUUID);
+            if (player == null) {
+                it.remove();
+                continue;
+            }
+            
+            PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
+            if (resolved != null) {
+                it.remove();
+                String[] parts = pending.stageData.split("\\|");
+                applyStageAnim(pending.playerUUID, resolved, pending.stageData, parts);
+                logger.info("[舞台同步] 玩家 {} 模型加载完成，已应用舞台动画", player.getName().getString());
+            }
+        }
     }
     
     public static void endStageAnim(Player player) {
@@ -94,6 +152,7 @@ public final class StageAnimSyncHelper {
             mwed.model.setLayerLoop(1, true);
             mwed.model.changeAnim(0, 1);
             mwed.model.changeAnim(0, 2);
+            mwed.model.resetPhysics();
             mwed.entityData.invalidateStateLayers();
         }
     }
@@ -120,6 +179,7 @@ public final class StageAnimSyncHelper {
     }
 
     public static void onDisconnect() {
+        pendingAnims.clear();
         remoteStageModels.clear();
         if (remoteStageAnims.isEmpty()) return;
         NativeFunc nf = NativeFunc.GetInst();
