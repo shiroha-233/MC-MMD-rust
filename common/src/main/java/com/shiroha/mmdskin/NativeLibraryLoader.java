@@ -182,10 +182,26 @@ public final class NativeLibraryLoader {
     // ==================== Android 加载 ====================
 
     private static void loadAndroid() {
-        logger.info("Android Env Detected! Arch: arm64");
+        logger.info("Android Env Detected! Arch: a" + (isArm64 ? "rm" : "md") + "64");
 
-        String resourcePath = "/natives/android-arm64/libmmd_engine.so";
+        String resourcePath = "/natives/android-a" + (isArm64 ? "rm" : "md") + "64/libmmd_engine.so";
+        String libcResPath = "/natives/android-a" + (isArm64 ? "rm" : "md") + "64/libc++_shared.so";
+        String libcPath = findLibcPath();
         String soFileName = "libmmd_engine.so";
+        String libcFileName = "libc++_shared.so";
+
+        boolean isLibcLoaded = isLibcLoaded();
+
+        if (!isLibcLoaded && libcPath != null) {
+            try {
+                System.load(libcPath);
+                logger.info("[Android] libc++_shared.so loaded: " + libcPath);
+                isLibcLoaded = true;
+            } catch (Throwable e) {
+                logger.warn("[Android] " + libcFileName + " load failed", e);
+                libcPath = null;
+            }
+        }
 
         // 策略0: 写入 $JAVA_HOME/lib
         var javaHome = System.getProperty("java.home");
@@ -196,9 +212,14 @@ public final class NativeLibraryLoader {
                 if (is == null) {
                     logger.warn("[Android] 策略0: 内置资源未找到: " + resourcePath);
                 } else {
-                    Files.copy(is, javaLibSoFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                    System.load(javaLibSoFile.getAbsolutePath());
-                    return;
+                    if (!isLibcLoaded) {
+                        isLibcLoaded = ensureLibcLoaded(libcResPath, libcFileName, javaLibDir);
+                    }
+                    if (isLibcLoaded) {
+                        Files.copy(is, javaLibSoFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                        System.load(javaLibSoFile.getAbsolutePath());
+                        return;
+                    }
                 }
             } catch (IOException | Error e) {
                 logger.error("[Android] " + javaLibSoFile.getAbsolutePath() + "加载失败：" + e.getMessage());
@@ -209,8 +230,14 @@ public final class NativeLibraryLoader {
 
         // 策略1: LD_LIBRARY_PATH
         try {
-            System.loadLibrary("mmd_engine");
-            return;
+            if (!isLibcLoaded) {
+                System.loadLibrary("c++_shared");
+                isLibcLoaded = isLibcLoaded();
+            }
+            if (isLibcLoaded) {
+                System.loadLibrary("mmd_engine");
+                return;
+            }
         } catch (Error e) {
             logger.warn("[Android] 策略1 失败: " + e.getMessage());
         }
@@ -219,15 +246,20 @@ public final class NativeLibraryLoader {
         String modRuntimeDir = System.getenv("MOD_ANDROID_RUNTIME");
         if (modRuntimeDir != null && !modRuntimeDir.isEmpty()) {
             try {
-                File runtimeDir = new File(modRuntimeDir);
-                if (!runtimeDir.exists()) runtimeDir.mkdirs();
-                File targetFile = new File(runtimeDir, soFileName);
+                if (!isLibcLoaded) {
+                    isLibcLoaded = ensureLibcLoaded(libcResPath, libcFileName, new File(modRuntimeDir));
+                }
+                if (isLibcLoaded) {
+                    File runtimeDir = new File(modRuntimeDir);
+                    if (!runtimeDir.exists()) runtimeDir.mkdirs();
+                    File targetFile = new File(runtimeDir, soFileName);
 
-                try (InputStream is = NativeLibraryLoader.class.getResourceAsStream(resourcePath)) {
-                    if (is != null) {
-                        Files.copy(is, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                        System.load(targetFile.getAbsolutePath());
-                        return;
+                    try (InputStream is = NativeLibraryLoader.class.getResourceAsStream(resourcePath)) {
+                        if (is != null) {
+                            Files.copy(is, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            System.load(targetFile.getAbsolutePath());
+                            return;
+                        }
                     }
                 }
             } catch (Exception | Error e) {
@@ -239,14 +271,21 @@ public final class NativeLibraryLoader {
         String pojavNativeDir = System.getenv("POJAV_NATIVEDIR");
         if (pojavNativeDir != null && !pojavNativeDir.isEmpty()) {
             try {
-                File nativeDir = new File(pojavNativeDir);
-                File targetFile = new File(nativeDir, soFileName);
+                if (!isLibcLoaded) {
+                    File nativeDirTemp = new File(pojavNativeDir);
+                    isLibcLoaded = ensureLibcLoaded(libcResPath, libcFileName, nativeDirTemp);
+                }
+                if (isLibcLoaded) {
+                    File nativeDir = new File(pojavNativeDir);
+                    if (!nativeDir.exists()) nativeDir.mkdirs();
+                    File targetFile = new File(nativeDir, soFileName);
 
-                try (InputStream is = NativeLibraryLoader.class.getResourceAsStream(resourcePath)) {
-                    if (is != null) {
-                        Files.copy(is, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                        System.load(targetFile.getAbsolutePath());
-                        return;
+                    try (InputStream is = NativeLibraryLoader.class.getResourceAsStream(resourcePath)) {
+                        if (is != null) {
+                            Files.copy(is, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            System.load(targetFile.getAbsolutePath());
+                            return;
+                        }
                     }
                 }
             } catch (Exception | Error e) {
@@ -258,30 +297,130 @@ public final class NativeLibraryLoader {
         File extracted = extractNativeLibrary(resourcePath, soFileName);
         if (extracted != null) {
             try {
-                System.load(extracted.getAbsolutePath());
-                return;
+                if (!isLibcLoaded) {
+                    File gameDir = new File(getGameDirectory());
+                    isLibcLoaded = ensureLibcLoaded(libcResPath, libcFileName, gameDir);
+                }
+                if (isLibcLoaded) {
+                    System.load(extracted.getAbsolutePath());
+                    return;
+                }
             } catch (Error e) {
                 logger.error("[Android] 策略4 失败 (游戏目录): " + e.getClass().getName() + ": " + e.getMessage());
             }
         }
 
         // 策略5: GitHub 下载
-        File downloaded = downloadNativeLibrary("libmmd_engine-android-arm64.so");
+        File downloaded = downloadNativeLibrary("libmmd_engine-android-a" + (isArm64 ? "rm" : "md") + "64.so");
         if (downloaded != null) {
             try {
-                System.load(downloaded.getAbsolutePath());
-                return;
+                if (!isLibcLoaded) {
+                    File gameDir = new File(getGameDirectory());
+                    isLibcLoaded = ensureLibcLoaded(libcResPath, libcFileName, gameDir);
+                }
+                if (isLibcLoaded) {
+                    System.load(downloaded.getAbsolutePath());
+                    return;
+                }
             } catch (Error e) {
                 logger.error("[Android] 策略5 失败 (下载): " + e.getClass().getName() + ": " + e.getMessage());
             }
         }
 
-        throw new UnsatisfiedLinkError("[Android] 无法加载原生库 libmmd_engine.so，所有策略均失败。"
+        if (!isLibcLoaded)
+            throw new UnsatisfiedLinkError("[Android] 无法加载 libc++_shared.so，请尝试重启游戏。如果仍出现此错误，请到github寻求帮助。\n Couldn't load libc++_shared.so. Please try restarting the game. If the error persists, please seek help on GitHub.\nhttps://github.com/shiroha-233/MC-MMD-rust/issues/");
+        else throw new UnsatisfiedLinkError("[Android] 无法加载原生库 libmmd_engine.so，所有策略均失败。"
                 + "请检查日志获取详细信息，或从 " + RELEASE_BASE_URL + " 手动下载 "
-                + getVersionedFileName("libmmd_engine-android-arm64.so"));
+                + getVersionedFileName("libmmd_engine-android-a" + (isArm64 ? "rm" : "md") + "64.so"));
     }
 
     // ==================== 工具方法 ====================
+
+    private static boolean isLibcLoaded() {
+        File[] maps = new File("/proc/" + ProcessHandle.current().pid() + "/map_files").listFiles();
+        if (maps == null) return false;
+        for (var f : maps)
+            if (f.getAbsolutePath().contains("libc++_shared.so")) {
+                logger.info("[Android] libc++_shared.so already loaded: " + f.getAbsolutePath());
+                return true;
+            }
+        logger.warn("[Android] libc++_shared.so not loaded, will try later.");
+        return false;
+    }
+
+    private static String findLibcPath() {
+        String libcName = "libc++_shared.so";
+        String libPaths = System.getenv("LD_LIBRARY_PATH");
+        String pojavLibs = System.getenv("POJAV_NATIVEDIR");
+        String fclLibs = System.getenv("FCL_NATIVEDIR");
+        String javaLib = System.getProperty("java.home") + "/lib";
+
+        var dirsToSearch = new java.util.ArrayList<Path>();
+        if (libPaths != null && !libPaths.isEmpty()) {
+            for (String part : libPaths.split(":")) {
+                if (!part.isEmpty()) {
+                    dirsToSearch.add(Paths.get(part));
+                }
+            }
+        }
+        if (pojavLibs != null && !pojavLibs.isEmpty()) {
+            dirsToSearch.add(Paths.get(pojavLibs));
+        }
+        if (fclLibs != null && !fclLibs.isEmpty()) {
+            dirsToSearch.add(Paths.get(fclLibs));
+        }
+        dirsToSearch.add(Paths.get(javaLib));
+
+        for (Path dir : dirsToSearch) {
+            try {
+                if (!Files.exists(dir) || !Files.isDirectory(dir)) continue;
+                try (var stream = Files.find(dir, Integer.MAX_VALUE,
+                        (p, attr) -> attr.isRegularFile() && !attr.isSymbolicLink()
+                                && p.getFileName().toString().equals(libcName))) {
+                    var first = stream.findFirst();
+                    if (first.isPresent()) {
+                        return first.get().toAbsolutePath().toString();
+                    }
+                }
+            } catch (IOException e) {
+                logger.warn("[Android] Error searching libc++_shared.so: " + dir + " -> " + e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    private static boolean ensureLibcLoaded(String libcResource, String libcFileName, File targetDir) {
+        if (isLibcLoaded()) {
+            return true;
+        }
+        if (targetDir == null) {
+            targetDir = new File(getGameDirectory());
+        }
+        if (!targetDir.exists() && !targetDir.mkdirs()) {
+            logger.warn("[Android] Cannot create dir for libc: " + targetDir);
+        }
+        if (!targetDir.canWrite()) {
+            logger.warn("[Android] Dir not writable for libc: " + targetDir);
+            return false;
+        }
+        try (InputStream is = NativeLibraryLoader.class.getResourceAsStream(libcResource)) {
+            if (is == null) {
+                logger.warn("[Android] Built-in libc resource not found: " + libcResource);
+                return false;
+            }
+            File out = new File(targetDir, libcFileName);
+            Files.copy(is, out.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            logger.info("[Android] Extracted libc++_shared.so to " + out.getAbsolutePath());
+            try {
+                System.load(out.getAbsolutePath());
+            } catch (Throwable t) {
+                logger.warn("[Android] Extracted libc load failed: " + t.getMessage(), t);
+            }
+        } catch (IOException e) {
+            logger.warn("[Android] Extract libc failed: " + e.getMessage(), e);
+        }
+        return isLibcLoaded();
+    }
 
     /**
      * 版本化文件名，避免文件替换冲突。
