@@ -34,6 +34,8 @@ public abstract class NeoForgePlayerRendererMixin extends LivingEntityRenderer<A
                 player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight,
                 YsmCompat.isYsmActive(player));
 
+        PlayerMixinDelegate.renderSceneModel(player, tickDelta, matrixStack, packedLight);
+
         switch (action) {
             case CANCEL -> ci.cancel();
             case SUPER_RENDER -> {

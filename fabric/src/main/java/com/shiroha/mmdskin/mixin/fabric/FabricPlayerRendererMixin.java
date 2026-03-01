@@ -34,6 +34,8 @@ public abstract class FabricPlayerRendererMixin extends LivingEntityRenderer<Abs
                 player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight,
                 YsmCompat.isYsmActive(player));
 
+        PlayerMixinDelegate.renderSceneModel(player, tickDelta, matrixStack, packedLight);
+
         switch (action) {
             case CANCEL -> ci.cancel();
             case SUPER_RENDER -> {
