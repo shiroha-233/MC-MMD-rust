@@ -34,6 +34,9 @@ public abstract class ForgePlayerRendererMixin extends LivingEntityRenderer<Abst
                 player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight,
                 YsmCompat.isYsmActive(player));
 
+        // 场景模型渲染（独立于玩家模型状态）
+        PlayerMixinDelegate.renderSceneModel(player, tickDelta, matrixStack, packedLight);
+
         switch (action) {
             case CANCEL -> ci.cancel();
             case SUPER_RENDER -> {

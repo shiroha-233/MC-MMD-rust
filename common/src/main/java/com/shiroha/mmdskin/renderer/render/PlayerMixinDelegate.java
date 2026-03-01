@@ -14,11 +14,13 @@ import com.shiroha.mmdskin.renderer.core.RenderContext;
 import com.shiroha.mmdskin.renderer.core.RenderParams;
 import com.shiroha.mmdskin.renderer.model.AbstractMMDModel;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager;
+import com.shiroha.mmdskin.renderer.model.SceneModelManager;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.util.Mth;
 
 /**
  * 玩家渲染 Mixin 委托（DRY 原则）
@@ -146,5 +148,22 @@ public final class PlayerMixinDelegate {
         matrixStack.popPose();
 
         return RenderAction.CANCEL;
+    }
+
+    /**
+     * 场景模型渲染（独立于玩家模型，由 Mixin 在每次本地玩家渲染时调用）
+     */
+    public static void renderSceneModel(AbstractClientPlayer player, float tickDelta,
+                                         PoseStack matrixStack, int packedLight) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || !mc.player.getUUID().equals(player.getUUID())) return;
+
+        SceneModelManager sceneMgr = SceneModelManager.getInstance();
+        if (!sceneMgr.isActive() && !sceneMgr.isLoading()) return;
+
+        double renderX = Mth.lerp(tickDelta, player.xo, player.getX());
+        double renderY = Mth.lerp(tickDelta, player.yo, player.getY());
+        double renderZ = Mth.lerp(tickDelta, player.zo, player.getZ());
+        sceneMgr.renderScene(matrixStack, tickDelta, packedLight, renderX, renderY, renderZ);
     }
 }

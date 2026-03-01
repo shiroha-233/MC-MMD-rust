@@ -48,6 +48,7 @@ public class MmdSkinClient {
         PathConstants.ensureDirectoryExists(PathConstants.getCustomAnimDir());
         PathConstants.ensureDirectoryExists(PathConstants.getCustomMorphDir());
         PathConstants.ensureDirectoryExists(PathConstants.getDefaultMorphDir());
+        PathConstants.ensureDirectoryExists(PathConstants.getSceneModelDir());
     }
     
     /** 内置默认动画文件列表 */

@@ -16,6 +16,7 @@ public final class PathConstants {
     
     // ==================== 模型目录 ====================
     public static final String ENTITY_PLAYER_DIR = "EntityPlayer";
+    public static final String SCENE_MODEL_DIR = "SceneModel";
     
     // ==================== 动画目录 ====================
     public static final String DEFAULT_ANIM_DIR = "DefaultAnim";
@@ -76,6 +77,10 @@ public final class PathConstants {
     
     public static File getEntityPlayerDir() {
         return new File(getSkinRootDir(), ENTITY_PLAYER_DIR);
+    }
+    
+    public static File getSceneModelDir() {
+        return new File(getSkinRootDir(), SCENE_MODEL_DIR);
     }
     
     public static File getDefaultAnimDir() {
@@ -173,6 +178,13 @@ public final class PathConstants {
         File stageDir = getStageAnimDir();
         if (!stageDir.exists()) {
             stageDir.mkdirs();
+        }
+    }
+    
+    public static void ensureSceneModelDir() {
+        File sceneDir = getSceneModelDir();
+        if (!sceneDir.exists()) {
+            sceneDir.mkdirs();
         }
     }
 }
