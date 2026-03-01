@@ -1,6 +1,6 @@
-//! 动画系统 - 复刻 mdanceio 实现
+//! 动画系统
 //!
-//! 提供 VMD 动画解析、关键帧插值、动画层管理等功能。
+//! 支持 VMD / FBX 动画解析、关键帧插值、动画层管理等功能。
 
 mod bezier_curve;
 mod interpolation;
@@ -10,6 +10,9 @@ mod motion;
 mod vmd_loader;
 mod vpd_file;
 mod animation_layer;
+pub(crate) mod fbx_parser;
+pub(crate) mod fbx_bone_mapping;
+pub mod fbx_loader;
 
 pub use bezier_curve::{BezierCurve, BezierCurveCache, Curve};
 pub use interpolation::{KeyframeInterpolationPoint, BoneKeyframeInterpolation};

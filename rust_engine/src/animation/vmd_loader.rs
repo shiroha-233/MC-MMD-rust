@@ -356,6 +356,16 @@ impl VmdAnimation {
         }
     }
 
+    /// 从 Motion 数据直接创建（供 FBX 等外部格式使用）
+    pub fn from_motion(motion: Motion) -> Self {
+        Self { motion }
+    }
+
+    /// 获取 Motion 可变引用（用于 FBX 重定向姿态校正等后处理）
+    pub fn motion_mut(&mut self) -> &mut Motion {
+        &mut self.motion
+    }
+
     /// 是否包含相机数据
     pub fn has_camera(&self) -> bool {
         self.motion.has_camera_data()

@@ -10,6 +10,7 @@ use std::ptr;
 use std::sync::Arc;
 
 use crate::animation::{VmdAnimation, VmdFile};
+use crate::animation::fbx_loader;
 use crate::model::{load_pmx, load_vrm};
 use crate::texture::load_texture;
 
@@ -745,13 +746,30 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_LoadAnimation(
         Err(_) => return 0,
     };
 
-    match VmdFile::load(&filename_str) {
-        Ok(vmd) => {
-            let animation = VmdAnimation::from_vmd_file(vmd);
-            register_animation(animation)
+    // 支持 "path.fbx#StackName" 语法选择指定 AnimationStack
+    let (file_path, stack_name) = if let Some(pos) = filename_str.rfind('#') {
+        let lower = filename_str[..pos].to_ascii_lowercase();
+        if lower.ends_with(".fbx") {
+            (&filename_str[..pos], Some(&filename_str[pos + 1..]))
+        } else {
+            (filename_str.as_str(), None)
         }
+    } else {
+        (filename_str.as_str(), None)
+    };
+
+    let lower = file_path.to_ascii_lowercase();
+    let result = if lower.ends_with(".fbx") {
+        fbx_loader::load_fbx_animation(file_path, stack_name).map(|a| register_animation(a))
+    } else {
+        VmdFile::load(file_path)
+            .map(|vmd| register_animation(VmdAnimation::from_vmd_file(vmd)))
+    };
+
+    match result {
+        Ok(handle) => handle,
         Err(e) => {
-            log::error!("Failed to load VMD: {}", e);
+            log::error!("Failed to load animation: {}", e);
             0
         }
     }

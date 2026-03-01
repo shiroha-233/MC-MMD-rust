@@ -50,6 +50,9 @@ pub enum MmdError {
 
     #[error("VRM parse error: {0}")]
     VrmParse(String),
+
+    #[error("FBX parse error: {0}")]
+    FbxParse(String),
 }
 
 pub type Result<T> = std::result::Result<T, MmdError>;
