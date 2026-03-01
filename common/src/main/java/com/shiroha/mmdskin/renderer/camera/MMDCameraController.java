@@ -1,6 +1,7 @@
 package com.shiroha.mmdskin.renderer.camera;
 
 import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.renderer.animation.MMDAnimManager;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager;
 import com.shiroha.mmdskin.renderer.render.PlayerModelResolver;
 import com.shiroha.mmdskin.renderer.render.StageAnimSyncHelper;
@@ -549,6 +550,10 @@ public class MMDCameraController {
                 nf.SetAutoBlinkEnabled(handle, true);
                 nf.SetEyeTrackingEnabled(handle, true);
             }
+            mwed.model.changeAnim(MMDAnimManager.GetAnimModel(mwed.model, "idle"), 0);
+            mwed.model.setLayerLoop(1, true);
+            mwed.model.changeAnim(0, 1);
+            mwed.model.changeAnim(0, 2);
             mwed.model.resetPhysics();
             mwed.entityData.invalidateStateLayers();
         }
@@ -809,6 +814,7 @@ public class MMDCameraController {
                 Minecraft.getInstance().options.hideGui = previousHideGui;
             }
             clearLocalPlayerStageFlags();
+            restoreModelState(nf);
             if (this.motionAnimHandle != 0) nf.DeleteAnimation(this.motionAnimHandle);
             if (this.cameraAnimHandle != 0 && this.cameraAnimHandle != this.motionAnimHandle) {
                 nf.DeleteAnimation(this.cameraAnimHandle);
