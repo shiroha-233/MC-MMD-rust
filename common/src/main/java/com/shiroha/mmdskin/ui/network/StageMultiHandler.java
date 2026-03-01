@@ -68,9 +68,12 @@ public final class StageMultiHandler {
                 if (parts.length >= 3) handleWatchStart(senderUUID, parts[2]);
                 break;
             case "WATCH_END":
-                // exitStageMode 内部会根据 watchingStage 判断身份并清理
-                MMDCameraController.getInstance().exitStageMode();
-                mgr.onWatchStageEnd(senderUUID);
+                MMDCameraController controller = MMDCameraController.getInstance();
+                if (controller.isWatching()) {
+                    controller.exitWatchMode(false);
+                } else if (controller.isPlaying()) {
+                    controller.exitStageMode();
+                }
                 break;
         }
     }

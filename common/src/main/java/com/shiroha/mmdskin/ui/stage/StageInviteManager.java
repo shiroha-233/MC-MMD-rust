@@ -124,6 +124,11 @@ public final class StageInviteManager {
         this.watchingHostUUID = null;
         this.watchingStageData = null;
     }
+    
+    public void stopWatchingStageOnly() {
+        this.watchingStage = false;
+        this.watchingStageData = null;
+    }
 
     public Set<UUID> getAcceptedMembers() {
         Set<UUID> accepted = new HashSet<>();

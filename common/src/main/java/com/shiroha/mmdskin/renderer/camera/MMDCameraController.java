@@ -116,7 +116,13 @@ public class MMDCameraController {
         this.escWasPressed = false;
         this.lastEscTimeNs = 0;
         this.mouseReleased = false;
-        this.waitingForHost = false;
+        
+        com.shiroha.mmdskin.ui.stage.StageInviteManager mgr = 
+            com.shiroha.mmdskin.ui.stage.StageInviteManager.getInstance();
+        if (mgr.getWatchingHostUUID() == null) {
+            this.waitingForHost = false;
+        }
+        
         this.state = StageState.INTRO;
         this.cameraFov = introStartFov;
     }
@@ -281,7 +287,8 @@ public class MMDCameraController {
                 if (mc.player != null) {
                     StageAnimSyncHelper.endStageAnim(mc.player);
                 }
-                mgr.stopWatching();
+                this.waitingForHost = true;
+                mc.setScreen(new com.shiroha.mmdskin.ui.stage.StageSelectScreen());
             } else {
                 mgr.notifyMembersStageEnd();
                 mgr.resetHostState();
@@ -715,6 +722,10 @@ public class MMDCameraController {
     }
 
     public void exitWatchMode() {
+        exitWatchMode(true);
+    }
+    
+    public void exitWatchMode(boolean sendLeave) {
         if (state != StageState.WATCHING) return;
 
         audioPlayer.cleanup();
@@ -724,9 +735,16 @@ public class MMDCameraController {
         }
 
         Minecraft mc = Minecraft.getInstance();
+        com.shiroha.mmdskin.ui.stage.StageInviteManager mgr = 
+            com.shiroha.mmdskin.ui.stage.StageInviteManager.getInstance();
+            
         if (mc.player != null) {
             com.shiroha.mmdskin.renderer.render.StageAnimSyncHelper.endStageAnim(mc.player);
             StageNetworkHandler.sendStageEnd();
+            
+            if (sendLeave && mgr.getWatchingHostUUID() != null) {
+                StageNetworkHandler.sendLeave(mgr.getWatchingHostUUID());
+            }
 
             this.anchorX = mc.player.getX();
             this.anchorY = mc.player.getY();
@@ -769,8 +787,14 @@ public class MMDCameraController {
 
         restoreMouseGrab();
 
-        com.shiroha.mmdskin.ui.stage.StageInviteManager.getInstance().stopWatching();
-        this.watchingHostUUID = null;
+        if (sendLeave) {
+            mgr.stopWatching();
+            this.watchingHostUUID = null;
+        } else {
+            mgr.stopWatchingStageOnly();
+            this.waitingForHost = true;
+        }
+        
         this.state = StageState.OUTRO;
     }
 
