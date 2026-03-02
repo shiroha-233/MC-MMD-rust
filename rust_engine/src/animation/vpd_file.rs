@@ -1,6 +1,4 @@
 //! VPD 文件加载器
-//!
-//! 解析 Vocaloid Pose Data 文件
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};

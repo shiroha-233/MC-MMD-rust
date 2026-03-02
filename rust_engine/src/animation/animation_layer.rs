@@ -1,12 +1,6 @@
 //! 动画层系统 - 复刻 mdanceio 实现
-//!
-//! 支持多轨并行动画：
-//! - 每层有独立的时间轴、权重和播放状态
-//! - 支持淡入淡出过渡
-//! - 层间动画通过权重混合
-//! - 支持姿态缓存过渡（Pose Snapshot Blend）
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use glam::{Vec3, Quat};
@@ -16,9 +10,6 @@ use crate::morph::MorphManager;
 
 use super::VmdAnimation;
 
-// ============================================================================
-// 姿态快照
-// ============================================================================
 
 /// 单个骨骼的姿态数据
 #[derive(Clone, Debug)]
@@ -46,12 +37,10 @@ pub struct PoseSnapshot {
 }
 
 impl PoseSnapshot {
-    /// 从 BoneManager 和 MorphManager 捕获当前姿态
     pub fn capture(bone_manager: &BoneManager, morph_manager: &MorphManager) -> Self {
         let mut bone_poses = HashMap::new();
         let mut morph_weights = HashMap::new();
         
-        // 捕获所有骨骼姿态
         for i in 0..bone_manager.bone_count() {
             if let Some(bone) = bone_manager.get_bone(i) {
                 bone_poses.insert(i, BonePose {
@@ -61,7 +50,6 @@ impl PoseSnapshot {
             }
         }
         
-        // 捕获所有 Morph 权重
         for i in 0..morph_manager.morph_count() {
             let weight = morph_manager.get_morph_weight(i);
             if weight.abs() > 0.001 {
@@ -72,41 +60,28 @@ impl PoseSnapshot {
         Self { bone_poses, morph_weights }
     }
     
-    /// 检查快照是否为空
     pub fn is_empty(&self) -> bool {
         self.bone_poses.is_empty() && self.morph_weights.is_empty()
     }
 }
 
-/// 动画层状态
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AnimationLayerState {
-    /// 停止状态
     Stopped,
-    /// 播放中
     Playing,
     /// 暂停
     Paused,
-    /// 淡入中
     FadingIn,
-    /// 淡出中
     FadingOut,
-    /// 过渡中（从缓存姿态过渡到新动画）
     Transitioning,
 }
 
-/// 动画层配置
 #[derive(Clone, Debug)]
 pub struct AnimationLayerConfig {
-    /// 层权重（0.0 - 1.0）
     pub weight: f32,
-    /// 播放速度倍率
     pub speed: f32,
-    /// 是否循环播放
     pub loop_playback: bool,
-    /// 淡入时间（秒）
     pub fade_in_time: f32,
-    /// 淡出时间（秒）
     pub fade_out_time: f32,
 }
 
@@ -122,35 +97,24 @@ impl Default for AnimationLayerConfig {
     }
 }
 
-/// 单个动画层
 pub struct AnimationLayer {
-    /// 层ID
     pub id: usize,
-    /// 层名称
     pub name: String,
-    /// 当前动画
     animation: Option<Arc<VmdAnimation>>,
-    /// 当前播放帧
     current_frame: f32,
-    /// 当前状态
     state: AnimationLayerState,
-    /// 配置
     config: AnimationLayerConfig,
-    /// 实际权重（考虑淡入淡出）
     effective_weight: f32,
-    /// 淡入淡出进度（0.0 - 1.0）
     fade_progress: f32,
     /// 是否启用
     enabled: bool,
     
-    // ======== 姿态缓存过渡相关 ========
     
-    /// 过渡开始时的姿态快照
     transition_snapshot: Option<PoseSnapshot>,
-    /// 过渡时间（秒）
     transition_duration: f32,
-    /// 过渡进度（0.0 - 1.0）
     transition_progress: f32,
+    bone_mask: Option<HashSet<usize>>,
+    bone_exclude: Option<HashSet<usize>>,
 }
 
 impl AnimationLayer {
@@ -169,6 +133,8 @@ impl AnimationLayer {
             transition_snapshot: None,
             transition_duration: 0.0,
             transition_progress: 0.0,
+            bone_mask: None,
+            bone_exclude: None,
         }
     }
 
@@ -184,12 +150,6 @@ impl AnimationLayer {
     }
     
     /// 带过渡地切换动画（姿态缓存过渡）
-    /// 
-    /// # 参数
-    /// - `animation`: 新动画
-    /// - `transition_time`: 过渡时间（秒）
-    /// - `bone_manager`: 当前骨骼管理器（用于捕获姿态）
-    /// - `morph_manager`: 当前 Morph 管理器
     pub fn transition_to(
         &mut self,
         animation: Option<Arc<VmdAnimation>>,
@@ -395,8 +355,32 @@ impl AnimationLayer {
 
     /// 评估动画并应用到骨骼管理器
     pub fn evaluate(&self, bone_manager: &mut BoneManager, morph_manager: &mut MorphManager) {
+        if !self.enabled { return; }
+
+        // 有骨骼遮罩/排除时，保存需保护的骨骼姿态
+        let saved = {
+            let need_save = |i: &usize| -> bool {
+                if let Some(ref mask) = self.bone_mask {
+                    if !mask.contains(i) { return true; }
+                }
+                if let Some(ref excl) = self.bone_exclude {
+                    if excl.contains(i) { return true; }
+                }
+                false
+            };
+            if self.bone_mask.is_some() || self.bone_exclude.is_some() {
+                Some((0..bone_manager.bone_count())
+                    .filter(|i| need_save(i))
+                    .filter_map(|i| {
+                        bone_manager.get_bone(i).map(|b| (i, b.animation_translate, b.animation_rotate))
+                    })
+                    .collect::<Vec<_>>())
+            } else {
+                None
+            }
+        };
+
         if self.state == AnimationLayerState::Transitioning {
-            // 过渡模式：混合缓存姿态和新动画
             self.evaluate_transition(bone_manager, morph_manager);
         } else if let Some(ref animation) = self.animation {
             if self.effective_weight > 0.001 {
@@ -406,6 +390,14 @@ impl AnimationLayer {
                     bone_manager,
                     morph_manager,
                 );
+            }
+        }
+
+        // 恢复非遮罩骨骼
+        if let Some(saved_bones) = saved {
+            for (idx, trans, rot) in saved_bones {
+                bone_manager.set_bone_translation(idx, trans);
+                bone_manager.set_bone_rotation(idx, rot);
             }
         }
     }
@@ -448,6 +440,16 @@ impl AnimationLayer {
                 morph_manager.set_morph_weight(morph_idx, blended);
             }
         }
+    }
+
+    /// 设置骨骼遮罩
+    pub fn set_bone_mask(&mut self, mask: Option<HashSet<usize>>) {
+        self.bone_mask = mask;
+    }
+
+    /// 设置骨骼排除集
+    pub fn set_bone_exclude(&mut self, exclude: Option<HashSet<usize>>) {
+        self.bone_exclude = exclude;
     }
 
     /// 获取当前状态
@@ -658,6 +660,21 @@ impl AnimationLayerManager {
     pub fn reset_all(&mut self) {
         for layer in &mut self.layers {
             layer.reset();
+        }
+    }
+
+    /// 检测层动画是否播完（非循环动画到达末帧后 Stopped）
+    pub fn is_layer_finished(&self, layer_id: usize) -> bool {
+        match self.layers.get(layer_id) {
+            Some(layer) => {
+                if layer.animation.is_none() {
+                    return true;
+                }
+                // 非循环 + 已停止 = 播放完毕
+                !layer.config.loop_playback && layer.state == AnimationLayerState::Stopped
+                    && layer.current_frame > 0.0
+            }
+            None => true,
         }
     }
 

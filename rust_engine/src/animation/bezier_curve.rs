@@ -1,6 +1,4 @@
 //! 贝塞尔曲线 - 复刻 mdanceio 实现
-//!
-//! 用于 VMD 动画的非线性插值
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -29,11 +27,6 @@ impl BezierCurve {
     const P1: Vec2 = Vec2::ONE;
 
     /// 创建新的贝塞尔曲线
-    /// 
-    /// # 参数
-    /// - `c0`: 控制点1 (归一化到 0-1 范围)
-    /// - `c1`: 控制点2 (归一化到 0-1 范围)
-    /// - `interval`: 采样间隔数
     pub fn new(c0: Vec2, c1: Vec2, interval: u32) -> Self {
         let interval = interval.max(1);
         let mut points = Vec::with_capacity((interval + 1) as usize);

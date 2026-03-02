@@ -1,7 +1,4 @@
 //! MMD 物理配置
-//!
-//! Bullet3 原生引擎简化配置。Bullet3 内置处理阻尼、约束求解等，
-//! 这里只保留可调节的高级参数。
 
 use once_cell::sync::Lazy;
 use std::sync::RwLock;

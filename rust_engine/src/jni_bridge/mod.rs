@@ -14,7 +14,12 @@ use once_cell::sync::Lazy;
 
 use crate::model::MmdModel;
 use crate::animation::VmdAnimation;
+use crate::animation::fbx_loader::FbxCache;
 use crate::texture::Texture;
+
+/// FBX 文件解析缓存（避免重复解析大文件）
+pub static FBX_CACHE: Lazy<RwLock<HashMap<String, Arc<FbxCache>>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 /// 全局模型存储
 pub static MODELS: Lazy<RwLock<HashMap<i64, Arc<Mutex<MmdModel>>>>> = 

@@ -1,6 +1,4 @@
 //! Motion 核心数据结构 - 复刻 mdanceio 实现
-//!
-//! 存储完整的动画数据，包括骨骼轨道和 Morph 轨道
 
 use std::collections::HashMap;
 

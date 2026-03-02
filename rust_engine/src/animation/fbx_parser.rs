@@ -1,6 +1,4 @@
 //! FBX 二进制格式解析器
-//!
-//! 支持 FBX 7400/7500 二进制格式，仅提取动画所需的节点数据。
 
 use std::io::{Read, Seek, SeekFrom};
 use byteorder::{LittleEndian, ReadBytesExt};

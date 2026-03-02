@@ -1,12 +1,4 @@
 //! MMD Engine - Rust 实现的 MMD 运行时引擎
-//!
-//! 提供与 C++ 原生引擎等价的功能：
-//! - PMX/PMD 模型加载
-//! - VMD 动画解析和播放
-//! - 骨骼系统和 IK 求解
-//! - Morph 变形系统
-//! - 顶点蒙皮计算
-//! - JNI 接口
 
 pub mod animation;
 pub mod jni_bridge;

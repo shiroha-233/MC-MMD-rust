@@ -837,6 +837,51 @@ impl MmdModel {
             .unwrap_or(0)
     }
 
+    /// 检测层动画是否播放完毕
+    pub fn is_layer_finished(&self, layer_id: usize) -> bool {
+        self.animation_layer_manager.is_layer_finished(layer_id)
+    }
+
+    /// 按根骨骼名设置层的骨骼遮罩（仅影响该骨骼及其子孙）
+    pub fn set_layer_bone_mask_by_name(&mut self, layer_id: usize, root_bone_name: Option<&str>) -> bool {
+        let mask = match root_bone_name {
+            Some(name) => {
+                if let Some(idx) = self.bone_manager.find_bone_by_name(name) {
+                    Some(self.bone_manager.collect_descendants(idx))
+                } else {
+                    return false;
+                }
+            }
+            None => None,
+        };
+        if let Some(layer) = self.animation_layer_manager.get_layer_mut(layer_id) {
+            layer.set_bone_mask(mask);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// 按根骨骼名设置层的骨骼排除集（该骨骼及其子孙不受动画影响）
+    pub fn set_layer_bone_exclude_by_name(&mut self, layer_id: usize, root_bone_name: Option<&str>) -> bool {
+        let exclude = match root_bone_name {
+            Some(name) => {
+                if let Some(idx) = self.bone_manager.find_bone_by_name(name) {
+                    Some(self.bone_manager.collect_descendants(idx))
+                } else {
+                    return false;
+                }
+            }
+            None => None,
+        };
+        if let Some(layer) = self.animation_layer_manager.get_layer_mut(layer_id) {
+            layer.set_bone_exclude(exclude);
+            true
+        } else {
+            false
+        }
+    }
+
     /// 获取所有活跃层中的最大帧数
     pub fn get_max_frame(&self) -> u32 {
         (0..self.animation_layer_manager.layer_count())

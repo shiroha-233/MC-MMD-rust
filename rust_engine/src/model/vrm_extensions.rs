@@ -33,7 +33,6 @@ pub struct VrmExpressions {
     pub map: HashMap<String, Vec<(usize, f32)>>,
 }
 
-// ── Spring Bone 数据结构 ──
 
 /// 碰撞器形状
 #[derive(Debug, Clone)]

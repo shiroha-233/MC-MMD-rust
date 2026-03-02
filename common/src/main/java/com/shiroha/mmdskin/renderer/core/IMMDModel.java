@@ -6,72 +6,26 @@ import net.minecraft.world.entity.Entity;
 import org.joml.Vector3f;
 
 /**
- * MMD 模型接口 (ISP - 接口隔离原则)
- * 
- * 定义 MMD 模型的核心操作，所有模型实现类必须实现此接口。
+ * MMD 模型接口
  */
 public interface IMMDModel {
     
-    /**
-     * 渲染模型
-     * 
-     * @param entityIn 实体
-     * @param entityYaw 实体偏航角
-     * @param entityPitch 实体俯仰角
-     * @param entityTrans 实体位移
-     * @param tickDelta 插值因子
-     * @param mat 变换矩阵栈
-     * @param packedLight 打包光照值
-     * @param context 渲染上下文
-     */
     void render(Entity entityIn, float entityYaw, float entityPitch, 
             Vector3f entityTrans, float tickDelta, PoseStack mat, int packedLight,
             RenderContext context);
 
-    /**
-     * 切换动画
-     * 
-     * @param anim 动画句柄
-     * @param layer 动画层
-     */
     void changeAnim(long anim, long layer);
     
-    /**
-     * 带过渡地切换动画
-     * 
-     * @param anim 动画句柄
-     * @param layer 动画层
-     * @param transitionTime 过渡时间（秒）
-     */
     void transitionAnim(long anim, long layer, float transitionTime);
 
-    /**
-     * 设置动画层是否循环播放
-     * 
-     * @param layer 动画层
-     * @param loop true=循环，false=播放到尾帧后停留
-     */
     default void setLayerLoop(long layer, boolean loop) {}
 
-    /**
-     * 重置物理模拟
-     */
     void resetPhysics();
 
-    /**
-     * 获取模型本地句柄
-     */
     long getModelHandle();
 
-    /**
-     * 获取模型目录路径
-     */
     String getModelDir();
     
-    /**
-     * 获取模型名称（文件夹名）
-     * 默认实现从 modelDir 路径中提取最后一段目录名
-     */
     default String getModelName() {
         String dir = getModelDir();
         if (dir == null || dir.isEmpty()) return "";
@@ -81,22 +35,20 @@ public interface IMMDModel {
         return lastSlash >= 0 ? dir.substring(lastSlash + 1) : dir;
     }
     
-    /**
-     * 释放模型资源（OpenGL 缓冲区、本地内存等）
-     * 实现类应在此方法中清理所有资源
-     */
+    default boolean setLayerBoneMask(int layer, String rootBoneName) {
+        return com.shiroha.mmdskin.NativeFunc.GetInst()
+                .SetLayerBoneMask(getModelHandle(), layer, rootBoneName);
+    }
+
+    default boolean setLayerBoneExclude(int layer, String rootBoneName) {
+        return com.shiroha.mmdskin.NativeFunc.GetInst()
+                .SetLayerBoneExclude(getModelHandle(), layer, rootBoneName);
+    }
+
     void dispose();
     
-    /**
-     * 获取模型 VRAM 占用（字节）
-     * 包括 GL 缓冲区（VBO/IBO/SSBO）的显存占用，不含纹理
-     */
     default long getVramUsage() { return 0; }
     
-    /**
-     * 获取模型 RAM 占用（字节）
-     * 包括 Rust 原生堆内存 + Java 侧堆外缓冲区（ByteBuffer/FloatBuffer）
-     */
     default long getRamUsage() {
         try {
             return com.shiroha.mmdskin.NativeFunc.GetInst().GetModelMemoryUsage(getModelHandle());

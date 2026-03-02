@@ -1,6 +1,4 @@
 //! 关键帧定义 - 复刻 mdanceio 实现
-//!
-//! 定义骨骼关键帧和 Morph 关键帧的数据结构
 
 use glam::{Vec3, Quat};
 

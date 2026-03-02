@@ -1,6 +1,4 @@
 //! VMD 文件加载器 - 复刻 mdanceio 实现
-//!
-//! 解析 VMD 动画文件并转换为 Motion 数据
 
 use std::io::{BufReader, Read, Seek};
 use std::fs::File;

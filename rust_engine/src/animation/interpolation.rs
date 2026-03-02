@@ -1,19 +1,9 @@
 //! 插值系统 - 复刻 mdanceio 实现
-//!
-//! 提供关键帧插值点和各种插值计算
 
 use glam::Vec3;
 use crate::animation::bezier_curve::{BezierCurveFactory, Curve};
 
 /// 计算插值系数
-/// 
-/// # 参数
-/// - `prev_frame_index`: 前一帧索引
-/// - `next_frame_index`: 后一帧索引
-/// - `frame_index`: 当前帧索引
-/// 
-/// # 返回
-/// 归一化的插值系数 [0, 1]
 #[inline]
 pub fn coefficient(prev_frame_index: u32, next_frame_index: u32, frame_index: u32) -> f32 {
     if prev_frame_index >= next_frame_index {
@@ -26,8 +16,6 @@ pub fn coefficient(prev_frame_index: u32, next_frame_index: u32, frame_index: u3
 }
 
 /// 关键帧插值点
-/// 
-/// 存储贝塞尔曲线的两个控制点，用于非线性插值
 #[derive(Debug, Clone, Copy)]
 pub struct KeyframeInterpolationPoint {
     /// 控制点1 (x, y)

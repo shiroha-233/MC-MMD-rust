@@ -1,6 +1,4 @@
 //! FBX 骨骼名 → MMD 标准骨骼名映射
-//!
-//! 支持 Mixamo 和 Unreal Mannequin 两种常见 FBX 骨架命名规范。
 
 /// 将 FBX 骨骼名映射到 PMX 标准骨骼名（依次尝试 Mixamo → Unreal Mannequin → 原名）
 pub fn map_fbx_bone_name(fbx_name: &str) -> String {

@@ -1,6 +1,4 @@
 //! MMD 物理系统模块
-//!
-//! 使用 Bullet3 物理引擎（通过 C FFI）实现 MMD 物理模拟。
 
 use glam::{Mat4, Vec3};
 

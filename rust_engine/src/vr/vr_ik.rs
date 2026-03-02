@@ -1,6 +1,4 @@
 //! VR IK 求解器
-//!
-//! 头部驱动 + 手臂 Two-Bone IK，在 update_node_animation 之后执行
 
 use glam::{Mat4, Quat, Vec3};
 use crate::skeleton::BoneManager;

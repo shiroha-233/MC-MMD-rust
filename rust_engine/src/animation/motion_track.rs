@@ -1,6 +1,4 @@
 //! 动画轨道 - 复刻 mdanceio 实现
-//!
-//! 存储单个骨骼或 Morph 的所有关键帧，并提供查找和插值功能
 
 use std::collections::BTreeMap;
 use glam::{Vec3, Quat, Mat4};

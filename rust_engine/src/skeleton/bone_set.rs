@@ -1,20 +1,10 @@
 //! 骨骼集合 - 参考 nphysics Multibody 设计
-//!
-//! BoneSet 管理整个骨骼层次结构，类似于 nphysics 的 Multibody。
-//! 核心职责：
-//! - 骨骼的添加和管理
-//! - 层次结构的构建
-//! - 变换的更新和传播
-//! - IK 求解
 
 use glam::{Vec3, Quat, Mat4};
 use std::collections::{HashMap, HashSet};
 
 use super::{BoneLink, IkSolver};
 
-// ============================================================================
-// 骨骼集合
-// ============================================================================
 
 /// 骨骼集合 - 类似 nphysics Multibody
 ///
@@ -575,6 +565,22 @@ impl BoneSet {
         }
     }
     
+    /// 收集指定骨骼及其所有子孙的索引集合
+    pub fn collect_descendants(&self, root_index: usize) -> HashSet<usize> {
+        let mut result = HashSet::new();
+        self.collect_descendants_recursive(root_index, &mut result);
+        result
+    }
+
+    fn collect_descendants_recursive(&self, index: usize, result: &mut HashSet<usize>) {
+        result.insert(index);
+        if index < self.children_cache.len() {
+            for &child in &self.children_cache[index] {
+                self.collect_descendants_recursive(child, result);
+            }
+        }
+    }
+
     /// 批量更新物理骨骼后，更新非物理骨骼
     pub fn update_non_physics_children(&mut self, physics_bone_indices: &HashSet<usize>) {
         for &idx in &self.sorted_indices.clone() {
