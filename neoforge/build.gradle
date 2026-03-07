@@ -137,10 +137,11 @@ dependencies {
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
 
-    // JLayer - MP3 解码器（舞台模式音频播放，shadow 打包进 JAR）
-    // 必须使用 common 配置（流入 developmentNeoForge），否则 NeoForge ModuleClassLoader 找不到
-    common("javazoom:jlayer:1.0.1")
-    shadowCommon("javazoom:jlayer:1.0.1")
+    // JLayer - MP3 解码器（舞台模式音频播放）
+    // common 配置使其在 dev 运行时可用（developmentNeoForge extends common）
+    // include 配置使其以 Jar-in-Jar 内嵌到 mod JAR
+    common("javazoom:jlayer:1.0.1") { transitive = false }
+    include("javazoom:jlayer:1.0.1")
 
     // NeoForge 平台
     neoForge "net.neoforged:neoforge:${neoforge_version}"
