@@ -138,21 +138,31 @@ public class MMDCameraController {
 
         this.motionAnimHandle = motionAnim;
 
+        // 修复：无相机数据时不再 return，改为设置 cameraAnimHandle = 0 并继续执行
+        // 这样可以继续播放音频，只是相机视角保持不变
+        boolean hasCameraData = false;
         if (cameraAnim != 0 && nf.HasCameraData(cameraAnim)) {
             this.cameraAnimHandle = cameraAnim;
+            hasCameraData = true;
         } else if (motionAnim != 0 && nf.HasCameraData(motionAnim)) {
             this.cameraAnimHandle = motionAnim;
+            hasCameraData = true;
         } else {
-            logger.warn("[舞台模式] 没有可用的相机数据");
-            return false;
+            // 无相机数据：记录警告但不 return，继续执行（音频仍会播放）
+            logger.warn("[舞台模式] 没有可用的相机数据，将以无相机模式继续");
+            this.cameraAnimHandle = 0;
         }
 
-        this.maxFrame = nf.GetAnimMaxFrame(this.cameraAnimHandle);
-        this.currentFrame = 0.0f;
-        this.cinematicMode = cinematic;
-        this.cameraHeightOffset = heightOffset;
-        this.modelName = modelName;
-        this.cameraData.setAnimHandle(this.cameraAnimHandle);
+        // 修复：无相机数据时使用动作动画的帧数作为最大帧
+        if (hasCameraData) {
+            this.maxFrame = nf.GetAnimMaxFrame(this.cameraAnimHandle);
+            this.cameraData.setAnimHandle(this.cameraAnimHandle);
+        } else if (motionAnim != 0) {
+            // 无相机但有动作时，使用动作帧数
+            this.maxFrame = nf.GetAnimMaxFrame(motionAnim);
+        } else {
+            this.maxFrame = 0;
+        }
 
         if (cinematic) {
             Minecraft mc = Minecraft.getInstance();
@@ -412,24 +422,27 @@ public class MMDCameraController {
             }
         }
 
-        cameraData.update(currentFrame);
+        // 修复：无相机数据时不更新相机位置，保持玩家当前视角
+        if (cameraAnimHandle != 0) {
+            cameraData.update(currentFrame);
 
-        Vector3f mmdPos = cameraData.getPosition();
-        float sx = mmdPos.x * MMD_TO_MC_SCALE;
-        float sy = mmdPos.y * MMD_TO_MC_SCALE;
-        float sz = mmdPos.z * MMD_TO_MC_SCALE;
+            Vector3f mmdPos = cameraData.getPosition();
+            float sx = mmdPos.x * MMD_TO_MC_SCALE;
+            float sy = mmdPos.y * MMD_TO_MC_SCALE;
+            float sz = mmdPos.z * MMD_TO_MC_SCALE;
 
-        float yawRad = (float) Math.toRadians(anchorYaw);
-        float cos = (float) Math.cos(yawRad);
-        float sin = (float) Math.sin(yawRad);
-        cameraX = anchorX + sx * cos - sz * sin;
-        cameraY = anchorY + sy + cameraHeightOffset;
-        cameraZ = anchorZ + sx * sin + sz * cos;
+            float yawRad = (float) Math.toRadians(anchorYaw);
+            float cos = (float) Math.cos(yawRad);
+            float sin = (float) Math.sin(yawRad);
+            cameraX = anchorX + sx * cos - sz * sin;
+            cameraY = anchorY + sy + cameraHeightOffset;
+            cameraZ = anchorZ + sx * sin + sz * cos;
 
-        cameraPitch = (float) Math.toDegrees(cameraData.getPitch());
-        cameraYaw = (float) Math.toDegrees(cameraData.getYaw()) + anchorYaw;
-        cameraRoll = (float) Math.toDegrees(cameraData.getRoll());
-        cameraFov = cameraData.getFov();
+            cameraPitch = (float) Math.toDegrees(cameraData.getPitch());
+            cameraYaw = (float) Math.toDegrees(cameraData.getYaw()) + anchorYaw;
+            cameraRoll = (float) Math.toDegrees(cameraData.getRoll());
+            cameraFov = cameraData.getFov();
+        }
     }
 
     private void updateOutro() {
