@@ -17,7 +17,7 @@ use crate::{MmdError, Result};
 /// FBX 时间单位：1秒 = 46186158000
 const FBX_TICKS_PER_SECOND: f64 = 46_186_158_000.0;
 const VMD_FPS: f64 = 30.0;
-pub const FBX_RETARGET_REV: &str = "fbx-retarget-2026-03-02-arm-reference-dir";
+pub const FBX_RETARGET_REV: &str = "fbx-retarget-2026-03-02-arm-shoulder-dynamic";
 
 /// FBX 模型节点（骨骼）信息
 struct FbxModel {
@@ -970,6 +970,8 @@ pub fn apply_arm_retarget_correction_with_reference(
     reference_dirs: Option<&HashMap<String, Vec3>>,
 ) {
     const MIN_CORRECTION_DEG: f32 = 0.25;
+    const SHOULDER_DYNAMIC_BOOST: f32 = 0.45;
+    const SHOULDER_MAX_WEIGHT: f32 = 0.85;
     let arm_bones: &[(&str, &str, Option<Vec3>, f32, f32)] = &[
         ("左肩", "左腕", None, 70.0, 0.35),
         ("右肩", "右腕", None, 70.0, 0.35),
@@ -1013,14 +1015,16 @@ pub fn apply_arm_retarget_correction_with_reference(
             correction = Quat::from_axis_angle(axis.normalize(), clamped);
         }
 
-        let weighted_angle = clamped * weight.clamp(0.0, 1.0);
-        if axis.length_squared() > 1e-8 {
-            correction = Quat::from_axis_angle(axis.normalize(), weighted_angle);
+        let axis_n = if axis.length_squared() > 1e-8 {
+            axis.normalize()
         } else {
             continue;
-        }
+        };
+        let base_weight = weight.clamp(0.0, 1.0);
+        let base_weighted_angle = clamped * base_weight;
+        correction = Quat::from_axis_angle(axis_n, base_weighted_angle);
 
-        let total_angle_deg = weighted_angle.to_degrees();
+        let total_angle_deg = base_weighted_angle.to_degrees();
         if total_angle_deg < MIN_CORRECTION_DEG {
             continue;
         }
@@ -1037,10 +1041,20 @@ pub fn apply_arm_retarget_correction_with_reference(
             total_angle_deg
         );
 
+        let is_shoulder = fallback_target.is_none() && max_correction_deg <= 70.0;
         if let Some(track) = animation.motion_mut().bone_tracks.get_mut(upper) {
             for kf in track.keyframes.values_mut() {
-                // 动画增量已在统一参考系中，最后叠加静止姿态偏移更稳定。
-                kf.orientation = (kf.orientation * correction).normalize();
+                // 抬手/下压幅度越大，肩骨校正权重越高，减少上下端误差。
+                let frame_correction = if is_shoulder {
+                    let posed_dir = (kf.orientation * pmx_dir).normalize_or_zero();
+                    let lift_factor = posed_dir.y.abs().clamp(0.0, 1.0);
+                    let dynamic_weight = (base_weight + lift_factor * SHOULDER_DYNAMIC_BOOST)
+                        .clamp(0.0, SHOULDER_MAX_WEIGHT);
+                    Quat::from_axis_angle(axis_n, clamped * dynamic_weight)
+                } else {
+                    correction
+                };
+                kf.orientation = (kf.orientation * frame_correction).normalize();
             }
         }
     }
