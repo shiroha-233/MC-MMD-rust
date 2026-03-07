@@ -110,7 +110,7 @@ public class ModelSelectorScreen extends Screen {
         this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), btn -> this.onClose())
             .bounds(panelX + 4, btnY, btnW, 14).build());
         
-        this.addRenderableWidget(Button.builder(Component.literal("刷新"), btn -> refreshModels())
+        this.addRenderableWidget(Button.builder(Component.translatable("gui.mmdskin.refresh"), btn -> refreshModels())
             .bounds(panelX + 4 + btnW + 4, btnY, btnW, 14).build());
     }
 
@@ -173,7 +173,7 @@ public class ModelSelectorScreen extends Screen {
         guiGraphics.drawCenteredString(this.font, this.title, cx, panelY + 4, COLOR_ACCENT);
         
         // 统计
-        String info = (modelCards.size() - 1) + " 模型 · " + truncate(currentModel, 10);
+        String info = Component.translatable("gui.mmdskin.model_selector.stats", modelCards.size() - 1, truncate(currentModel, 10)).getString();
         guiGraphics.drawCenteredString(this.font, info, cx, panelY + 16, COLOR_TEXT_DIM);
         
         // 分隔线

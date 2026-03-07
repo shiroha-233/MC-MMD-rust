@@ -70,7 +70,9 @@ public class ActionWheelScreen extends AbstractWheelScreen {
             renderDividerLines(guiGraphics);
             renderOuterRing(guiGraphics);
             
-            String centerText = selectedSlot >= 0 ? "◆ 点击选择" : "选择动作";
+            String centerText = selectedSlot >= 0
+                ? Component.translatable("gui.mmdskin.action_wheel.click_select").getString()
+                : Component.translatable("gui.mmdskin.select_action").getString();
             renderCenterCircle(guiGraphics, centerText, 0xFF60A0D0);
             renderActionLabels(guiGraphics);
         }
@@ -87,7 +89,7 @@ public class ActionWheelScreen extends AbstractWheelScreen {
         guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, 0xC0182030);
         drawRectOutline(guiGraphics, boxX, boxY, boxWidth, boxHeight, style.lineColor());
         
-        Component hint = Component.literal("没有配置动作，点击 ⚙ 配置");
+        Component hint = Component.translatable("gui.mmdskin.action_wheel.no_actions");
         guiGraphics.drawCenteredString(this.font, hint, centerX, centerY - 4, 0xFFFFFF);
     }
 

@@ -160,7 +160,7 @@ public class MaidConfigWheelScreen extends AbstractWheelScreen {
             Minecraft.getInstance().setScreen(screen);
         } else {
             Minecraft.getInstance().gui.getChat().addMessage(
-                Component.literal("§c未找到女仆模型，请先为女仆选择一个MMD模型"));
+                Component.translatable("message.mmdskin.maid.model_not_found"));
         }
     }
 

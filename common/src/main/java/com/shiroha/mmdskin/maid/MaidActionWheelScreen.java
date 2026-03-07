@@ -72,7 +72,9 @@ public class MaidActionWheelScreen extends AbstractWheelScreen {
             renderDividerLines(guiGraphics);
             renderOuterRing(guiGraphics);
             
-            String centerText = selectedSlot >= 0 ? "◆ 点击选择" : maidName;
+            String centerText = selectedSlot >= 0
+                ? Component.translatable("gui.mmdskin.action_wheel.click_select").getString()
+                : maidName;
             renderCenterCircle(guiGraphics, centerText, 0xFFD060A0);
             renderActionLabels(guiGraphics);
         }
@@ -89,7 +91,7 @@ public class MaidActionWheelScreen extends AbstractWheelScreen {
         guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, 0xC0301828);
         drawRectOutline(guiGraphics, boxX, boxY, boxWidth, boxHeight, style.lineColor());
         
-        Component hint = Component.literal("没有配置动作");
+        Component hint = Component.translatable("gui.mmdskin.maid_action_wheel.no_actions");
         guiGraphics.drawCenteredString(this.font, hint, centerX, centerY - 4, 0xFFFFFF);
     }
 

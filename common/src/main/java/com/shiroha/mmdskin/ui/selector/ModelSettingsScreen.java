@@ -225,25 +225,45 @@ public class ModelSettingsScreen extends Screen {
     }
     
     private void renderQuickSlots(GuiGraphics guiGraphics, int x, int y, int w, int mouseX, int mouseY) {
-        ModelSelectorConfig cfg = ModelSelectorConfig.getInstance();
-        int slotH = 16;
-        int spacing = 2;
+        ModelSelectorConfig selectorConfig = ModelSelectorConfig.getInstance();
+        int btnW = (w - 4) / 2;
+        int btnH = 16;
+
         for (int i = 0; i < ModelSelectorConfig.QUICK_SLOT_COUNT; i++) {
-            int sy = y + i * (slotH + spacing);
-            boolean hovered = mouseX >= x && mouseX <= x + w && mouseY >= sy && mouseY <= sy + slotH;
-            String bound = cfg.getQuickSlotModel(i);
-            boolean isBound = modelName.equals(bound);
-            
-            int bgColor = hovered ? COLOR_ITEM_HOVER : 0;
-            if (bgColor != 0) guiGraphics.fill(x, sy, x + w, sy + slotH, bgColor);
-            
+            int col = i % 2;
+            int row = i / 2;
+            int btnX = x + col * (btnW + 4);
+            int btnY = y + row * (btnH + 3);
+
+            String boundModel = selectorConfig.getQuickSlotModel(i);
+            boolean isBoundToThis = modelName.equals(boundModel);
+            boolean isBoundToOther = boundModel != null && !boundModel.isEmpty() && !isBoundToThis;
+            boolean isHovered = mouseX >= btnX && mouseX <= btnX + btnW
+                && mouseY >= btnY && mouseY <= btnY + btnH;
+
+            int bgColor;
+            if (isBoundToThis) {
+                bgColor = COLOR_SLOT_BOUND;
+            } else if (isHovered) {
+                bgColor = COLOR_ITEM_HOVER;
+            } else {
+                bgColor = COLOR_SLOT_UNBOUND;
+            }
+            guiGraphics.fill(btnX, btnY, btnX + btnW, btnY + btnH, bgColor);
+
             String label = Component.translatable("gui.mmdskin.model_settings.slot", i + 1).getString();
-            guiGraphics.drawString(this.font, label, x + 4, sy + 4, COLOR_TEXT);
-            
-            int dotX = x + w - 12;
-            int dotY = sy + 4;
-            int dotColor = isBound ? COLOR_SLOT_BOUND : COLOR_SLOT_UNBOUND;
-            guiGraphics.fill(dotX, dotY, dotX + 8, dotY + 8, dotColor);
+            int labelColor = isBoundToThis ? 0xFFFFFFFF : COLOR_TEXT;
+            int labelW = this.font.width(label);
+            guiGraphics.drawString(this.font, label, btnX + (btnW - labelW) / 2, btnY + 4, labelColor);
+
+            if (isBoundToOther && isHovered) {
+                String hint = truncate(boundModel, 14);
+                int hintW = this.font.width(hint);
+                int hintX = btnX + (btnW - hintW) / 2;
+                int hintY = btnY + btnH + 1;
+                guiGraphics.fill(hintX - 2, hintY - 1, hintX + hintW + 2, hintY + 9, 0xE0182030);
+                guiGraphics.drawString(this.font, hint, hintX, hintY, COLOR_TEXT_DIM);
+            }
         }
     }
     
@@ -427,11 +447,16 @@ public class ModelSettingsScreen extends Screen {
     }
     
     private boolean handleQuickSlotClick(double mouseX, double mouseY, int x, int w) {
-        int slotH = 16;
-        int spacing = 2;
+        int btnW = (w - 4) / 2;
+        int btnH = 16;
+        int y = quickSlotSectionY;
+
         for (int i = 0; i < ModelSelectorConfig.QUICK_SLOT_COUNT; i++) {
-            int sy = quickSlotSectionY + i * (slotH + spacing);
-            if (mouseX >= x && mouseX <= x + w && mouseY >= sy && mouseY <= sy + slotH) {
+            int col = i % 2;
+            int row = i / 2;
+            int btnX = x + col * (btnW + 4);
+            int btnY = y + row * (btnH + 3);
+            if (mouseX >= btnX && mouseX <= btnX + btnW && mouseY >= btnY && mouseY <= btnY + btnH) {
                 toggleQuickSlot(i);
                 return true;
             }
@@ -440,12 +465,14 @@ public class ModelSettingsScreen extends Screen {
     }
     
     private void toggleQuickSlot(int slot) {
-        ModelSelectorConfig cfg = ModelSelectorConfig.getInstance();
-        String bound = cfg.getQuickSlotModel(slot);
-        if (modelName.equals(bound)) {
-            cfg.setQuickSlotModel(slot, null);
+        ModelSelectorConfig selectorConfig = ModelSelectorConfig.getInstance();
+        String currentBound = selectorConfig.getQuickSlotModel(slot);
+        if (modelName.equals(currentBound)) {
+            selectorConfig.setQuickSlotModel(slot, null);
+            logger.info("取消快捷槽位 {} 绑定", slot + 1);
         } else {
-            cfg.setQuickSlotModel(slot, modelName);
+            selectorConfig.setQuickSlotModel(slot, modelName);
+            logger.info("模型 {} 绑定到快捷槽位 {}", modelName, slot + 1);
         }
     }
     

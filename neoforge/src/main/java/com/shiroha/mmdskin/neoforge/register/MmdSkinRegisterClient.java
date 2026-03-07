@@ -42,9 +42,6 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.network.PacketDistributor;
-
-import net.minecraftforge.event.entity.living.LivingDeathEvent;
-import net.minecraftforge.event.entity.player.PlayerEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.glfw.GLFW;
@@ -331,34 +328,6 @@ public class MmdSkinRegisterClient {
             MmdSkinRendererPlayerHelper.onDisconnect();
             BoneSyncManager.onDisconnect();
             com.shiroha.mmdskin.ui.stage.StageInviteManager.getInstance().onDisconnect();
-        }
-
-        /**
-         * 玩家死亡事件 - 退出舞台模式以防止视角锁定
-         */
-        @SubscribeEvent
-        public static void onPlayerDeath(LivingDeathEvent event) {
-            Minecraft mc = Minecraft.getInstance();
-            if (mc.player != null && event.getEntity().getUUID().equals(mc.player.getUUID())) {
-                MMDCameraController controller = MMDCameraController.getInstance();
-                if (controller.isInStageMode()) {
-                    controller.exitStageMode();
-                }
-            }
-        }
-
-        /**
-         * 玩家复活事件 - 强制退出舞台模式
-         */
-        @SubscribeEvent
-        public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
-            Minecraft mc = Minecraft.getInstance();
-            if (mc.player != null && event.getEntity().getUUID().equals(mc.player.getUUID())) {
-                MMDCameraController controller = MMDCameraController.getInstance();
-                if (controller.isInStageMode()) {
-                    controller.exitStageMode();
-                }
-            }
         }
 
         /**

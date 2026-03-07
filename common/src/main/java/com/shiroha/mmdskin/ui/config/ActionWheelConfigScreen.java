@@ -89,13 +89,13 @@ public class ActionWheelConfigScreen extends Screen {
         rightMaxScroll = Math.max(0, selectedActions.size() * (ITEM_HEIGHT + ITEM_SPACING) - panelHeight + PANEL_PADDING * 2);
         
         // 底部按钮
-        this.addRenderableWidget(Button.builder(Component.literal("刷新"), btn -> rescan())
+        this.addRenderableWidget(Button.builder(Component.translatable("gui.mmdskin.refresh"), btn -> rescan())
             .bounds(centerX - 155, buttonY, 70, 20).build());
         
-        this.addRenderableWidget(Button.builder(Component.literal("全选"), btn -> selectAll())
+        this.addRenderableWidget(Button.builder(Component.translatable("gui.mmdskin.select_all"), btn -> selectAll())
             .bounds(centerX - 80, buttonY, 50, 20).build());
         
-        this.addRenderableWidget(Button.builder(Component.literal("清空"), btn -> clearAll())
+        this.addRenderableWidget(Button.builder(Component.translatable("gui.mmdskin.clear_all"), btn -> clearAll())
             .bounds(centerX - 25, buttonY, 50, 20).build());
         
         this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), btn -> saveAndClose())
@@ -149,21 +149,21 @@ public class ActionWheelConfigScreen extends Screen {
         guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 12, COLOR_TEXT_PRIMARY);
         
         // 副标题
-        String subtitle = String.format("可用: %d  |  已选: %d", availableActions.size(), selectedActions.size());
-        guiGraphics.drawCenteredString(this.font, Component.literal(subtitle), this.width / 2, 28, COLOR_TEXT_SECONDARY);
+        Component subtitle = Component.translatable("gui.mmdskin.config.stats", availableActions.size(), selectedActions.size());
+        guiGraphics.drawCenteredString(this.font, subtitle, this.width / 2, 28, COLOR_TEXT_SECONDARY);
         
         // 左侧面板 - 可用动画
         int leftPanelX = this.width / 2 - PANEL_WIDTH - 30;
-        renderPanel(guiGraphics, leftPanelX, "可用动画", availableActions, leftScrollOffset, mouseX, mouseY, true);
+        renderPanel(guiGraphics, leftPanelX, Component.translatable("gui.mmdskin.action_config.available").getString(), availableActions, leftScrollOffset, mouseX, mouseY, true);
         
         // 右侧面板 - 已选动画
         int rightPanelX = this.width / 2 + 30;
-        renderPanel(guiGraphics, rightPanelX, "轮盘动画", selectedActions, rightScrollOffset, mouseX, mouseY, false);
+        renderPanel(guiGraphics, rightPanelX, Component.translatable("gui.mmdskin.action_config.selected").getString(), selectedActions, rightScrollOffset, mouseX, mouseY, false);
         
         // 中间箭头提示
         int arrowY = this.height / 2;
-        guiGraphics.drawCenteredString(this.font, Component.literal("←→"), this.width / 2, arrowY - 10, COLOR_TEXT_SECONDARY);
-        guiGraphics.drawCenteredString(this.font, Component.literal("点击添加/移除"), this.width / 2, arrowY + 5, 0x888888);
+        guiGraphics.drawCenteredString(this.font, Component.translatable("gui.mmdskin.config.click_add"), this.width / 2, arrowY - 10, COLOR_TEXT_SECONDARY);
+        guiGraphics.drawCenteredString(this.font, Component.translatable("gui.mmdskin.config.click_remove"), this.width / 2, arrowY + 5, 0x888888);
         
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
@@ -232,7 +232,13 @@ public class ActionWheelConfigScreen extends Screen {
         
         // 名称
         String name = entry.name;
-        if (name.length() > 22) name = name.substring(0, 19) + "...";
+        int maxWidth = width - 10;
+        if (this.font.width(name) > maxWidth) {
+            while (this.font.width(name + "...") > maxWidth && name.length() > 1) {
+                name = name.substring(0, name.length() - 1);
+            }
+            name = name + "...";
+        }
         guiGraphics.drawString(this.font, name, x + 5, y + 4, COLOR_TEXT_PRIMARY);
         
         // 来源和大小
@@ -263,9 +269,9 @@ public class ActionWheelConfigScreen extends Screen {
     private String getSourceShort(String source) {
         if (source == null) return "?";
         switch (source) {
-            case "DEFAULT": return "默认";
-            case "CUSTOM": return "自定义";
-            case "MODEL": return "模型";
+            case "DEFAULT": return Component.translatable("gui.mmdskin.source.default").getString();
+            case "CUSTOM": return Component.translatable("gui.mmdskin.source.custom").getString();
+            case "MODEL": return Component.translatable("gui.mmdskin.source.model").getString();
             default: return source;
         }
     }
