@@ -264,6 +264,52 @@ impl MmdModel {
         self.submeshes.len()
     }
 
+    pub fn memory_usage(&self) -> usize {
+        use std::mem::size_of;
+
+        let string_capacity = |items: &[String]| -> usize {
+            items
+                .iter()
+                .map(|s| size_of::<String>() + s.capacity())
+                .sum()
+        };
+
+        size_of::<Self>()
+            + self.vertices.capacity() * size_of::<RuntimeVertex>()
+            + self.indices.capacity() * size_of::<u32>()
+            + self.weights.capacity() * size_of::<VertexWeight>()
+            + self.materials.capacity() * size_of::<MmdMaterial>()
+            + self.submeshes.capacity() * size_of::<SubMesh>()
+            + string_capacity(&self.texture_paths)
+            + self.rigid_bodies.capacity() * size_of::<mmd::pmx::rigid_body::RigidBody>()
+            + self.joints.capacity() * size_of::<mmd::pmx::joint::Joint>()
+            + self.update_positions.capacity() * size_of::<Vec3>()
+            + self.update_normals.capacity() * size_of::<Vec3>()
+            + self.update_uvs.capacity() * size_of::<Vec2>()
+            + self.update_positions_raw.capacity() * size_of::<f32>()
+            + self.update_normals_raw.capacity() * size_of::<f32>()
+            + self.update_uvs_raw.capacity() * size_of::<f32>()
+            + self.physics_bone_transforms_buf.capacity() * size_of::<Mat4>()
+            + self.material_visible.capacity() * size_of::<bool>()
+            + self.bone_indices.capacity() * size_of::<i32>()
+            + self.bone_weights.capacity() * size_of::<f32>()
+            + self.original_positions.capacity() * size_of::<f32>()
+            + self.original_normals.capacity() * size_of::<f32>()
+            + self.gpu_morph_offsets.capacity() * size_of::<f32>()
+            + self.gpu_morph_weights.capacity() * size_of::<f32>()
+            + self.vertex_morph_indices.capacity() * size_of::<usize>()
+            + self.gpu_uv_morph_offsets.capacity() * size_of::<f32>()
+            + self.gpu_uv_morph_weights.capacity() * size_of::<f32>()
+            + self.uv_morph_indices.capacity() * size_of::<usize>()
+            + self.effective_weights_buf.capacity() * size_of::<f32>()
+            + self.material_morph_results_flat_cache.capacity() * size_of::<f32>()
+            + self.vpd_bone_overrides.capacity() * (size_of::<usize>() + size_of::<(Vec3, Quat)>())
+            + self.head_submesh_flags.capacity() * size_of::<bool>()
+            + self.material_visible_backup.capacity() * size_of::<bool>()
+            + self.transition_matrices.capacity() * size_of::<Mat4>()
+            + self.morph_manager.memory_usage() as usize
+    }
+
     // ========== 材质可见性控制 ==========
 
     /// 初始化材质可见性（默认全部可见）
@@ -799,6 +845,11 @@ impl MmdModel {
             .set_layer_speed(layer_id, speed);
     }
 
+    pub fn set_layer_loop(&mut self, layer_id: usize, loop_playback: bool) {
+        self.animation_layer_manager
+            .set_layer_loop(layer_id, loop_playback);
+    }
+
     /// 跳转到指定帧
     pub fn seek_layer(&mut self, layer_id: usize, frame: f32) {
         self.animation_layer_manager.seek_layer(layer_id, frame);
@@ -842,6 +893,59 @@ impl MmdModel {
             .get_layer(layer_id)
             .map(|l| l.max_frame())
             .unwrap_or(0)
+    }
+
+    /// 检测层动画是否播放完毕
+    pub fn is_layer_finished(&self, layer_id: usize) -> bool {
+        self.animation_layer_manager.is_layer_finished(layer_id)
+    }
+
+    /// 按根骨骼名设置层的骨骼遮罩（仅影响该骨骼及其子孙）
+    pub fn set_layer_bone_mask_by_name(
+        &mut self,
+        layer_id: usize,
+        root_bone_name: Option<&str>,
+    ) -> bool {
+        let mask = match root_bone_name {
+            Some(name) => {
+                if let Some(idx) = self.bone_manager.find_bone_by_name(name) {
+                    Some(self.bone_manager.collect_descendants(idx))
+                } else {
+                    return false;
+                }
+            }
+            None => None,
+        };
+        if let Some(layer) = self.animation_layer_manager.get_layer_mut(layer_id) {
+            layer.set_bone_mask(mask);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// 按根骨骼名设置层的骨骼排除集（该骨骼及其子孙不受动画影响）
+    pub fn set_layer_bone_exclude_by_name(
+        &mut self,
+        layer_id: usize,
+        root_bone_name: Option<&str>,
+    ) -> bool {
+        let exclude = match root_bone_name {
+            Some(name) => {
+                if let Some(idx) = self.bone_manager.find_bone_by_name(name) {
+                    Some(self.bone_manager.collect_descendants(idx))
+                } else {
+                    return false;
+                }
+            }
+            None => None,
+        };
+        if let Some(layer) = self.animation_layer_manager.get_layer_mut(layer_id) {
+            layer.set_bone_exclude(exclude);
+            true
+        } else {
+            false
+        }
     }
 
     /// 获取所有活跃层中的最大帧数
@@ -1545,67 +1649,6 @@ impl MmdModel {
     /// 获取原始法线数据指针
     pub fn get_original_normals_ptr(&self) -> *const f32 {
         self.original_normals.as_ptr()
-    }
-
-    // ========== GPU Morph ==========
-
-    /// 初始化 GPU 顶点 Morph 数据（稀疏→密集格式）
-    pub fn init_gpu_morph_data(&mut self) {
-        if self.gpu_morph_initialized {
-            return;
-        }
-
-        let vertex_count = self.vertices.len();
-
-        // 收集所有顶点类型的 Morph 索引
-        self.vertex_morph_indices = (0..self.morph_manager.morph_count())
-            .filter_map(|i| {
-                let morph = self.morph_manager.get_morph(i)?;
-                if morph.morph_type == crate::morph::MorphType::Vertex
-                    && !morph.vertex_offsets.is_empty()
-                {
-                    Some(i)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        self.vertex_morph_count = self.vertex_morph_indices.len();
-
-        if self.vertex_morph_count == 0 {
-            log::info!("模型没有顶点 Morph，跳过 GPU Morph 初始化");
-            self.gpu_morph_initialized = true;
-            return;
-        }
-
-        // 分配密集格式的偏移数据：morph_count * vertex_count * 3 (xyz)
-        let total_floats = self.vertex_morph_count * vertex_count * 3;
-        self.gpu_morph_offsets = vec![0.0f32; total_floats];
-        self.gpu_morph_weights = vec![0.0f32; self.vertex_morph_count];
-
-        // 填充稀疏数据到密集格式
-        for (morph_idx, &global_morph_idx) in self.vertex_morph_indices.iter().enumerate() {
-            if let Some(morph) = self.morph_manager.get_morph(global_morph_idx) {
-                let base_offset = morph_idx * vertex_count * 3;
-                for offset in &morph.vertex_offsets {
-                    let vid = offset.vertex_index as usize;
-                    if vid < vertex_count {
-                        let idx = base_offset + vid * 3;
-                        self.gpu_morph_offsets[idx] = offset.offset.x;
-                        self.gpu_morph_offsets[idx + 1] = offset.offset.y;
-                        self.gpu_morph_offsets[idx + 2] = offset.offset.z;
-                    }
-                }
-            }
-        }
-
-        self.gpu_morph_initialized = true;
-        log::info!(
-            "GPU Morph 数据初始化完成: {} 个顶点 Morph, 数据大小 {:.2} MB",
-            self.vertex_morph_count,
-            (total_floats * 4) as f64 / 1024.0 / 1024.0
-        );
     }
 
     // ========== GPU Morph ==========

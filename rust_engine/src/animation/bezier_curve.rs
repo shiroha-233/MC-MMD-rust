@@ -1,10 +1,8 @@
 //! 贝塞尔曲线 - 复刻 mdanceio 实现
-//!
-//! 用于 VMD 动画的非线性插值
 
+use glam::Vec2;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use glam::Vec2;
 
 /// 曲线 trait
 pub trait Curve {
@@ -29,16 +27,11 @@ impl BezierCurve {
     const P1: Vec2 = Vec2::ONE;
 
     /// 创建新的贝塞尔曲线
-    /// 
-    /// # 参数
-    /// - `c0`: 控制点1 (归一化到 0-1 范围)
-    /// - `c1`: 控制点2 (归一化到 0-1 范围)
-    /// - `interval`: 采样间隔数
     pub fn new(c0: Vec2, c1: Vec2, interval: u32) -> Self {
         let interval = interval.max(1);
         let mut points = Vec::with_capacity((interval + 1) as usize);
         let interval_f = interval as f32;
-        
+
         for i in 0..=interval {
             let t = i as f32 / interval_f;
             let it = 1.0 - t;
@@ -49,10 +42,10 @@ impl BezierCurve {
                 + Self::P1 * t.powi(3);
             points.push(point);
         }
-        
+
         // 按 X 排序以便查找
         points.sort_unstable_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
-        
+
         Self {
             points,
             c0,
@@ -62,17 +55,11 @@ impl BezierCurve {
     }
 
     /// 从 VMD 参数创建贝塞尔曲线
-    /// 
+    ///
     /// VMD 使用 [0, 127] 范围的控制点参数
     pub fn from_parameters(parameters: [u8; 4], interval: u32) -> Self {
-        let c0 = Vec2::new(
-            parameters[0] as f32 / 127.0,
-            parameters[1] as f32 / 127.0,
-        );
-        let c1 = Vec2::new(
-            parameters[2] as f32 / 127.0,
-            parameters[3] as f32 / 127.0,
-        );
+        let c0 = Vec2::new(parameters[0] as f32 / 127.0, parameters[1] as f32 / 127.0);
+        let c1 = Vec2::new(parameters[2] as f32 / 127.0, parameters[3] as f32 / 127.0);
         Self::new(c0, c1, interval)
     }
 
@@ -93,10 +80,10 @@ impl BezierCurve {
         let mut left = Vec::new();
         let mut right = Vec::new();
         Self::split_bezier_curve(&points, t, &mut left, &mut right);
-        
+
         let left_interval = (self.interval as f32 * t) as u32;
         let right_interval = (self.interval as f32 * (1.0 - t)) as u32;
-        
+
         // left: P0(0,0) -> split_point，控制点需归一化到 [0,1]
         let split_point = left[3];
         let left_c0 = if split_point.x.abs() > f32::EPSILON && split_point.y.abs() > f32::EPSILON {
@@ -109,7 +96,7 @@ impl BezierCurve {
         } else {
             Vec2::new(0.75, 0.75)
         };
-        
+
         // right: split_point -> P1(1,1)，right 存储顺序为 [P1, C, E, F]
         // 反转后子曲线为 [F, E, C, P1]，控制点 c0=E, c1=C
         let range = Self::P1 - split_point;
@@ -129,19 +116,14 @@ impl BezierCurve {
         } else {
             Vec2::new(0.75, 0.75)
         };
-        
+
         (
             Self::new(left_c0, left_c1, left_interval.max(1)),
             Self::new(right_c0, right_c1, right_interval.max(1)),
         )
     }
 
-    fn split_bezier_curve(
-        points: &[Vec2],
-        t: f32,
-        left: &mut Vec<Vec2>,
-        right: &mut Vec<Vec2>,
-    ) {
+    fn split_bezier_curve(points: &[Vec2], t: f32, left: &mut Vec<Vec2>, right: &mut Vec<Vec2>) {
         if points.len() == 1 {
             left.push(points[0]);
             right.push(points[0]);
@@ -159,7 +141,7 @@ impl BezierCurve {
 
 impl Curve for BezierCurve {
     /// 根据输入值计算曲线输出值
-    /// 
+    ///
     /// 使用预计算的采样点进行线性插值查找
     fn value(&self, v: f32) -> f32 {
         let mut n = (self.points[0], self.points[1]);
@@ -190,7 +172,7 @@ struct CurveCacheKey {
 }
 
 /// 贝塞尔曲线缓存
-/// 
+///
 /// 避免重复创建相同参数的曲线
 #[derive(Debug)]
 pub struct BezierCurveCache(RwLock<HashMap<CurveCacheKey, Arc<BezierCurve>>>);
@@ -212,9 +194,9 @@ impl BezierCurveFactory for BezierCurveCache {
         let key = CurveCacheKey { c0, c1 };
         let c0_f = Vec2::new(c0[0] as f32 / 127.0, c0[1] as f32 / 127.0);
         let c1_f = Vec2::new(c1[0] as f32 / 127.0, c1[1] as f32 / 127.0);
-        
+
         let build_new_curve = || Arc::new(BezierCurve::new(c0_f, c1_f, interval));
-        
+
         // 尝试读取缓存
         match self.0.read() {
             Ok(map) => {
@@ -227,7 +209,7 @@ impl BezierCurveFactory for BezierCurveCache {
             }
             Err(_) => return build_new_curve(),
         };
-        
+
         // 写入缓存（新建或更新精度不足的条目）
         match self.0.write() {
             Ok(mut map) => {
@@ -260,12 +242,8 @@ mod tests {
     #[test]
     fn test_linear_curve() {
         // 线性曲线 (对角线)
-        let curve = BezierCurve::new(
-            Vec2::new(0.25, 0.25),
-            Vec2::new(0.75, 0.75),
-            100,
-        );
-        
+        let curve = BezierCurve::new(Vec2::new(0.25, 0.25), Vec2::new(0.75, 0.75), 100);
+
         // 线性曲线应该近似 y = x
         assert!((curve.value(0.0) - 0.0).abs() < 0.01);
         assert!((curve.value(0.5) - 0.5).abs() < 0.05);
@@ -275,12 +253,8 @@ mod tests {
     #[test]
     fn test_ease_in_curve() {
         // Ease-in 曲线
-        let curve = BezierCurve::new(
-            Vec2::new(0.42, 0.0),
-            Vec2::new(1.0, 1.0),
-            100,
-        );
-        
+        let curve = BezierCurve::new(Vec2::new(0.42, 0.0), Vec2::new(1.0, 1.0), 100);
+
         // Ease-in 在开始时较慢
         let v_quarter = curve.value(0.25);
         assert!(v_quarter < 0.25);
@@ -289,10 +263,10 @@ mod tests {
     #[test]
     fn test_cache() {
         let cache = BezierCurveCache::new();
-        
+
         let curve1 = cache.get_or_new([32, 32], [96, 96], 100);
         let curve2 = cache.get_or_new([32, 32], [96, 96], 100);
-        
+
         // 应该返回相同的 Arc
         assert!(Arc::ptr_eq(&curve1, &curve2));
     }

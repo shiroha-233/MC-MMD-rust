@@ -4,10 +4,6 @@ import com.shiroha.mmdskin.NativeFunc;
 
 import java.nio.ByteBuffer;
 
-/**
- * 实体动画状态
- * 管理单个实体的动画层状态和手部矩阵
- */
 public class EntityAnimState {
     
     public enum State {
@@ -25,12 +21,19 @@ public class EntityAnimState {
         }
     }
     
+    public enum AnimPhase { NONE, ENTERING, LOOPING, EXITING }
+
     public boolean playCustomAnim;
     public boolean playStageAnim;
     public long rightHandMat;
     public long leftHandMat;
     public State[] stateLayers;
     public ByteBuffer matBuffer;
+    public AnimPhase[] layerPhases;
+    public String[] layerGroupIds;
+    public String[] layerExitStacks;
+    public String[] layerLoopStacks;
+    public boolean layer1BoneMaskSet;
     
     public EntityAnimState(int layerCount) {
         NativeFunc nf = NativeFunc.GetInst();
@@ -39,14 +42,22 @@ public class EntityAnimState {
         this.rightHandMat = nf.CreateMat();
         this.leftHandMat = nf.CreateMat();
         this.matBuffer = ByteBuffer.allocateDirect(64);
+        this.layerPhases = new AnimPhase[layerCount];
+        this.layerGroupIds = new String[layerCount];
+        this.layerExitStacks = new String[layerCount];
+        this.layerLoopStacks = new String[layerCount];
+        for (int i = 0; i < layerCount; i++) {
+            layerPhases[i] = AnimPhase.NONE;
+        }
     }
     
-    /**
-     * 将所有层标记为脏状态，确保下次状态更新一定触发动画切换
-     */
     public void invalidateStateLayers() {
         for (int i = 0; i < stateLayers.length; i++) {
             stateLayers[i] = null;
+            layerPhases[i] = AnimPhase.NONE;
+            layerGroupIds[i] = null;
+            layerExitStacks[i] = null;
+            layerLoopStacks[i] = null;
         }
     }
     

@@ -3,6 +3,7 @@ package com.shiroha.mmdskin;
 import com.shiroha.mmdskin.config.PathConstants;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager;
 import com.shiroha.mmdskin.renderer.resource.MMDTextureManager;
+import com.shiroha.mmdskin.renderer.animation.FbxDefaultAnimPack;
 import com.shiroha.mmdskin.renderer.animation.MMDAnimManager;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -36,14 +37,11 @@ public class MmdSkinClient {
         MMDModelManager.Init();
         MMDTextureManager.Init();
         MMDAnimManager.Init();
+        FbxDefaultAnimPack.init();
         
-        // 确保 EntityPlayer 目录存在
         ensureEntityPlayerDirectory();
     }
     
-    /**
-     * 确保所有必需的目录结构存在
-     */
     private static void ensureEntityPlayerDirectory() {
         PathConstants.ensureDirectoryExists(PathConstants.getEntityPlayerDir());
         PathConstants.ensureDirectoryExists(PathConstants.getCustomAnimDir());
@@ -52,36 +50,31 @@ public class MmdSkinClient {
         PathConstants.ensureDirectoryExists(PathConstants.getSceneModelDir());
     }
     
-    /** 内置默认动画文件列表 */
     private static final String[] DEFAULT_ANIM_FILES = {
         "crawl.vmd", "die.vmd", "elytraFly.vmd", "idle.vmd",
         "itemActive_minecraft.bow_Left_using.vmd", "itemActive_minecraft.iron_sword_Right_swinging.vmd",
         "itemActive_minecraft.shield_Left_using.vmd", "itemActive_minecraft.shield_Right_using.vmd",
         "lieDown.vmd", "onClimbable.vmd", "onClimbableDown.vmd", "onClimbableUp.vmd",
         "onHorse.vmd", "ride.vmd", "sleep.vmd", "sneak.vmd",
-        "sprint.vmd", "swim.vmd", "swingLeft.vmd", "swingRight.vmd", "walk.vmd"
+        "sprint.vmd", "swim.vmd", "swingLeft.vmd", "swingRight.vmd", "walk.vmd",
+        "UAL1.fbx"
     };
     
-    /**
-     * 检查并提取内置默认动画到 3d-skin/DefaultAnim
-     */
     private static void extractDefaultAnimIfNeeded() {
         File defaultAnimDir = PathConstants.getDefaultAnimDir();
+        PathConstants.ensureDirectoryExists(defaultAnimDir);
         
-        // 如果目录不存在或为空，则提取内置动画
-        String[] files = defaultAnimDir.list();
-        if (!defaultAnimDir.exists() || files == null || files.length == 0) {
-            PathConstants.ensureDirectoryExists(defaultAnimDir);
+        for (String fileName : DEFAULT_ANIM_FILES) {
+            File targetFile = new File(defaultAnimDir, fileName);
+            if (targetFile.exists()) continue;
             
-            for (String fileName : DEFAULT_ANIM_FILES) {
-                try (InputStream is = MmdSkinClient.class.getResourceAsStream("/assets/mmdskin/default_anim/" + fileName)) {
-                    if (is != null) {
-                        File targetFile = new File(defaultAnimDir, fileName);
-                        Files.copy(is, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                    }
-                } catch (IOException e) {
-                    logger.warn("提取动画文件失败: " + fileName, e);
+            try (InputStream is = MmdSkinClient.class.getResourceAsStream("/assets/mmdskin/default_anim/" + fileName)) {
+                if (is != null) {
+                    Files.copy(is, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    logger.info("提取默认动画: {}", fileName);
                 }
+            } catch (IOException e) {
+                logger.warn("提取动画文件失败: " + fileName, e);
             }
         }
     }

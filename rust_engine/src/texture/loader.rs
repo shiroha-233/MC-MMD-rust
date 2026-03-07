@@ -1,9 +1,4 @@
 //! 纹理加载
-//! 
-//! 与C++版本完全一致的实现：
-//! - 垂直翻转图像（stbi_set_flip_vertically_on_load(true)）
-//! - 根据原始通道数选择RGB或RGBA格式
-//! - has_alpha基于原始通道数判断
 
 use std::path::Path;
 use image::{GenericImageView, DynamicImage};
@@ -12,9 +7,6 @@ use crate::{Result, MmdError};
 use super::Texture;
 
 /// 从文件加载纹理
-/// 与C++版本完全一致：
-/// 1. 垂直翻转图像
-/// 2. 根据原始通道数选择RGB(3字节)或RGBA(4字节)
 pub fn load_texture<P: AsRef<Path>>(path: P) -> Result<Texture> {
     let img = image::open(path.as_ref())
         .map_err(|e| MmdError::Texture(format!("Failed to load texture: {}", e)))?;

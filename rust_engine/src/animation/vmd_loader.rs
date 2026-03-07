@@ -1,20 +1,20 @@
 //! VMD 文件加载器 - 复刻 mdanceio 实现
-//!
-//! 解析 VMD 动画文件并转换为 Motion 数据
 
-use std::io::{BufReader, Read, Seek};
 use std::fs::File;
+use std::io::{BufReader, Read, Seek};
 use std::path::Path;
 
-use glam::{Vec3, Quat};
 use byteorder::{LittleEndian, ReadBytesExt};
+use glam::{Quat, Vec3};
 
-use crate::{MmdError, Result};
-use crate::skeleton::BoneManager;
 use crate::morph::MorphManager;
+use crate::skeleton::BoneManager;
+use crate::{MmdError, Result};
 
+use super::keyframe::{
+    BoneKeyframe, CameraInterpolation, CameraKeyframe, IkKeyframe, MorphKeyframe,
+};
 use super::motion::Motion;
-use super::keyframe::{BoneKeyframe, MorphKeyframe, IkKeyframe, CameraKeyframe, CameraInterpolation};
 use super::motion_track::{BoneFrameTransform, CameraFrameTransform};
 
 /// VMD 文件头
@@ -33,8 +33,7 @@ pub struct VmdFile {
 impl VmdFile {
     /// 从文件路径加载 VMD
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let file = File::open(path.as_ref())
-            .map_err(|e| MmdError::Io(e))?;
+        let file = File::open(path.as_ref()).map_err(|e| MmdError::Io(e))?;
         let mut reader = BufReader::new(file);
         Self::load_from_reader(&mut reader)
     }
@@ -49,28 +48,31 @@ impl VmdFile {
     pub fn load_from_reader<R: Read + Seek>(reader: &mut R) -> Result<Self> {
         // 读取头部
         let mut header = [0u8; 30];
-        reader.read_exact(&mut header)
+        reader
+            .read_exact(&mut header)
             .map_err(|e| MmdError::VmdParse(format!("Failed to read header: {}", e)))?;
 
         // 验证头部 (两个头部都是 25 字节)
         let is_v1 = header[..25] == VMD_HEADER_V1[..];
         let is_v2 = header[..25] == VMD_HEADER_V2[..];
-        
+
         if !is_v1 && !is_v2 {
             return Err(MmdError::VmdParse("Invalid VMD header".to_string()));
         }
 
         // 读取模型名称 (20 字节)
         let mut model_name_bytes = [0u8; 20];
-        reader.read_exact(&mut model_name_bytes)
+        reader
+            .read_exact(&mut model_name_bytes)
             .map_err(|e| MmdError::VmdParse(format!("Failed to read model name: {}", e)))?;
         let model_name = decode_shift_jis(&model_name_bytes);
 
         let mut motion = Motion::new();
 
         // 读取骨骼关键帧
-        let bone_keyframe_count = reader.read_u32::<LittleEndian>()
-            .map_err(|e| MmdError::VmdParse(format!("Failed to read bone keyframe count: {}", e)))?;
+        let bone_keyframe_count = reader.read_u32::<LittleEndian>().map_err(|e| {
+            MmdError::VmdParse(format!("Failed to read bone keyframe count: {}", e))
+        })?;
 
         for _ in 0..bone_keyframe_count {
             let (name, keyframe) = read_bone_keyframe(reader)?;
@@ -78,8 +80,9 @@ impl VmdFile {
         }
 
         // 读取 Morph 关键帧
-        let morph_keyframe_count = reader.read_u32::<LittleEndian>()
-            .map_err(|e| MmdError::VmdParse(format!("Failed to read morph keyframe count: {}", e)))?;
+        let morph_keyframe_count = reader.read_u32::<LittleEndian>().map_err(|e| {
+            MmdError::VmdParse(format!("Failed to read morph keyframe count: {}", e))
+        })?;
 
         for _ in 0..morph_keyframe_count {
             let (name, keyframe) = read_morph_keyframe(reader)?;
@@ -95,7 +98,7 @@ impl VmdFile {
                     motion.insert_camera_keyframe(keyframe);
                 }
             }
-            
+
             // 尝试读取光照数据
             if let Ok(light_count) = reader.read_u32::<LittleEndian>() {
                 // 跳过光照数据 (每个 28 字节)
@@ -103,7 +106,7 @@ impl VmdFile {
                     let mut buf = [0u8; 28];
                     let _ = reader.read_exact(&mut buf);
                 }
-                
+
                 // 尝试读取阴影数据（可能不存在）
                 if let Ok(shadow_count) = reader.read_u32::<LittleEndian>() {
                     // 跳过阴影数据 (每个 9 字节)
@@ -111,7 +114,7 @@ impl VmdFile {
                         let mut buf = [0u8; 9];
                         let _ = reader.read_exact(&mut buf);
                     }
-                    
+
                     // 尝试读取 IK 数据
                     if let Ok(ik_count) = reader.read_u32::<LittleEndian>() {
                         for _ in 0..ik_count {
@@ -127,10 +130,7 @@ impl VmdFile {
             }
         }
 
-        Ok(Self {
-            model_name,
-            motion,
-        })
+        Ok(Self { model_name, motion })
     }
 
     /// 获取最大帧数
@@ -143,44 +143,74 @@ impl VmdFile {
 fn read_bone_keyframe<R: Read>(reader: &mut R) -> Result<(String, BoneKeyframe)> {
     // 骨骼名称 (15 字节)
     let mut name_bytes = [0u8; 15];
-    reader.read_exact(&mut name_bytes)
+    reader
+        .read_exact(&mut name_bytes)
         .map_err(|e| MmdError::VmdParse(format!("Failed to read bone name: {}", e)))?;
     let name = decode_shift_jis(&name_bytes);
 
     // 帧索引
-    let frame_index = reader.read_u32::<LittleEndian>()
+    let frame_index = reader
+        .read_u32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read frame index: {}", e)))?;
 
     // 平移 (x, y, z)
-    let tx = reader.read_f32::<LittleEndian>()
+    let tx = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read translation: {}", e)))?;
-    let ty = reader.read_f32::<LittleEndian>()
+    let ty = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read translation: {}", e)))?;
-    let tz = reader.read_f32::<LittleEndian>()
+    let tz = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read translation: {}", e)))?;
 
     // 旋转 (四元数 x, y, z, w)
-    let rx = reader.read_f32::<LittleEndian>()
+    let rx = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read rotation: {}", e)))?;
-    let ry = reader.read_f32::<LittleEndian>()
+    let ry = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read rotation: {}", e)))?;
-    let rz = reader.read_f32::<LittleEndian>()
+    let rz = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read rotation: {}", e)))?;
-    let rw = reader.read_f32::<LittleEndian>()
+    let rw = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read rotation: {}", e)))?;
 
     // 插值参数 (64 字节)
     let mut interpolation = [0u8; 64];
-    reader.read_exact(&mut interpolation)
+    reader
+        .read_exact(&mut interpolation)
         .map_err(|e| MmdError::VmdParse(format!("Failed to read interpolation: {}", e)))?;
 
     // 提取插值参数
     // VMD 插值数据布局：每行 16 字节，共 4 行
     // 每行格式：X_x1, Y_x1, Z_x1, R_x1, X_y1, Y_y1, Z_y1, R_y1, ...
-    let interpolation_x = [interpolation[0], interpolation[4], interpolation[8], interpolation[12]];
-    let interpolation_y = [interpolation[1], interpolation[5], interpolation[9], interpolation[13]];
-    let interpolation_z = [interpolation[2], interpolation[6], interpolation[10], interpolation[14]];
-    let interpolation_r = [interpolation[3], interpolation[7], interpolation[11], interpolation[15]];
+    let interpolation_x = [
+        interpolation[0],
+        interpolation[4],
+        interpolation[8],
+        interpolation[12],
+    ];
+    let interpolation_y = [
+        interpolation[1],
+        interpolation[5],
+        interpolation[9],
+        interpolation[13],
+    ];
+    let interpolation_z = [
+        interpolation[2],
+        interpolation[6],
+        interpolation[10],
+        interpolation[14],
+    ];
+    let interpolation_r = [
+        interpolation[3],
+        interpolation[7],
+        interpolation[11],
+        interpolation[15],
+    ];
 
     // 坐标系转换：Z 轴和 W 分量反转
     let translation = Vec3::new(tx, ty, -tz);
@@ -204,16 +234,19 @@ fn read_bone_keyframe<R: Read>(reader: &mut R) -> Result<(String, BoneKeyframe)>
 fn read_morph_keyframe<R: Read>(reader: &mut R) -> Result<(String, MorphKeyframe)> {
     // Morph 名称 (15 字节)
     let mut name_bytes = [0u8; 15];
-    reader.read_exact(&mut name_bytes)
+    reader
+        .read_exact(&mut name_bytes)
         .map_err(|e| MmdError::VmdParse(format!("Failed to read morph name: {}", e)))?;
     let name = decode_shift_jis(&name_bytes);
 
     // 帧索引
-    let frame_index = reader.read_u32::<LittleEndian>()
+    let frame_index = reader
+        .read_u32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read frame index: {}", e)))?;
 
     // 权重
-    let weight = reader.read_f32::<LittleEndian>()
+    let weight = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read weight: {}", e)))?;
 
     let keyframe = MorphKeyframe {
@@ -228,33 +261,39 @@ fn read_morph_keyframe<R: Read>(reader: &mut R) -> Result<(String, MorphKeyframe
 /// 每个 IK 帧包含帧索引、显示标志和多个 IK 信息
 fn read_ik_keyframe<R: Read>(reader: &mut R) -> Result<Vec<IkKeyframe>> {
     // 帧索引
-    let frame_index = reader.read_u32::<LittleEndian>()
+    let frame_index = reader
+        .read_u32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read IK frame index: {}", e)))?;
-    
+
     // 显示标志 (1 字节)
-    let _show = reader.read_u8()
+    let _show = reader
+        .read_u8()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read IK show flag: {}", e)))?;
-    
+
     // IK 信息数量
-    let ik_info_count = reader.read_u32::<LittleEndian>()
+    let ik_info_count = reader
+        .read_u32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read IK info count: {}", e)))?;
-    
+
     let mut keyframes = Vec::with_capacity(ik_info_count as usize);
-    
+
     for _ in 0..ik_info_count {
         // IK 名称 (20 字节)
         let mut name_bytes = [0u8; 20];
-        reader.read_exact(&mut name_bytes)
+        reader
+            .read_exact(&mut name_bytes)
             .map_err(|e| MmdError::VmdParse(format!("Failed to read IK name: {}", e)))?;
         let ik_name = decode_shift_jis(&name_bytes);
-        
+
         // 启用标志 (1 字节)
-        let enabled = reader.read_u8()
-            .map_err(|e| MmdError::VmdParse(format!("Failed to read IK enable flag: {}", e)))? != 0;
-        
+        let enabled = reader
+            .read_u8()
+            .map_err(|e| MmdError::VmdParse(format!("Failed to read IK enable flag: {}", e)))?
+            != 0;
+
         keyframes.push(IkKeyframe::new(frame_index, ik_name, enabled));
     }
-    
+
     Ok(keyframes)
 }
 
@@ -269,51 +308,78 @@ fn read_ik_keyframe<R: Read>(reader: &mut R) -> Result<Vec<IkKeyframe>> {
 ///   is_perspective (u8, 1B)
 fn read_camera_keyframe<R: Read>(reader: &mut R) -> Result<CameraKeyframe> {
     // 帧索引
-    let frame_index = reader.read_u32::<LittleEndian>()
+    let frame_index = reader
+        .read_u32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read camera frame index: {}", e)))?;
 
     // 距离
-    let distance = reader.read_f32::<LittleEndian>()
+    let distance = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read camera distance: {}", e)))?;
 
     // 目标点 (look_at)
-    let lx = reader.read_f32::<LittleEndian>()
+    let lx = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read camera look_at: {}", e)))?;
-    let ly = reader.read_f32::<LittleEndian>()
+    let ly = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read camera look_at: {}", e)))?;
-    let lz = reader.read_f32::<LittleEndian>()
+    let lz = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read camera look_at: {}", e)))?;
 
     // 角度（欧拉角，弧度）
-    let ax = reader.read_f32::<LittleEndian>()
+    let ax = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read camera angle: {}", e)))?;
-    let ay = reader.read_f32::<LittleEndian>()
+    let ay = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read camera angle: {}", e)))?;
-    let az = reader.read_f32::<LittleEndian>()
+    let az = reader
+        .read_f32::<LittleEndian>()
         .map_err(|e| MmdError::VmdParse(format!("Failed to read camera angle: {}", e)))?;
 
     // 插值参数 (24 字节 = 6组 * 4字节)
     // 顺序: X, Y, Z, Rotation, Distance, FOV
     let mut interp_raw = [0u8; 24];
-    reader.read_exact(&mut interp_raw)
+    reader
+        .read_exact(&mut interp_raw)
         .map_err(|e| MmdError::VmdParse(format!("Failed to read camera interpolation: {}", e)))?;
 
     let interpolation = CameraInterpolation {
         lookat_x: [interp_raw[0], interp_raw[1], interp_raw[2], interp_raw[3]],
         lookat_y: [interp_raw[4], interp_raw[5], interp_raw[6], interp_raw[7]],
         lookat_z: [interp_raw[8], interp_raw[9], interp_raw[10], interp_raw[11]],
-        angle:    [interp_raw[12], interp_raw[13], interp_raw[14], interp_raw[15]],
-        distance: [interp_raw[16], interp_raw[17], interp_raw[18], interp_raw[19]],
-        fov:      [interp_raw[20], interp_raw[21], interp_raw[22], interp_raw[23]],
+        angle: [
+            interp_raw[12],
+            interp_raw[13],
+            interp_raw[14],
+            interp_raw[15],
+        ],
+        distance: [
+            interp_raw[16],
+            interp_raw[17],
+            interp_raw[18],
+            interp_raw[19],
+        ],
+        fov: [
+            interp_raw[20],
+            interp_raw[21],
+            interp_raw[22],
+            interp_raw[23],
+        ],
     };
 
     // FOV (u32)
-    let fov = reader.read_u32::<LittleEndian>()
-        .map_err(|e| MmdError::VmdParse(format!("Failed to read camera fov: {}", e)))? as f32;
+    let fov = reader
+        .read_u32::<LittleEndian>()
+        .map_err(|e| MmdError::VmdParse(format!("Failed to read camera fov: {}", e)))?
+        as f32;
 
     // 是否透视 (u8)
-    let is_perspective = reader.read_u8()
-        .map_err(|e| MmdError::VmdParse(format!("Failed to read camera perspective flag: {}", e)))? == 0;
+    let is_perspective = reader.read_u8().map_err(|e| {
+        MmdError::VmdParse(format!("Failed to read camera perspective flag: {}", e))
+    })? == 0;
 
     // 保留 VMD 原始值（不做坐标系转换，由 compute_camera_transform 统一处理）
     let look_at = Vec3::new(lx, ly, lz);
@@ -335,7 +401,7 @@ fn decode_shift_jis(bytes: &[u8]) -> String {
     // 找到第一个 null 字节
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     let bytes = &bytes[..end];
-    
+
     // 使用 encoding_rs 解码
     let (decoded, _, _) = encoding_rs::SHIFT_JIS.decode(bytes);
     decoded.into_owned()
@@ -351,9 +417,15 @@ pub struct VmdAnimation {
 impl VmdAnimation {
     /// 从 VmdFile 创建
     pub fn from_vmd_file(vmd: VmdFile) -> Self {
-        Self {
-            motion: vmd.motion,
-        }
+        Self { motion: vmd.motion }
+    }
+
+    pub fn from_motion(motion: Motion) -> Self {
+        Self { motion }
+    }
+
+    pub fn motion_mut(&mut self) -> &mut Motion {
+        &mut self.motion
     }
 
     /// 是否包含相机数据
@@ -407,7 +479,12 @@ impl VmdAnimation {
     }
 
     /// 获取骨骼帧变换
-    pub fn get_bone_transform(&self, name: &str, frame_index: u32, amount: f32) -> BoneFrameTransform {
+    pub fn get_bone_transform(
+        &self,
+        name: &str,
+        frame_index: u32,
+        amount: f32,
+    ) -> BoneFrameTransform {
         self.motion.find_bone_transform(name, frame_index, amount)
     }
 
@@ -417,7 +494,7 @@ impl VmdAnimation {
     }
 
     /// 评估动画并应用到骨骼和 Morph
-    /// 
+    ///
     /// # 参数
     /// - `frame`: 浮点帧数（支持帧间插值）
     /// - `bone_manager`: 骨骼管理器
@@ -432,7 +509,7 @@ impl VmdAnimation {
     }
 
     /// 带权重评估动画
-    /// 
+    ///
     /// # 参数
     /// - `frame`: 浮点帧数
     /// - `weight`: 混合权重 [0, 1]
@@ -452,15 +529,19 @@ impl VmdAnimation {
         // 应用骨骼动画
         for bone_name in self.motion.bone_track_names() {
             if let Some(bone_idx) = bone_manager.find_bone_by_name(bone_name) {
-                let transform = self.motion.find_bone_transform(bone_name, frame_index, amount);
-                
+                let transform = self
+                    .motion
+                    .find_bone_transform(bone_name, frame_index, amount);
+
                 if weight >= 1.0 {
                     bone_manager.set_bone_translation(bone_idx, transform.translation);
                     bone_manager.set_bone_rotation(bone_idx, transform.orientation);
                 } else if weight > 0.0 {
                     if let Some(bone) = bone_manager.get_bone(bone_idx) {
-                        let blended_translation = bone.animation_translate.lerp(transform.translation, weight);
-                        let blended_rotation = bone.animation_rotate.slerp(transform.orientation, weight);
+                        let blended_translation =
+                            bone.animation_translate.lerp(transform.translation, weight);
+                        let blended_rotation =
+                            bone.animation_rotate.slerp(transform.orientation, weight);
                         bone_manager.set_bone_translation(bone_idx, blended_translation);
                         bone_manager.set_bone_rotation(bone_idx, blended_rotation);
                     }
@@ -471,8 +552,10 @@ impl VmdAnimation {
         // 应用 Morph 动画
         for morph_name in self.motion.morph_track_names() {
             if let Some(morph_idx) = morph_manager.find_morph_by_name(morph_name) {
-                let morph_weight = self.motion.find_morph_weight(morph_name, frame_index, amount);
-                
+                let morph_weight = self
+                    .motion
+                    .find_morph_weight(morph_name, frame_index, amount);
+
                 if weight >= 1.0 {
                     morph_manager.set_morph_weight(morph_idx, morph_weight);
                 } else if weight > 0.0 {
@@ -482,7 +565,7 @@ impl VmdAnimation {
                 }
             }
         }
-        
+
         // 应用 IK 启用/禁用状态
         for ik_name in self.motion.ik_track_names() {
             let enabled = self.motion.is_ik_enabled(ik_name, frame_index);

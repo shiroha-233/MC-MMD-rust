@@ -1,9 +1,4 @@
 //! 骨骼系统 - 参考 nphysics Multibody 设计
-//!
-//! 核心设计思想：
-//! - BoneLink: 类似 nphysics MultibodyLink，表示单个骨骼节点
-//! - BoneSet: 类似 nphysics Multibody，管理骨骼层次结构
-//! - IkSolver: IK 求解器
 
 mod bone_link;
 mod bone_set;
@@ -15,9 +10,6 @@ pub use ik_solver::IkSolver;
 
 use glam::{Vec3, Quat, Mat4};
 
-// ============================================================================
-// 公共类型定义
-// ============================================================================
 
 /// 骨骼变换数据
 #[derive(Clone, Copy, Debug)]

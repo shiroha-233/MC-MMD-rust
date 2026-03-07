@@ -1,7 +1,4 @@
 //! JNI 原生函数实现
-//!
-//! 对照 C++ 版 NativeFunc.h 实现所有接口
-//! 使用标准 jni 0.21 API
 
 use jni::objects::{JByteBuffer, JClass, JString};
 use jni::sys::{jboolean, jbyte, jfloat, jint, jlong, jstring};
@@ -9,17 +6,15 @@ use jni::JNIEnv;
 use std::ptr;
 use std::sync::Arc;
 
-use crate::animation::{VmdAnimation, VmdFile};
+use crate::animation::{fbx_loader, VmdAnimation, VmdFile};
 use crate::model::load_pmx;
 use crate::texture::load_texture;
 
-use super::{register_animation, register_model, register_texture, ANIMATIONS, MODELS, TEXTURES};
+use super::{
+    register_animation, register_model, register_texture, ANIMATIONS, FBX_CACHE, MODELS, TEXTURES,
+};
 
 const VERSION: &str = "v1.0.3";
-
-// ============================================================================
-// 基础函数
-// ============================================================================
 
 /// 获取版本号
 #[no_mangle]
@@ -743,7 +738,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_ResetModelPhysics(
 pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_LoadAnimation(
     mut env: JNIEnv,
     _class: JClass,
-    _model: jlong,
+    model_handle: jlong,
     filename: JString,
 ) -> jlong {
     let filename_str: String = match env.get_string(&filename) {
@@ -751,16 +746,160 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_LoadAnimation(
         Err(_) => return 0,
     };
 
-    match VmdFile::load(&filename_str) {
-        Ok(vmd) => {
-            let animation = VmdAnimation::from_vmd_file(vmd);
-            register_animation(animation)
+    let (file_path, stack_name) = if let Some(pos) = filename_str.rfind('#') {
+        let lower = filename_str[..pos].to_ascii_lowercase();
+        if lower.ends_with(".fbx") {
+            (&filename_str[..pos], Some(&filename_str[pos + 1..]))
+        } else {
+            (filename_str.as_str(), None)
         }
+    } else {
+        (filename_str.as_str(), None)
+    };
+
+    let is_fbx = file_path.to_ascii_lowercase().ends_with(".fbx");
+    let arm_positions = if is_fbx {
+        let models = MODELS.read().unwrap();
+        if let Some(model_arc) = models.get(&model_handle) {
+            let model = model_arc.lock().unwrap();
+            let mut pos = std::collections::HashMap::new();
+            for name in &[
+                "左肩",
+                "左腕",
+                "左ひじ",
+                "左手首",
+                "右肩",
+                "右腕",
+                "右ひじ",
+                "右手首",
+            ] {
+                if let Some(idx) = model.bone_manager.find_bone_by_name(name) {
+                    if let Some(bone) = model.bone_manager.get_bone(idx) {
+                        pos.insert(name.to_string(), bone.initial_position);
+                    }
+                }
+            }
+            pos
+        } else {
+            std::collections::HashMap::new()
+        }
+    } else {
+        std::collections::HashMap::new()
+    };
+
+    let result = if is_fbx {
+        let cache = {
+            let cache_map = FBX_CACHE.read().unwrap();
+            cache_map.get(file_path).cloned()
+        };
+        let cache = match cache {
+            Some(c) => c,
+            None => match fbx_loader::FbxCache::load(file_path) {
+                Ok(c) => {
+                    let arc = Arc::new(c);
+                    let mut cache_map = FBX_CACHE.write().unwrap();
+                    cache_map.insert(file_path.to_string(), arc.clone());
+                    arc
+                }
+                Err(e) => {
+                    log::error!("FBX 解析失败: {}", e);
+                    return 0;
+                }
+            },
+        };
+
+        cache.load_animation(stack_name).map(|mut anim| {
+            fbx_loader::apply_arm_retarget_correction_with_reference(
+                &mut anim,
+                &arm_positions,
+                Some(cache.arm_reference_dirs()),
+            );
+            register_animation(anim)
+        })
+    } else {
+        VmdFile::load(file_path).map(|vmd| register_animation(VmdAnimation::from_vmd_file(vmd)))
+    };
+
+    match result {
+        Ok(handle) => handle,
         Err(e) => {
-            log::error!("Failed to load VMD: {}", e);
+            log::error!("Failed to load animation: {}", e);
             0
         }
     }
+}
+
+/// 预加载 FBX 文件到缓存（避免首次加载动画时阻塞）
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_PreloadFbxFile(
+    mut env: JNIEnv,
+    _class: JClass,
+    filename: JString,
+) -> jboolean {
+    let path: String = match env.get_string(&filename) {
+        Ok(s) => s.into(),
+        Err(_) => return 0,
+    };
+    {
+        let cache_map = FBX_CACHE.read().unwrap();
+        if cache_map.contains_key(&path) {
+            return 1; // 已缓存
+        }
+    }
+    match fbx_loader::FbxCache::load(&path) {
+        Ok(c) => {
+            let mut cache_map = FBX_CACHE.write().unwrap();
+            cache_map.insert(path, Arc::new(c));
+            1
+        }
+        Err(e) => {
+            log::error!("FBX 预加载失败: {}", e);
+            0
+        }
+    }
+}
+
+/// 列出 FBX 文件中所有 AnimationStack 名称（JSON 数组）
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_ListFbxStacks(
+    mut env: JNIEnv,
+    _class: JClass,
+    filename: JString,
+) -> jstring {
+    let path: String = match env.get_string(&filename) {
+        Ok(s) => s.into(),
+        Err(_) => return ptr::null_mut(),
+    };
+    // 优先从缓存获取
+    let stacks = {
+        let cache_map = FBX_CACHE.read().unwrap();
+        cache_map.get(&path).map(|c| c.stack_names().to_vec())
+    };
+    let stacks = match stacks {
+        Some(s) => s,
+        None => match fbx_loader::list_fbx_stacks(&path) {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!("列出 FBX Stack 失败: {}", e);
+                return ptr::null_mut();
+            }
+        },
+    };
+    let json = serde_json::to_string(&stacks).unwrap_or_else(|_| "[]".to_string());
+    match env.new_string(&json) {
+        Ok(s) => s.into_raw(),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// 清除 FBX 文件缓存
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_ClearFbxCache(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    let mut cache_map = FBX_CACHE.write().unwrap();
+    cache_map.clear();
 }
 
 /// 删除动画
@@ -1301,6 +1440,109 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetLayerMaxFrame(
     0.0
 }
 
+/// 检测层动画是否播放完毕（非循环动画到达末帧）
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_IsLayerAnimationFinished(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    layer: jlong,
+) -> jboolean {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let model = model_arc.lock().unwrap();
+        if model.is_layer_finished(layer as usize) {
+            1
+        } else {
+            0
+        }
+    } else {
+        1 // 无模型视为已完成
+    }
+}
+
+/// 设置层骨骼遮罩（按根骨骼名，仅影响该骨骼及其子孙）
+/// bone_name 为 null 时清除遮罩
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetLayerBoneMask(
+    mut env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    layer: jlong,
+    bone_name: JString,
+) -> jboolean {
+    let name_opt: Option<String> = if bone_name.is_null() {
+        None
+    } else {
+        match env.get_string(&bone_name) {
+            Ok(s) => Some(s.into()),
+            Err(_) => return 0,
+        }
+    };
+
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut model = model_arc.lock().unwrap();
+        let ok = model.set_layer_bone_mask_by_name(layer as usize, name_opt.as_deref());
+        if ok {
+            1
+        } else {
+            0
+        }
+    } else {
+        0
+    }
+}
+
+/// 设置层骨骼排除集（按根骨骼名，该骨骼及其子孙不受动画影响）
+/// bone_name 为 null 时清除排除
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetLayerBoneExclude(
+    mut env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    layer: jlong,
+    bone_name: JString,
+) -> jboolean {
+    let name_opt: Option<String> = if bone_name.is_null() {
+        None
+    } else {
+        match env.get_string(&bone_name) {
+            Ok(s) => Some(s.into()),
+            Err(_) => return 0,
+        }
+    };
+
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut model = model_arc.lock().unwrap();
+        let ok = model.set_layer_bone_exclude_by_name(layer as usize, name_opt.as_deref());
+        if ok {
+            1
+        } else {
+            0
+        }
+    } else {
+        0
+    }
+}
+
+/// 设置动画层是否循环播放
+/// loop_play: true=循环，false=播放到尾帧后停留
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetLayerLoop(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    layer: jlong,
+    loop_play: jboolean,
+) {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut model = model_arc.lock().unwrap();
+        model.set_layer_loop(layer as usize, loop_play != 0);
+    }
+}
 // ============================================================================
 // 纹理相关函数
 // ============================================================================
@@ -2909,6 +3151,22 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_BuildMCVertexBuffer(
             overlay_uv as u32,
             packed_light as u32,
         ) as jint
+    } else {
+        0
+    }
+}
+
+/// 获取模型在 Rust 堆上的内存占用（字节）
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetModelMemoryUsage(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+) -> jlong {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let model = model_arc.lock().unwrap();
+        model.memory_usage() as jlong
     } else {
         0
     }
