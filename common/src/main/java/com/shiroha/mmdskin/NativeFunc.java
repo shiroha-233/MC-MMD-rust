@@ -34,7 +34,6 @@ public class NativeFunc {
     public native long LoadModelVRM(String filename, String dir, long layerCount);
 
     public native boolean IsVrmModel(long model);
-
     public native void DeleteModel(long model);
 
     public native void UpdateModel(long model, float deltaTime);

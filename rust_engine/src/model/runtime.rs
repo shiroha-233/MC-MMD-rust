@@ -87,6 +87,8 @@ pub struct MmdModel {
 
     debug_logged: bool,
 
+    is_vrm: bool,
+
     // 模型全局变换
     model_transform: Mat4,
 
@@ -208,6 +210,7 @@ impl MmdModel {
             is_blinking: false,
             blink_morph_index: None,
             debug_logged: false,
+            is_vrm: false,
             model_transform: Mat4::IDENTITY,
             physics: None,
             physics_enabled: false,
@@ -358,6 +361,14 @@ impl MmdModel {
     /// 获取所有材质名称列表
     pub fn get_material_names(&self) -> Vec<String> {
         self.materials.iter().map(|m| m.name.clone()).collect()
+    }
+
+    pub fn set_vrm(&mut self, is_vrm: bool) {
+        self.is_vrm = is_vrm;
+    }
+
+    pub fn is_vrm(&self) -> bool {
+        self.is_vrm
     }
 
     // ========== 第一人称模式 ==========

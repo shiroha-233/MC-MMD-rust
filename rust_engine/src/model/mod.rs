@@ -5,8 +5,17 @@ mod loader;
 mod material;
 mod submesh;
 
+mod vrm_loader;
+mod vrm_mesh;
+mod vrm_skeleton;
+mod vrm_material;
+mod vrm_morph;
+mod vrm_extensions;
+mod bone_mapping;
+
 pub use runtime::MmdModel;
 pub use loader::load_pmx;
+pub use vrm_loader::load_vrm;
 pub use material::MmdMaterial;
 pub use submesh::SubMesh;
 
