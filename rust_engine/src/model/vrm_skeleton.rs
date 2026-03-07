@@ -1,6 +1,6 @@
 //! glTF skin/nodes → BoneSet 骨骼系统转换（含 MMD 虚拟骨骼注入）
 
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Quat, Vec3};
 use std::collections::HashMap;
 
 use super::bone_mapping;
@@ -146,6 +146,9 @@ pub(crate) fn build_skeleton(
 
     bone_set.build_hierarchy();
 
+    // T-pose → A-pose 手臂静息旋转修正
+    apply_arm_rest_rotations(&mut bone_set);
+
     Ok(bone_set)
 }
 
@@ -205,6 +208,86 @@ fn find_hips_world_pos(
 }
 
 /// 查找 hips 在 joint 数组中的索引
+const ARM_REST_ANGLE_DEG: f32 = 35.0;
+
+fn apply_arm_rest_rotations(bone_set: &mut BoneSet) {
+    apply_single_arm_rest(bone_set, "左腕", "左ひじ", true);
+    apply_single_arm_rest(bone_set, "右腕", "右ひじ", false);
+    propagate_parent_rest_rotation(bone_set);
+}
+
+fn apply_single_arm_rest(
+    bone_set: &mut BoneSet,
+    upper_name: &str,
+    lower_name: &str,
+    is_left: bool,
+) {
+    let upper_idx = match bone_set.find_bone_by_name(upper_name) {
+        Some(i) => i,
+        None => return,
+    };
+    let lower_idx = match bone_set.find_bone_by_name(lower_name) {
+        Some(i) => i,
+        None => return,
+    };
+
+    let upper_pos = bone_set.get_bone(upper_idx).unwrap().initial_position;
+    let lower_pos = bone_set.get_bone(lower_idx).unwrap().initial_position;
+
+    let diff = lower_pos - upper_pos;
+    let horizontal_len = (diff.x * diff.x + diff.z * diff.z).sqrt();
+
+    if horizontal_len < 0.001 {
+        return;
+    }
+
+    let current_angle = diff.y.atan2(horizontal_len);
+    let target_angle = -ARM_REST_ANGLE_DEG.to_radians();
+    let correction = target_angle - current_angle;
+
+    if correction.abs() < 3.0_f32.to_radians() {
+        return;
+    }
+
+    let z_angle = if is_left { correction } else { -correction };
+    let rotation = Quat::from_axis_angle(Vec3::Z, z_angle);
+
+    if let Some(bone) = bone_set.get_bone_mut(upper_idx) {
+        bone.rest_rotation = rotation;
+    }
+
+    log::info!(
+        "VRM 手臂修正: {} 当前={:.1}° 目标={:.1}° 修正={:.1}°",
+        upper_name,
+        current_angle.to_degrees(),
+        target_angle.to_degrees(),
+        correction.to_degrees()
+    );
+}
+
+fn propagate_parent_rest_rotation(bone_set: &mut BoneSet) {
+    let bone_count = bone_set.bone_count();
+
+    for i in 0..bone_count {
+        let parent_idx = match bone_set.get_bone(i) {
+            Some(b) => b.parent_index,
+            None => continue,
+        };
+        if parent_idx < 0 || parent_idx as usize >= bone_count {
+            continue;
+        }
+        let pi = parent_idx as usize;
+        let parent_accumulated = bone_set.get_bone(pi).unwrap().parent_rest_rotation;
+        let parent_rest = bone_set.get_bone(pi).unwrap().rest_rotation;
+        let accumulated = parent_accumulated * parent_rest;
+
+        if accumulated != Quat::IDENTITY {
+            if let Some(bone) = bone_set.get_bone_mut(i) {
+                bone.parent_rest_rotation = accumulated;
+            }
+        }
+    }
+}
 fn find_hips_joint_index(
     humanoid_mapping: &HumanoidMapping,
     joint_nodes: &[usize],

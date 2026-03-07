@@ -129,6 +129,12 @@ pub struct BoneLink {
     /// 本地 Z 轴
     pub local_axis_z: Vec3,
     
+    /// VRM T-pose → A-pose 静息旋转
+    pub rest_rotation: Quat,
+    
+    /// 祖先累积 rest_rotation（共轭补偿用）
+    pub parent_rest_rotation: Quat,
+    
     // ========================================
     // 动态数据（每帧更新）
     // ========================================
@@ -181,6 +187,8 @@ impl BoneLink {
             fixed_axis: Vec3::Z,
             local_axis_x: Vec3::X,
             local_axis_z: Vec3::Z,
+            rest_rotation: Quat::IDENTITY,
+            parent_rest_rotation: Quat::IDENTITY,
             animation_translate: Vec3::ZERO,
             animation_rotate: Quat::IDENTITY,
             ik_rotate: Quat::IDENTITY,
@@ -346,19 +354,14 @@ impl BoneLink {
     }
     
     /// 计算本地变换 (local_to_parent)
-    ///
-    /// 变换顺序：
-    /// 1. 平移 = body_shift + animation_translate + append_translate
-    /// 2. 旋转 = ik_rotate * animation_rotate * append_rotate
     pub fn compute_local_transform(&mut self) {
-        // 计算平移
         let mut translate = self.body_shift + self.animation_translate;
         if self.flags.contains(BoneFlags::APPEND_TRANSLATE) {
             translate += self.append_translate;
         }
         
-        // 计算旋转
-        let mut rotation = self.animation_rotate;
+        let p = self.parent_rest_rotation;
+        let mut rotation = p.inverse() * self.animation_rotate * p * self.rest_rotation;
         if self.flags.contains(BoneFlags::IK_ENABLED) {
             rotation = self.ik_rotate * rotation;
         }

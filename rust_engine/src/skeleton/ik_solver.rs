@@ -170,8 +170,8 @@ impl IkSolver {
             
             let delta_rot = Quat::from_axis_angle(axis, angle);
             
-            // 计算新的链旋转
-            let chain_rot = bones[link_idx].ik_rotate * bones[link_idx].animation_rotate * delta_rot;
+            let p = bones[link_idx].parent_rest_rotation;
+            let chain_rot = bones[link_idx].ik_rotate * p.inverse() * bones[link_idx].animation_rotate * p * bones[link_idx].rest_rotation * delta_rot;
             
             // 应用角度限制
             let chain_rot = if link.has_limits {
@@ -197,8 +197,7 @@ impl IkSolver {
                 chain_rot
             };
             
-            // 更新 IK 旋转
-            bones[link_idx].ik_rotate = chain_rot * bones[link_idx].animation_rotate.inverse();
+            bones[link_idx].ik_rotate = chain_rot * bones[link_idx].rest_rotation.inverse() * p.inverse() * bones[link_idx].animation_rotate.inverse() * p;
             bones[link_idx].compute_local_transform();
             Self::update_global_transform_recursive(bones, children_cache, link_idx);
         }
@@ -288,9 +287,9 @@ impl IkSolver {
         new_angle = new_angle.clamp(limit_min, limit_max);
         chain_states[chain_idx].plane_mode_angle = new_angle;
         
-        // 更新 IK 旋转
+        let p = bones[link_idx].parent_rest_rotation;
         bones[link_idx].ik_rotate = Quat::from_axis_angle(rotate_axis, new_angle)
-            * bones[link_idx].animation_rotate.inverse();
+            * bones[link_idx].rest_rotation.inverse() * p.inverse() * bones[link_idx].animation_rotate.inverse() * p;
         bones[link_idx].compute_local_transform();
         Self::update_global_transform_recursive(bones, children_cache, link_idx);
     }

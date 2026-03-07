@@ -518,11 +518,7 @@ impl BoneSet {
         if index >= self.links.len() {
             return;
         }
-
-        // 1. 设置全局变换
         self.links[index].local_to_world = transform;
-
-        // 2. 反推局部变换
         let parent_idx = self.links[index].parent_index;
         let local_transform = if parent_idx >= 0 && (parent_idx as usize) < self.links.len() {
             let parent_global = self.links[parent_idx as usize].local_to_world;
@@ -531,13 +527,11 @@ impl BoneSet {
             transform
         };
         self.links[index].local_to_parent = local_transform;
-
-        // 3. 从 local_transform 提取动画数据
         let (_, rotation, translation) = local_transform.to_scale_rotation_translation();
-        self.links[index].animation_rotate = rotation;
+        let p = self.links[index].parent_rest_rotation;
+        self.links[index].animation_rotate =
+            p * rotation * self.links[index].rest_rotation.inverse() * p.inverse();
         self.links[index].animation_translate = translation - self.links[index].body_shift;
-
-        // 4. 递归更新子骨骼
         self.update_children_global_transform(index);
     }
 
@@ -559,7 +553,9 @@ impl BoneSet {
         self.links[index].local_to_parent = local_transform;
 
         let (_, rotation, translation) = local_transform.to_scale_rotation_translation();
-        self.links[index].animation_rotate = rotation;
+        let p = self.links[index].parent_rest_rotation;
+        self.links[index].animation_rotate =
+            p * rotation * self.links[index].rest_rotation.inverse() * p.inverse();
         self.links[index].animation_translate = translation - self.links[index].body_shift;
     }
 
