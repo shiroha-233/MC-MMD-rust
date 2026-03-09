@@ -10,16 +10,12 @@ import org.joml.Quaternionf;
 
 /**
  * mc-vr-api 数据适配层（SRP：将 IVRData 转换为 Rust 引擎需要的 float[21]）
- * <p>
- * 布局：[head(7), mainHand(7), offHand(7)]，每组 [posX,posY,posZ, quatX,quatY,quatZ,quatW]
- * <p>
- * 注意：此类直接引用 mc-vr-api 类型，调用方必须通过 VRDetector 守卫确保类存在。
  */
+
 public final class VRDataProvider {
 
     private VRDataProvider() {}
 
-    /** 检测玩家是否处于 VR 模式 */
     public static boolean isVRPlayer(Player player) {
         try {
             return VRAPI.VRAPIInstance.playerInVR(player);
@@ -28,10 +24,6 @@ public final class VRDataProvider {
         }
     }
 
-    /**
-     * 获取渲染帧的追踪数据（float[21]）
-     * @return 追踪数据，不可用时返回 null
-     */
     public static float[] getRenderTrackingData(Player player) {
         try {
             if (!VRAPI.VRAPIInstance.playerInVR(player)) return null;
@@ -49,7 +41,6 @@ public final class VRDataProvider {
         }
     }
 
-    /** 将单个追踪点写入数组（7 float: pos xyz + quat xyzw） */
     private static void writeTrackingPoint(IVRData vrData, float[] out, int offset) {
         if (vrData == null) return;
 
@@ -58,7 +49,6 @@ public final class VRDataProvider {
         out[offset + 1] = (float) pos.y;
         out[offset + 2] = (float) pos.z;
 
-        // 旋转矩阵 → 四元数
         Matrix4f rotMat = vrData.getRotationMatrix();
         Quaternionf quat = new Quaternionf();
         rotMat.getNormalizedRotation(quat);

@@ -14,3 +14,4 @@ public interface KeyMappingAccessor {
     @Accessor("key")
     InputConstants.Key mmd$getBoundKey();
 }
+

@@ -1,7 +1,7 @@
 package com.shiroha.mmdskin.api;
 
 import com.shiroha.mmdskin.NativeFunc;
-import com.shiroha.mmdskin.renderer.render.PlayerModelResolver;
+import com.shiroha.mmdskin.player.model.PlayerModelResolver;
 import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -14,34 +14,13 @@ import java.util.List;
 
 /**
  * MMD Skin 公共 API（外部模组调用入口）
- *
- * 提供只读的模型信息查询接口，线程安全。
- * 所有方法在模型不存在或未加载时返回 null / 空集合，不会抛出异常。
- *
- * <pre>
- * 使用示例：
- *   ModelInfo info = MmdSkinApi.getModelInfo(player);
- *   if (info != null) {
- *       List&lt;String&gt; boneNames = info.getBoneNames();
- *       float[] positions = info.getBonePositions();
- *   }
- *
- *   float[] uvs = MmdSkinApi.getUV(player);
- * </pre>
  */
+
 public final class MmdSkinApi {
     private static final Logger logger = LogManager.getLogger();
 
     private MmdSkinApi() {}
 
-    // ==================== 模型信息 ====================
-
-    /**
-     * 获取玩家当前绑定的 MMD 模型信息
-     *
-     * @param player 目标玩家
-     * @return 模型信息快照，模型未加载时返回 null
-     */
     public static ModelInfo getModelInfo(Player player) {
         long handle = resolveModelHandle(player);
         if (handle == 0) return null;
@@ -52,10 +31,8 @@ public final class MmdSkinApi {
             int vertexCount = (int) nf.GetVertexCount(handle);
             int materialCount = (int) nf.GetMaterialCount(handle);
 
-            // 骨骼名称
             List<String> boneNames = parseBoneNames(nf.GetBoneNames(handle));
 
-            // 骨骼实时位置
             float[] bonePositions = null;
             if (boneCount > 0) {
                 ByteBuffer buf = ByteBuffer.allocateDirect(boneCount * 12);
@@ -76,14 +53,6 @@ public final class MmdSkinApi {
         }
     }
 
-    // ==================== UV 数据 ====================
-
-    /**
-     * 获取玩家当前模型的实时 UV 坐标（经过 UV Morph 变形后）
-     *
-     * @param player 目标玩家
-     * @return UV 数组 [u0, v0, u1, v1, ...]，模型未加载时返回 null
-     */
     public static float[] getUV(Player player) {
         long handle = resolveModelHandle(player);
         if (handle == 0) return null;
@@ -108,12 +77,6 @@ public final class MmdSkinApi {
         }
     }
 
-    // ==================== 内部工具 ====================
-
-    /**
-     * 解析玩家当前绑定模型的原生句柄
-     * @return 模型句柄，不存在时返回 0
-     */
     private static long resolveModelHandle(Player player) {
         if (player == null) return 0;
         try {
@@ -127,21 +90,18 @@ public final class MmdSkinApi {
         }
     }
 
-    /**
-     * 解析 JSON 数组格式的骨骼名称字符串
-     */
     private static List<String> parseBoneNames(String json) {
         if (json == null || json.length() <= 2) {
             return Collections.emptyList();
         }
-        // 去掉 [ ]
+
         String content = json.substring(1, json.length() - 1);
         if (content.isEmpty()) {
             return Collections.emptyList();
         }
 
         List<String> names = new ArrayList<>();
-        // 简单解析：按 "," 分割，去掉引号
+
         boolean inQuote = false;
         boolean escaped = false;
         StringBuilder sb = new StringBuilder();

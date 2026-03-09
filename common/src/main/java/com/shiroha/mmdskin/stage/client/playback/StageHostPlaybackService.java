@@ -1,177 +1,195 @@
 package com.shiroha.mmdskin.stage.client.playback;
 
-import com.shiroha.mmdskin.NativeFunc;
-import com.shiroha.mmdskin.config.StageConfig;
 import com.shiroha.mmdskin.config.StagePack;
-import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
-import com.shiroha.mmdskin.renderer.model.MMDModelManager;
-import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
-import com.shiroha.mmdskin.renderer.render.PlayerModelResolver;
-import com.shiroha.mmdskin.stage.client.viewmodel.StageLobbyViewModel;
+import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackBroadcastPort;
+import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackRuntimePort;
+import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackSessionPort;
 import com.shiroha.mmdskin.stage.domain.model.StageDescriptor;
-import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
-import com.shiroha.mmdskin.ui.network.StageNetworkHandler;
-import net.minecraft.client.Minecraft;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 public final class StageHostPlaybackService {
-    private static final Logger LOGGER = LogManager.getLogger();
+    private static volatile StagePlaybackRuntimePort defaultRuntime = new StagePlaybackRuntimePort() {
+        @Override
+        public void enterStageSelection(boolean waitingForHost) {
+        }
+
+        @Override
+        public void setWaitingForHost(boolean waitingForHost) {
+        }
+
+        @Override
+        public void exitStageSelection() {
+        }
+
+        @Override
+        public void stopActivePlaybackForRemoteEnd() {
+        }
+
+        @Override
+        public void applyFrameSync(float frame) {
+        }
+
+        @Override
+        public void applyInitialFrameSync(float frame) {
+        }
+
+        @Override
+        public HostStartResult startHostPlayback(StagePack pack, boolean cinematicMode,
+                                                 float cameraHeightOffset, String selectedMotionFileName) {
+            return HostStartResult.failed();
+        }
+
+        @Override
+        public GuestStartResult startGuestPlayback(UUID hostUUID, StagePlaybackStartRequest request,
+                                                    boolean useHostCamera) {
+            return GuestStartResult.failed();
+        }
+    };
+
+    private static volatile StagePlaybackBroadcastPort defaultBroadcast = new StagePlaybackBroadcastPort() {
+        @Override
+        public void sendStageWatch(UUID targetUUID, UUID sessionId, StageDescriptor descriptor,
+                                   float heightOffset, float startFrame) {
+        }
+
+        @Override
+        public void sendRemoteStageStart(StageDescriptor descriptor) {
+        }
+    };
+
+    private static volatile StagePlaybackSessionPort defaultSessionPort = new StagePlaybackSessionPort() {
+        @Override
+        public boolean isSessionMember() {
+            return false;
+        }
+
+        @Override
+        public boolean isSessionHost() {
+            return false;
+        }
+
+        @Override
+        public boolean isUseHostCamera() {
+            return true;
+        }
+
+        @Override
+        public UUID getSessionId() {
+            return null;
+        }
+
+        @Override
+        public UUID getHostPlayerId() {
+            return null;
+        }
+
+        @Override
+        public java.util.Set<UUID> getAcceptedMembers() {
+            return java.util.Collections.emptySet();
+        }
+
+        @Override
+        public boolean matchesCurrentSession(UUID hostUUID, UUID incomingSessionId) {
+            return false;
+        }
+
+        @Override
+        public boolean onInviteReceived(UUID hostUUID, UUID incomingSessionId) {
+            return false;
+        }
+
+        @Override
+        public void onSessionDissolved(UUID hostUUID, UUID incomingSessionId) {
+        }
+
+        @Override
+        public void onPlaybackStopped(UUID hostUUID) {
+        }
+
+        @Override
+        public void onPlaybackStarted(UUID hostUUID, StageDescriptor descriptor) {
+        }
+
+        @Override
+        public void stopWatchingStageOnly() {
+        }
+
+        @Override
+        public void leaveSession() {
+        }
+
+        @Override
+        public void closeHostedSession() {
+        }
+    };
+
     private static final StageHostPlaybackService INSTANCE = new StageHostPlaybackService();
 
-    private final StageLobbyViewModel lobbyViewModel = StageLobbyViewModel.getInstance();
+    private volatile StagePlaybackRuntimePort runtime;
+    private volatile StagePlaybackBroadcastPort broadcast;
+    private volatile StagePlaybackSessionPort sessionPort;
 
     private StageHostPlaybackService() {
+        resetCollaborators();
     }
 
     public static StageHostPlaybackService getInstance() {
         return INSTANCE;
     }
 
+    public synchronized void configureRuntimeCollaborators(StagePlaybackRuntimePort runtime,
+                                                           StagePlaybackBroadcastPort broadcast,
+                                                           StagePlaybackSessionPort sessionPort) {
+        defaultRuntime = Objects.requireNonNull(runtime, "runtime");
+        defaultBroadcast = Objects.requireNonNull(broadcast, "broadcast");
+        defaultSessionPort = Objects.requireNonNull(sessionPort, "sessionPort");
+        resetCollaborators();
+    }
+
+    synchronized void setCollaboratorsForTesting(StagePlaybackRuntimePort runtime,
+                                                 StagePlaybackBroadcastPort broadcast,
+                                                 StagePlaybackSessionPort sessionPort) {
+        this.runtime = Objects.requireNonNull(runtime, "runtime");
+        this.broadcast = Objects.requireNonNull(broadcast, "broadcast");
+        this.sessionPort = Objects.requireNonNull(sessionPort, "sessionPort");
+    }
+
+    synchronized void resetCollaborators() {
+        this.runtime = defaultRuntime;
+        this.broadcast = defaultBroadcast;
+        this.sessionPort = defaultSessionPort;
+    }
+
     public boolean startPack(StagePack pack, boolean cinematicMode, float cameraHeightOffset,
                              String selectedMotionFileName) {
-        if (pack == null || !pack.hasMotionVmd()) {
-            return false;
-        }
-
-        NativeFunc nativeFunc = NativeFunc.GetInst();
-        Minecraft mc = Minecraft.getInstance();
-
-        StageConfig config = StageConfig.getInstance();
-        config.lastStagePack = pack.getName();
-        config.cinematicMode = cinematicMode;
-        config.cameraHeightOffset = cameraHeightOffset;
-        config.save();
-
-        StagePack.VmdFileInfo cameraFile = null;
-        List<StagePack.VmdFileInfo> motionFiles = new ArrayList<>();
-        for (StagePack.VmdFileInfo info : pack.getVmdFiles()) {
-            if (info.hasCamera && cameraFile == null) {
-                cameraFile = info;
-            }
-            if (info.hasBones || info.hasMorphs) {
-                motionFiles.add(info);
-            }
-        }
-
-        if (selectedMotionFileName != null && !selectedMotionFileName.isEmpty()) {
-            motionFiles = motionFiles.stream()
-                    .filter(info -> selectedMotionFileName.equals(info.name))
-                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-        }
-
-        if (motionFiles.isEmpty()) {
-            LOGGER.warn("[舞台模式] 没有可用的动作 VMD");
-            return false;
-        }
-
-        long mergedAnim = nativeFunc.LoadAnimation(0, motionFiles.get(0).path);
-        if (mergedAnim == 0) {
-            LOGGER.error("[舞台模式] 动作 VMD 加载失败: {}", motionFiles.get(0).path);
-            return false;
-        }
-
-        List<Long> tempHandles = new ArrayList<>();
-        for (int i = 1; i < motionFiles.size(); i++) {
-            long tempAnim = nativeFunc.LoadAnimation(0, motionFiles.get(i).path);
-            if (tempAnim != 0) {
-                nativeFunc.MergeAnimation(mergedAnim, tempAnim);
-                tempHandles.add(tempAnim);
-            }
-        }
-        for (long handle : tempHandles) {
-            nativeFunc.DeleteAnimation(handle);
-        }
-
-        long cameraAnim = 0;
-        if (cameraFile != null) {
-            cameraAnim = nativeFunc.LoadAnimation(0, cameraFile.path);
-        }
-
-        List<String> motionNames = new ArrayList<>();
-        for (StagePack.VmdFileInfo motionFile : motionFiles) {
-            motionNames.add(motionFile.name);
-        }
-
-        String audioFileName = null;
-        if (pack.hasAudio() && !pack.getAudioFiles().isEmpty()) {
-            audioFileName = pack.getAudioFiles().get(0).name;
-        }
-        StageDescriptor defaultDescriptor = new StageDescriptor(
-                pack.getName(),
-                motionNames,
-                cameraFile != null ? cameraFile.name : null,
-                audioFileName
-        );
-        if (!defaultDescriptor.isValid()) {
-            cleanupHandles(nativeFunc, mergedAnim, cameraAnim);
-            LOGGER.warn("[舞台模式] 默认舞台描述构建失败");
-            return false;
-        }
-
-        long modelHandle = 0;
-        String modelName = null;
-        if (mc.player != null) {
-            modelName = ModelSelectorConfig.getInstance().getSelectedModel();
-            if (modelName != null && !modelName.isEmpty()) {
-                MMDModelManager.Model modelData = MMDModelManager.GetModel(
-                        modelName,
-                        PlayerModelResolver.getCacheKey(mc.player)
-                );
-                if (modelData != null) {
-                    modelHandle = modelData.model.getModelHandle();
-                    MmdSkinRendererPlayerHelper.startStageAnimation(modelData, mergedAnim);
-                }
-            }
-        }
-
-        String audioPath = pack.getFirstAudioPath();
-        boolean started = MMDCameraController.getInstance().startStage(
-                mergedAnim,
-                cameraAnim,
+        StagePlaybackRuntimePort runtime = this.runtime;
+        StagePlaybackBroadcastPort broadcast = this.broadcast;
+        StagePlaybackRuntimePort.HostStartResult result = runtime.startHostPlayback(
+                pack,
                 cinematicMode,
-                modelHandle,
-                modelName,
-                audioPath,
-                cameraHeightOffset
+                cameraHeightOffset,
+                selectedMotionFileName
         );
-        if (!started) {
-            cleanupHandles(nativeFunc, mergedAnim, cameraAnim);
-            LOGGER.warn("[舞台模式] 相机控制器启动失败，已释放动画句柄");
+        if (!result.started()) {
             return false;
         }
 
-        notifyMembers(defaultDescriptor, cameraHeightOffset);
-        StageNetworkHandler.sendRemoteStageStart(buildRemoteStageDescriptor(defaultDescriptor));
+        notifyMembers(broadcast, result.sessionDescriptor(), cameraHeightOffset);
+        if (result.remoteDescriptor() != null) {
+            broadcast.sendRemoteStageStart(result.remoteDescriptor());
+        }
         return true;
     }
 
-    private void notifyMembers(StageDescriptor defaultDescriptor, float heightOffset) {
-        UUID sessionId = lobbyViewModel.getSessionId();
-        for (UUID memberUUID : lobbyViewModel.getAcceptedMembers()) {
-            if (defaultDescriptor.isValid()) {
-                StageNetworkHandler.sendStageWatch(memberUUID, sessionId, defaultDescriptor, heightOffset, 0.0f);
-            }
+    private void notifyMembers(StagePlaybackBroadcastPort broadcast, StageDescriptor descriptor, float heightOffset) {
+        UUID sessionId = sessionPort.getSessionId();
+        if (sessionId == null || descriptor == null || !descriptor.isValid()) {
+            return;
         }
-    }
-
-    private void cleanupHandles(NativeFunc nativeFunc, long mergedAnim, long cameraAnim) {
-        if (mergedAnim != 0) {
-            nativeFunc.DeleteAnimation(mergedAnim);
+        for (UUID memberUUID : sessionPort.getAcceptedMembers()) {
+            broadcast.sendStageWatch(memberUUID, sessionId, descriptor, heightOffset, 0.0f);
         }
-        if (cameraAnim != 0 && cameraAnim != mergedAnim) {
-            nativeFunc.DeleteAnimation(cameraAnim);
-        }
-    }
-
-    private StageDescriptor buildRemoteStageDescriptor(StageDescriptor descriptor) {
-        StageDescriptor remoteDescriptor = descriptor.copy();
-        remoteDescriptor.setCameraFile(null);
-        remoteDescriptor.setAudioFile(null);
-        return remoteDescriptor;
     }
 }

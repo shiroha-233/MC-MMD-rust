@@ -13,23 +13,19 @@ import net.minecraft.network.chat.Component;
  * 使用 Cloth Config API 构建
  */
 public class ModConfigScreen {
-    
-    /**
-     * 创建模组设置界面
-     */
+
     public static Screen create(Screen parent) {
         ConfigData data = MmdSkinConfig.getData();
-        
+
         ConfigBuilder builder = ConfigBuilder.create()
             .setParentScreen(parent)
             .setTitle(Component.translatable("gui.mmdskin.mod_settings.title"));
-        
+
         ConfigEntryBuilder entryBuilder = builder.entryBuilder();
-        
-        // 渲染设置分类
+
         ConfigCategory renderCategory = builder.getOrCreateCategory(
             Component.translatable("gui.mmdskin.mod_settings.category.render"));
-        
+
         renderCategory.addEntry(entryBuilder
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.opengl_lighting"),
@@ -38,7 +34,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.opengl_lighting.tooltip"))
             .setSaveConsumer(value -> data.openGLEnableLighting = value)
             .build());
-        
+
         renderCategory.addEntry(entryBuilder
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.mmd_shader"),
@@ -47,7 +43,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.mmd_shader.tooltip"))
             .setSaveConsumer(value -> data.mmdShaderEnabled = value)
             .build());
-        
+
         renderCategory.addEntry(entryBuilder
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.first_person_model"),
@@ -78,11 +74,10 @@ public class ModConfigScreen {
             .setTextGetter(value -> Component.literal(String.format("%.3f", value.intValue() / 1000.0F)))
             .setSaveConsumer(value -> data.firstPersonCameraVerticalOffset = value.intValue() / 1000.0F)
             .build());
-        
-        // 性能设置分类
+
         ConfigCategory performanceCategory = builder.getOrCreateCategory(
             Component.translatable("gui.mmdskin.mod_settings.category.performance"));
-        
+
         performanceCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.model_pool_max"),
@@ -91,7 +86,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.model_pool_max.tooltip"))
             .setSaveConsumer(value -> data.modelPoolMaxCount = value)
             .build());
-        
+
         performanceCategory.addEntry(entryBuilder
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.gpu_skinning"),
@@ -100,7 +95,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.gpu_skinning.tooltip"))
             .setSaveConsumer(value -> data.gpuSkinningEnabled = value)
             .build());
-        
+
         performanceCategory.addEntry(entryBuilder
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.gpu_morph"),
@@ -109,7 +104,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.gpu_morph.tooltip"))
             .setSaveConsumer(value -> data.gpuMorphEnabled = value)
             .build());
-        
+
         performanceCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.max_bones"),
@@ -118,7 +113,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.max_bones.tooltip"))
             .setSaveConsumer(value -> data.maxBones = value)
             .build());
-        
+
         performanceCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.texture_cache_budget"),
@@ -128,11 +123,10 @@ public class ModConfigScreen {
             .setTextGetter(value -> Component.literal(value + " MB"))
             .setSaveConsumer(value -> data.textureCacheBudgetMB = value)
             .build());
-        
-        // Toon 渲染设置分类（3渲2）
+
         ConfigCategory toonCategory = builder.getOrCreateCategory(
             Component.translatable("gui.mmdskin.mod_settings.category.toon"));
-        
+
         toonCategory.addEntry(entryBuilder
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.toon_enabled"),
@@ -141,7 +135,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_enabled.tooltip"))
             .setSaveConsumer(value -> data.toonRenderingEnabled = value)
             .build());
-        
+
         toonCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_levels"),
@@ -150,8 +144,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_levels.tooltip"))
             .setSaveConsumer(value -> data.toonLevels = value)
             .build());
-        
-        // 边缘光设置
+
         toonCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_rim_power"),
@@ -160,7 +153,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_rim_power.tooltip"))
             .setSaveConsumer(value -> data.toonRimPower = value / 10.0f)
             .build());
-        
+
         toonCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_rim_intensity"),
@@ -169,8 +162,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_rim_intensity.tooltip"))
             .setSaveConsumer(value -> data.toonRimIntensity = value / 100.0f)
             .build());
-        
-        // 阴影色设置
+
         toonCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_shadow_r"),
@@ -179,7 +171,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_shadow.tooltip"))
             .setSaveConsumer(value -> data.toonShadowR = value / 100.0f)
             .build());
-        
+
         toonCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_shadow_g"),
@@ -187,7 +179,7 @@ public class ModConfigScreen {
             .setDefaultValue(50)
             .setSaveConsumer(value -> data.toonShadowG = value / 100.0f)
             .build());
-        
+
         toonCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_shadow_b"),
@@ -195,8 +187,7 @@ public class ModConfigScreen {
             .setDefaultValue(70)
             .setSaveConsumer(value -> data.toonShadowB = value / 100.0f)
             .build());
-        
-        // 高光设置
+
         toonCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_specular_power"),
@@ -205,7 +196,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_specular_power.tooltip"))
             .setSaveConsumer(value -> data.toonSpecularPower = value)
             .build());
-        
+
         toonCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_specular_intensity"),
@@ -214,8 +205,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_specular_intensity.tooltip"))
             .setSaveConsumer(value -> data.toonSpecularIntensity = value / 100.0f)
             .build());
-        
-        // 描边设置
+
         toonCategory.addEntry(entryBuilder
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.toon_outline"),
@@ -224,7 +214,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_outline.tooltip"))
             .setSaveConsumer(value -> data.toonOutlineEnabled = value)
             .build());
-        
+
         toonCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_outline_width"),
@@ -233,7 +223,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_outline_width.tooltip"))
             .setSaveConsumer(value -> data.toonOutlineWidth = value / 1000.0f)
             .build());
-        
+
         toonCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_outline_r"),
@@ -242,7 +232,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_outline_color.tooltip"))
             .setSaveConsumer(value -> data.toonOutlineR = value / 100.0f)
             .build());
-        
+
         toonCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_outline_g"),
@@ -250,7 +240,7 @@ public class ModConfigScreen {
             .setDefaultValue(10)
             .setSaveConsumer(value -> data.toonOutlineG = value / 100.0f)
             .build());
-        
+
         toonCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_outline_b"),
@@ -258,12 +248,10 @@ public class ModConfigScreen {
             .setDefaultValue(10)
             .setSaveConsumer(value -> data.toonOutlineB = value / 100.0f)
             .build());
-        
-        // ==================== 物理引擎设置分类（Bullet3） ====================
+
         ConfigCategory physicsCategory = builder.getOrCreateCategory(
             Component.translatable("gui.mmdskin.mod_settings.category.physics"));
-        
-        // 启用物理模拟
+
         physicsCategory.addEntry(entryBuilder
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.physics_enabled"),
@@ -272,8 +260,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_enabled.tooltip"))
             .setSaveConsumer(value -> data.physicsEnabled = value)
             .build());
-        
-        // 重力（MMD 标准 -98.0，滑块显示正值）
+
         physicsCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.physics_gravity"),
@@ -282,8 +269,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_gravity.tooltip"))
             .setSaveConsumer(value -> data.physicsGravityY = value * -1.0f)
             .build());
-        
-        // 物理 FPS
+
         physicsCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.physics_fps"),
@@ -292,8 +278,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_fps.tooltip"))
             .setSaveConsumer(value -> data.physicsFps = value)
             .build());
-        
-        // 子步数
+
         physicsCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.physics_substeps"),
@@ -302,8 +287,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_substeps.tooltip"))
             .setSaveConsumer(value -> data.physicsMaxSubstepCount = value)
             .build());
-        
-        // 惯性强度
+
         physicsCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.physics_inertia"),
@@ -312,8 +296,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_inertia.tooltip"))
             .setSaveConsumer(value -> data.physicsInertiaStrength = value / 100.0f)
             .build());
-        
-        // 最大线速度
+
         physicsCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.physics_max_linear_velocity"),
@@ -322,8 +305,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_max_linear_velocity.tooltip"))
             .setSaveConsumer(value -> data.physicsMaxLinearVelocity = value)
             .build());
-        
-        // 最大角速度
+
         physicsCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.physics_max_angular_velocity"),
@@ -332,8 +314,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_max_angular_velocity.tooltip"))
             .setSaveConsumer(value -> data.physicsMaxAngularVelocity = value)
             .build());
-        
-        // 启用关节
+
         physicsCategory.addEntry(entryBuilder
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.physics_joints_enabled"),
@@ -342,8 +323,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_joints_enabled.tooltip"))
             .setSaveConsumer(value -> data.physicsJointsEnabled = value)
             .build());
-        
-        // 碰撞过滤
+
         physicsCategory.addEntry(entryBuilder
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.physics_kinematic_filter"),
@@ -352,8 +332,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_kinematic_filter.tooltip"))
             .setSaveConsumer(value -> data.physicsKinematicFilter = value)
             .build());
-        
-        // 调试日志
+
         physicsCategory.addEntry(entryBuilder
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.physics_debug_log"),
@@ -362,8 +341,7 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_debug_log.tooltip"))
             .setSaveConsumer(value -> data.physicsDebugLog = value)
             .build());
-        
-        // ==================== VR 联动设置 ====================
+
         ConfigCategory vrCategory = builder.getOrCreateCategory(
             Component.translatable("gui.mmdskin.mod_settings.category.vr"));
 
@@ -386,10 +364,9 @@ public class ModConfigScreen {
             .setSaveConsumer(value -> data.vrArmIKStrength = value / 100.0f)
             .build());
 
-        // ==================== 调试设置分类 ====================
         ConfigCategory debugCategory = builder.getOrCreateCategory(
             Component.translatable("gui.mmdskin.mod_settings.category.debug"));
-        
+
         debugCategory.addEntry(entryBuilder
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.debug_hud"),
@@ -398,14 +375,14 @@ public class ModConfigScreen {
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.debug_hud.tooltip"))
             .setSaveConsumer(value -> data.debugHudEnabled = value)
             .build());
-        
+
         builder.setSavingRunnable(() -> {
             MmdSkinConfig.save();
-            // 同步渲染模式设置到工厂
-            com.shiroha.mmdskin.renderer.core.RenderModeManager.setUseGpuSkinning(data.gpuSkinningEnabled);
-            // 重载所有模型以应用新的渲染模式（CPU/GPU 蒙皮热切换）
-            com.shiroha.mmdskin.renderer.model.MMDModelManager.forceReloadAllModels();
-            // 同步物理配置到 Rust 引擎
+
+            com.shiroha.mmdskin.renderer.runtime.mode.RenderModeManager.setUseGpuSkinning(data.gpuSkinningEnabled);
+
+            com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager.forceReloadAllModels();
+
             try {
                 com.shiroha.mmdskin.NativeFunc.GetInst().SetPhysicsConfig(
                     data.physicsEnabled,
@@ -423,7 +400,8 @@ public class ModConfigScreen {
                 org.apache.logging.log4j.LogManager.getLogger().warn("物理配置 JNI 方法未找到，请重新编译 Rust 库");
             }
         });
-        
+
         return builder.build();
     }
 }
+

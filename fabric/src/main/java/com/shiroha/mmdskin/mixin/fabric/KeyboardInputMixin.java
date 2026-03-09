@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.mixin.fabric;
 
-import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
+import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
 import net.minecraft.client.player.KeyboardInput;
 import net.minecraft.client.player.Input;
 import org.spongepowered.asm.mixin.Mixin;
@@ -28,3 +28,4 @@ public abstract class KeyboardInputMixin extends Input {
         }
     }
 }
+

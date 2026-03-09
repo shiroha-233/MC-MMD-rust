@@ -1,7 +1,6 @@
 package com.shiroha.mmdskin.stage.client;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.ArrayList;
@@ -10,6 +9,9 @@ import java.util.List;
 import java.util.UUID;
 
 public final class StageClientContext {
+    public record NearbyPlayer(UUID uuid, String name) {
+    }
+
     private StageClientContext() {
     }
 
@@ -36,8 +38,8 @@ public final class StageClientContext {
         return uuid.toString().substring(0, 8);
     }
 
-    public static List<AbstractClientPlayer> getNearbyPlayers(double range) {
-        List<AbstractClientPlayer> result = new ArrayList<>();
+    public static List<NearbyPlayer> getNearbyPlayers(double range) {
+        List<NearbyPlayer> result = new ArrayList<>();
         Minecraft mc = minecraft();
         if (mc.player == null || mc.level == null) {
             return result;
@@ -47,11 +49,11 @@ public final class StageClientContext {
             if (player.getUUID().equals(selfUUID)) {
                 continue;
             }
-            if (mc.player.distanceTo(player) <= range && player instanceof AbstractClientPlayer clientPlayer) {
-                result.add(clientPlayer);
+            if (mc.player.distanceTo(player) <= range) {
+                result.add(new NearbyPlayer(player.getUUID(), player.getName().getString()));
             }
         }
-        result.sort(Comparator.comparing(player -> player.getName().getString(), String.CASE_INSENSITIVE_ORDER));
+        result.sort(Comparator.comparing(NearbyPlayer::name, String.CASE_INSENSITIVE_ORDER));
         return result;
     }
 }

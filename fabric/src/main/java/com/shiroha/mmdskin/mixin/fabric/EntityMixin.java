@@ -1,7 +1,7 @@
 package com.shiroha.mmdskin.mixin.fabric;
 
 import com.shiroha.mmdskin.config.ConfigManager;
-import com.shiroha.mmdskin.renderer.core.FirstPersonManager;
+import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -11,13 +11,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/**
- * 实体 Mixin — 修复第一人称下的交互射线起点 (Fabric)
- *
- * 当开启第一人称 MMD 渲染时，相机位置已经移动到了模型眼睛骨骼处。
- * 为了保持准星指向与实际交互（方块破坏、攻击）一致，
- * 必须让实体的眼睛位置（交互射线起点）也同步到骨骼位置。
- */
+/** 实体 Mixin，用于同步第一人称 MMD 视角下的眼睛位置与视线向量。 */
 @Mixin(Entity.class)
 public abstract class EntityMixin {
     @Inject(method = "getEyePosition(F)Lnet/minecraft/world/phys/Vec3;", at = @At("HEAD"), cancellable = true)
@@ -33,7 +27,6 @@ public abstract class EntityMixin {
                         return;
                     }
 
-                    // 兜底逻辑：手动计算，防止相机未初始化时崩溃
                     Vec3 bonePos = FirstPersonManager.getRotatedEyePosition(entity, partialTick);
                     float originalYaw = entity.getViewYRot(partialTick);
                     float originalPitch = entity.getViewXRot(partialTick);
@@ -55,7 +48,6 @@ public abstract class EntityMixin {
                     return;
                 }
 
-                // 非第一人称，仅返回骨骼位置
                 cir.setReturnValue(FirstPersonManager.getRotatedEyePosition(entity, partialTick));
             }
         }

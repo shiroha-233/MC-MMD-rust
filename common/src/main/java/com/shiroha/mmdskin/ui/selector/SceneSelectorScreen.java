@@ -1,7 +1,8 @@
 package com.shiroha.mmdskin.ui.selector;
 
-import com.shiroha.mmdskin.renderer.model.ModelInfo;
-import com.shiroha.mmdskin.renderer.model.SceneModelManager;
+import com.shiroha.mmdskin.asset.catalog.ModelInfo;
+import com.shiroha.mmdskin.scene.client.SceneModelCatalog;
+import com.shiroha.mmdskin.scene.client.SceneModelManager;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -17,6 +18,7 @@ import java.util.List;
  */
 public class SceneSelectorScreen extends Screen {
     private static final Logger logger = LogManager.getLogger();
+    private static final SceneModelCatalog SCENE_CATALOG = SceneModelCatalog.getInstance();
 
     private static final int PANEL_WIDTH = 140;
     private static final int PANEL_MARGIN = 4;
@@ -55,7 +57,7 @@ public class SceneSelectorScreen extends Screen {
 
     private void loadAvailableScenes() {
         sceneCards.clear();
-        List<ModelInfo> models = SceneModelManager.scanSceneModels();
+        List<ModelInfo> models = SCENE_CATALOG.listModels();
         for (ModelInfo info : models) {
             sceneCards.add(new SceneCardEntry(info.getFolderName(), info));
         }
@@ -98,7 +100,7 @@ public class SceneSelectorScreen extends Screen {
     }
 
     private void refreshScenes() {
-        SceneModelManager.invalidateSceneCache();
+        SCENE_CATALOG.invalidate();
         loadAvailableScenes();
         scrollOffset = 0;
         this.clearWidgets();

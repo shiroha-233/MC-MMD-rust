@@ -1,7 +1,7 @@
 package com.shiroha.mmdskin.mixin.forge;
 
 import com.shiroha.mmdskin.config.ConfigManager;
-import com.shiroha.mmdskin.renderer.core.FirstPersonManager;
+import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -33,7 +33,6 @@ public abstract class EntityMixin {
                         return;
                     }
 
-                    // 兜底逻辑：手动计算，防止相机未初始化时崩溃
                     Vec3 bonePos = FirstPersonManager.getRotatedEyePosition(entity, partialTick);
                     float originalYaw = entity.getViewYRot(partialTick);
                     float originalPitch = entity.getViewXRot(partialTick);
@@ -55,7 +54,6 @@ public abstract class EntityMixin {
                     return;
                 }
 
-                // 非第一人称，仅返回骨骼位置
                 cir.setReturnValue(FirstPersonManager.getRotatedEyePosition(entity, partialTick));
             }
         }
@@ -85,3 +83,4 @@ public abstract class EntityMixin {
         }
     }
 }
+

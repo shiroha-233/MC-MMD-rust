@@ -1,7 +1,7 @@
 package com.shiroha.mmdskin.stage.client;
 
-import com.shiroha.mmdskin.renderer.render.StageAnimSyncHelper;
 import com.shiroha.mmdskin.stage.application.StageSessionService;
+import com.shiroha.mmdskin.stage.client.sync.StageAnimSyncHelper;
 import com.shiroha.mmdskin.stage.domain.model.StageCameraMode;
 import com.shiroha.mmdskin.stage.protocol.StagePacket;
 import com.shiroha.mmdskin.stage.protocol.StagePacketCodec;
@@ -40,17 +40,21 @@ public final class StageClientPacketHandler {
         }
         UUID localPlayerId = mc.player.getUUID();
 
-        UUID targetUUID = parseUUID(packet.targetPlayerId);
+        UUID targetUUID = StageClientPacketMapper.parseUUID(packet.targetPlayerId);
         if (targetUUID != null && !targetUUID.equals(localPlayerId)) {
             return;
         }
 
-        UUID sessionId = parseUUID(packet.sessionId);
+        UUID sessionId = StageClientPacketMapper.parseUUID(packet.sessionId);
         switch (packet.type) {
             case INVITE_REQUEST -> playbackCoordinator.handleInviteRequest(senderUUID, sessionId);
             case INVITE_CANCEL -> sessionService.onInviteCancelled(senderUUID, sessionId);
             case INVITE_RESPONSE -> sessionService.onInviteReply(senderUUID, sessionId, packet.inviteDecision);
-            case SESSION_STATE -> sessionService.onSessionState(senderUUID, sessionId, packet.members);
+            case SESSION_STATE -> sessionService.onSessionState(
+                    senderUUID,
+                    sessionId,
+                    StageClientPacketMapper.toSessionMembers(packet.members)
+            );
             case READY_UPDATE -> sessionService.onMemberReady(
                     senderUUID,
                     sessionId,
@@ -59,7 +63,11 @@ public final class StageClientPacketHandler {
             );
             case MEMBER_LEAVE -> sessionService.onMemberLeft(senderUUID, sessionId);
             case SESSION_DISSOLVE -> playbackCoordinator.handleSessionDissolve(senderUUID, sessionId);
-            case PLAYBACK_START -> playbackCoordinator.handlePlaybackStart(senderUUID, sessionId, packet);
+            case PLAYBACK_START -> playbackCoordinator.handlePlaybackStart(
+                    senderUUID,
+                    sessionId,
+                    StageClientPacketMapper.toPlaybackStartRequest(packet)
+            );
             case PLAYBACK_STOP -> playbackCoordinator.handlePlaybackStop(senderUUID, sessionId);
             case FRAME_SYNC -> playbackCoordinator.handleFrameSync(senderUUID, sessionId, packet.frame);
             case REMOTE_STAGE_START -> {
@@ -86,14 +94,4 @@ public final class StageClientPacketHandler {
         }
     }
 
-    private UUID parseUUID(String raw) {
-        if (raw == null || raw.isEmpty()) {
-            return null;
-        }
-        try {
-            return UUID.fromString(raw);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
-    }
 }

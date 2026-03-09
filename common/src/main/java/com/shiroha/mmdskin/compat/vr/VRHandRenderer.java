@@ -12,22 +12,14 @@ import org.apache.logging.log4j.Logger;
 
 /**
  * VR 手持物品渲染器（SRP：在控制器位置渲染手持物品）
- * <p>
- * MMD 身体（含手臂）由 PlayerMixinDelegate 在世界空间渲染，
- * 此类仅负责在 Vivecraft 控制器位置渲染手持物品。
  */
+
 public final class VRHandRenderer {
 
     private static final Logger LOGGER = LogManager.getLogger();
 
     private VRHandRenderer() {}
 
-    /**
-     * 在 VR 控制器位置渲染手持物品
-     * <p>
-     * Vivecraft 的 setupRenderingAtController 已将 poseStack 变换到控制器世界空间，
-     * 此处直接渲染物品即可。
-     */
     public static void renderHandItem(PoseStack poseStack, MultiBufferSource buffer,
                                        int packedLight, InteractionHand hand) {
         try {

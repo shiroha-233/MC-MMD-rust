@@ -9,6 +9,7 @@ import org.apache.logging.log4j.Logger;
 /**
  * VR 骨骼驱动层（SRP：将 VR 追踪数据转换到模型空间并传递给 Rust IK）
  */
+
 public final class VRBoneDriver {
 
     private static final Logger LOGGER = LogManager.getLogger();
@@ -24,9 +25,6 @@ public final class VRBoneDriver {
         }
     }
 
-    /**
-     * 驱动模型 VR 骨骼（世界空间 → 模型局部空间 → Rust IK）
-     */
     public static boolean driveModel(long modelHandle, Player player, float tickDelta) {
         if (modelHandle == 0) return false;
         try {
@@ -45,17 +43,17 @@ public final class VRBoneDriver {
             float[] localData = new float[21];
             for (int i = 0; i < 3; i++) {
                 int off = i * 7;
-                // 世界坐标 → 玩家相对坐标
+
                 float dx = worldData[off]     - px;
                 float dy = worldData[off + 1] - py;
                 float dz = worldData[off + 2] - pz;
-                // 反向旋转 bodyYaw → 模型朝向空间，再转 MMD 单位
+
                 float lx =  cosY * dx + sinY * dz;
                 float lz = -sinY * dx + cosY * dz;
                 localData[off]     = lx / MODEL_SCALE;
                 localData[off + 1] = dy / MODEL_SCALE;
                 localData[off + 2] = lz / MODEL_SCALE;
-                // 四元数也反向旋转 bodyYaw
+
                 transformRotation(worldData, off + 3, localData, off + 3, cosY, sinY);
             }
 
@@ -67,25 +65,20 @@ public final class VRBoneDriver {
         }
     }
 
-    /**
-     * 四元数反向旋转 bodyYaw（Q_local = Q_yawInv * Q_world）
-     */
     private static void transformRotation(float[] src, int si,
                                            float[] dst, int di,
                                            float cosY, float sinY) {
-        // 半角公式
+
         float cosH = (float) Math.sqrt((1.0f + cosY) * 0.5f);
         float sinH = (float) Math.sqrt(Math.max(0, (1.0f - cosY) * 0.5f));
         if (sinY > 0) sinH = -sinH;
 
-        // Q_yawInv = (0, sinH, 0, cosH)
         float qx = src[si], qy = src[si + 1], qz = src[si + 2], qw = src[si + 3];
         dst[di]     = cosH * qx + sinH * qz;
         dst[di + 1] = cosH * qy + sinH * qw;
         dst[di + 2] = cosH * qz - sinH * qx;
         dst[di + 3] = cosH * qw - sinH * qy;
 
-        // 归一化
         float len = (float) Math.sqrt(
             dst[di] * dst[di] + dst[di+1] * dst[di+1] +
             dst[di+2] * dst[di+2] + dst[di+3] * dst[di+3]);

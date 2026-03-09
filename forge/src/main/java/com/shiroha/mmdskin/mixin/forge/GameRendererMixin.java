@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.mixin.forge;
 
-import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
+import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
 import net.minecraft.client.Camera;
 import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
-    
+
     @Inject(method = "getFov", at = @At("RETURN"), cancellable = true)
     private void onGetFov(Camera camera, float partialTick, boolean useFovSetting, CallbackInfoReturnable<Double> cir) {
         MMDCameraController controller = MMDCameraController.getInstance();
@@ -22,3 +22,4 @@ public abstract class GameRendererMixin {
         }
     }
 }
+

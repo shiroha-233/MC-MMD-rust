@@ -2,8 +2,8 @@ package com.shiroha.mmdskin.mixin.fabric;
 
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.fabric.YsmCompat;
-import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
-import com.shiroha.mmdskin.renderer.core.FirstPersonManager;
+import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
+import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import net.minecraft.client.Camera;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -16,22 +16,19 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * 相机 Mixin — 舞台模式相机接管 & 第一人称 MMD 模型相机高度调整
- * 在 Camera.setup() 尾部覆盖位置和旋转
- */
+/** 相机 Mixin，用于接管舞台模式与第一人称 MMD 相机位置。 */
 @Mixin(Camera.class)
 public abstract class CameraMixin {
-    
+
     @Shadow
     protected abstract void setPosition(double x, double y, double z);
-    
+
     @Shadow
     protected abstract void setRotation(float yaw, float pitch);
-    
+
     @Inject(method = "setup", at = @At("TAIL"))
     private void onSetup(BlockGetter level, Entity entity, boolean detached, boolean mirrored, float partialTick, CallbackInfo ci) {
-        // 舞台模式相机接管
+
         MMDCameraController controller = MMDCameraController.getInstance();
         if (controller.isActive()) {
             controller.checkEscapeKey();
@@ -43,9 +40,9 @@ public abstract class CameraMixin {
                 }
             }
         } else {
-            // 第一人称 MMD 模型相机：跟踪眼睛骨骼动画位置
+
             if (FirstPersonManager.isActive() && FirstPersonManager.isEyeBoneValid() && !detached) {
-                // YSM 兼容：若 YSM 激活且未阻止自身模型渲染，则让 YSM 控制相机
+
                 if (entity instanceof LivingEntity living) {
                     boolean ysmActive = YsmCompat.isYsmModelActive(living);
                     boolean ysmDisableSelf = YsmCompat.isDisableSelfModel();

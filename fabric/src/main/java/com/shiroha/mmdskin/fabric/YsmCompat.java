@@ -7,27 +7,20 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import java.lang.reflect.Method;
 
-/**
- * YSM (Yes Steve Model) 兼容性辅助类 (Fabric)
- * 通过反射访问 YSM 内部 API，用于检测玩家是否正在使用 YSM 模型
- */
+/** Fabric 侧 YSM 兼容辅助类，用于检测模型状态与相关显示开关。 */
 public class YsmCompat {
     private static final Logger logger = LogManager.getLogger();
     private static boolean ysmChecked = false;
     private static boolean ysmPresent = false;
 
     private static Method isModelActiveMethod = null;
-    
-    // YSM 配置项字段
+
     private static Object disableSelfModelValue = null;
     private static Object disableOtherModelValue = null;
     private static Object disableSelfHandsValue = null;
 
     private static Method booleanValueGetMethod = null;
 
-    /**
-     * 综合判断：实体是否应显示 YSM 模型（而非原版/MMD）
-     */
     public static boolean isYsmActive(LivingEntity entity) {
         if (!isYsmModelActive(entity)) {
             return false;
@@ -42,9 +35,6 @@ public class YsmCompat {
         }
     }
 
-    /**
-     * 检查实体是否配置了 YSM 模型（无论当前是否显示）
-     */
     public static boolean isYsmModelActive(LivingEntity entity) {
         if (!ysmChecked) {
             ysmPresent = FabricLoader.getInstance().isModLoaded("yes_steve_model");
@@ -55,10 +45,9 @@ public class YsmCompat {
                     disableOtherModelValue = ysmConfigClass.getDeclaredField("oo0o0OO0Oo0oOOo00o00Ooo0").get(null);
                     disableSelfHandsValue = ysmConfigClass.getDeclaredField("ooO00O0oOooO0OoOO000OoOo").get(null);
 
-                    // 检查模型是否激活 (使用 YesSteveModel.isAvailable 作为通用判定)
                     Class<?> ysmMainClass = Class.forName("com.elfmcys.yesstevemodel.YesSteveModel");
                     isModelActiveMethod = ysmMainClass.getMethod("isAvailable");
-                    
+
                     if (disableSelfModelValue != null) {
                         booleanValueGetMethod = disableSelfModelValue.getClass().getMethod("get");
                     }
@@ -75,7 +64,7 @@ public class YsmCompat {
             try {
                 return (Boolean) isModelActiveMethod.invoke(null);
             } catch (Exception e) {
-                // 忽略调用异常
+
             }
         }
 

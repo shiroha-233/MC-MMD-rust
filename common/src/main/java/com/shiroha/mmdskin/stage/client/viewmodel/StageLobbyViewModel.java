@@ -5,7 +5,6 @@ import com.shiroha.mmdskin.stage.client.StageClientContext;
 import com.shiroha.mmdskin.stage.client.playback.StageLocalPlaybackPreferences;
 import com.shiroha.mmdskin.stage.domain.model.StageMember;
 import com.shiroha.mmdskin.stage.domain.model.StageMemberState;
-import net.minecraft.client.player.AbstractClientPlayer;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -95,9 +94,9 @@ public final class StageLobbyViewModel {
     }
 
     public List<HostEntry> getHostPanelEntries() {
-        List<AbstractClientPlayer> nearbyPlayers = StageClientContext.getNearbyPlayers(NEARBY_RANGE);
+        List<StageClientContext.NearbyPlayer> nearbyPlayers = StageClientContext.getNearbyPlayers(NEARBY_RANGE);
         LinkedHashMap<UUID, HostEntry> result = new LinkedHashMap<>();
-        Set<UUID> nearbyIds = nearbyPlayers.stream().map(AbstractClientPlayer::getUUID)
+        Set<UUID> nearbyIds = nearbyPlayers.stream().map(StageClientContext.NearbyPlayer::uuid)
                 .collect(java.util.stream.Collectors.toSet());
 
         for (StageMember member : sessionService.getMembers()) {
@@ -113,10 +112,10 @@ public final class StageLobbyViewModel {
             ));
         }
 
-        for (AbstractClientPlayer nearbyPlayer : nearbyPlayers) {
-            result.putIfAbsent(nearbyPlayer.getUUID(), new HostEntry(
-                    nearbyPlayer.getUUID(),
-                    nearbyPlayer.getName().getString(),
+        for (StageClientContext.NearbyPlayer nearbyPlayer : nearbyPlayers) {
+            result.putIfAbsent(nearbyPlayer.uuid(), new HostEntry(
+                    nearbyPlayer.uuid(),
+                    nearbyPlayer.name(),
                     null,
                     true,
                     false

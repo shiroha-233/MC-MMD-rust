@@ -4,9 +4,9 @@ import java.util.UUID;
 
 import com.shiroha.mmdskin.fabric.register.MmdSkinRegisterCommon;
 import com.shiroha.mmdskin.maid.MaidMMDModelManager;
-import com.shiroha.mmdskin.renderer.animation.PendingAnimSignalCache;
-import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
-import com.shiroha.mmdskin.renderer.render.MorphSyncHelper;
+import com.shiroha.mmdskin.player.animation.PendingAnimSignalCache;
+import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
+import com.shiroha.mmdskin.player.sync.MorphSyncHelper;
 import com.shiroha.mmdskin.ui.network.NetworkOpCode;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 
@@ -37,7 +37,6 @@ public class MmdSkinNetworkPack {
         buffer.writeByteArray(data);
         ClientPlayNetworking.send(MmdSkinRegisterCommon.SKIN_C2S, buffer);
     }
-
 
     public static void sendToServer(int opCode, UUID playerUUID, String animId) {
         FriendlyByteBuf buffer = PacketByteBufs.create();
@@ -128,3 +127,4 @@ public class MmdSkinNetworkPack {
         }
     }
 }
+

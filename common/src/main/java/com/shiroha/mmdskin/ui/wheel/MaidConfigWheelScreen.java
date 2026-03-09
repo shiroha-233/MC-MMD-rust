@@ -15,11 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * 女仆配置轮盘界面
- * 对着女仆按住 B 打开，松开关闭
- * 提供模型切换/动作选择/材质控制三个入口
- */
+/** 女仆配置轮盘界面。 */
 public class MaidConfigWheelScreen extends AbstractWheelScreen {
     private static final WheelStyle STYLE = new WheelStyle(
             0.45f, 0.35f,
@@ -29,12 +25,12 @@ public class MaidConfigWheelScreen extends AbstractWheelScreen {
     
     private final List<ConfigSlot> configSlots;
     
-    // 女仆信息
+
     private final UUID maidUUID;
     private final int maidEntityId;
     private final String maidName;
     
-    // 监控的按键
+
     private final KeyMapping monitoredKey;
     
     public MaidConfigWheelScreen(UUID maidUUID, int maidEntityId, String maidName, KeyMapping keyMapping) {
@@ -88,16 +84,16 @@ public class MaidConfigWheelScreen extends AbstractWheelScreen {
     public void tick() {
         super.tick();
 
-        // 只有在当前界面确实是 MaidConfigWheelScreen 时才检测按键
+
         if (Minecraft.getInstance().screen != this) {
             return;
         }
 
-        // 检测按键是否松开
+
         if (monitoredKey != null) {
             boolean isDown = false;
 
-            // 兜底逻辑
+
             if (monitoredKey.isDown()) {
                 isDown = true;
             } else {
@@ -109,7 +105,7 @@ public class MaidConfigWheelScreen extends AbstractWheelScreen {
             }
 
             if (!isDown) {
-                // 按键松开，执行选中的操作并关闭
+
                 if (selectedSlot >= 0 && selectedSlot < configSlots.size()) {
                     ConfigSlot slot = configSlots.get(selectedSlot);
                     this.onClose();
@@ -145,7 +141,7 @@ public class MaidConfigWheelScreen extends AbstractWheelScreen {
         }
     }
     
-    // 女仆配置操作
+
     private void openMaidModelSelector() {
         Minecraft.getInstance().setScreen(new MaidModelSelectorScreen(maidUUID, maidEntityId, maidName));
     }

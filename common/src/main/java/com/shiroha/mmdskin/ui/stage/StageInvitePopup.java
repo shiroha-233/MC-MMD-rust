@@ -112,7 +112,7 @@ public class StageInvitePopup extends Screen {
         if (button == 0) {
             if (hoverAccept) {
                 lobbyViewModel.acceptInvite();
-                Minecraft.getInstance().setScreen(new StageSelectScreen());
+                StagePlaybackUiAdapter.INSTANCE.openStageSelection();
                 return true;
             }
             if (hoverDecline) {

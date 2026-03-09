@@ -15,16 +15,10 @@ import org.apache.logging.log4j.Logger;
 
 /**
  * 原生库加载器（SRP：仅负责平台检测、库提取/下载/清理/加载）
- *
- * 加载策略优先级：
- * 1. 从模组内置资源提取（确保版本一致）
- * 2. 从 GitHub Release 自动下载
- * Android 有专用的多策略加载流程。
  */
+
 public final class NativeLibraryLoader {
     private static final Logger logger = LogManager.getLogger();
-
-    // ==================== 平台检测 ====================
 
     private static final boolean isAndroid;
     private static final boolean isLinux;
@@ -40,7 +34,6 @@ public final class NativeLibraryLoader {
         isLoongArch64 = arch.contains("loongarch64") || arch.contains("loong64");
         isRiscv64 = arch.contains("riscv64");
 
-        // Android 检测（FCL/PojavLauncher 等启动器使用标准 JVM）
         boolean androidDetected = false;
         String[] launcherEnvKeys = { "FCL_NATIVEDIR", "POJAV_NATIVEDIR", "MOD_ANDROID_RUNTIME", "FCL_VERSION_CODE" };
         for (String key : launcherEnvKeys) {
@@ -70,16 +63,11 @@ public final class NativeLibraryLoader {
         isLinux = System.getProperty("os.name").toLowerCase().contains("linux") && !isAndroid;
     }
 
-    /** 供其他模块查询当前是否运行在 Android 环境 */
     public static boolean isAndroid() { return isAndroid; }
-
-    // ==================== 版本与下载 ====================
 
     static final String LIBRARY_VERSION = "v1.0.3";
     private static final String RELEASE_BASE_URL =
             "https://github.com/shiroha-23/MC-MMD-rust/releases/download/" + LIBRARY_VERSION + "/";
-
-    // ==================== 游戏目录缓存 ====================
 
     private static volatile String gameDirectory;
     private static final Object DIR_LOCK = new Object();
@@ -95,13 +83,8 @@ public final class NativeLibraryLoader {
         return gameDirectory;
     }
 
-    // ==================== 入口 ====================
-
     private NativeLibraryLoader() {}
 
-    /**
-     * 加载原生库并校验版本（由 NativeFunc 在首次初始化时调用）
-     */
     static void loadAndVerify(NativeFunc instance) {
         if (isAndroid) {
             loadAndroid();
@@ -110,8 +93,6 @@ public final class NativeLibraryLoader {
         }
         verifyLoadedLibraryVersion(instance);
     }
-
-    // ==================== 桌面端加载 ====================
 
     private static void loadDesktop() {
         String resourcePath;
@@ -153,7 +134,6 @@ public final class NativeLibraryLoader {
 
         cleanupOldLibraries(fileName, downloadFileName);
 
-        // 策略1: 从模组内置资源提取
         File extracted = extractNativeLibrary(resourcePath, fileName);
         if (extracted != null) {
             try {
@@ -164,7 +144,6 @@ public final class NativeLibraryLoader {
             }
         }
 
-        // 策略2: 从 GitHub Release 下载
         File downloaded = downloadNativeLibrary(downloadFileName);
         if (downloaded != null) {
             try {
@@ -179,8 +158,6 @@ public final class NativeLibraryLoader {
                 + "，请检查网络连接或从 " + RELEASE_BASE_URL + " 手动下载");
     }
 
-    // ==================== Android 加载 ====================
-
     private static void loadAndroid() {
         logger.info("Android Env Detected! Arch: a" + (isArm64 ? "rm" : "md") + "64");
 
@@ -190,10 +167,8 @@ public final class NativeLibraryLoader {
         String soFileName = "libmmd_engine.so";
         String libcFileName = "libc++_shared.so";
 
-        // 检测是否加载libc++_shared.so，如未加载，则尝试加载
         boolean isLibcLoaded = isLibcLoaded();
 
-        // 如果环境中已经有 libc 所在路径，尝试先用 load 加载它
         if (!isLibcLoaded && libcPath != null) {
             try {
                 System.load(libcPath);
@@ -205,7 +180,6 @@ public final class NativeLibraryLoader {
             }
         }
 
-        // 策略0: 写入 $JAVA_HOME/lib
         var javaHome = System.getProperty("java.home");
         var javaLibDir = new File(javaHome, "lib");
         var javaLibSoFile = new File(javaLibDir, soFileName);
@@ -214,7 +188,7 @@ public final class NativeLibraryLoader {
                 if (is == null) {
                     logger.warn("[Android] 策略0: 内置资源未找到: " + resourcePath);
                 } else {
-                    // 确保 libc 如果还没有加载，先解压并加载到同一目录
+
                     if (!isLibcLoaded) {
                         isLibcLoaded = ensureLibcLoaded(libcResPath, libcFileName, javaLibDir);
                     }
@@ -232,9 +206,8 @@ public final class NativeLibraryLoader {
             logger.warn("[Android] JAVA_HOME 无法写入，跳过");
         }
 
-        // 策略1: LD_LIBRARY_PATH
         try {
-            // 先尝试从默认路径加载 libc，如果还未加载则把内置版本放到游戏目录作为 fallback
+
             if (!isLibcLoaded) {
                 System.loadLibrary("c++_shared");
                 isLibcLoaded = isLibcLoaded();
@@ -247,12 +220,11 @@ public final class NativeLibraryLoader {
             logger.warn("[Android] 策略1 失败: " + e.getMessage());
         }
 
-        // 策略2: MOD_ANDROID_RUNTIME
         String modRuntimeDir = System.getenv("MOD_ANDROID_RUNTIME");
         if (modRuntimeDir != null && !modRuntimeDir.isEmpty()) {
             try {
                 if (!isLibcLoaded) {
-                    // 仍可尝试解压之后再决定是否继续
+
                     isLibcLoaded = ensureLibcLoaded(libcResPath, libcFileName, new File(modRuntimeDir));
                 }
                 if (isLibcLoaded) {
@@ -273,7 +245,6 @@ public final class NativeLibraryLoader {
             }
         }
 
-        // 策略3: POJAV_NATIVEDIR
         String pojavNativeDir = System.getenv("POJAV_NATIVEDIR");
         if (pojavNativeDir != null && !pojavNativeDir.isEmpty()) {
             try {
@@ -299,7 +270,6 @@ public final class NativeLibraryLoader {
             }
         }
 
-        // 策略4: 游戏目录
         File extracted = extractNativeLibrary(resourcePath, soFileName);
         if (extracted != null) {
             try {
@@ -316,7 +286,6 @@ public final class NativeLibraryLoader {
             }
         }
 
-        // 策略5: GitHub 下载
         File downloaded = downloadNativeLibrary("libmmd_engine-android-a" + (isArm64 ? "rm" : "md") + "64.so");
         if (downloaded != null) {
             try {
@@ -340,15 +309,9 @@ public final class NativeLibraryLoader {
                 + getVersionedFileName("libmmd_engine-android-a" + (isArm64 ? "rm" : "md") + "64.so"));
     }
 
-    // ==================== 工具方法 ====================
-
-    /**
-     * 检测安卓{@code libc++_shared.so}是否已加载
-     * @return {@code true} if loaded or {@code false} if not load
-     */
     private static boolean isLibcLoaded() {
         File[] maps = new File("/proc/" + ProcessHandle.current().pid() + "/map_files").listFiles();
-        for (var f : maps) 
+        for (var f : maps)
             if (f.getAbsolutePath().contains("libc++_shared.so")) {
                 logger.info("[Android] libc++_shared.so 已预加载：" + f.getAbsolutePath());
                 return true;
@@ -357,10 +320,6 @@ public final class NativeLibraryLoader {
         return false;
     }
 
-    /**
-     * 通过环境变量查找{@code libc++_shared.so}
-     * @return {@code libc++_shared.so}的绝对地址，找不到则为{@code null}
-     */
     private static String findLibcPath() {
         String libcName = "libc++_shared.so";
         String libPaths = System.getenv("LD_LIBRARY_PATH");
@@ -368,7 +327,6 @@ public final class NativeLibraryLoader {
         String fclLibs = System.getenv("FCL_NATIVEDIR");
         String javaLib = System.getProperty("java.home") + "/lib";
 
-        // helper to search a directory for the libc name
         var dirsToSearch = new java.util.ArrayList<Path>();
         if (libPaths != null && !libPaths.isEmpty()) {
             for (String part : libPaths.split(":")) {
@@ -403,14 +361,6 @@ public final class NativeLibraryLoader {
         return null;
     }
 
-    /**
-     * 如果当前进程尚未加载 libc++_shared.so，则将内置资源中的共享库解压到指定目录并尝试加载。
-     *
-     * @param libcResource 资源路径，例如"/natives/android-arm64/libc++_shared.so"
-     * @param libcFileName 文件名通常为"libc++_shared.so"
-     * @param targetDir 解压目标目录，若为null则使用游戏目录
-     * @return true表示加载成功或之前已加载，false表示仍未加载
-     */
     private static boolean ensureLibcLoaded(String libcResource, String libcFileName, File targetDir) {
         if (isLibcLoaded()) {
             return true;
@@ -446,10 +396,6 @@ public final class NativeLibraryLoader {
         return isLibcLoaded();
     }
 
-    /**
-     * 版本化文件名，避免文件替换冲突。
-     * 例如: mmd_engine.dll → mmd_engine_v1.0.3.dll
-     */
     private static String getVersionedFileName(String baseFileName) {
         int dotIndex = baseFileName.lastIndexOf('.');
         if (dotIndex > 0) {
@@ -458,7 +404,6 @@ public final class NativeLibraryLoader {
         return baseFileName + "_" + LIBRARY_VERSION;
     }
 
-    /** 从模组内置资源提取原生库（版本化文件名） */
     private static File extractNativeLibrary(String resourcePath, String fileName) {
         try {
             String versionedName = getVersionedFileName(fileName);
@@ -486,7 +431,6 @@ public final class NativeLibraryLoader {
         }
     }
 
-    /** 从 GitHub Release 下载原生库 */
     private static File downloadNativeLibrary(String downloadFileName) {
         try {
             String versionedName = getVersionedFileName(downloadFileName);
@@ -542,7 +486,6 @@ public final class NativeLibraryLoader {
         }
     }
 
-    /** 清理旧版本库文件和遗留辅助文件 */
     private static void cleanupOldLibraries(String baseFileName, String downloadBaseFileName) {
         try {
             File gameDir = new File(getGameDirectory());
@@ -589,7 +532,6 @@ public final class NativeLibraryLoader {
         }
     }
 
-    /** 版本校验：调用 GetVersion() 与 Java 侧版本比较 */
     private static void verifyLoadedLibraryVersion(NativeFunc instance) {
         try {
             String rustVersion = instance.GetVersion();

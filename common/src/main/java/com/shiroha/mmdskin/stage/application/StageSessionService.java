@@ -1,15 +1,14 @@
 package com.shiroha.mmdskin.stage.application;
 
-import com.shiroha.mmdskin.stage.client.StageClientContext;
-import com.shiroha.mmdskin.stage.client.playback.StageLocalPlaybackPreferences;
+import com.shiroha.mmdskin.stage.application.port.StageLocalPlayerContextPort;
+import com.shiroha.mmdskin.stage.application.port.StagePlaybackPreferencesPort;
+import com.shiroha.mmdskin.stage.application.port.StageSessionOutboundPort;
 import com.shiroha.mmdskin.stage.domain.model.StageCameraMode;
 import com.shiroha.mmdskin.stage.domain.model.StageDescriptor;
 import com.shiroha.mmdskin.stage.domain.model.StageInviteDecision;
 import com.shiroha.mmdskin.stage.domain.model.StageMember;
 import com.shiroha.mmdskin.stage.domain.model.StageMemberState;
 import com.shiroha.mmdskin.stage.domain.model.StageRole;
-import com.shiroha.mmdskin.stage.protocol.StageMemberSnapshot;
-import com.shiroha.mmdskin.ui.network.StageNetworkHandler;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -23,10 +22,73 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 public final class StageSessionService {
+    private static volatile StageLocalPlayerContextPort defaultLocalPlayerContext = new StageLocalPlayerContextPort() {
+        @Override
+        public UUID getLocalPlayerUUID() {
+            return null;
+        }
+
+        @Override
+        public String resolvePlayerName(UUID uuid) {
+            return uuid == null ? "" : uuid.toString();
+        }
+    };
+    private static volatile StagePlaybackPreferencesPort defaultPlaybackPreferences = new StagePlaybackPreferencesPort() {
+        @Override
+        public boolean isCustomMotionEnabled() {
+            return false;
+        }
+
+        @Override
+        public List<String> getSelectedMotionFiles() {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public String getSelectedPackName() {
+            return null;
+        }
+
+        @Override
+        public void reset() {
+        }
+    };
+    private static volatile StageSessionOutboundPort defaultOutbound = new StageSessionOutboundPort() {
+        @Override
+        public void sendReady(UUID hostUUID, UUID sessionId, boolean ready, boolean useHostCamera,
+                              String motionPackName, List<String> motionFiles) {
+        }
+
+        @Override
+        public void sendStageInvite(UUID targetUUID, UUID sessionId) {
+        }
+
+        @Override
+        public void sendInviteCancel(UUID targetUUID, UUID sessionId) {
+        }
+
+        @Override
+        public void sendInviteResponse(UUID hostUUID, UUID sessionId, StageInviteDecision decision) {
+        }
+
+        @Override
+        public void sendLeave(UUID hostUUID, UUID sessionId) {
+        }
+
+        @Override
+        public void sendStageWatchEnd(UUID targetUUID, UUID sessionId) {
+        }
+
+        @Override
+        public void sendSessionDissolve(UUID sessionId) {
+        }
+    };
     private static final StageSessionService INSTANCE = new StageSessionService();
 
     private final Map<UUID, SessionMember> members = new LinkedHashMap<>();
-    private final StageLocalPlaybackPreferences localPlaybackPreferences = StageLocalPlaybackPreferences.getInstance();
+    private StageLocalPlayerContextPort localPlayerContext;
+    private StagePlaybackPreferencesPort playbackPreferences;
+    private StageSessionOutboundPort outbound;
 
     private StageRole localRole = StageRole.NONE;
     private UUID sessionId;
@@ -40,10 +102,34 @@ public final class StageSessionService {
     private StageDescriptor watchingDescriptor;
 
     private StageSessionService() {
+        resetCollaborators();
     }
 
     public static StageSessionService getInstance() {
         return INSTANCE;
+    }
+
+    public synchronized void configureRuntimeCollaborators(StageLocalPlayerContextPort localPlayerContext,
+                                                           StagePlaybackPreferencesPort playbackPreferences,
+                                                           StageSessionOutboundPort outbound) {
+        defaultLocalPlayerContext = Objects.requireNonNull(localPlayerContext, "localPlayerContext");
+        defaultPlaybackPreferences = Objects.requireNonNull(playbackPreferences, "playbackPreferences");
+        defaultOutbound = Objects.requireNonNull(outbound, "outbound");
+        resetCollaborators();
+    }
+
+    synchronized void setCollaboratorsForTesting(StageLocalPlayerContextPort localPlayerContext,
+                                                 StagePlaybackPreferencesPort playbackPreferences,
+                                                 StageSessionOutboundPort outbound) {
+        this.localPlayerContext = Objects.requireNonNull(localPlayerContext, "localPlayerContext");
+        this.playbackPreferences = Objects.requireNonNull(playbackPreferences, "playbackPreferences");
+        this.outbound = Objects.requireNonNull(outbound, "outbound");
+    }
+
+    synchronized void resetCollaborators() {
+        this.localPlayerContext = defaultLocalPlayerContext;
+        this.playbackPreferences = defaultPlaybackPreferences;
+        this.outbound = defaultOutbound;
     }
 
     public synchronized StageRole getLocalRole() {
@@ -120,7 +206,7 @@ public final class StageSessionService {
         if (localRole != StageRole.MEMBER || sessionId == null || hostPlayerId == null) {
             return;
         }
-        StageNetworkHandler.sendReady(
+        outbound.sendReady(
                 hostPlayerId,
                 sessionId,
                 localReady,
@@ -131,7 +217,7 @@ public final class StageSessionService {
     }
 
     public synchronized void sendInvite(UUID targetUUID) {
-        UUID selfUUID = StageClientContext.getLocalPlayerUUID();
+        UUID selfUUID = localPlayerContext.getLocalPlayerUUID();
         if (selfUUID == null || targetUUID == null || selfUUID.equals(targetUUID) || localRole == StageRole.MEMBER) {
             return;
         }
@@ -146,12 +232,12 @@ public final class StageSessionService {
 
         members.put(targetUUID, new SessionMember(
                 targetUUID,
-                StageClientContext.resolvePlayerName(targetUUID),
+                localPlayerContext.resolvePlayerName(targetUUID),
                 StageMemberState.INVITED,
                 StageCameraMode.HOST_CAMERA,
                 false
         ));
-        StageNetworkHandler.sendStageInvite(targetUUID, sessionId);
+        outbound.sendStageInvite(targetUUID, sessionId);
     }
 
     public synchronized void cancelInvite(UUID targetUUID) {
@@ -163,7 +249,7 @@ public final class StageSessionService {
             return;
         }
         members.remove(targetUUID);
-        StageNetworkHandler.sendInviteCancel(targetUUID, sessionId);
+        outbound.sendInviteCancel(targetUUID, sessionId);
     }
 
     public synchronized void acceptInvite() {
@@ -173,7 +259,7 @@ public final class StageSessionService {
         }
         pendingInvite = null;
         joinSessionAsMember(invite.hostUUID, invite.sessionId, invite.hostName);
-        StageNetworkHandler.sendInviteResponse(invite.hostUUID, invite.sessionId, StageInviteDecision.ACCEPT);
+        outbound.sendInviteResponse(invite.hostUUID, invite.sessionId, StageInviteDecision.ACCEPT);
     }
 
     public synchronized void declineInvite() {
@@ -182,11 +268,11 @@ public final class StageSessionService {
             return;
         }
         pendingInvite = null;
-        StageNetworkHandler.sendInviteResponse(invite.hostUUID, invite.sessionId, StageInviteDecision.DECLINE);
+        outbound.sendInviteResponse(invite.hostUUID, invite.sessionId, StageInviteDecision.DECLINE);
     }
 
     public synchronized boolean onInviteReceived(UUID hostUUID, UUID incomingSessionId) {
-        UUID selfUUID = StageClientContext.getLocalPlayerUUID();
+        UUID selfUUID = localPlayerContext.getLocalPlayerUUID();
         if (selfUUID == null || hostUUID == null || selfUUID.equals(hostUUID)) {
             return false;
         }
@@ -195,10 +281,10 @@ public final class StageSessionService {
             return false;
         }
         if (localRole != StageRole.NONE) {
-            StageNetworkHandler.sendInviteResponse(hostUUID, incomingSessionId, StageInviteDecision.BUSY);
+            outbound.sendInviteResponse(hostUUID, incomingSessionId, StageInviteDecision.BUSY);
             return false;
         }
-        pendingInvite = new PendingInvite(hostUUID, incomingSessionId, StageClientContext.resolvePlayerName(hostUUID));
+        pendingInvite = new PendingInvite(hostUUID, incomingSessionId, localPlayerContext.resolvePlayerName(hostUUID));
         return true;
     }
 
@@ -217,7 +303,7 @@ public final class StageSessionService {
         if (member == null) {
             return;
         }
-        member.name = StageClientContext.resolvePlayerName(memberUUID);
+        member.name = localPlayerContext.resolvePlayerName(memberUUID);
         member.state = switch (decision) {
             case ACCEPT -> StageMemberState.ACCEPTED;
             case DECLINE -> StageMemberState.DECLINED;
@@ -238,28 +324,29 @@ public final class StageSessionService {
         member.state = ready ? StageMemberState.READY : StageMemberState.ACCEPTED;
     }
 
-    public synchronized void onSessionState(UUID hostUUID, UUID incomingSessionId, List<StageMemberSnapshot> snapshots) {
+    public synchronized void onSessionState(UUID hostUUID, UUID incomingSessionId, List<StageSessionMemberSnapshot> snapshots) {
         if (hostUUID == null || incomingSessionId == null) {
             return;
         }
-        UUID selfUUID = StageClientContext.getLocalPlayerUUID();
+        UUID selfUUID = localPlayerContext.getLocalPlayerUUID();
         this.hostPlayerId = hostUUID;
         this.sessionId = incomingSessionId;
         this.pendingInvite = null;
         this.members.clear();
 
         if (snapshots != null) {
-            for (StageMemberSnapshot snapshot : snapshots) {
-                UUID memberUUID = parseUUID(snapshot.uuid);
-                StageMemberState state = parseState(snapshot.state);
-                if (memberUUID == null || state == null) {
-                    continue;
-                }
+            for (StageSessionMemberSnapshot snapshot : snapshots) {
+                UUID memberUUID = snapshot.playerId();
+                StageMemberState state = snapshot.state();
                 boolean local = selfUUID != null && selfUUID.equals(memberUUID);
-                StageCameraMode cameraMode = parseCameraMode(snapshot.cameraMode);
+                StageCameraMode cameraMode = snapshot.cameraMode() != null
+                        ? snapshot.cameraMode()
+                        : StageCameraMode.HOST_CAMERA;
                 members.put(memberUUID, new SessionMember(
                         memberUUID,
-                        snapshot.name != null && !snapshot.name.isEmpty() ? snapshot.name : StageClientContext.resolvePlayerName(memberUUID),
+                        snapshot.playerName() != null && !snapshot.playerName().isEmpty()
+                                ? snapshot.playerName()
+                                : localPlayerContext.resolvePlayerName(memberUUID),
                         state,
                         cameraMode,
                         local
@@ -347,6 +434,13 @@ public final class StageSessionService {
         clearSession(true);
     }
 
+    public synchronized void leaveSession() {
+        if (localRole == StageRole.MEMBER && hostPlayerId != null && sessionId != null) {
+            outbound.sendLeave(hostPlayerId, sessionId);
+        }
+        clearSession(true);
+    }
+
     public synchronized void stopWatchingStageOnly() {
         watchingStage = false;
         watchingDescriptor = null;
@@ -357,13 +451,13 @@ public final class StageSessionService {
             return;
         }
         for (UUID memberUUID : getAcceptedMembers()) {
-            StageNetworkHandler.sendStageWatchEnd(memberUUID, sessionId);
+            outbound.sendStageWatchEnd(memberUUID, sessionId);
         }
     }
 
     public synchronized void closeHostedSession() {
         if (localRole == StageRole.HOST && sessionId != null) {
-            StageNetworkHandler.sendSessionDissolve(sessionId);
+            outbound.sendSessionDissolve(sessionId);
         }
         clearSession(true);
     }
@@ -390,7 +484,7 @@ public final class StageSessionService {
     private void ensureHostSelfEntry(UUID selfUUID) {
         members.put(selfUUID, new SessionMember(
                 selfUUID,
-                StageClientContext.resolvePlayerName(selfUUID),
+                localPlayerContext.resolvePlayerName(selfUUID),
                 StageMemberState.HOST,
                 StageCameraMode.HOST_CAMERA,
                 true
@@ -399,7 +493,7 @@ public final class StageSessionService {
 
     private void joinSessionAsMember(UUID hostUUID, UUID incomingSessionId, String hostName) {
         clearSession(false);
-        UUID selfUUID = StageClientContext.getLocalPlayerUUID();
+        UUID selfUUID = localPlayerContext.getLocalPlayerUUID();
         localRole = StageRole.MEMBER;
         sessionId = incomingSessionId;
         hostPlayerId = hostUUID;
@@ -409,7 +503,7 @@ public final class StageSessionService {
 
         members.put(hostUUID, new SessionMember(
                 hostUUID,
-                hostName != null && !hostName.isEmpty() ? hostName : StageClientContext.resolvePlayerName(hostUUID),
+                hostName != null && !hostName.isEmpty() ? hostName : localPlayerContext.resolvePlayerName(hostUUID),
                 StageMemberState.HOST,
                 StageCameraMode.HOST_CAMERA,
                 false
@@ -418,7 +512,7 @@ public final class StageSessionService {
         if (selfUUID != null) {
             members.put(selfUUID, new SessionMember(
                     selfUUID,
-                    StageClientContext.resolvePlayerName(selfUUID),
+                    localPlayerContext.resolvePlayerName(selfUUID),
                     StageMemberState.ACCEPTED,
                     localCameraMode,
                     true
@@ -427,7 +521,7 @@ public final class StageSessionService {
     }
 
     private void updateLocalMemberState(StageMemberState state) {
-        UUID selfUUID = StageClientContext.getLocalPlayerUUID();
+        UUID selfUUID = localPlayerContext.getLocalPlayerUUID();
         if (selfUUID == null) {
             return;
         }
@@ -447,22 +541,22 @@ public final class StageSessionService {
     }
 
     private List<String> buildLocalMotionFiles() {
-        if (!localPlaybackPreferences.isCustomMotionEnabled()) {
+        if (!playbackPreferences.isCustomMotionEnabled()) {
             return Collections.emptyList();
         }
-        List<String> motionFiles = localPlaybackPreferences.getSelectedMotionFiles();
+        List<String> motionFiles = playbackPreferences.getSelectedMotionFiles();
         return motionFiles.isEmpty() ? Collections.emptyList() : List.copyOf(motionFiles);
     }
 
     private String buildLocalMotionPackName() {
-        if (!localPlaybackPreferences.isCustomMotionEnabled()) {
+        if (!playbackPreferences.isCustomMotionEnabled()) {
             return null;
         }
-        return localPlaybackPreferences.getSelectedPackName();
+        return playbackPreferences.getSelectedPackName();
     }
 
     private void clearSession(boolean resetCameraMode) {
-        localPlaybackPreferences.reset();
+        playbackPreferences.reset();
         members.clear();
         localRole = StageRole.NONE;
         sessionId = null;
@@ -471,39 +565,6 @@ public final class StageSessionService {
         stopWatchingStageOnly();
         if (resetCameraMode) {
             localCameraMode = StageCameraMode.HOST_CAMERA;
-        }
-    }
-
-    private static UUID parseUUID(String raw) {
-        if (raw == null || raw.isEmpty()) {
-            return null;
-        }
-        try {
-            return UUID.fromString(raw);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
-    }
-
-    private static StageMemberState parseState(String raw) {
-        if (raw == null || raw.isEmpty()) {
-            return null;
-        }
-        try {
-            return StageMemberState.valueOf(raw);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
-    }
-
-    private static StageCameraMode parseCameraMode(String raw) {
-        if (raw == null || raw.isEmpty()) {
-            return StageCameraMode.HOST_CAMERA;
-        }
-        try {
-            return StageCameraMode.valueOf(raw);
-        } catch (IllegalArgumentException e) {
-            return StageCameraMode.HOST_CAMERA;
         }
     }
 

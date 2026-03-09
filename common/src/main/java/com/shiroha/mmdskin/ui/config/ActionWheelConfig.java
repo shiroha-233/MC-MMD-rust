@@ -3,7 +3,7 @@ package com.shiroha.mmdskin.ui.config;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.shiroha.mmdskin.config.PathConstants;
-import com.shiroha.mmdskin.renderer.animation.AnimationInfo;
+import com.shiroha.mmdskin.asset.catalog.AnimationInfo;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -11,21 +11,15 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
-/**
- * 动作轮盘配置管理
- * 负责加载和保存动作配置，扫描可用动作文件
- * 
- * 重构说明：
- * - 使用 AnimationInfo 扫描所有目录的 VMD 文件
- * - 支持 DefaultAnim、CustomAnim 和模型专属动画
- */
+/** 动作轮盘配置管理。 */
 public class ActionWheelConfig {
     private static final Logger LOGGER = LogManager.getLogger();
     private static ActionWheelConfig instance;
-    
-    private List<ActionEntry> displayedActions; // 轮盘显示的动作
-    private List<ActionEntry> availableActions; // 所有可用的动作
+
+    private List<ActionEntry> displayedActions;
+    private List<ActionEntry> availableActions;
 
     private ActionWheelConfig() {
         this.displayedActions = new ArrayList<>();
@@ -36,43 +30,25 @@ public class ActionWheelConfig {
     public static synchronized ActionWheelConfig getInstance() {
         if (instance == null) {
             instance = new ActionWheelConfig();
-            instance.load(); // 只在首次创建时加载
+            instance.load();
         }
         return instance;
     }
-    
-    /**
-     * 重置实例（用于测试或强制重新加载）
-     */
+
     public static synchronized void reset() {
         instance = null;
     }
 
-    /**
-     * 扫描所有动画目录获取可用动作
-     * 使用 AnimationInfo 扫描：DefaultAnim、CustomAnim、模型目录
-     */
     public void scanAvailableActions() {
         availableActions.clear();
-        
-        // 使用 AnimationInfo 扫描所有动画
+
         List<AnimationInfo> animations = AnimationInfo.scanAllAnimations();
-        
+
         for (AnimationInfo anim : animations) {
-            availableActions.add(new ActionEntry(
-                anim.getDisplayName(),
-                anim.getAnimName(),
-                anim.getSource().name(),
-                anim.getModelName(),
-                anim.getFormattedSize()
-            ));
+            availableActions.add(ActionEntry.from(anim));
         }
     }
 
-    /**
-     * 从文件加载配置
-     * 使用 UTF-8 编码支持中文
-     */
     public void load() {
         try {
             File configFile = PathConstants.getActionWheelConfigFile();
@@ -87,7 +63,7 @@ public class ActionWheelConfig {
                 ConfigData data = gson.fromJson(reader, ConfigData.class);
                 if (data != null && data.displayedActions != null) {
                     this.displayedActions = data.displayedActions;
-                    // 过滤掉不存在的动作
+
                     filterValidActions();
                 } else {
                     loadDefaultDisplayedActions();
@@ -99,29 +75,28 @@ public class ActionWheelConfig {
         }
     }
 
-    /**
-     * 加载默认显示的动作（所有可用动作）
-     */
     private void loadDefaultDisplayedActions() {
         displayedActions.clear();
         displayedActions.addAll(availableActions);
     }
 
-    /**
-     * 过滤掉不存在的动作
-     */
     private void filterValidActions() {
-        displayedActions.removeIf(displayed -> 
-            availableActions.stream().noneMatch(available -> 
-                available.animId.equals(displayed.animId)
-            )
-        );
+        displayedActions.removeIf(displayed -> findMatchingAvailableAction(displayed) == null);
+        displayedActions.replaceAll(displayed -> {
+            ActionEntry matched = findMatchingAvailableAction(displayed);
+            return matched != null ? matched : displayed;
+        });
     }
 
-    /**
-     * 保存配置到文件
-     * 使用 UTF-8 编码支持中文
-     */
+    private ActionEntry findMatchingAvailableAction(ActionEntry entry) {
+        for (ActionEntry available : availableActions) {
+            if (available.matches(entry)) {
+                return available;
+            }
+        }
+        return null;
+    }
+
     public void save() {
         try {
             File configFile = PathConstants.getActionWheelConfigFile();
@@ -138,45 +113,30 @@ public class ActionWheelConfig {
         }
     }
 
-
-    /**
-     * 获取轮盘显示的动作列表
-     */
     public List<ActionEntry> getDisplayedActions() {
         return Collections.unmodifiableList(displayedActions);
     }
 
-    /**
-     * 获取所有可用的动作列表
-     */
     public List<ActionEntry> getAvailableActions() {
         return Collections.unmodifiableList(availableActions);
     }
 
-    /**
-     * 设置轮盘显示的动作
-     */
     public void setDisplayedActions(List<ActionEntry> actions) {
-        this.displayedActions = actions;
+        this.displayedActions = new ArrayList<>(actions);
     }
 
-    /**
-     * 重新扫描动作文件
-     */
     public void rescan() {
         scanAvailableActions();
         filterValidActions();
     }
 
-    /**
-     * 动作条目
-     */
     public static class ActionEntry {
-        public String name;      // 显示名称
-        public String animId;    // 动画ID（文件名，不含.vmd）
-        public String source;    // 来源：DEFAULT, CUSTOM, MODEL
-        public String modelName; // 模型名称（仅模型专属动画有效）
-        public String fileSize;  // 格式化的文件大小
+        public String name;
+        public String animId;
+        public String source;
+        public String modelName;
+        public String fileSize;
+        public String catalogKey;
 
         public ActionEntry() {}
 
@@ -186,19 +146,50 @@ public class ActionWheelConfig {
             this.source = "CUSTOM";
             this.modelName = null;
             this.fileSize = "";
+            this.catalogKey = null;
         }
-        
+
         public ActionEntry(String name, String animId, String source, String modelName, String fileSize) {
             this.name = name;
             this.animId = animId;
             this.source = source;
             this.modelName = modelName;
             this.fileSize = fileSize;
+            this.catalogKey = null;
         }
-        
-        /**
-         * 获取来源描述
-         */
+
+        public ActionEntry(String name, String animId, String source, String modelName, String fileSize, String catalogKey) {
+            this.name = name;
+            this.animId = animId;
+            this.source = source;
+            this.modelName = modelName;
+            this.fileSize = fileSize;
+            this.catalogKey = catalogKey;
+        }
+
+        public static ActionEntry from(AnimationInfo anim) {
+            return new ActionEntry(
+                anim.getDisplayName(),
+                anim.getAnimName(),
+                anim.getSource().name(),
+                anim.getModelName(),
+                anim.getFormattedSize(),
+                anim.getCatalogKey()
+            );
+        }
+
+        public boolean matches(ActionEntry other) {
+            if (other == null) {
+                return false;
+            }
+            if (catalogKey != null && other.catalogKey != null) {
+                return Objects.equals(catalogKey, other.catalogKey);
+            }
+            return Objects.equals(animId, other.animId)
+                && Objects.equals(source, other.source)
+                && Objects.equals(modelName, other.modelName);
+        }
+
         public String getSourceDescription() {
             if (source == null) return "未知";
             switch (source) {
@@ -210,9 +201,6 @@ public class ActionWheelConfig {
         }
     }
 
-    /**
-     * 配置数据容器
-     */
     private static class ConfigData {
         List<ActionEntry> displayedActions;
     }

@@ -5,16 +5,18 @@ import com.shiroha.mmdskin.forge.config.ModConfigScreen;
 import com.shiroha.mmdskin.forge.network.MmdSkinNetworkPack;
 import com.shiroha.mmdskin.maid.MaidActionNetworkHandler;
 import com.shiroha.mmdskin.maid.MaidModelNetworkHandler;
-import com.shiroha.mmdskin.renderer.model.MMDModelManager;
-import com.shiroha.mmdskin.renderer.render.MmdSkinRenderFactory;
-import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
+import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
+import com.shiroha.mmdskin.renderer.integration.entity.MmdSkinRenderFactory;
+import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.stage.application.StageSessionService;
 import com.shiroha.mmdskin.ui.network.ActionWheelNetworkHandler;
 import com.shiroha.mmdskin.ui.network.MorphWheelNetworkHandler;
 import com.shiroha.mmdskin.ui.network.NetworkOpCode;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import com.shiroha.mmdskin.ui.network.StageNetworkHandler;
-import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
+import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
+import com.shiroha.mmdskin.stage.client.sync.StageAnimSyncHelper;
+import com.shiroha.mmdskin.debug.client.PerformanceHud;
 import com.shiroha.mmdskin.ui.QuickModelSwitcher;
 import com.shiroha.mmdskin.ui.wheel.ConfigWheelScreen;
 import com.shiroha.mmdskin.ui.wheel.MaidConfigWheelScreen;
@@ -39,7 +41,6 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.fml.common.Mod;
 
-
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import org.apache.logging.log4j.LogManager;
@@ -52,26 +53,23 @@ import org.lwjgl.glfw.GLFW;
  */
 public class MmdSkinRegisterClient {
     static final Logger logger = LogManager.getLogger();
-    
-    // 主配置轮盘按键 (Alt，可自定义)
+
     public static final KeyMapping keyConfigWheel = new KeyMapping(
-        "key.mmdskin.config_wheel", 
-        KeyConflictContext.IN_GAME, 
-        InputConstants.Type.KEYSYM, 
-        GLFW.GLFW_KEY_LEFT_ALT, 
+        "key.mmdskin.config_wheel",
+        KeyConflictContext.IN_GAME,
+        InputConstants.Type.KEYSYM,
+        GLFW.GLFW_KEY_LEFT_ALT,
         "key.categories.mmdskin"
     );
-    
-    // 女仆配置轮盘按键 (B，对着女仆时生效)
+
     public static final KeyMapping keyMaidConfigWheel = new KeyMapping(
-        "key.mmdskin.maid_config_wheel", 
-        KeyConflictContext.IN_GAME, 
-        InputConstants.Type.KEYSYM, 
-        GLFW.GLFW_KEY_B, 
+        "key.mmdskin.maid_config_wheel",
+        KeyConflictContext.IN_GAME,
+        InputConstants.Type.KEYSYM,
+        GLFW.GLFW_KEY_B,
         "key.categories.mmdskin"
     );
-    
-    // 快捷模型切换按键 1-4（默认不绑定）
+
     public static final KeyMapping[] keyQuickModels = new KeyMapping[4];
     static {
         for (int i = 0; i < 4; i++) {
@@ -84,84 +82,78 @@ public class MmdSkinRegisterClient {
             );
         }
     }
-    
-    // 追踪按键状态
+
     private static boolean configWheelKeyWasDown = false;
     private static boolean maidConfigWheelKeyWasDown = false;
-    
-    // 是否已注册网络发送器
+
     private static boolean networkSendersRegistered = false;
 
-    /**
-     * 主注册方法 - 在客户端初始化时调用
-     * 注册事件监听器到两个事件总线
-     */
     public static void Register() {
         KeyMappingUtil.setBoundKeyGetter(k -> k.getKey());
         MinecraftForge.EVENT_BUS.register(ForgeEventHandler.class);
         ConfigWheelScreen.setModSettingsScreenFactory(() -> ModConfigScreen.create(null));
         registerNetworkSenders();
     }
-    
+
     private static void registerNetworkSenders() {
         if (networkSendersRegistered) return;
         networkSendersRegistered = true;
-        
+
         Minecraft MCinstance = Minecraft.getInstance();
-        
-        ActionWheelNetworkHandler.setNetworkSender(animId -> {
+
+        ActionWheelNetworkHandler.getInstance().setNetworkSender(animId -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
                 MmdSkinRegisterCommon.channel.sendToServer(
                     new MmdSkinNetworkPack(NetworkOpCode.CUSTOM_ANIM, player.getUUID(), animId));
             }
         });
-        
-        ActionWheelNetworkHandler.setAnimStopSender(() -> {
+
+        ActionWheelNetworkHandler.getInstance().setAnimStopSender(() -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
                 MmdSkinRegisterCommon.channel.sendToServer(
                     new MmdSkinNetworkPack(NetworkOpCode.RESET_PHYSICS, player.getUUID(), 0));
             }
         });
-        
-        MorphWheelNetworkHandler.setNetworkSender(morphName -> {
+
+        MorphWheelNetworkHandler.getInstance().setNetworkSender(morphName -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
                 MmdSkinRegisterCommon.channel.sendToServer(
                     new MmdSkinNetworkPack(NetworkOpCode.MORPH_SYNC, player.getUUID(), morphName));
             }
         });
-        
-        com.shiroha.mmdskin.ui.network.ModelSelectorNetworkHandler.setNetworkSender(modelName -> {
+
+        com.shiroha.mmdskin.ui.network.ModelSelectorNetworkHandler.getInstance().setNetworkSender(modelName -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
                 MmdSkinRegisterCommon.channel.sendToServer(
                     new MmdSkinNetworkPack(NetworkOpCode.MODEL_SELECT, player.getUUID(), modelName));
             }
         });
-        
+
         PlayerModelSyncManager.setNetworkBroadcaster((playerUUID, modelName) -> {
             MmdSkinRegisterCommon.channel.sendToServer(
                 new MmdSkinNetworkPack(NetworkOpCode.MODEL_SELECT, playerUUID, modelName));
         });
-        
-        MaidModelNetworkHandler.setNetworkSender((entityId, modelName) -> {
+
+        MaidModelNetworkHandler.getInstance().setNetworkSender((entityId, modelName) -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
                 MmdSkinRegisterCommon.channel.sendToServer(
                     new MmdSkinNetworkPack(NetworkOpCode.MAID_MODEL, player.getUUID(), entityId, modelName));
             }
         });
-        
-        MaidActionNetworkHandler.setNetworkSender((entityId, animId) -> {
+
+        MaidActionNetworkHandler.getInstance().setNetworkSender((entityId, animId) -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
                 MmdSkinRegisterCommon.channel.sendToServer(
                     new MmdSkinNetworkPack(NetworkOpCode.MAID_ACTION, player.getUUID(), entityId, animId));
             }
         });
-        
+
         StageNetworkHandler.setStageMultiSender(data -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
@@ -170,7 +162,7 @@ public class MmdSkinRegisterClient {
             }
         });
     }
-    
+
     @OnlyIn(Dist.CLIENT)
     public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(keyConfigWheel);
@@ -178,24 +170,24 @@ public class MmdSkinRegisterClient {
         for (KeyMapping keyQuickModel : keyQuickModels) {
             event.register(keyQuickModel);
         }
-    }    
+    }
     @OnlyIn(Dist.CLIENT)
     public static void onRegisterEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
         Minecraft MCinstance = Minecraft.getInstance();
         File[] modelDirs = new File(MCinstance.gameDirectory, "3d-skin").listFiles();
-        
+
         if (modelDirs != null) {
             for (File i : modelDirs) {
                 String name = i.getName();
-                if (!name.startsWith("EntityPlayer") && 
-                    !name.equals("DefaultAnim") && 
+                if (!name.startsWith("EntityPlayer") &&
+                    !name.equals("DefaultAnim") &&
                     !name.equals("CustomAnim") &&
                     !name.equals("Shader")) {
-                    
+
                     String mcEntityName = name.replace('.', ':');
                     if (EntityType.byString(mcEntityName).isPresent()) {
                         event.registerEntityRenderer(
-                            EntityType.byString(mcEntityName).get(), 
+                            EntityType.byString(mcEntityName).get(),
                             new MmdSkinRenderFactory<>(mcEntityName));
                     } else {
                         logger.warn("{} 实体不存在，跳过渲染注册", mcEntityName);
@@ -204,24 +196,21 @@ public class MmdSkinRegisterClient {
             }
         }
     }
-    
+
     @Mod.EventBusSubscriber(value = Dist.CLIENT, modid = MmdSkin.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
     public static class ForgeEventHandler {
-        
+
         @SubscribeEvent
         public static void onClientTick(TickEvent.ClientTickEvent event) {
             if (event.phase != TickEvent.Phase.END) return;
-            
+
             Minecraft mc = Minecraft.getInstance();
             if (mc.player == null) return;
 
-            // 模型/纹理缓存 GC
             MMDModelManager.tick();
-            
-            // 舞台动画待处理队列重试
-            com.shiroha.mmdskin.renderer.render.StageAnimSyncHelper.tickPending();
 
-            // 主配置轮盘按键处理
+            StageAnimSyncHelper.tickPending();
+
             if (mc.screen == null || mc.screen instanceof ConfigWheelScreen) {
                 boolean keyDown = keyConfigWheel.isDown();
                 if (keyDown && !configWheelKeyWasDown) {
@@ -231,8 +220,7 @@ public class MmdSkinRegisterClient {
             } else {
                 configWheelKeyWasDown = false;
             }
-            
-            // 快捷模型切换按键处理
+
             if (mc.screen == null) {
                 for (int i = 0; i < keyQuickModels.length; i++) {
                     while (keyQuickModels[i].consumeClick()) {
@@ -240,8 +228,7 @@ public class MmdSkinRegisterClient {
                     }
                 }
             }
-            
-            // 女仆配置轮盘按键处理
+
             if (mc.screen == null || mc.screen instanceof MaidConfigWheelScreen) {
                 boolean keyDown = keyMaidConfigWheel.isDown();
                 if (keyDown && !maidConfigWheelKeyWasDown) {
@@ -252,30 +239,30 @@ public class MmdSkinRegisterClient {
                 maidConfigWheelKeyWasDown = false;
             }
         }
-        
+
         private static void tryOpenMaidConfigWheel(Minecraft mc) {
             HitResult hitResult = mc.hitResult;
             if (hitResult == null || hitResult.getType() != HitResult.Type.ENTITY) {
                 return;
             }
-            
+
             EntityHitResult entityHit = (EntityHitResult) hitResult;
             Entity target = entityHit.getEntity();
-            
+
             String className = target.getClass().getName();
             if (className.contains("EntityMaid") || className.contains("touhoulittlemaid")) {
                 String maidName = target.getName().getString();
                 mc.setScreen(new MaidConfigWheelScreen(target.getUUID(), target.getId(), maidName, keyMaidConfigWheel));
             }
         }
-        
+
         @SubscribeEvent
         public static void onPlayerLoggedIn(ClientPlayerNetworkEvent.LoggingIn event) {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player != null) {
                 String selectedModel = com.shiroha.mmdskin.ui.config.ModelSelectorConfig.getInstance()
                     .getPlayerModel(mc.player.getName().getString());
-                if (selectedModel != null && !selectedModel.isEmpty() && 
+                if (selectedModel != null && !selectedModel.isEmpty() &&
                     !selectedModel.equals(com.shiroha.mmdskin.config.UIConstants.DEFAULT_MODEL_NAME)) {
                     PlayerModelSyncManager.broadcastLocalModelSelection(mc.player.getUUID(), selectedModel);
                 }
@@ -283,7 +270,7 @@ public class MmdSkinRegisterClient {
                     new MmdSkinNetworkPack(NetworkOpCode.REQUEST_ALL_MODELS, mc.player.getUUID(), ""));
             }
         }
-        
+
         @SubscribeEvent
         public static void onPlayerLoggedOut(ClientPlayerNetworkEvent.LoggingOut event) {
             MMDCameraController.getInstance().exitStageMode();
@@ -305,9 +292,9 @@ public class MmdSkinRegisterClient {
 
         @SubscribeEvent
         public static void onRenderGui(net.minecraftforge.client.event.RenderGuiEvent.Post event) {
-            com.shiroha.mmdskin.renderer.core.PerformanceHud.render(event.getGuiGraphics());
+            PerformanceHud.render(event.getGuiGraphics());
         }
-        
+
         @SubscribeEvent
         public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
             Minecraft mc = Minecraft.getInstance();
@@ -320,3 +307,4 @@ public class MmdSkinRegisterClient {
         }
     }
 }
+

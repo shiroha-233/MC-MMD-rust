@@ -96,7 +96,7 @@ public class NativeFunc {
     public native int GetSubMeshVertexCount(long model, long pos);
 
     public native void ChangeModelAnim(long model, long anim, long layer);
-    
+
     public native void TransitionLayerTo(long model, long layer, long anim, float transitionTime);
 
     public native void SetLayerLoop(long model, long layer, boolean loop);
@@ -136,149 +136,149 @@ public class NativeFunc {
     public native long LoadAnimation(long model, String filename);
 
     public native void DeleteAnimation(long anim);
-    
+
     public native boolean PreloadFbxFile(String path);
-    
+
     public native String ListFbxStacks(String path);
-    
+
     public native void ClearFbxCache();
-    
+
     public native boolean HasCameraData(long anim);
-    
+
     public native float GetAnimMaxFrame(long anim);
-    
+
     public native void GetCameraTransform(long anim, float frame, ByteBuffer buffer);
-    
+
     public native boolean HasBoneData(long anim);
-    
+
     public native boolean HasMorphData(long anim);
-    
+
     public native void MergeAnimation(long target, long source);
 
     public native void SetHeadAngle(long model, float x, float y, float z, boolean flag);
-    
+
     public native void SetModelTransform(long model,
         float m00, float m01, float m02, float m03,
         float m10, float m11, float m12, float m13,
         float m20, float m21, float m22, float m23,
         float m30, float m31, float m32, float m33);
-    
+
     public native void SetModelPositionAndYaw(long model, float posX, float posY, float posZ, float yaw);
 
     public native void SetEyeAngle(long model, float eyeX, float eyeY);
-    
+
     public native void SetEyeMaxAngle(long model, float maxAngle);
-    
+
     public native void SetEyeTrackingEnabled(long model, boolean enabled);
-    
+
     public native boolean IsEyeTrackingEnabled(long model);
 
     public native void SetAutoBlinkEnabled(long model, boolean enabled);
-    
+
     public native boolean IsAutoBlinkEnabled(long model);
-    
+
     public native void SetBlinkParams(long model, float interval, float duration);
 
     public native boolean InitPhysics(long model);
-    
+
     public native void ResetPhysics(long model);
-    
+
     public native void SetPhysicsEnabled(long model, boolean enabled);
-    
+
     public native boolean IsPhysicsEnabled(long model);
-    
+
     public native boolean HasPhysics(long model);
-    
+
     public native String GetPhysicsDebugInfo(long model);
-    
+
     public native boolean IsMaterialVisible(long model, int index);
-    
+
     public native void SetMaterialVisible(long model, int index, boolean visible);
-    
+
     public native int SetMaterialVisibleByName(long model, String name, boolean visible);
-    
+
     public native void SetAllMaterialsVisible(long model, boolean visible);
-    
+
     public native String GetMaterialName(long model, int index);
-    
+
     public native String GetMaterialNames(long model);
-    
+
     public native int GetBoneCount(long model);
-    
+
     public native long GetSkinningMatrices(long model);
-    
+
     public native int CopySkinningMatricesToBuffer(long model, java.nio.ByteBuffer buffer);
-    
+
     public native long GetBoneIndices(long model);
-    
+
     public native int CopyBoneIndicesToBuffer(long model, java.nio.ByteBuffer buffer, int vertexCount);
-    
+
     public native long GetBoneWeights(long model);
-    
+
     public native int CopyBoneWeightsToBuffer(long model, java.nio.ByteBuffer buffer, int vertexCount);
-    
+
     public native long GetOriginalPositions(long model);
-    
+
     public native int CopyOriginalPositionsToBuffer(long model, java.nio.ByteBuffer buffer, int vertexCount);
-    
+
     public native long GetOriginalNormals(long model);
-    
+
     public native int CopyOriginalNormalsToBuffer(long model, java.nio.ByteBuffer buffer, int vertexCount);
-    
+
     public native String GetGpuSkinningDebugInfo(long model);
-    
+
     public native void UpdateAnimationOnly(long model, float deltaTime);
-    
+
     public native void InitGpuSkinningData(long model);
-    
+
     public native void InitGpuMorphData(long model);
-    
+
     public native int GetVertexMorphCount(long model);
-    
+
     public native long GetGpuMorphOffsets(long model);
-    
+
     public native long GetGpuMorphOffsetsSize(long model);
-    
+
     public native long GetGpuMorphWeights(long model);
-    
+
     public native void SyncGpuMorphWeights(long model);
-    
+
     public native long CopyGpuMorphOffsetsToBuffer(long model, java.nio.ByteBuffer buffer);
-    
+
     public native int CopyGpuMorphWeightsToBuffer(long model, java.nio.ByteBuffer buffer);
-    
+
     public native boolean IsGpuMorphInitialized(long model);
-    
+
     public native int ApplyVpdMorph(long model, String filename);
-    
+
     public native void ResetAllMorphs(long model);
-    
+
     public native boolean SetMorphWeightByName(long model, String morphName, float weight);
-    
+
     public native long GetMorphCount(long model);
-    
+
     public native String GetMorphName(long model, int index);
-    
+
     public native float GetMorphWeight(long model, int index);
-    
+
     public native void SetMorphWeight(long model, int index, float weight);
-    
+
     public native void InitGpuUvMorphData(long model);
-    
+
     public native int GetUvMorphCount(long model);
-    
+
     public native long GetGpuUvMorphOffsetsSize(long model);
-    
+
     public native long CopyGpuUvMorphOffsetsToBuffer(long model, java.nio.ByteBuffer buffer);
-    
+
     public native int CopyGpuUvMorphWeightsToBuffer(long model, java.nio.ByteBuffer buffer);
-    
+
     public native int GetMaterialMorphResultCount(long model);
-    
+
     public native int CopyMaterialMorphResultsToBuffer(long model, java.nio.ByteBuffer buffer);
-    
+
     public native int BatchGetSubMeshData(long model, java.nio.ByteBuffer buffer);
-    
+
     public native void SetPhysicsConfig(
         boolean enabled,
         float gravityY,
@@ -291,28 +291,28 @@ public class NativeFunc {
         boolean kinematicFilter,
         boolean debugLog
     );
-    
+
     public native void SetFirstPersonMode(long model, boolean enabled);
-    
+
     public native boolean IsFirstPersonMode(long model);
-    
+
     public native float GetHeadBonePositionY(long model);
-    
+
     public native void GetEyeBonePosition(long model, float[] out);
-    
+
     public native String GetBoneNames(long model);
-    
+
     public native int CopyBonePositionsToBuffer(long model, java.nio.ByteBuffer buffer);
-    
+
     public native int CopyRealtimeUVsToBuffer(long model, java.nio.ByteBuffer buffer);
-    
+
     public native long GetModelMemoryUsage(long model);
-    
+
     public native void SetVRTrackingData(long model, float[] trackingData);
-    
+
     public native void SetVREnabled(long model, boolean enabled);
-    
+
     public native void SetVRIKParams(long model, float armIKStrength);
-    
+
     public native void SetVRHandMode(long model, int mode);
 }

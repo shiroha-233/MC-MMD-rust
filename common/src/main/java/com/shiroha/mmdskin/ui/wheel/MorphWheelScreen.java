@@ -1,22 +1,14 @@
 package com.shiroha.mmdskin.ui.wheel;
 
-import com.shiroha.mmdskin.NativeFunc;
-import com.shiroha.mmdskin.config.PathConstants;
-import com.shiroha.mmdskin.config.UIConstants;
-import com.shiroha.mmdskin.renderer.model.MMDModelManager;
-import com.shiroha.mmdskin.renderer.render.PlayerModelResolver;
-import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
-import com.shiroha.mmdskin.ui.config.MorphWheelConfig;
 import com.shiroha.mmdskin.ui.config.MorphWheelConfigScreen;
-import com.shiroha.mmdskin.ui.network.MorphWheelNetworkHandler;
+import com.shiroha.mmdskin.ui.wheel.service.DefaultMorphWheelService;
+import com.shiroha.mmdskin.ui.wheel.service.MorphOption;
+import com.shiroha.mmdskin.ui.wheel.service.MorphWheelService;
 import com.shiroha.mmdskin.util.KeyMappingUtil;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +18,6 @@ import java.util.List;
  * 与动作轮盘保持一致的UI风格
  */
 public class MorphWheelScreen extends AbstractWheelScreen {
-    private static final Logger logger = LogManager.getLogger();
     private static final WheelStyle STYLE = new WheelStyle(
             0.80f, 0.25f,
             0xFF60A0D0, 0xCC60A0D0, 0x60FFFFFF,
@@ -34,26 +25,34 @@ public class MorphWheelScreen extends AbstractWheelScreen {
     );
     
     private static final int TEXT_COLOR = 0xFFFFFFFF;
-    
+
+    private final MorphWheelService morphWheelService;
     private final KeyMapping triggerKey;
-    
+
     private List<MorphSlot> morphSlots = new ArrayList<>();
-    
+
     private static class MorphSlot {
         String displayName;
         String morphName;
         String filePath;
-        
-        MorphSlot(String displayName, String morphName, String filePath) {
+        boolean resetAction;
+
+        MorphSlot(String displayName, String morphName, String filePath, boolean resetAction) {
             this.displayName = displayName;
             this.morphName = morphName;
             this.filePath = filePath;
+            this.resetAction = resetAction;
         }
     }
-    
+
     public MorphWheelScreen(KeyMapping keyMapping) {
+        this(keyMapping, new DefaultMorphWheelService());
+    }
+
+    MorphWheelScreen(KeyMapping keyMapping, MorphWheelService morphWheelService) {
         super(Component.translatable("gui.mmdskin.morph_wheel"), STYLE);
         this.triggerKey = keyMapping;
+        this.morphWheelService = morphWheelService;
     }
 
     @Override
@@ -75,42 +74,14 @@ public class MorphWheelScreen extends AbstractWheelScreen {
     
     private void initMorphSlots() {
         morphSlots.clear();
-        
-        MorphWheelConfig config = MorphWheelConfig.getInstance();
-        List<MorphWheelConfig.MorphEntry> displayed = config.getDisplayedMorphs();
-        
-        for (MorphWheelConfig.MorphEntry entry : displayed) {
-            // 构建文件路径
-            String filePath = getMorphFilePath(entry);
-            morphSlots.add(new MorphSlot(entry.displayName, entry.morphName, filePath));
-        }
-        
-        // 添加"重置表情"选项
-        morphSlots.add(new MorphSlot(Component.translatable("gui.mmdskin.reset_morph").getString(), "__reset__", null));
-    }
-    
-    private String getMorphFilePath(MorphWheelConfig.MorphEntry entry) {
-        if (entry.source == null) {
-            return PathConstants.getCustomMorphPath(entry.morphName);
-        }
-        switch (entry.source) {
-            case "DEFAULT":
-                return PathConstants.getDefaultMorphPath(entry.morphName);
-            case "CUSTOM":
-                return PathConstants.getCustomMorphPath(entry.morphName);
-            case "MODEL":
-                if (entry.modelName != null) {
-                    return PathConstants.getModelMorphPath(entry.modelName, entry.morphName);
-                }
-                return PathConstants.getCustomMorphPath(entry.morphName);
-            default:
-                return PathConstants.getCustomMorphPath(entry.morphName);
+        for (MorphOption option : morphWheelService.loadMorphs()) {
+            morphSlots.add(new MorphSlot(option.displayName(), option.morphName(), option.filePath(), option.resetAction()));
         }
     }
     
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        // 半透明背景
+
         guiGraphics.fill(0, 0, width, height, 0x80000000);
         
         updateSelectedSlot(mouseX, mouseY);
@@ -126,7 +97,7 @@ public class MorphWheelScreen extends AbstractWheelScreen {
             guiGraphics.drawString(font, hint, centerX - hintWidth / 2, centerY - 4, TEXT_COLOR);
         }
         
-        // 中心圆 + 标题 + 选中名称
+
         String centerText = Component.translatable("gui.mmdskin.morph_wheel.select").getString();
         if (selectedSlot >= 0 && selectedSlot < morphSlots.size()) {
             centerText = morphSlots.get(selectedSlot).displayName;
@@ -175,7 +146,7 @@ public class MorphWheelScreen extends AbstractWheelScreen {
         if (triggerKey != null) {
             com.mojang.blaze3d.platform.InputConstants.Key boundKey = KeyMappingUtil.getBoundKey(triggerKey);
             if (boundKey != null && boundKey.getType() == com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM && boundKey.getValue() == keyCode) {
-                // 松开按键时执行选中的表情
+
                 if (selectedSlot >= 0 && selectedSlot < morphSlots.size()) {
                     executeMorph(morphSlots.get(selectedSlot));
                 }
@@ -187,52 +158,6 @@ public class MorphWheelScreen extends AbstractWheelScreen {
     }
     
     private void executeMorph(MorphSlot slot) {
-        // 获取当前玩家的模型
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) return;
-        
-        // 从配置获取玩家选择的模型
-        String playerName = mc.player.getName().getString();
-        String selectedModel = ModelSelectorConfig.getInstance().getPlayerModel(playerName);
-        
-        // 如果是默认渲染，不处理
-        if (selectedModel == null || selectedModel.isEmpty() || UIConstants.DEFAULT_MODEL_NAME.equals(selectedModel)) {
-            logger.warn("当前使用默认渲染，无法应用表情");
-            return;
-        }
-        
-        MMDModelManager.Model m = MMDModelManager.GetModel(
-                selectedModel,
-                PlayerModelResolver.getCacheKey(mc.player)
-        );
-        if (m == null) {
-            logger.warn("未找到玩家模型: {}", selectedModel);
-            return;
-        }
-        
-        long modelHandle = m.model.getModelHandle();
-        NativeFunc nf = NativeFunc.GetInst();
-        
-        if ("__reset__".equals(slot.morphName)) {
-            // 重置所有表情
-            nf.ResetAllMorphs(modelHandle);
-        } else {
-            // 应用 VPD 表情/姿势
-            if (slot.filePath != null) {
-                int result = nf.ApplyVpdMorph(modelHandle, slot.filePath);
-                if (result >= 0) {
-                    // 解码返回值: 高16位为骨骼数，低16位为 Morph 数
-                    int boneCount = (result >> 16) & 0xFFFF;
-                    int morphCount = result & 0xFFFF;
-                } else if (result == -1) {
-                    logger.error("VPD 文件加载失败: {}", slot.filePath);
-                } else if (result == -2) {
-                    logger.error("模型不存在, handle={}", modelHandle);
-                }
-            }
-        }
-        
-        // 发送网络同步（如果需要）
-        MorphWheelNetworkHandler.sendMorphToServer(slot.morphName);
+        morphWheelService.selectMorph(new MorphOption(slot.displayName, slot.morphName, slot.filePath, slot.resetAction));
     }
 }

@@ -2,8 +2,8 @@ package com.shiroha.mmdskin.mixin.fabric;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.fabric.YsmCompat;
-import com.shiroha.mmdskin.renderer.render.PlayerMixinDelegate;
-import com.shiroha.mmdskin.renderer.render.PlayerMixinDelegate.RenderAction;
+import com.shiroha.mmdskin.renderer.integration.player.PlayerMixinDelegate;
+import com.shiroha.mmdskin.renderer.integration.player.PlayerMixinDelegate.RenderAction;
 
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.player.AbstractClientPlayer;
@@ -16,10 +16,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Fabric 玩家渲染器 Mixin
- * 核心渲染逻辑委托给 PlayerMixinDelegate（DRY 原则）
- */
+/** Fabric 玩家渲染入口，委托共享玩家渲染逻辑。 */
 @Mixin(PlayerRenderer.class)
 public abstract class FabricPlayerRendererMixin extends LivingEntityRenderer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> {
 
@@ -34,7 +31,6 @@ public abstract class FabricPlayerRendererMixin extends LivingEntityRenderer<Abs
                 player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight,
                 YsmCompat.isYsmActive(player));
 
-        // 场景模型渲染（独立于玩家模型状态）
         PlayerMixinDelegate.renderSceneModel(player, tickDelta, matrixStack, packedLight);
 
         switch (action) {
@@ -43,7 +39,7 @@ public abstract class FabricPlayerRendererMixin extends LivingEntityRenderer<Abs
                 super.render(player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight);
                 return;
             }
-            case FALLTHROUGH -> { /* 不干预，原版流程继续 */ }
+            case FALLTHROUGH -> {  }
         }
     }
 }

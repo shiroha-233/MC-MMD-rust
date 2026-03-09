@@ -29,13 +29,12 @@ public final class MmdSkinConfig extends AbstractMmdSkinConfig {
         ConfigManager.init(instance);
     }
 
-    /** 获取配置数据（供 UI 使用） */
     public static ConfigData getData() {
         return instance.data;
     }
 
-    /** 保存配置 */
     public static void save() {
         instance.data.save(configPath);
     }
 }
+
