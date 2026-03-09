@@ -598,13 +598,13 @@ public class StageSelectScreen extends Screen {
     }
     
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (assignPanel != null && assignPanel.isInside(mouseX, mouseY)) {
-            return assignPanel.mouseScrolled(mouseX, mouseY, delta);
+            return assignPanel.mouseScrolled(mouseX, mouseY, scrollY);
         }
         if (mouseX < panelX || mouseX > panelX + PANEL_WIDTH) return false;
         
-        int scrollAmount = (int) (-delta * (ITEM_HEIGHT + ITEM_SPACING) * 3);
+        int scrollAmount = (int) (-scrollY * (ITEM_HEIGHT + ITEM_SPACING) * 3);
         
         if (mouseY < splitY) {
             packScrollOffset = Math.max(0, Math.min(packMaxScroll, packScrollOffset + scrollAmount));

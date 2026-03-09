@@ -48,7 +48,7 @@ public class PerformanceHud {
         if (!ConfigManager.isDebugHudEnabled()) return;
 
         Minecraft mc = Minecraft.getInstance();
-        if (mc.options.hideGui || mc.options.renderDebug) return;
+        if (mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()) return;
 
         if (gpuVendor == null) detectGpuVendor();
 

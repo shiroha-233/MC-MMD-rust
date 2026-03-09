@@ -1,4 +1,4 @@
-﻿package com.shiroha.mmdskin.renderer.model;
+package com.shiroha.mmdskin.renderer.model;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -24,7 +24,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * 鍦烘櫙妯″瀷绠＄悊鍣? * 绠＄悊鏀剧疆鍦ㄤ笘鐣屼腑鐨勯潤鎬?MMD 鍦烘櫙妯″瀷鐨勭敓鍛藉懆鏈? */
+ * 场景模型管理器
+ * 管理放置在世界中的静态 MMD 场景模型的生命周期
+ */
 public final class SceneModelManager {
     private static final Logger logger = LogManager.getLogger();
     private static final SceneModelManager INSTANCE = new SceneModelManager();
@@ -69,7 +71,7 @@ public final class SceneModelManager {
 
         ModelInfo info = scanSceneModelByFolder(folderName);
         if (info == null) {
-            logger.warn("鍦烘櫙妯″瀷鏈壘鍒? {}", folderName);
+            logger.warn("场景模型未找到: {}", folderName);
             this.active = false;
             return;
         }
@@ -94,8 +96,13 @@ public final class SceneModelManager {
     }
 
     /**
-     * 姣忓抚娓叉煋璋冪敤锛堢敱 PlayerMixinDelegate 鍦ㄦ湰鍦扮帺瀹舵覆鏌撳悗璋冪敤锛?     * PoseStack 鍘熺偣涓虹帺瀹舵彃鍊兼覆鏌撲綅缃?     *
-     * 鍏抽敭锛氫笘鐣岀┖闂村亸绉诲繀椤诲湪 PoseStack 涓婄洿鎺?translate锛岃€岄潪閫氳繃 entityTrans 浼犻€掋€?     * 鍘熷洜锛歞oRenderModel 涓棆杞?entityYaw)鍦?entityTrans 骞崇Щ涔嬪墠搴旂敤锛?     * 鑻ュ皢鍋忕Щ鏀惧湪 entityTrans 涓紝鍋忕Щ鏂瑰悜浼氶殢妯″瀷鏈濆悜鏃嬭浆瀵艰嚧浣嶇疆閿欒銆?     */
+     * 每帧渲染调用（由 PlayerMixinDelegate 在本地玩家渲染后调用）
+     * PoseStack 原点为玩家插值渲染位置
+     *
+     * 关键：世界空间偏移必须在 PoseStack 上直接 translate，而非通过 entityTrans 传递。
+     * 原因：doRenderModel 中旋转(entityYaw)在 entityTrans 平移之前应用，
+     * 若将偏移放在 entityTrans 中，偏移方向会随模型朝向旋转导致位置错误。
+     */
     public void renderScene(PoseStack matrixStack, float tickDelta, int packedLight,
                             double entityRenderX, double entityRenderY, double entityRenderZ) {
         checkPendingLoad();
@@ -112,7 +119,8 @@ public final class SceneModelManager {
         float posZ = (float)(placeZ * AbstractMMDModel.MODEL_SCALE);
         float yawRad = placeYaw * ((float) Math.PI / 180F);
 
-        // 娓叉煋鍓嶈缃墿鐞嗕綅缃紙handleLivingEntity 浼氱敤鐜╁鍧愭爣瑕嗙洊锛屾覆鏌撳悗闇€鍐嶆淇锛?        nf.SetModelPositionAndYaw(handle, posX, posY, posZ, yawRad);
+        // 渲染前设置物理位置（handleLivingEntity 会用玩家坐标覆盖，渲染后需再次修正）
+        nf.SetModelPositionAndYaw(handle, posX, posY, posZ, yawRad);
 
         float offsetX = (float)(placeX - entityRenderX);
         float offsetY = (float)(placeY - entityRenderY);
@@ -139,7 +147,7 @@ public final class SceneModelManager {
             loading = false;
 
             if (result == null || result.modelHandle == 0) {
-                logger.error("鍦烘櫙妯″瀷鍔犺浇澶辫触: {}", sceneModelName);
+                logger.error("场景模型加载失败: {}", sceneModelName);
                 active = false;
                 return;
             }
@@ -147,7 +155,7 @@ public final class SceneModelManager {
             IMMDModel m = RenderModeManager.createModelFromHandle(
                     result.modelHandle, result.modelInfo.getFolderPath(), result.modelInfo.isPMD());
             if (m == null) {
-                logger.error("鍦烘櫙妯″瀷 GL 璧勬簮鍒涘缓澶辫触: {}", sceneModelName);
+                logger.error("场景模型 GL 资源创建失败: {}", sceneModelName);
                 NativeFunc.GetInst().DeleteModel(result.modelHandle);
                 active = false;
                 return;
@@ -163,9 +171,9 @@ public final class SceneModelManager {
             float yawRad = placeYaw * ((float) Math.PI / 180F);
             nativeFunc.SetModelPositionAndYaw(m.getModelHandle(), posX, posY, posZ, yawRad);
 
-            logger.info("鍦烘櫙妯″瀷鍔犺浇瀹屾垚: {}", sceneModelName);
+            logger.info("场景模型加载完成: {}", sceneModelName);
         } catch (Exception e) {
-            logger.error("鍦烘櫙妯″瀷鍔犺浇寮傚父: {}", sceneModelName, e);
+            logger.error("场景模型加载异常: {}", sceneModelName, e);
             pendingLoad = null;
             loading = false;
             active = false;
@@ -190,7 +198,7 @@ public final class SceneModelManager {
                 preloadTextures(nf, handle, modelInfo.getFolderPath());
                 return new LoadResult(handle, modelInfo);
             } catch (Exception e) {
-                logger.error("鍦烘櫙妯″瀷鍚庡彴鍔犺浇寮傚父", e);
+                logger.error("场景模型后台加载异常", e);
                 if (handle != 0) {
                     try { NativeFunc.GetInst().DeleteModel(handle); } catch (Exception ignored) {}
                 }
@@ -209,7 +217,7 @@ public final class SceneModelManager {
                 }
             }
         } catch (Exception e) {
-            logger.warn("鍦烘櫙妯″瀷绾圭悊棰勮В鐮侀儴鍒嗗け璐?, e);
+            logger.warn("场景模型纹理预解码部分失败", e);
         }
     }
 
@@ -223,7 +231,7 @@ public final class SceneModelManager {
         }
     }
 
-    // ===== 鍦烘櫙妯″瀷鎵弿 =====
+    // ===== 场景模型扫描 =====
 
     private static volatile List<ModelInfo> sceneModelCache;
     private static volatile long sceneCacheTimestamp;

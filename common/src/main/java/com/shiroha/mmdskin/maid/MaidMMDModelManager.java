@@ -177,4 +177,11 @@ public class MaidMMDModelManager {
     public static int getBindingCount() {
         return maidModelBindings.size();
     }
+
+    /**
+     * 获取所有已加载的女仆模型快照（供 PerformanceHud 使用）
+     */
+    public static java.util.Collection<MMDModelManager.Model> getLoadedMaidModels() {
+        return loadedModels.values();
+    }
 }

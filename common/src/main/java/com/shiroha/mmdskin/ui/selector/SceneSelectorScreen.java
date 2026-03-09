@@ -1,4 +1,4 @@
-﻿package com.shiroha.mmdskin.ui.selector;
+package com.shiroha.mmdskin.ui.selector;
 
 import com.shiroha.mmdskin.renderer.model.ModelInfo;
 import com.shiroha.mmdskin.renderer.model.SceneModelManager;
@@ -13,7 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 鍦烘櫙妯″瀷閫夋嫨鐣岄潰 鈥?澶嶇敤 ModelSelectorScreen 鐨勯潰鏉块鏍? */
+ * 场景模型选择界面 — 复用 ModelSelectorScreen 的面板风格
+ */
 public class SceneSelectorScreen extends Screen {
     private static final Logger logger = LogManager.getLogger();
 
@@ -107,7 +108,7 @@ public class SceneSelectorScreen extends Screen {
     private void selectScene(SceneCardEntry card) {
         this.currentScene = card.displayName;
         SceneModelManager.getInstance().placeScene(card.displayName);
-        logger.info("鏀剧疆鍦烘櫙妯″瀷: {}", card.displayName);
+        logger.info("放置场景模型: {}", card.displayName);
         this.clearWidgets();
         this.init();
     }
@@ -208,12 +209,12 @@ public class SceneSelectorScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (mouseX >= panelX && mouseX <= panelX + PANEL_WIDTH) {
-            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) (delta * 24)));
+            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) (scrollY * 24)));
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override
