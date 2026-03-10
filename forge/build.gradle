@@ -46,6 +46,7 @@ configurations {
 
 shadowJar {
     exclude "architectury.common.json"
+    exclude "fabric.mod.json"
     configurations = [project.configurations.shadowCommon]
     archiveClassifier.set("dev-shadow")
     
@@ -93,11 +94,11 @@ tasks.named('processResources', ProcessResources).configure {
         forge_version: project.forge_version,
         forge_version_range: '[47,48)',
         loader_version_range: '[47,)',
-        mod_id: 'template-mod',
-        mod_name: 'Template Mod',
+        mod_id: 'mmdskin',
+        mod_name: '3D Skin Layers',
         mod_version: project.version,
-        mod_authors: 'Template Author',
-        mod_description: 'Template Mod for Architectury'
+        mod_authors: 'shiroha233, kjkjkAIStudio(原作者), asuka-mio, Gengorou-C',
+        mod_description: 'A mod that replaces Minecraft entity rendering with MMD models'
     ]
 
     inputs.properties replaceProperties
@@ -140,6 +141,7 @@ dependencies {
 sourcesJar {
     // Avoid duplicate entries when merging common sources
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude 'META-INF/mods.toml'
     def commonSources = project(":common").sourcesJar
     dependsOn commonSources
     from commonSources.archiveFile.map { zipTree(it) }
@@ -157,7 +159,7 @@ sourceSets {
             // Avoid JPMS split-package: keep top-level network package only in common
         }
         resources {
-            exclude 'assets/template-mod/lang/*.json'
+            exclude 'assets/mmdskin/lang/*.json'
         }
     }
 }

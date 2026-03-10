@@ -5,7 +5,7 @@ license = "MIT"
 
 [[mods]]
 modId = "mmdskin"
-version = "${mod_version}"
+version = "1.0.3-1.20.1"
 displayName = "3D Skin Layers"
 authors = "shiroha233, kjkjkAIStudio(原作者), asuka-mio, Gengorou-C"
 description = '''A mod that replaces Minecraft entity rendering with MMD models'''

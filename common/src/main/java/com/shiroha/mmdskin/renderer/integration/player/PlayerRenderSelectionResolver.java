@@ -1,5 +1,6 @@
 package com.shiroha.mmdskin.renderer.integration.player;
 
+import com.shiroha.mmdskin.compat.vr.VRArmHider;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
@@ -18,6 +19,11 @@ final class PlayerRenderSelectionResolver {
         boolean isLocalPlayer = minecraft.player != null && minecraft.player.getUUID().equals(player.getUUID());
         String playerName = player.getName().getString();
         String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
+        boolean isLocalFirstPerson = isLocalPlayer && minecraft.options.getCameraType().isFirstPerson();
+
+        if (isLocalFirstPerson && !FirstPersonManager.shouldRenderFirstPerson() && !VRArmHider.isLocalPlayerInVR()) {
+            return PlayerRenderSelection.terminal(PlayerMixinDelegate.RenderAction.FALLTHROUGH);
+        }
 
         if (isLocalPlayer && FirstPersonManager.shouldRenderFirstPerson()) {
             if (isYsmActive) {

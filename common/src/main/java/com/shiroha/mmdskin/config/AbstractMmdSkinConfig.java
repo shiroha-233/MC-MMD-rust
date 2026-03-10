@@ -49,6 +49,6 @@ public abstract class AbstractMmdSkinConfig implements ConfigManager.IConfigProv
     @Override public boolean isDebugHudEnabled() { return data.debugHudEnabled; }
     @Override public int getTextureCacheBudgetMB() { return data.textureCacheBudgetMB; }
 
-    @Override public boolean isVREnabled() { return data.vrEnabled; }
+    @Override public boolean isVREnabled() { return false; }
     @Override public float getVRArmIKStrength() { return data.vrArmIKStrength; }
 }

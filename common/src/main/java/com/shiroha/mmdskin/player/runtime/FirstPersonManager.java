@@ -83,6 +83,7 @@ public final class FirstPersonManager {
     }
 
     public static boolean isActive() {
+        ensureActiveState();
         return activeFirstPerson;
     }
 
@@ -116,6 +117,7 @@ public final class FirstPersonManager {
     }
 
     public static void reset() {
+        disableTrackedModel();
         activeFirstPerson = false;
         trackedModelHandle = 0;
         cachedModelScale = 1.0f;
@@ -123,5 +125,38 @@ public final class FirstPersonManager {
         eyeBonePos[1] = 0.0f;
         eyeBonePos[2] = 0.0f;
         eyeBoneValid = false;
+        lastCameraPos = Vec3.ZERO;
+    }
+
+    private static void ensureActiveState() {
+        if (!activeFirstPerson) {
+            return;
+        }
+
+        if (shouldRenderFirstPerson()) {
+            return;
+        }
+
+        disableTrackedModel();
+        activeFirstPerson = false;
+        trackedModelHandle = 0;
+        cachedModelScale = 1.0f;
+        eyeBonePos[0] = 0.0f;
+        eyeBonePos[1] = 0.0f;
+        eyeBonePos[2] = 0.0f;
+        eyeBoneValid = false;
+        lastCameraPos = Vec3.ZERO;
+    }
+
+    private static void disableTrackedModel() {
+        if (!activeFirstPerson || trackedModelHandle == 0) {
+            return;
+        }
+
+        try {
+            NativeFunc.GetInst().SetFirstPersonMode(trackedModelHandle, false);
+        } catch (Exception e) {
+            logger.warn("Failed to disable first-person mode for model {}", trackedModelHandle, e);
+        }
     }
 }
