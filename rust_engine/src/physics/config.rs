@@ -45,14 +45,12 @@ impl Default for PhysicsConfig {
     }
 }
 
-static PHYSICS_CONFIG: Lazy<RwLock<PhysicsConfig>> =
-    Lazy::new(|| RwLock::new(PhysicsConfig::default()));
+static PHYSICS_CONFIG: Lazy<RwLock<PhysicsConfig>> = Lazy::new(|| {
+    RwLock::new(PhysicsConfig::default())
+});
 
 pub fn get_config() -> PhysicsConfig {
-    PHYSICS_CONFIG
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone()
+    PHYSICS_CONFIG.read().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
 pub fn set_config(config: PhysicsConfig) {

@@ -3,11 +3,8 @@
 use std::collections::HashMap;
 
 use super::bezier_curve::BezierCurveCache;
-use super::keyframe::{BoneKeyframe, CameraKeyframe, IkKeyframe, MorphKeyframe};
-use super::motion_track::{
-    BoneFrameTransform, BoneMotionTrack, CameraFrameTransform, CameraMotionTrack, IkMotionTrack,
-    MorphMotionTrack, MotionTrack,
-};
+use super::motion_track::{BoneMotionTrack, MorphMotionTrack, IkMotionTrack, CameraMotionTrack, MotionTrack, BoneFrameTransform, CameraFrameTransform};
+use super::keyframe::{BoneKeyframe, MorphKeyframe, IkKeyframe, CameraKeyframe};
 
 /// 动画数据
 #[derive(Debug, Clone)]
@@ -44,26 +41,24 @@ impl Motion {
 
     /// 获取动画持续时间（最大帧索引）
     pub fn duration(&self) -> u32 {
-        let bone_max = self
-            .bone_tracks
+        let bone_max = self.bone_tracks
             .values()
             .map(|t| t.max_frame_index())
             .max()
             .unwrap_or(0);
-
-        let morph_max = self
-            .morph_tracks
+        
+        let morph_max = self.morph_tracks
             .values()
             .map(|t| t.max_frame_index())
             .max()
             .unwrap_or(0);
-
+        
         let camera_max = if self.camera_track.is_empty() {
             0
         } else {
             self.camera_track.max_frame_index()
         };
-
+        
         bone_max.max(morph_max).max(camera_max)
     }
 
@@ -102,9 +97,12 @@ impl Motion {
     }
 
     /// 获取相机帧变换
-    pub fn find_camera_transform(&self, frame_index: u32, amount: f32) -> CameraFrameTransform {
-        self.camera_track
-            .seek_precisely(frame_index, amount, &self.bezier_cache)
+    pub fn find_camera_transform(
+        &self,
+        frame_index: u32,
+        amount: f32,
+    ) -> CameraFrameTransform {
+        self.camera_track.seek_precisely(frame_index, amount, &self.bezier_cache)
     }
 
     /// 插入 IK 关键帧
@@ -145,7 +143,7 @@ impl Motion {
     }
 
     /// 获取骨骼帧变换
-    ///
+    /// 
     /// # 参数
     /// - `name`: 骨骼名称
     /// - `frame_index`: 帧索引
@@ -164,12 +162,17 @@ impl Motion {
     }
 
     /// 获取 Morph 权重
-    ///
+    /// 
     /// # 参数
     /// - `name`: Morph 名称
     /// - `frame_index`: 帧索引
     /// - `amount`: 帧间插值系数 [0, 1)
-    pub fn find_morph_weight(&self, name: &str, frame_index: u32, amount: f32) -> f32 {
+    pub fn find_morph_weight(
+        &self,
+        name: &str,
+        frame_index: u32,
+        amount: f32,
+    ) -> f32 {
         if let Some(track) = self.morph_tracks.get(name) {
             track.seek_precisely(frame_index, amount, &self.bezier_cache)
         } else {
@@ -229,28 +232,26 @@ impl Motion {
     pub fn merge(&mut self, other: &Motion) {
         // 合并骨骼轨道
         for (name, track) in &other.bone_tracks {
-            let entry = self
-                .bone_tracks
+            let entry = self.bone_tracks
                 .entry(name.clone())
                 .or_insert_with(BoneMotionTrack::new);
-
+            
             for (_, keyframe) in &track.keyframes {
                 entry.insert_keyframe(keyframe.clone());
             }
         }
-
+        
         // 合并 Morph 轨道
         for (name, track) in &other.morph_tracks {
-            let entry = self
-                .morph_tracks
+            let entry = self.morph_tracks
                 .entry(name.clone())
                 .or_insert_with(MorphMotionTrack::new);
-
+            
             for (_, keyframe) in &track.keyframes {
                 entry.insert_keyframe(keyframe.clone());
             }
         }
-
+        
         self.dirty = true;
     }
 }

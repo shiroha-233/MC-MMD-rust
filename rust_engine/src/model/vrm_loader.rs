@@ -1,14 +1,17 @@
 //! VRM 模型加载入口
 
-use glam::{Vec2, Vec3};
 use std::path::Path;
+use glam::{Vec2, Vec3};
 
-use super::runtime::MmdModel;
-use super::{vrm_extensions, vrm_material, vrm_mesh, vrm_morph, vrm_skeleton};
 use crate::{MmdError, Result};
+use super::runtime::MmdModel;
+use super::{vrm_extensions, vrm_mesh, vrm_skeleton, vrm_material, vrm_morph};
 
 /// 从 gltf::import 已解码的图片数据写入 PNG 临时文件，返回绝对路径数组
-fn extract_textures(model_dir: &Path, images: &[gltf::image::Data]) -> Vec<String> {
+fn extract_textures(
+    model_dir: &Path,
+    images: &[gltf::image::Data],
+) -> Vec<String> {
     let mut paths = Vec::new();
 
     for (i, img_data) in images.iter().enumerate() {
@@ -25,24 +28,13 @@ fn extract_textures(model_dir: &Path, images: &[gltf::image::Data]) -> Vec<Strin
                     return Err(format!("不支持的图片格式: {:?}", img_data.format).into());
                 }
             };
-            image::save_buffer(
-                &full_path,
-                pixels,
-                img_data.width,
-                img_data.height,
-                color_type,
-            )?;
+            image::save_buffer(&full_path, pixels, img_data.width, img_data.height, color_type)?;
             Ok(())
         })();
 
         match result {
             Ok(_) => {
-                log::debug!(
-                    "纹理提取: {} ({}x{})",
-                    filename,
-                    img_data.width,
-                    img_data.height
-                );
+                log::debug!("纹理提取: {} ({}x{})", filename, img_data.width, img_data.height);
                 paths.push(full_path.to_string_lossy().replace('\\', "/"));
             }
             Err(e) => {
@@ -60,8 +52,8 @@ pub fn load_vrm<P: AsRef<Path>>(path: P) -> Result<MmdModel> {
     let path = path.as_ref();
     let model_dir = path.parent().unwrap_or_else(|| Path::new("."));
 
-    let (document, buffers, images) =
-        gltf::import(path).map_err(|e| MmdError::VrmParse(format!("glTF 加载失败: {}", e)))?;
+    let (document, buffers, images) = gltf::import(path)
+        .map_err(|e| MmdError::VrmParse(format!("glTF 加载失败: {}", e)))?;
 
     let vrm_ext = vrm_extensions::parse_vrm_extensions(&document)?;
     let mut mesh = vrm_mesh::merge_meshes(&document, &buffers)?;
@@ -77,11 +69,11 @@ pub fn load_vrm<P: AsRef<Path>>(path: P) -> Result<MmdModel> {
         }
     }
 
-    let skin = document
-        .skins()
-        .next()
+    let skin = document.skins().next()
         .ok_or_else(|| MmdError::VrmParse("VRM 缺少 skin 数据".into()))?;
-    let bone_manager = vrm_skeleton::build_skeleton(&document, &skin, &buffers, &vrm_ext.humanoid)?;
+    let bone_manager = vrm_skeleton::build_skeleton(
+        &document, &skin, &buffers, &vrm_ext.humanoid,
+    )?;
 
     let (materials, _placeholder_paths) = vrm_material::convert_materials(&document, &vrm_ext);
 
@@ -94,8 +86,7 @@ pub fn load_vrm<P: AsRef<Path>>(path: P) -> Result<MmdModel> {
         materials.len(),
     );
 
-    let name = path
-        .file_stem()
+    let name = path.file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("vrm_model")
         .to_string();
@@ -105,8 +96,8 @@ pub fn load_vrm<P: AsRef<Path>>(path: P) -> Result<MmdModel> {
     let update_uvs: Vec<Vec2> = mesh.vertices.iter().map(|v| v.uv).collect();
 
     let mut model = MmdModel::new();
-    model.set_vrm(true);
     model.name = name;
+    model.set_vrm(true);
     model.vertices = mesh.vertices;
     model.indices = mesh.indices;
     model.weights = mesh.weights;
@@ -121,9 +112,7 @@ pub fn load_vrm<P: AsRef<Path>>(path: P) -> Result<MmdModel> {
     model.bone_manager = bone_manager;
     model.morph_manager = morph_manager;
 
-    model
-        .morph_manager
-        .set_material_count(model.materials.len());
+    model.morph_manager.set_material_count(model.materials.len());
     model.morph_manager.set_vertex_count(model.vertices.len());
     model.init_material_visibility();
     model.update();

@@ -8,6 +8,7 @@ pub mod physics;
 pub mod skeleton;
 pub mod skinning;
 pub mod texture;
+pub mod vr;
 
 pub use animation::{VmdAnimation, VmdFile};
 pub use model::MmdModel;
@@ -15,6 +16,7 @@ pub use morph::{Morph, MorphManager};
 pub use physics::{MMDPhysics, MmdRigidBodyData, MmdJointData, PhysicsMode};
 pub use skeleton::{Bone, BoneManager, IkSolver};
 pub use texture::Texture;
+pub use vr::VrIkSolver;
 
 use thiserror::Error;
 

@@ -6,15 +6,15 @@ use jni::JNIEnv;
 use std::ptr;
 use std::sync::Arc;
 
-use crate::animation::{fbx_loader, VmdAnimation, VmdFile};
+use crate::animation::{VmdAnimation, VmdFile};
+use crate::animation::fbx_loader;
 use crate::model::{load_pmx, load_vrm};
 use crate::texture::load_texture;
 
-use super::{
-    register_animation, register_model, register_texture, ANIMATIONS, FBX_CACHE, MODELS, TEXTURES,
-};
+use super::{register_animation, register_model, register_texture, ANIMATIONS, FBX_CACHE, MODELS, TEXTURES};
 
 const VERSION: &str = "v1.0.4";
+
 
 /// 获取版本号
 #[no_mangle]
@@ -74,8 +74,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyDataToByteBuffer(
     if copy_len > capacity {
         log::error!(
             "CopyDataToByteBuffer: 长度 {} 超过缓冲区容量 {}，已阻止越界写入",
-            copy_len,
-            capacity
+            copy_len, capacity
         );
         return;
     }
@@ -107,15 +106,12 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_LoadModelPMX(
         Ok(mut model) => {
             // 自动初始化物理系统
             if !model.rigid_bodies.is_empty() {
-                log::info!(
-                    "模型包含 {} 个刚体, {} 个关节, 自动初始化物理",
-                    model.rigid_bodies.len(),
-                    model.joints.len()
-                );
+                log::info!("模型包含 {} 个刚体, {} 个关节, 自动初始化物理", 
+                    model.rigid_bodies.len(), model.joints.len());
                 model.init_physics();
             }
             register_model(model)
-        }
+        },
         Err(e) => {
             log::error!("Failed to load PMX: {}", e);
             0
@@ -195,11 +191,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetPoss(
         .get(&model)
         .map(|m| {
             let mg = m.lock().unwrap();
-            if mg.update_positions_raw.is_empty() {
-                0
-            } else {
-                mg.get_positions_ptr() as jlong
-            }
+            if mg.update_positions_raw.is_empty() { 0 } else { mg.get_positions_ptr() as jlong }
         })
         .unwrap_or(0)
 }
@@ -216,11 +208,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetNormals(
         .get(&model)
         .map(|m| {
             let mg = m.lock().unwrap();
-            if mg.update_normals_raw.is_empty() {
-                0
-            } else {
-                mg.get_normals_ptr() as jlong
-            }
+            if mg.update_normals_raw.is_empty() { 0 } else { mg.get_normals_ptr() as jlong }
         })
         .unwrap_or(0)
 }
@@ -237,11 +225,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetUVs(
         .get(&model)
         .map(|m| {
             let mg = m.lock().unwrap();
-            if mg.update_uvs_raw.is_empty() {
-                0
-            } else {
-                mg.get_uvs_ptr() as jlong
-            }
+            if mg.update_uvs_raw.is_empty() { 0 } else { mg.get_uvs_ptr() as jlong }
         })
         .unwrap_or(0)
 }
@@ -756,6 +740,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_LoadAnimation(
         Err(_) => return 0,
     };
 
+    // 支持 "path.fbx#StackName" 语法选择指定 AnimationStack
     let (file_path, stack_name) = if let Some(pos) = filename_str.rfind('#') {
         let lower = filename_str[..pos].to_ascii_lowercase();
         if lower.ends_with(".fbx") {
@@ -767,22 +752,16 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_LoadAnimation(
         (filename_str.as_str(), None)
     };
 
-    let is_fbx = file_path.to_ascii_lowercase().ends_with(".fbx");
+    let lower = file_path.to_ascii_lowercase();
+    let is_fbx = lower.ends_with(".fbx");
+
+    // FBX 手臂校正需要模型骨骼位置，先提取后释放 MODELS 锁
     let arm_positions = if is_fbx {
         let models = MODELS.read().unwrap();
         if let Some(model_arc) = models.get(&model_handle) {
             let model = model_arc.lock().unwrap();
             let mut pos = std::collections::HashMap::new();
-            for name in &[
-                "左肩",
-                "左腕",
-                "左ひじ",
-                "左手首",
-                "右肩",
-                "右腕",
-                "右ひじ",
-                "右手首",
-            ] {
+            for name in &["左肩", "左腕", "左ひじ", "左手首", "右肩", "右腕", "右ひじ", "右手首"] {
                 if let Some(idx) = model.bone_manager.find_bone_by_name(name) {
                     if let Some(bone) = model.bone_manager.get_bone(idx) {
                         pos.insert(name.to_string(), bone.initial_position);
@@ -798,26 +777,28 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_LoadAnimation(
     };
 
     let result = if is_fbx {
+        // 使用 FBX 缓存避免重复解析大文件
         let cache = {
             let cache_map = FBX_CACHE.read().unwrap();
             cache_map.get(file_path).cloned()
         };
         let cache = match cache {
             Some(c) => c,
-            None => match fbx_loader::FbxCache::load(file_path) {
-                Ok(c) => {
-                    let arc = Arc::new(c);
-                    let mut cache_map = FBX_CACHE.write().unwrap();
-                    cache_map.insert(file_path.to_string(), arc.clone());
-                    arc
+            None => {
+                match fbx_loader::FbxCache::load(file_path) {
+                    Ok(c) => {
+                        let arc = Arc::new(c);
+                        let mut cache_map = FBX_CACHE.write().unwrap();
+                        cache_map.insert(file_path.to_string(), arc.clone());
+                        arc
+                    }
+                    Err(e) => {
+                        log::error!("FBX 解析失败: {}", e);
+                        return 0;
+                    }
                 }
-                Err(e) => {
-                    log::error!("FBX 解析失败: {}", e);
-                    return 0;
-                }
-            },
+            }
         };
-
         cache.load_animation(stack_name).map(|mut anim| {
             fbx_loader::apply_arm_retarget_correction_with_reference(
                 &mut anim,
@@ -827,7 +808,8 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_LoadAnimation(
             register_animation(anim)
         })
     } else {
-        VmdFile::load(file_path).map(|vmd| register_animation(VmdAnimation::from_vmd_file(vmd)))
+        VmdFile::load(file_path)
+            .map(|vmd| register_animation(VmdAnimation::from_vmd_file(vmd)))
     };
 
     match result {
@@ -893,7 +875,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_ListFbxStacks(
                 log::error!("列出 FBX Stack 失败: {}", e);
                 return ptr::null_mut();
             }
-        },
+        }
     };
     let json = serde_json::to_string(&stacks).unwrap_or_else(|_| "[]".to_string());
     match env.new_string(&json) {
@@ -932,11 +914,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_HasCameraData(
 ) -> jboolean {
     let animations = ANIMATIONS.read().unwrap();
     if let Some(animation) = animations.get(&anim) {
-        if animation.has_camera() {
-            1u8
-        } else {
-            0u8
-        }
+        if animation.has_camera() { 1u8 } else { 0u8 }
     } else {
         0u8
     }
@@ -970,7 +948,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetCameraTransform(
     let animations = ANIMATIONS.read().unwrap();
     if let Some(animation) = animations.get(&anim) {
         let transform = animation.get_camera_transform(frame);
-
+        
         let dst = match env.get_direct_buffer_address(&buffer) {
             Ok(p) => p,
             Err(_) => return,
@@ -1008,11 +986,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_HasBoneData(
 ) -> jboolean {
     let animations = ANIMATIONS.read().unwrap();
     if let Some(animation) = animations.get(&anim) {
-        if animation.has_bones() {
-            1u8
-        } else {
-            0u8
-        }
+        if animation.has_bones() { 1u8 } else { 0u8 }
     } else {
         0u8
     }
@@ -1027,11 +1001,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_HasMorphData(
 ) -> jboolean {
     let animations = ANIMATIONS.read().unwrap();
     if let Some(animation) = animations.get(&anim) {
-        if animation.has_morphs() {
-            1u8
-        } else {
-            0u8
-        }
+        if animation.has_morphs() { 1u8 } else { 0u8 }
     } else {
         0u8
     }
@@ -1070,28 +1040,19 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetModelTransform(
     _env: JNIEnv,
     _class: JClass,
     model: jlong,
-    m00: jfloat,
-    m01: jfloat,
-    m02: jfloat,
-    m03: jfloat,
-    m10: jfloat,
-    m11: jfloat,
-    m12: jfloat,
-    m13: jfloat,
-    m20: jfloat,
-    m21: jfloat,
-    m22: jfloat,
-    m23: jfloat,
-    m30: jfloat,
-    m31: jfloat,
-    m32: jfloat,
-    m33: jfloat,
+    m00: jfloat, m01: jfloat, m02: jfloat, m03: jfloat,
+    m10: jfloat, m11: jfloat, m12: jfloat, m13: jfloat,
+    m20: jfloat, m21: jfloat, m22: jfloat, m23: jfloat,
+    m30: jfloat, m31: jfloat, m32: jfloat, m33: jfloat,
 ) {
     let models = MODELS.read().unwrap();
     if let Some(model_arc) = models.get(&model) {
         let mut model = model_arc.lock().unwrap();
         let transform = glam::Mat4::from_cols_array(&[
-            m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33,
+            m00, m01, m02, m03,
+            m10, m11, m12, m13,
+            m20, m21, m22, m23,
+            m30, m31, m32, m33,
         ]);
         model.set_model_transform(transform);
     }
@@ -1106,7 +1067,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetModelPositionAndYa
     _class: JClass,
     model: jlong,
     pos_x: jfloat,
-    pos_y: jfloat,
+    pos_y: jfloat, 
     pos_z: jfloat,
     yaw: jfloat,
 ) {
@@ -1196,11 +1157,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_IsEyeTrackingEnabled(
         .get(&model)
         .map(|m| {
             let model = m.lock().unwrap();
-            if model.is_eye_tracking_enabled() {
-                1u8
-            } else {
-                0u8
-            }
+            if model.is_eye_tracking_enabled() { 1u8 } else { 0u8 }
         })
         .unwrap_or(0u8)
 }
@@ -1232,11 +1189,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_IsAutoBlinkEnabled(
         .get(&model)
         .map(|m| {
             let model = m.lock().unwrap();
-            if model.is_auto_blink_enabled() {
-                1u8
-            } else {
-                0u8
-            }
+            if model.is_auto_blink_enabled() { 1u8 } else { 0u8 }
         })
         .unwrap_or(0u8)
 }
@@ -1402,9 +1355,9 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetLayerFadeTimes(
 }
 
 /// 带过渡地切换指定层的动画（姿态缓存过渡）
-///
+/// 
 /// 从当前骨骼姿态平滑过渡到新动画，避免动作切换时的突兀感。
-///
+/// 
 /// # 参数
 /// - model: 模型句柄
 /// - layer: 动画层ID（0-3）
@@ -1460,11 +1413,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_IsLayerAnimationFinis
     let models = MODELS.read().unwrap();
     if let Some(model_arc) = models.get(&model) {
         let model = model_arc.lock().unwrap();
-        if model.is_layer_finished(layer as usize) {
-            1
-        } else {
-            0
-        }
+        if model.is_layer_finished(layer as usize) { 1 } else { 0 }
     } else {
         1 // 无模型视为已完成
     }
@@ -1493,11 +1442,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetLayerBoneMask(
     if let Some(model_arc) = models.get(&model) {
         let mut model = model_arc.lock().unwrap();
         let ok = model.set_layer_bone_mask_by_name(layer as usize, name_opt.as_deref());
-        if ok {
-            1
-        } else {
-            0
-        }
+        if ok { 1 } else { 0 }
     } else {
         0
     }
@@ -1526,11 +1471,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetLayerBoneExclude(
     if let Some(model_arc) = models.get(&model) {
         let mut model = model_arc.lock().unwrap();
         let ok = model.set_layer_bone_exclude_by_name(layer as usize, name_opt.as_deref());
-        if ok {
-            1
-        } else {
-            0
-        }
+        if ok { 1 } else { 0 }
     } else {
         0
     }
@@ -1552,6 +1493,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetLayerLoop(
         model.set_layer_loop(layer as usize, loop_play != 0);
     }
 }
+
 // ============================================================================
 // 纹理相关函数
 // ============================================================================
@@ -1646,8 +1588,7 @@ use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
 /// 矩阵存储（使用 HashMap + ID，避免 Vec 扩容导致指针失效）
-static MATRICES: Lazy<Mutex<std::collections::HashMap<i64, glam::Mat4>>> =
-    Lazy::new(|| Mutex::new(std::collections::HashMap::new()));
+static MATRICES: Lazy<Mutex<std::collections::HashMap<i64, glam::Mat4>>> = Lazy::new(|| Mutex::new(std::collections::HashMap::new()));
 
 /// 矩阵 ID 计数器
 fn next_matrix_id() -> i64 {
@@ -1868,11 +1809,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_IsMaterialVisible(
     let models = MODELS.read().unwrap();
     if let Some(model_arc) = models.get(&model) {
         let model = model_arc.lock().unwrap();
-        if model.is_material_visible(index as usize) {
-            1
-        } else {
-            0
-        }
+        if model.is_material_visible(index as usize) { 1 } else { 0 }
     } else {
         1 // 默认可见
     }
@@ -1965,10 +1902,8 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetMaterialNames(
         let model = model_arc.lock().unwrap();
         let names = model.get_material_names();
         // 构建简单的 JSON 数组
-        let json = format!(
-            "[{}]",
-            names
-                .iter()
+        let json = format!("[{}]", 
+            names.iter()
                 .map(|n| format!("\"{}\"", n.replace('"', "\\\"")))
                 .collect::<Vec<_>>()
                 .join(",")
@@ -2034,7 +1969,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopySkinningMatricesT
         if matrices.is_empty() {
             return 0;
         }
-
+        
         let dst = match env.get_direct_buffer_address(&buffer) {
             Ok(p) => p,
             Err(_) => return 0,
@@ -2043,11 +1978,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopySkinningMatricesT
         let byte_size = bone_count * 64; // 每个 Mat4 = 16 floats * 4 bytes
         let capacity = env.get_direct_buffer_capacity(&buffer).unwrap_or(0);
         if byte_size > capacity {
-            log::error!(
-                "CopySkinningMatricesToBuffer: 需要 {} 字节, 容量 {}",
-                byte_size,
-                capacity
-            );
+            log::error!("CopySkinningMatricesToBuffer: 需要 {} 字节, 容量 {}", byte_size, capacity);
             return 0;
         }
         unsafe {
@@ -2070,9 +2001,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetBoneIndices(
     if let Some(model_arc) = models.get(&model) {
         let model = model_arc.lock().unwrap();
         let ptr = model.get_bone_indices_ptr();
-        if ptr.is_null() {
-            return 0;
-        }
+        if ptr.is_null() { return 0; }
         return ptr as jlong;
     }
     0
@@ -2094,7 +2023,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyBoneIndicesToBuff
         if ptr.is_null() {
             return 0;
         }
-
+        
         let dst = match env.get_direct_buffer_address(&buffer) {
             Ok(p) => p,
             Err(_) => return 0,
@@ -2102,11 +2031,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyBoneIndicesToBuff
         let byte_size = (vertex_count as usize) * 16; // 4 int * 4 bytes
         let capacity = env.get_direct_buffer_capacity(&buffer).unwrap_or(0);
         if byte_size > capacity {
-            log::error!(
-                "CopyBoneIndicesToBuffer: 需要 {} 字节, 容量 {}",
-                byte_size,
-                capacity
-            );
+            log::error!("CopyBoneIndicesToBuffer: 需要 {} 字节, 容量 {}", byte_size, capacity);
             return 0;
         }
         unsafe {
@@ -2129,9 +2054,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetBoneWeights(
     if let Some(model_arc) = models.get(&model) {
         let model = model_arc.lock().unwrap();
         let ptr = model.get_bone_weights_ptr();
-        if ptr.is_null() {
-            return 0;
-        }
+        if ptr.is_null() { return 0; }
         return ptr as jlong;
     }
     0
@@ -2153,7 +2076,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyBoneWeightsToBuff
         if ptr.is_null() {
             return 0;
         }
-
+        
         let dst = match env.get_direct_buffer_address(&buffer) {
             Ok(p) => p,
             Err(_) => return 0,
@@ -2161,11 +2084,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyBoneWeightsToBuff
         let byte_size = (vertex_count as usize) * 16; // 4 float * 4 bytes
         let capacity = env.get_direct_buffer_capacity(&buffer).unwrap_or(0);
         if byte_size > capacity {
-            log::error!(
-                "CopyBoneWeightsToBuffer: 需要 {} 字节, 容量 {}",
-                byte_size,
-                capacity
-            );
+            log::error!("CopyBoneWeightsToBuffer: 需要 {} 字节, 容量 {}", byte_size, capacity);
             return 0;
         }
         unsafe {
@@ -2188,9 +2107,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetOriginalPositions(
     if let Some(model_arc) = models.get(&model) {
         let model = model_arc.lock().unwrap();
         let ptr = model.get_original_positions_ptr();
-        if ptr.is_null() {
-            return 0;
-        }
+        if ptr.is_null() { return 0; }
         return ptr as jlong;
     }
     0
@@ -2212,7 +2129,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyOriginalPositions
         if ptr.is_null() {
             return 0;
         }
-
+        
         let dst = match env.get_direct_buffer_address(&buffer) {
             Ok(p) => p,
             Err(_) => return 0,
@@ -2220,11 +2137,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyOriginalPositions
         let byte_size = (vertex_count as usize) * 12; // 3 float * 4 bytes
         let capacity = env.get_direct_buffer_capacity(&buffer).unwrap_or(0);
         if byte_size > capacity {
-            log::error!(
-                "CopyOriginalPositionsToBuffer: 需要 {} 字节, 容量 {}",
-                byte_size,
-                capacity
-            );
+            log::error!("CopyOriginalPositionsToBuffer: 需要 {} 字节, 容量 {}", byte_size, capacity);
             return 0;
         }
         unsafe {
@@ -2247,9 +2160,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetOriginalNormals(
     if let Some(model_arc) = models.get(&model) {
         let model = model_arc.lock().unwrap();
         let ptr = model.get_original_normals_ptr();
-        if ptr.is_null() {
-            return 0;
-        }
+        if ptr.is_null() { return 0; }
         return ptr as jlong;
     }
     0
@@ -2271,7 +2182,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyOriginalNormalsTo
         if ptr.is_null() {
             return 0;
         }
-
+        
         let dst = match env.get_direct_buffer_address(&buffer) {
             Ok(p) => p,
             Err(_) => return 0,
@@ -2279,11 +2190,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyOriginalNormalsTo
         let byte_size = (vertex_count as usize) * 12; // 3 float * 4 bytes
         let capacity = env.get_direct_buffer_capacity(&buffer).unwrap_or(0);
         if byte_size > capacity {
-            log::error!(
-                "CopyOriginalNormalsToBuffer: 需要 {} 字节, 容量 {}",
-                byte_size,
-                capacity
-            );
+            log::error!("CopyOriginalNormalsToBuffer: 需要 {} 字节, 容量 {}", byte_size, capacity);
             return 0;
         }
         unsafe {
@@ -2305,12 +2212,12 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetGpuSkinningDebugIn
     let models = MODELS.read().unwrap();
     if let Some(model_arc) = models.get(&model) {
         let model = model_arc.lock().unwrap();
-
+        
         let vertex_count = model.vertices.len();
         let bone_count = model.bone_manager.bone_count();
         let bone_indices = model.get_bone_indices();
         let bone_weights = model.get_bone_weights();
-
+        
         // 统计信息
         let mut max_bone_idx = -1i32;
         let mut invalid_idx_count = 0usize;
@@ -2318,17 +2225,17 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetGpuSkinningDebugIn
         let mut bdef1_count = 0usize;
         let mut bdef2_count = 0usize;
         let mut bdef4_count = 0usize;
-
+        
         for i in 0..vertex_count {
             let base = i * 4;
             let mut total_weight = 0.0f32;
             let mut valid_bones = 0;
             let mut used_slots = 0;
-
+            
             for j in 0..4 {
                 let idx = bone_indices[base + j];
                 let weight = bone_weights[base + j];
-
+                
                 if idx > max_bone_idx {
                     max_bone_idx = idx;
                 }
@@ -2342,11 +2249,11 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetGpuSkinningDebugIn
                     }
                 }
             }
-
+            
             if valid_bones > 0 && total_weight < 0.001 {
                 zero_weight_count += 1;
             }
-
+            
             // 统计权重类型
             match used_slots {
                 1 => bdef1_count += 1,
@@ -2354,25 +2261,23 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetGpuSkinningDebugIn
                 _ => bdef4_count += 1,
             }
         }
-
+        
         // 物理信息
         let physics_enabled = model.is_physics_enabled();
         let dynamic_bones = model.get_dynamic_bone_count();
-
+        
         let info = format!(
             "顶点:{}, 骨骼:{}, 最大索引:{}, 无效索引:{}, 零权重:{}, BDEF1:{}, BDEF2:{}, BDEF4+:{}, 物理:{}, 动态骨骼:{}",
             vertex_count, bone_count, max_bone_idx, invalid_idx_count, zero_weight_count,
             bdef1_count, bdef2_count, bdef4_count, physics_enabled, dynamic_bones
         );
-
+        
         if let Ok(s) = env.new_string(&info) {
             return s.into_raw();
         }
     }
-
-    env.new_string("模型未找到")
-        .map(|s| s.into_raw())
-        .unwrap_or(ptr::null_mut())
+    
+    ptr::null_mut()
 }
 
 /// 仅更新动画（不执行 CPU 蒙皮，用于 GPU 蒙皮模式）
@@ -2509,18 +2414,14 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyGpuMorphOffsetsTo
         if size == 0 {
             return 0;
         }
-
+        
         let dst = match env.get_direct_buffer_address(&buffer) {
             Ok(p) => p,
             Err(_) => return 0,
         };
         let capacity = env.get_direct_buffer_capacity(&buffer).unwrap_or(0);
         if size > capacity {
-            log::error!(
-                "CopyGpuMorphOffsetsToBuffer: 需要 {} 字节, 容量 {}",
-                size,
-                capacity
-            );
+            log::error!("CopyGpuMorphOffsetsToBuffer: 需要 {} 字节, 容量 {}", size, capacity);
             return 0;
         }
         unsafe {
@@ -2547,7 +2448,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyGpuMorphWeightsTo
         if morph_count == 0 {
             return 0;
         }
-
+        
         let byte_size = morph_count * 4; // float = 4 bytes
         let dst = match env.get_direct_buffer_address(&buffer) {
             Ok(p) => p,
@@ -2555,11 +2456,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyGpuMorphWeightsTo
         };
         let capacity = env.get_direct_buffer_capacity(&buffer).unwrap_or(0);
         if byte_size > capacity {
-            log::error!(
-                "CopyGpuMorphWeightsToBuffer: 需要 {} 字节, 容量 {}",
-                byte_size,
-                capacity
-            );
+            log::error!("CopyGpuMorphWeightsToBuffer: 需要 {} 字节, 容量 {}", byte_size, capacity);
             return 0;
         }
         unsafe {
@@ -2593,9 +2490,9 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_IsGpuMorphInitialized
 // ============================================================================
 
 /// 加载 VPD 表情预设并应用到模型
-///
+/// 
 /// VPD 文件可以同时包含骨骼姿势（Bone）和表情权重（Morph）数据，此函数会同时应用两者。
-///
+/// 
 /// 返回值编码: 高16位为骨骼匹配数，低16位为 Morph 匹配数
 /// - 成功: (bone_count << 16) | morph_count
 /// - -1: 文件加载失败
@@ -2608,21 +2505,21 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_ApplyVpdMorph(
     filename: JString,
 ) -> jint {
     use crate::animation::VpdFile;
-
+    
     let filename_str: String = match env.get_string(&filename) {
         Ok(s) => s.into(),
         Err(_) => return -1,
     };
-
+    
     let models = MODELS.read().unwrap();
     if let Some(model_arc) = models.get(&model) {
         let mut model = model_arc.lock().unwrap();
-
+        
         match VpdFile::load(&filename_str) {
             Ok(vpd) => {
                 let mut morph_count = 0i32;
                 let mut bone_count = 0i32;
-
+                
                 // 1. 应用 Morph 表情
                 for morph_data in &vpd.morphs {
                     if let Some(idx) = model.morph_manager.find_morph_by_name(&morph_data.name) {
@@ -2630,7 +2527,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_ApplyVpdMorph(
                         morph_count += 1;
                     }
                 }
-
+                
                 // 2. 设置 VPD 骨骼姿势覆盖（会在每帧动画评估后自动应用）
                 model.clear_vpd_bone_overrides();
                 for bone_data in &vpd.bones {
@@ -2639,10 +2536,10 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_ApplyVpdMorph(
                         bone_count += 1;
                     }
                 }
-
+                
                 // 同步到 GPU 缓冲区（用于 GPU 蒙皮模式）
                 model.sync_gpu_morph_weights();
-
+                
                 // 返回编码值: 高16位骨骼数，低16位 Morph 数
                 return ((bone_count & 0xFFFF) << 16) | (morph_count & 0xFFFF);
             }
@@ -2683,7 +2580,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetMorphWeightByName(
         Ok(s) => s.into(),
         Err(_) => return 0,
     };
-
+    
     let models = MODELS.read().unwrap();
     if let Some(model_arc) = models.get(&model) {
         let mut model = model_arc.lock().unwrap();
@@ -2835,11 +2732,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyGpuUvMorphOffsets
         };
         let capacity = env.get_direct_buffer_capacity(&buffer).unwrap_or(0);
         if size > capacity {
-            log::error!(
-                "CopyGpuUvMorphOffsetsToBuffer: 需要 {} 字节, 容量 {}",
-                size,
-                capacity
-            );
+            log::error!("CopyGpuUvMorphOffsetsToBuffer: 需要 {} 字节, 容量 {}", size, capacity);
             return 0;
         }
         unsafe {
@@ -2874,11 +2767,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyGpuUvMorphWeights
         };
         let capacity = env.get_direct_buffer_capacity(&buffer).unwrap_or(0);
         if byte_size > capacity {
-            log::error!(
-                "CopyGpuUvMorphWeightsToBuffer: 需要 {} 字节, 容量 {}",
-                byte_size,
-                capacity
-            );
+            log::error!("CopyGpuUvMorphWeightsToBuffer: 需要 {} 字节, 容量 {}", byte_size, capacity);
             return 0;
         }
         unsafe {
@@ -2938,11 +2827,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyMaterialMorphResu
         };
         let capacity = env.get_direct_buffer_capacity(&buffer).unwrap_or(0);
         if byte_size > capacity {
-            log::error!(
-                "CopyMaterialMorphResultsToBuffer: 需要 {} 字节, 容量 {}",
-                byte_size,
-                capacity
-            );
+            log::error!("CopyMaterialMorphResultsToBuffer: 需要 {} 字节, 容量 {}", byte_size, capacity);
             return 0;
         }
         unsafe {
@@ -2972,7 +2857,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetPhysicsConfig(
     kinematic_filter: jboolean,
     debug_log: jboolean,
 ) {
-    use crate::physics::config::{set_config, PhysicsConfig};
+    use crate::physics::config::{PhysicsConfig, set_config};
 
     let config = PhysicsConfig {
         enabled: enabled != 0,
@@ -2990,12 +2875,8 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetPhysicsConfig(
     set_config(config);
 
     if debug_log != 0 {
-        log::info!(
-            "[Bullet3 物理配置] 重力={}, FPS={}, 惯性={}",
-            gravity_y,
-            physics_fps,
-            inertia_strength
-        );
+        log::info!("[Bullet3 物理配置] 重力={}, FPS={}, 惯性={}", 
+            gravity_y, physics_fps, inertia_strength);
     }
 }
 
@@ -3026,11 +2907,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_IsFirstPersonMode(
     let models = MODELS.read().unwrap();
     if let Some(model_arc) = models.get(&model) {
         let model = model_arc.lock().unwrap();
-        if model.is_first_person_enabled() {
-            1
-        } else {
-            0
-        }
+        if model.is_first_person_enabled() { 1 } else { 0 }
     } else {
         0
     }
@@ -3093,8 +2970,10 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_BatchGetSubMeshData(
         Ok(c) => c,
         Err(_) => return 0,
     };
-    let output = unsafe { std::slice::from_raw_parts_mut(out_ptr, out_cap) };
-
+    let output = unsafe {
+        std::slice::from_raw_parts_mut(out_ptr, out_cap)
+    };
+    
     let models = MODELS.read().unwrap();
     if let Some(model_arc) = models.get(&model) {
         let model = model_arc.lock().unwrap();
@@ -3105,8 +2984,121 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_BatchGetSubMeshData(
 }
 
 // ============================================================================
+// 公共 API 相关
+// ============================================================================
+
+/// 获取所有骨骼名称（JSON 数组格式）
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetBoneNames(
+    env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+) -> jstring {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let model = model_arc.lock().unwrap();
+        let bone_count = model.bone_manager.bone_count();
+        let mut names = Vec::with_capacity(bone_count);
+        for i in 0..bone_count {
+            if let Some(bone) = model.bone_manager.get_bone(i) {
+                names.push(format!("\"{}\"", bone.name.replace('"', "\\\"")));
+            }
+        }
+        let json = format!("[{}]", names.join(","));
+        if let Ok(s) = env.new_string(&json) {
+            return s.into_raw();
+        }
+    }
+    env.new_string("[]")
+        .map(|s| s.into_raw())
+        .unwrap_or(ptr::null_mut())
+}
+
+/// 复制所有骨骼的实时世界位置到 ByteBuffer
+/// 每个骨骼 3 个 float (x, y, z)，共 boneCount * 12 字节
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyBonePositionsToBuffer(
+    env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    buffer: JByteBuffer,
+) -> jint {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let model = model_arc.lock().unwrap();
+        let bone_count = model.bone_manager.bone_count();
+        if bone_count == 0 {
+            return 0;
+        }
+        
+        let byte_size = bone_count * 12; // 3 floats * 4 bytes
+        let dst = match env.get_direct_buffer_address(&buffer) {
+            Ok(p) => p,
+            Err(_) => return 0,
+        };
+        let capacity = env.get_direct_buffer_capacity(&buffer).unwrap_or(0);
+        if byte_size > capacity {
+            log::error!("CopyBonePositionsToBuffer: 需要 {} 字节, 容量 {}", byte_size, capacity);
+            return 0;
+        }
+        
+        // 逐骨骼写入位置
+        let dst_floats = unsafe { std::slice::from_raw_parts_mut(dst as *mut f32, bone_count * 3) };
+        for i in 0..bone_count {
+            if let Some(bone) = model.bone_manager.get_bone(i) {
+                let pos = bone.position();
+                dst_floats[i * 3] = pos.x;
+                dst_floats[i * 3 + 1] = pos.y;
+                dst_floats[i * 3 + 2] = pos.z;
+            }
+        }
+        return bone_count as jint;
+    }
+    0
+}
+
+/// 复制实时 UV 数据到 ByteBuffer（经过 UV Morph 变形后）
+/// 每个顶点 2 个 float (u, v)，共 vertexCount * 8 字节
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyRealtimeUVsToBuffer(
+    env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    buffer: JByteBuffer,
+) -> jint {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let model = model_arc.lock().unwrap();
+        let uv_raw = &model.update_uvs_raw;
+        if uv_raw.is_empty() {
+            return 0;
+        }
+        
+        let vertex_count = uv_raw.len() / 2;
+        let byte_size = uv_raw.len() * 4; // f32 = 4 bytes
+        let dst = match env.get_direct_buffer_address(&buffer) {
+            Ok(p) => p,
+            Err(_) => return 0,
+        };
+        let capacity = env.get_direct_buffer_capacity(&buffer).unwrap_or(0);
+        if byte_size > capacity {
+            log::error!("CopyRealtimeUVsToBuffer: 需要 {} 字节, 容量 {}", byte_size, capacity);
+            return 0;
+        }
+        
+        unsafe {
+            let src = uv_raw.as_ptr() as *const u8;
+            ptr::copy_nonoverlapping(src, dst, byte_size);
+        }
+        return vertex_count as jint;
+    }
+    0
+}
+
+// ============================================================================
 // 内存统计
 // ============================================================================
+
 /// 获取模型在 Rust 堆上的内存占用（字节）
 #[no_mangle]
 pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetModelMemoryUsage(
@@ -3116,12 +3108,81 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetModelMemoryUsage(
 ) -> jlong {
     let models = MODELS.read().unwrap();
     if let Some(model_arc) = models.get(&model) {
-        let model = model_arc.lock().unwrap();
-        model.memory_usage() as jlong
+        let m = model_arc.lock().unwrap();
+        m.memory_usage() as jlong
     } else {
         0
     }
 }
+
+// ============================================================================
+// VR 联动
+// ============================================================================
+
+/// 批量设置 VR 追踪数据（3 追踪点 × 7 float = 21）
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetVRTrackingData(
+    mut env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    tracking_data: jni::objects::JFloatArray,
+) {
+    let mut buf = [0.0f32; 21];
+    if env.get_float_array_region(&tracking_data, 0, &mut buf).is_err() {
+        return;
+    }
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut m = model_arc.lock().unwrap();
+        m.set_vr_tracking_data(&buf);
+    }
+}
+
+/// 启用/禁用 VR 模式
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetVREnabled(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    enabled: jboolean,
+) {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut m = model_arc.lock().unwrap();
+        m.set_vr_enabled(enabled != 0);
+    }
+}
+
+/// 设置 VR IK 参数
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetVRIKParams(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    arm_ik_strength: jfloat,
+) {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut m = model_arc.lock().unwrap();
+        m.set_vr_ik_strength(arm_ik_strength);
+    }
+}
+
+/// 设置 VR 手部渲染模式（0=全身, 1=仅左手, 2=仅右手）
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetVRHandMode(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    mode: jint,
+) {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut m = model_arc.lock().unwrap();
+        m.set_vr_hand_mode(mode as u8);
+    }
+}
+
 /// 加载 VRM 模型
 #[no_mangle]
 pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_LoadModelVRM(
@@ -3153,13 +3214,9 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_IsVrmModel(
     model: jlong,
 ) -> jboolean {
     let models = MODELS.read().unwrap();
-    if let Some(model_arc) = models.get(&model) {
-        let model = model_arc.lock().unwrap();
-        if model.is_vrm() {
-            1
-        } else {
-            0
-        }
+    if let Some(m) = models.get(&model) {
+        let m = m.lock().unwrap();
+        if m.is_vrm() { 1 } else { 0 }
     } else {
         0
     }

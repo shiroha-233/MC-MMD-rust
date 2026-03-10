@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-use glam::{Quat, Vec3};
+use glam::{Vec3, Quat};
 
 use crate::{MmdError, Result};
 
@@ -42,7 +42,8 @@ pub struct VpdFile {
 impl VpdFile {
     /// 从文件路径加载 VPD
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let file = File::open(path.as_ref()).map_err(|e| MmdError::Io(e))?;
+        let file = File::open(path.as_ref())
+            .map_err(|e| MmdError::Io(e))?;
         let reader = BufReader::new(file);
         Self::load_from_reader(reader)
     }
@@ -60,13 +61,12 @@ impl VpdFile {
         let mut morphs = Vec::new();
 
         let mut lines = reader.lines();
-
+        
         // 读取头部
-        let header = lines
-            .next()
+        let header = lines.next()
             .ok_or_else(|| MmdError::VpdParse("Empty file".to_string()))?
             .map_err(|e| MmdError::VpdParse(format!("Failed to read header: {}", e)))?;
-
+        
         if !header.contains("Vocaloid Pose Data file") {
             return Err(MmdError::VpdParse("Invalid VPD header".to_string()));
         }
@@ -91,7 +91,7 @@ impl VpdFile {
                 Ok(l) => l,
                 Err(_) => continue,
             };
-
+            
             let line = line.trim();
             if line.is_empty() || line.starts_with("//") {
                 continue;
@@ -127,21 +127,23 @@ impl VpdFile {
                         current_values.push(val);
                     }
                 }
-
+                
                 // 当收集到 7 个值时（3 平移 + 4 旋转），创建骨骼
                 if current_values.len() >= 7 {
                     if let Some(name) = current_bone_name.take() {
                         // 坐标系转换：Z 轴和 W 分量反转
-                        let translation =
-                            Vec3::new(current_values[0], current_values[1], -current_values[2]);
+                        let translation = Vec3::new(
+                            current_values[0],
+                            current_values[1],
+                            -current_values[2],
+                        );
                         let rotation = Quat::from_xyzw(
                             current_values[3],
                             current_values[4],
                             -current_values[5],
                             -current_values[6],
-                        )
-                        .normalize();
-
+                        ).normalize();
+                        
                         bones.push(VpdBone {
                             name,
                             translation,

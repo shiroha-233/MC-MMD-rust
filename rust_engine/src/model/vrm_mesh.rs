@@ -42,16 +42,16 @@ pub(crate) fn merge_meshes(
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
             let vertex_offset = vertices.len() as u32;
 
-            // POSITION → RuntimeVertex.position（Z 轴取反：右手→左手坐标系）
+            // 左手→右手坐标系对齐：X-flip + Z-flip（等价于绕 Y 轴旋转 180°）
             let positions: Vec<Vec3> = reader.read_positions()
-                .map(|iter| iter.map(|p| Vec3::new(p[0], p[1], -p[2])).collect())
+                .map(|iter| iter.map(|p| Vec3::new(-p[0], p[1], -p[2])).collect())
                 .unwrap_or_default();
             let vertex_count = positions.len();
 
-            // NORMAL → RuntimeVertex.normal（Z 轴取反）
+            // NORMAL — 同样 X-flip + Z-flip
             let normals: Vec<Vec3> = reader.read_normals()
-                .map(|iter| iter.map(|n| Vec3::new(n[0], n[1], -n[2])).collect())
-                .unwrap_or_else(|| vec![Vec3::new(0.0, 0.0, -1.0); vertex_count]);
+                .map(|iter| iter.map(|n| Vec3::new(-n[0], n[1], -n[2])).collect())
+                .unwrap_or_else(|| vec![Vec3::new(0.0, 0.0, 1.0); vertex_count]);
 
             // TEXCOORD_0 → RuntimeVertex.uv（V 轴翻转：glTF V=0 在顶部，纹理加载时做了 flip_vertical 需要匹配）
             let uvs: Vec<Vec2> = reader.read_tex_coords(0)
@@ -90,7 +90,7 @@ pub(crate) fn merge_meshes(
                 }
             }
 
-            // 索引数据（反转三角形绕序：Z 轴翻转后保持正确面朝向）
+            // 索引数据 — X+Z 双翻转（偶数次）绕序不变
             let index_begin = indices.len() as u32;
             let index_count = match reader.read_indices() {
                 Some(idx) => {
@@ -98,9 +98,9 @@ pub(crate) fn merge_meshes(
                     let count = raw.len() as u32;
                     for tri in raw.chunks(3) {
                         if tri.len() == 3 {
-                            indices.push(tri[2] + vertex_offset);
-                            indices.push(tri[1] + vertex_offset);
                             indices.push(tri[0] + vertex_offset);
+                            indices.push(tri[1] + vertex_offset);
+                            indices.push(tri[2] + vertex_offset);
                         }
                     }
                     count
@@ -113,14 +113,14 @@ pub(crate) fn merge_meshes(
             submeshes.push(SubMesh::new(index_begin, index_count, material_id as i32));
             material_indices.push(material_id);
 
-            // Morph targets 偏移数据（Z 轴取反）
+            // Morph targets — X-flip + Z-flip
             let prim_targets: Vec<MorphTargetData> = reader.read_morph_targets()
                 .map(|(positions, normals, _tangents)| {
                     let position_offsets = positions
-                        .map(|iter| iter.map(|p| Vec3::new(p[0], p[1], -p[2])).collect())
+                        .map(|iter| iter.map(|p| Vec3::new(-p[0], p[1], -p[2])).collect())
                         .unwrap_or_else(|| vec![Vec3::ZERO; vertex_count]);
                     let normal_offsets = normals
-                        .map(|iter| iter.map(|n| Vec3::new(n[0], n[1], -n[2])).collect())
+                        .map(|iter| iter.map(|n| Vec3::new(-n[0], n[1], -n[2])).collect())
                         .unwrap_or_default();
                     MorphTargetData { position_offsets, normal_offsets }
                 })
