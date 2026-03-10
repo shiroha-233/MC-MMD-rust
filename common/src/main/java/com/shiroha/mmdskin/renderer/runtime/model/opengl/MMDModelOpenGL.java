@@ -1,14 +1,19 @@
-package com.shiroha.mmdskin.renderer.runtime.model;
+package com.shiroha.mmdskin.renderer.runtime.model.opengl;
 
+import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ShaderProvider;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonShaderCpu;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonConfig;
+import com.shiroha.mmdskin.renderer.runtime.model.AbstractMMDModel;
+import com.shiroha.mmdskin.renderer.runtime.model.shared.MMDMaterial;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.vertex.PoseStack;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
+import java.util.List;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.world.entity.Entity;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /**
@@ -160,5 +165,50 @@ public class MMDModelOpenGL extends AbstractMMDModel {
 
     public void setUniforms(ShaderInstance shader, PoseStack deliverStack) {
         setupShaderUniforms(shader, deliverStack, light0Direction, light1Direction, lightMapMaterial.tex);
+    }
+
+    NativeFunc nativeFunc() {
+        return getNf();
+    }
+
+    long nativeModelHandle() {
+        return model;
+    }
+
+    Quaternionf workingQuaternion() {
+        return tempQuat;
+    }
+
+    float modelScaleValue() {
+        return getModelScale();
+    }
+
+    void loadMaterialMorphResults() {
+        fetchMaterialMorphResults();
+    }
+
+    float effectiveMaterialAlpha(int materialIndex, float baseAlpha) {
+        return getEffectiveMaterialAlpha(materialIndex, baseAlpha);
+    }
+
+    void releaseBaseResources() {
+        releaseTextures();
+        disposeModelHandle();
+        disposeMaterialMorphBuffers();
+    }
+
+    int materialMorphResultCountValue() {
+        return materialMorphResultCount;
+    }
+
+    void applyBaseState(long modelHandle, String modelDirectory, List<String> loadedTextureKeys) {
+        this.model = modelHandle;
+        this.modelDir = modelDirectory;
+        this.textureKeys = loadedTextureKeys;
+    }
+
+    void applyMaterialMorphState(int resultCount, ByteBuffer resultBuffer) {
+        this.materialMorphResultCount = resultCount;
+        this.materialMorphResultsByteBuffer = resultBuffer;
     }
 }

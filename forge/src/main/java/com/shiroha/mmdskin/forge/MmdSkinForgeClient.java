@@ -5,7 +5,7 @@ import com.shiroha.mmdskin.MmdSkinClient;
 import com.shiroha.mmdskin.forge.config.MmdSkinConfig;
 import com.shiroha.mmdskin.forge.maid.MaidRenderEventHandler;
 import com.shiroha.mmdskin.forge.register.MmdSkinRegisterClient;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelOpenGL;
+import com.shiroha.mmdskin.renderer.runtime.model.opengl.MMDModelOpenGL;
 
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;

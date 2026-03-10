@@ -1,6 +1,5 @@
 package com.shiroha.mmdskin.renderer.runtime.mode;
 
-import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.asset.catalog.ModelInfo;
 import com.shiroha.mmdskin.renderer.api.IMMDModel;
 
@@ -37,8 +36,7 @@ public class RenderModeManager {
         }
 
         factories.add(factory);
-        enabledStates.putIfAbsent(factory.getCategory(),
-            factory.getCategory() == RenderCategory.CPU_SKINNING);
+        enabledStates.putIfAbsent(factory.getCategory(), factory.isEnabledByDefault());
     }
 
     public static void unregisterFactory(RenderCategory category) {
@@ -54,7 +52,9 @@ public class RenderModeManager {
     }
 
     private static void syncFactoryStates() {
-        enabledStates.put(RenderCategory.GPU_SKINNING, ConfigManager.isGpuSkinningEnabled());
+        for (IMMDModelFactory factory : factories) {
+            enabledStates.put(factory.getCategory(), factory.isEnabledInCurrentEnvironment());
+        }
     }
 
     public static boolean isEnabled(RenderCategory category) {

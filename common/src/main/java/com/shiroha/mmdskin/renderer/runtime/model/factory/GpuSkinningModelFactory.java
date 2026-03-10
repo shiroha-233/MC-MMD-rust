@@ -1,10 +1,11 @@
 package com.shiroha.mmdskin.renderer.runtime.model.factory;
 
-import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.renderer.api.IMMDModel;
+import com.shiroha.mmdskin.renderer.runtime.bridge.ModelRuntimeBridgeHolder;
 import com.shiroha.mmdskin.renderer.runtime.mode.IMMDModelFactory;
 import com.shiroha.mmdskin.renderer.runtime.mode.RenderCategory;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelGpuSkinning;
+import com.shiroha.mmdskin.renderer.runtime.model.gpu.MMDModelGpuSkinning;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -35,9 +36,14 @@ public class GpuSkinningModelFactory implements IMMDModelFactory {
     @Override
     public boolean isAvailable() {
 
-        if (NativeFunc.isAndroid()) return false;
+        if (ModelRuntimeBridgeHolder.get().isAndroid()) return false;
 
         return true;
+    }
+
+    @Override
+    public boolean isEnabledInCurrentEnvironment() {
+        return isAvailable() && ConfigManager.isGpuSkinningEnabled();
     }
 
     @Override

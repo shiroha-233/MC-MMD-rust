@@ -1,4 +1,4 @@
-package com.shiroha.mmdskin.renderer.runtime.model;
+package com.shiroha.mmdskin.renderer.runtime.model.opengl;
 
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -8,14 +8,21 @@ import com.shiroha.mmdskin.MmdSkinClient;
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.renderer.compat.IrisCompat;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonShaderCpu;
+import com.shiroha.mmdskin.renderer.pipeline.shader.ToonRenderHelper;
+import com.shiroha.mmdskin.renderer.runtime.model.helper.LightingHelper;
+import com.shiroha.mmdskin.renderer.runtime.model.shared.SubMeshDrawHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.world.entity.Entity;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL46C;
 
 final class MMDModelOpenGLRenderer {
+    private static final Logger logger = LogManager.getLogger();
+
     private MMDModelOpenGLRenderer() {
     }
 
@@ -23,22 +30,25 @@ final class MMDModelOpenGLRenderer {
                        Vector3f entityTrans, PoseStack deliverStack, int packedLight) {
         Minecraft minecraft = Minecraft.getInstance();
         LightingHelper.LightData light = LightingHelper.sampleLight(entityIn, minecraft);
+        var workingQuat = target.workingQuaternion();
+        var nativeFunc = target.nativeFunc();
+        long modelHandle = target.nativeModelHandle();
 
         target.light0Direction.set(1.0f, 0.75f, 0.0f).normalize();
         target.light1Direction.set(-1.0f, 0.75f, 0.0f).normalize();
         float yawRad = entityYaw * ((float) Math.PI / 180F);
-        target.light0Direction.rotate(target.tempQuat.identity().rotateY(yawRad));
-        target.light1Direction.rotate(target.tempQuat.identity().rotateY(yawRad));
+        target.light0Direction.rotate(workingQuat.identity().rotateY(yawRad));
+        target.light1Direction.rotate(workingQuat.identity().rotateY(yawRad));
 
-        deliverStack.mulPose(target.tempQuat.identity().rotateY(-yawRad));
-        deliverStack.mulPose(target.tempQuat.identity().rotateX(entityPitch * ((float) Math.PI / 180F)));
+        deliverStack.mulPose(workingQuat.identity().rotateY(-yawRad));
+        deliverStack.mulPose(workingQuat.identity().rotateX(entityPitch * ((float) Math.PI / 180F)));
         deliverStack.translate(entityTrans.x, entityTrans.y, entityTrans.z);
-        float baseScale = target.getModelScale();
+        float baseScale = target.modelScaleValue();
         deliverStack.scale(baseScale, baseScale, baseScale);
 
-        target.fetchMaterialMorphResults();
+        target.loadMaterialMorphResults();
         target.subMeshDataBuf.clear();
-        target.nf.BatchGetSubMeshData(target.model, target.subMeshDataBuf);
+        nativeFunc.BatchGetSubMeshData(modelHandle, target.subMeshDataBuf);
 
         boolean useToon = initializeToonShaderIfNeeded();
         if (useToon) {
@@ -57,7 +67,7 @@ final class MMDModelOpenGLRenderer {
         if (MMDModelOpenGL.toonShaderCpu == null) {
             MMDModelOpenGL.toonShaderCpu = new ToonShaderCpu();
             if (!MMDModelOpenGL.toonShaderCpu.init()) {
-                AbstractMMDModel.logger.warn("ToonShaderCpu 初始化失败，回退到普通着色");
+                logger.warn("ToonShaderCpu 初始化失败，回退到普通着色");
                 MMDModelOpenGL.toonShaderCpu = null;
                 return false;
             }
@@ -118,21 +128,23 @@ final class MMDModelOpenGLRenderer {
 
     private static void uploadDynamicBuffers(MMDModelOpenGL target, int blockLight, int skyLight,
                                              float skyDarken, boolean irisActive) {
+        var nativeFunc = target.nativeFunc();
+        long modelHandle = target.nativeModelHandle();
         int posAndNorSize = target.vertexCount * 12;
-        long posData = target.nf.GetPoss(target.model);
-        target.nf.CopyDataToByteBuffer(target.posBuffer, posData, posAndNorSize);
+        long posData = nativeFunc.GetPoss(modelHandle);
+        nativeFunc.CopyDataToByteBuffer(target.posBuffer, posData, posAndNorSize);
         GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.vertexBufferObject);
         GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.posBuffer);
 
-        long normalData = target.nf.GetNormals(target.model);
-        target.nf.CopyDataToByteBuffer(target.norBuffer, normalData, posAndNorSize);
+        long normalData = nativeFunc.GetNormals(modelHandle);
+        nativeFunc.CopyDataToByteBuffer(target.norBuffer, normalData, posAndNorSize);
         GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.normalBufferObject);
         GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.norBuffer);
 
         if (target.hasUvMorph) {
             int uv0Size = target.vertexCount * 8;
-            long uv0Data = target.nf.GetUVs(target.model);
-            target.nf.CopyDataToByteBuffer(target.uv0Buffer, uv0Data, uv0Size);
+            long uv0Data = nativeFunc.GetUVs(modelHandle);
+            nativeFunc.CopyDataToByteBuffer(target.uv0Buffer, uv0Data, uv0Size);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.texcoordBufferObject);
             GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv0Buffer);
         }
@@ -303,33 +315,16 @@ final class MMDModelOpenGLRenderer {
     }
 
     private static void drawSubMeshes(MMDModelOpenGL target, Minecraft minecraft) {
-        RenderSystem.activeTexture(GL46C.GL_TEXTURE0);
-        for (int i = 0; i < target.subMeshCount; ++i) {
-            int base = i * 20;
-            int materialID = target.subMeshDataBuf.getInt(base);
-            int beginIndex = target.subMeshDataBuf.getInt(base + 4);
-            int vertCount = target.subMeshDataBuf.getInt(base + 8);
-            float alpha = target.subMeshDataBuf.getFloat(base + 12);
-            boolean visible = target.subMeshDataBuf.get(base + 16) != 0;
-            boolean bothFace = target.subMeshDataBuf.get(base + 17) != 0;
-
-            if (!visible) continue;
-            if (target.getEffectiveMaterialAlpha(materialID, alpha) < 0.001f) continue;
-
-            if (bothFace) {
-                RenderSystem.disableCull();
-            } else {
-                RenderSystem.enableCull();
-            }
-
-            int texId = target.mats[materialID].tex == 0
-                    ? minecraft.getTextureManager().getTexture(TextureManager.INTENTIONAL_MISSING_TEXTURE).getId()
-                    : target.mats[materialID].tex;
-            RenderSystem.setShaderTexture(0, texId);
-            GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, texId);
-            long startPos = (long) beginIndex * target.indexElementSize;
-            GL46C.glDrawElements(GL46C.GL_TRIANGLES, vertCount, target.indexType, startPos);
-        }
+        int missingTextureId = minecraft.getTextureManager()
+                .getTexture(TextureManager.INTENTIONAL_MISSING_TEXTURE)
+                .getId();
+        SubMeshDrawHelper.draw(
+                target.subMeshDataBuf,
+                target.subMeshCount,
+                target.indexElementSize,
+                target.indexType,
+                materialId -> target.mats[materialId].tex == 0 ? missingTextureId : target.mats[materialId].tex,
+                target::effectiveMaterialAlpha);
     }
 
     private static void clearStandardRenderState(MMDModelOpenGL target) {
@@ -381,11 +376,13 @@ final class MMDModelOpenGLRenderer {
             }
         }
 
+        var nativeFunc = target.nativeFunc();
+        long modelHandle = target.nativeModelHandle();
         int posAndNorSize = target.vertexCount * 12;
-        long posData = target.nf.GetPoss(target.model);
-        target.nf.CopyDataToByteBuffer(target.posBuffer, posData, posAndNorSize);
-        long normalData = target.nf.GetNormals(target.model);
-        target.nf.CopyDataToByteBuffer(target.norBuffer, normalData, posAndNorSize);
+        long posData = nativeFunc.GetPoss(modelHandle);
+        nativeFunc.CopyDataToByteBuffer(target.posBuffer, posData, posAndNorSize);
+        long normalData = nativeFunc.GetNormals(modelHandle);
+        nativeFunc.CopyDataToByteBuffer(target.norBuffer, normalData, posAndNorSize);
 
         GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.vertexBufferObject);
         GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.posBuffer);
@@ -393,8 +390,8 @@ final class MMDModelOpenGLRenderer {
         GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.norBuffer);
         if (target.hasUvMorph) {
             int uv0Size = target.vertexCount * 8;
-            long uv0Data = target.nf.GetUVs(target.model);
-            target.nf.CopyDataToByteBuffer(target.uv0Buffer, uv0Data, uv0Size);
+            long uv0Data = nativeFunc.GetUVs(modelHandle);
+            nativeFunc.CopyDataToByteBuffer(target.uv0Buffer, uv0Data, uv0Size);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.texcoordBufferObject);
             GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv0Buffer);
         }
@@ -437,29 +434,16 @@ final class MMDModelOpenGLRenderer {
 
         MMDModelOpenGL.toonShaderCpu.setOutlineProjectionMatrix(target.projMatBuff);
         MMDModelOpenGL.toonShaderCpu.setOutlineModelViewMatrix(target.modelViewMatBuff);
-        MMDModelOpenGL.toonShaderCpu.setOutlineWidth(MMDModelOpenGL.toonConfig.getOutlineWidth());
-        MMDModelOpenGL.toonShaderCpu.setOutlineColor(
-                MMDModelOpenGL.toonConfig.getOutlineColorR(),
-                MMDModelOpenGL.toonConfig.getOutlineColorG(),
-                MMDModelOpenGL.toonConfig.getOutlineColorB()
-        );
+        ToonRenderHelper.setupOutlineUniforms(MMDModelOpenGL.toonShaderCpu);
 
         GL46C.glCullFace(GL46C.GL_FRONT);
         RenderSystem.enableCull();
-        for (int i = 0; i < target.subMeshCount; ++i) {
-            int base = i * 20;
-            int materialID = target.subMeshDataBuf.getInt(base);
-            int beginIndex = target.subMeshDataBuf.getInt(base + 4);
-            int count = target.subMeshDataBuf.getInt(base + 8);
-            float edgeAlpha = target.subMeshDataBuf.getFloat(base + 12);
-            boolean visible = target.subMeshDataBuf.get(base + 16) != 0;
-
-            if (!visible) continue;
-            if (target.getEffectiveMaterialAlpha(materialID, edgeAlpha) < 0.001f) continue;
-
-            long startPos = (long) beginIndex * target.indexElementSize;
-            GL46C.glDrawElements(GL46C.GL_TRIANGLES, count, target.indexType, startPos);
-        }
+        SubMeshDrawHelper.drawOutline(
+                target.subMeshDataBuf,
+                target.subMeshCount,
+                target.indexElementSize,
+                target.indexType,
+                target::effectiveMaterialAlpha);
         GL46C.glCullFace(GL46C.GL_BACK);
 
         if (posLoc != -1) GL46C.glDisableVertexAttribArray(posLoc);
@@ -490,22 +474,7 @@ final class MMDModelOpenGLRenderer {
 
         MMDModelOpenGL.toonShaderCpu.setProjectionMatrix(target.projMatBuff);
         MMDModelOpenGL.toonShaderCpu.setModelViewMatrix(target.modelViewMatBuff);
-        MMDModelOpenGL.toonShaderCpu.setSampler0(0);
-        MMDModelOpenGL.toonShaderCpu.setLightIntensity(lightIntensity);
-        MMDModelOpenGL.toonShaderCpu.setToonLevels(MMDModelOpenGL.toonConfig.getToonLevels());
-        MMDModelOpenGL.toonShaderCpu.setRimLight(
-                MMDModelOpenGL.toonConfig.getRimPower(),
-                MMDModelOpenGL.toonConfig.getRimIntensity()
-        );
-        MMDModelOpenGL.toonShaderCpu.setShadowColor(
-                MMDModelOpenGL.toonConfig.getShadowColorR(),
-                MMDModelOpenGL.toonConfig.getShadowColorG(),
-                MMDModelOpenGL.toonConfig.getShadowColorB()
-        );
-        MMDModelOpenGL.toonShaderCpu.setSpecular(
-                MMDModelOpenGL.toonConfig.getSpecularPower(),
-                MMDModelOpenGL.toonConfig.getSpecularIntensity()
-        );
+        ToonRenderHelper.setupToonUniforms(MMDModelOpenGL.toonShaderCpu, lightIntensity);
 
         drawSubMeshes(target, minecraft);
 

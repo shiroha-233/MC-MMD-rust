@@ -35,25 +35,13 @@ public interface IMMDModel {
         return lastSlash >= 0 ? dir.substring(lastSlash + 1) : dir;
     }
 
-    default boolean setLayerBoneMask(int layer, String rootBoneName) {
-        return com.shiroha.mmdskin.NativeFunc.GetInst()
-                .SetLayerBoneMask(getModelHandle(), layer, rootBoneName);
-    }
+    boolean setLayerBoneMask(int layer, String rootBoneName);
 
-    default boolean setLayerBoneExclude(int layer, String rootBoneName) {
-        return com.shiroha.mmdskin.NativeFunc.GetInst()
-                .SetLayerBoneExclude(getModelHandle(), layer, rootBoneName);
-    }
+    boolean setLayerBoneExclude(int layer, String rootBoneName);
 
     void dispose();
 
     default long getVramUsage() { return 0; }
 
-    default long getRamUsage() {
-        try {
-            return com.shiroha.mmdskin.NativeFunc.GetInst().GetModelMemoryUsage(getModelHandle());
-        } catch (Exception e) {
-            return 0;
-        }
-    }
+    long getRamUsage();
 }

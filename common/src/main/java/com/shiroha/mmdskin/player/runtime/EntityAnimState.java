@@ -30,6 +30,7 @@ public class EntityAnimState {
     public State[] stateLayers;
     public ByteBuffer matBuffer;
     public AnimPhase[] layerPhases;
+    public String[] layerAnimationKeys;
     public String[] layerGroupIds;
     public String[] layerExitStacks;
     public String[] layerLoopStacks;
@@ -43,6 +44,7 @@ public class EntityAnimState {
         this.leftHandMat = nf.CreateMat();
         this.matBuffer = ByteBuffer.allocateDirect(64);
         this.layerPhases = new AnimPhase[layerCount];
+        this.layerAnimationKeys = new String[layerCount];
         this.layerGroupIds = new String[layerCount];
         this.layerExitStacks = new String[layerCount];
         this.layerLoopStacks = new String[layerCount];
@@ -55,6 +57,7 @@ public class EntityAnimState {
         for (int i = 0; i < stateLayers.length; i++) {
             stateLayers[i] = null;
             layerPhases[i] = AnimPhase.NONE;
+            layerAnimationKeys[i] = null;
             layerGroupIds[i] = null;
             layerExitStacks[i] = null;
             layerLoopStacks[i] = null;

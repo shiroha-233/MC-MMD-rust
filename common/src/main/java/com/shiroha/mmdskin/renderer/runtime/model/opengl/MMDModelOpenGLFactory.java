@@ -1,8 +1,11 @@
-package com.shiroha.mmdskin.renderer.runtime.model;
+package com.shiroha.mmdskin.renderer.runtime.model.opengl;
 
 import com.shiroha.mmdskin.NativeFunc;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.shiroha.mmdskin.renderer.runtime.texture.MMDTextureManager;
+import com.shiroha.mmdskin.renderer.runtime.model.shared.MMDMaterial;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.GL46C;
 import org.lwjgl.system.MemoryUtil;
 
@@ -13,6 +16,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 final class MMDModelOpenGLFactory {
+    private static final Logger logger = LogManager.getLogger();
+
     private MMDModelOpenGLFactory() {
     }
 
@@ -21,7 +26,7 @@ final class MMDModelOpenGLFactory {
             MMDModelOpenGL.InitShader();
         }
 
-        NativeFunc nf = AbstractMMDModel.getNf();
+        NativeFunc nf = NativeFunc.GetInst();
         long model;
         if (isPMD) {
             model = nf.LoadModelPMD(modelFilename, modelDir, layerCount);
@@ -29,7 +34,7 @@ final class MMDModelOpenGLFactory {
             model = nf.LoadModelPMX(modelFilename, modelDir, layerCount);
         }
         if (model == 0) {
-            AbstractMMDModel.logger.warn(String.format("Cannot open model: '%s'.", modelFilename));
+            logger.warn(String.format("Cannot open model: '%s'.", modelFilename));
             return null;
         }
 
@@ -45,7 +50,7 @@ final class MMDModelOpenGLFactory {
             MMDModelOpenGL.InitShader();
         }
 
-        NativeFunc nf = AbstractMMDModel.getNf();
+        NativeFunc nf = NativeFunc.GetInst();
         BufferUploader.reset();
 
         int vertexArrayObject = 0;
@@ -181,8 +186,7 @@ final class MMDModelOpenGLFactory {
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, 0);
 
             MMDModelOpenGL result = new MMDModelOpenGL();
-            result.model = model;
-            result.modelDir = modelDir;
+            result.applyBaseState(model, modelDir, texKeys);
             result.vertexCount = vertexCount;
             result.posBuffer = posBuffer;
             result.colorBuffer = colorBuffer;
@@ -203,7 +207,6 @@ final class MMDModelOpenGLFactory {
             result.mats = mats;
             result.lightMapMaterial = lightMapMaterial;
             result.hasUvMorph = nf.GetUvMorphCount(model) > 0;
-            result.textureKeys = texKeys;
 
             modelViewMatBuff = MemoryUtil.memAllocFloat(16);
             projMatBuff = MemoryUtil.memAllocFloat(16);
@@ -217,10 +220,9 @@ final class MMDModelOpenGLFactory {
             int matMorphCount = nf.GetMaterialMorphResultCount(model);
             if (matMorphCount > 0) {
                 int floatCount = matMorphCount * 56;
-                result.materialMorphResultCount = matMorphCount;
                 matMorphResultsByteBuf = MemoryUtil.memAlloc(floatCount * 4);
                 matMorphResultsByteBuf.order(ByteOrder.LITTLE_ENDIAN);
-                result.materialMorphResultsByteBuffer = matMorphResultsByteBuf;
+                result.applyMaterialMorphState(matMorphCount, matMorphResultsByteBuf);
             }
 
             result.subMeshCount = (int) nf.GetSubMeshCount(model);
@@ -230,7 +232,7 @@ final class MMDModelOpenGLFactory {
             nf.SetAutoBlinkEnabled(model, true);
             return result;
         } catch (Exception e) {
-            AbstractMMDModel.logger.error("CPU 蒙皮模型创建失败，清理资源: {}", e.getMessage());
+            logger.error("CPU 蒙皮模型创建失败，清理资源: {}", e.getMessage());
 
             if (vertexArrayObject > 0) GL46C.glDeleteVertexArrays(vertexArrayObject);
             if (indexBufferObject > 0) GL46C.glDeleteBuffers(indexBufferObject);

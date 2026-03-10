@@ -1,4 +1,4 @@
-package com.shiroha.mmdskin.renderer.runtime.model;
+package com.shiroha.mmdskin.renderer.runtime.model.helper;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;

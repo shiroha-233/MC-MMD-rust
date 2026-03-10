@@ -1,4 +1,4 @@
-package com.shiroha.mmdskin.renderer.runtime.model;
+package com.shiroha.mmdskin.renderer.runtime.model.gpu;
 
 import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.renderer.runtime.texture.MMDTextureManager;
@@ -6,12 +6,15 @@ import com.shiroha.mmdskin.renderer.pipeline.shader.ShaderConstants;
 import com.shiroha.mmdskin.renderer.pipeline.shader.SkinningComputeShader;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonShaderCpu;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonConfig;
+import com.shiroha.mmdskin.renderer.runtime.model.AbstractMMDModel;
+import com.shiroha.mmdskin.renderer.runtime.model.shared.MMDMaterial;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.PoseStack;
 
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.world.entity.Entity;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL46C;
 import org.lwjgl.system.MemoryUtil;
@@ -516,6 +519,40 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
 
     void setUniforms(ShaderInstance shader, PoseStack deliverStack) {
         setupShaderUniforms(shader, deliverStack, light0Direction, light1Direction, lightMapMaterial.tex);
+    }
+
+    NativeFunc nativeFunc() {
+        return getNf();
+    }
+
+    long nativeModelHandle() {
+        return model;
+    }
+
+    Quaternionf workingQuaternion() {
+        return tempQuat;
+    }
+
+    float modelScaleValue() {
+        return getModelScale();
+    }
+
+    int materialMorphResultCountValue() {
+        return materialMorphResultCount;
+    }
+
+    void loadMaterialMorphResults() {
+        fetchMaterialMorphResults();
+    }
+
+    float effectiveMaterialAlpha(int materialIndex, float baseAlpha) {
+        return getEffectiveMaterialAlpha(materialIndex, baseAlpha);
+    }
+
+    void releaseBaseResources() {
+        releaseTextures();
+        disposeModelHandle();
+        disposeMaterialMorphBuffers();
     }
 
     @Override

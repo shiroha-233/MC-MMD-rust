@@ -1,8 +1,8 @@
 package com.shiroha.mmdskin.renderer.integration.player;
 
 import com.shiroha.mmdskin.renderer.api.RenderParams;
+import com.shiroha.mmdskin.renderer.integration.ModelPropertyHelper;
 import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager.Model;
-import com.shiroha.mmdskin.util.VectorParseUtil;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.util.Mth;
 import org.joml.Vector3f;
@@ -39,24 +39,14 @@ public final class PlayerRenderHelper {
     }
 
     public static float[] getModelSize(Model modelData) {
-        float[] size = new float[2];
-        size[0] = getPropertyFloat(modelData, "size", 1.0f);
-        size[1] = getPropertyFloat(modelData, "size_in_inventory", 1.0f);
-        return size;
+        return ModelPropertyHelper.getModelSize(modelData.properties);
     }
 
     public static float getPropertyFloat(Model modelData, String key, float defaultValue) {
-        String value = modelData.properties.getProperty(key);
-        if (value == null) return defaultValue;
-        try {
-            return Float.parseFloat(value);
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
+        return ModelPropertyHelper.getFloat(modelData.properties, key, defaultValue);
     }
 
     public static Vector3f getPropertyVector(Model modelData, String key) {
-        String value = modelData.properties.getProperty(key);
-        return value == null ? new Vector3f(0.0f) : VectorParseUtil.parseVec3f(value);
+        return ModelPropertyHelper.getVector(modelData.properties, key);
     }
 }

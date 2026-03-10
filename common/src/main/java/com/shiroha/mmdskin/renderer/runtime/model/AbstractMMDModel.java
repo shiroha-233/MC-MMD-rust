@@ -1,16 +1,16 @@
 package com.shiroha.mmdskin.renderer.runtime.model;
 
 import com.shiroha.mmdskin.NativeFunc;
-import com.shiroha.mmdskin.renderer.runtime.model.EyeTrackingHelper;
 import com.shiroha.mmdskin.renderer.api.IMMDModel;
 import com.shiroha.mmdskin.renderer.api.RenderContext;
+import com.shiroha.mmdskin.renderer.runtime.bridge.ModelRuntimeBridgeHolder;
+import com.shiroha.mmdskin.renderer.runtime.model.helper.LivingEntityModelStateHelper;
 import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
-import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import org.apache.logging.log4j.LogManager;
@@ -31,7 +31,6 @@ public abstract class AbstractMMDModel implements IMMDModel {
 
     protected static final float MAX_DELTA_TIME = 0.25f;
     protected static final float MODEL_SCALE = 0.09f;
-
     protected long model;
     protected String modelDir;
     private String cachedModelName;
@@ -101,6 +100,16 @@ public abstract class AbstractMMDModel implements IMMDModel {
     public String getModelDir() { return modelDir; }
 
     @Override
+    public boolean setLayerBoneMask(int layer, String rootBoneName) {
+        return ModelRuntimeBridgeHolder.get().setLayerBoneMask(model, layer, rootBoneName);
+    }
+
+    @Override
+    public boolean setLayerBoneExclude(int layer, String rootBoneName) {
+        return ModelRuntimeBridgeHolder.get().setLayerBoneExclude(model, layer, rootBoneName);
+    }
+
+    @Override
     public String getModelName() {
         if (cachedModelName == null) {
             cachedModelName = IMMDModel.super.getModelName();
@@ -120,37 +129,30 @@ public abstract class AbstractMMDModel implements IMMDModel {
         return isVrmModel;
     }
 
+    @Override
+    public long getRamUsage() {
+        try {
+            return ModelRuntimeBridgeHolder.get().getModelMemoryUsage(model);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     private void handleLivingEntity(LivingEntity entityIn, float entityYaw, float entityPitch,
                                      Vector3f entityTrans, float tickDelta, PoseStack mat,
                                      int packedLight, RenderContext context) {
         boolean stagePlaying = MMDCameraController.getInstance().isStagePlayingModel(model);
 
-        if (stagePlaying) {
-            getNf().SetHeadAngle(model, 0.0f, 0.0f, 0.0f, context.isWorldScene());
-        } else if (!vrActive) {
-
-            float headAngleX = Mth.clamp(entityIn.getXRot(), -50.0f, 50.0f);
-            float headAngleY = (entityYaw - Mth.lerp(tickDelta, entityIn.yHeadRotO, entityIn.yHeadRot)) % 360.0f;
-            if (headAngleY < -180.0f) headAngleY += 360.0f;
-            else if (headAngleY > 180.0f) headAngleY -= 360.0f;
-            headAngleY = Mth.clamp(headAngleY, -80.0f, 80.0f);
-
-            float pitchRad = headAngleX * ((float) Math.PI / 180F);
-            float yawRad = context.isInventoryScene()
-                    ? -headAngleY * ((float) Math.PI / 180F)
-                    : headAngleY * ((float) Math.PI / 180F);
-            getNf().SetHeadAngle(model, pitchRad, yawRad, 0.0f, context.isWorldScene());
-        }
-
-        if (!stagePlaying && !vrActive) {
-            EyeTrackingHelper.updateEyeTracking(getNf(), model, entityIn, entityYaw, tickDelta, getModelName());
-        }
-
-        float posX = (float)(Mth.lerp(tickDelta, entityIn.xo, entityIn.getX()) * MODEL_SCALE);
-        float posY = (float)(Mth.lerp(tickDelta, entityIn.yo, entityIn.getY()) * MODEL_SCALE);
-        float posZ = (float)(Mth.lerp(tickDelta, entityIn.zo, entityIn.getZ()) * MODEL_SCALE);
-        float bodyYaw = Mth.lerp(tickDelta, entityIn.yBodyRotO, entityIn.yBodyRot) * ((float) Math.PI / 180F);
-        getNf().SetModelPositionAndYaw(model, posX, posY, posZ, bodyYaw);
+        LivingEntityModelStateHelper.syncModelState(
+                getNf(),
+                model,
+                entityIn,
+                entityYaw,
+                tickDelta,
+                context,
+                getModelName(),
+                stagePlaying,
+                vrActive);
 
         update();
         doRenderModel(entityIn, entityYaw, entityPitch, entityTrans, mat, packedLight);
@@ -195,7 +197,7 @@ public abstract class AbstractMMDModel implements IMMDModel {
 
     protected void disposeModelHandle() {
         if (model != 0) {
-            getNf().DeleteModel(model);
+            ModelRuntimeBridgeHolder.get().deleteModel(model);
             model = 0;
         }
     }

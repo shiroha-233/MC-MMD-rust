@@ -4,7 +4,7 @@ import com.shiroha.mmdskin.MmdSkinClient;
 import com.shiroha.mmdskin.fabric.config.MmdSkinConfig;
 import com.shiroha.mmdskin.fabric.maid.MaidCompatMixinPlugin;
 import com.shiroha.mmdskin.fabric.register.MmdSkinRegisterClient;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelOpenGL;
+import com.shiroha.mmdskin.renderer.runtime.model.opengl.MMDModelOpenGL;
 
 import net.fabricmc.api.ClientModInitializer;
 

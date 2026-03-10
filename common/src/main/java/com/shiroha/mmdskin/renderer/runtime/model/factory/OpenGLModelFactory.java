@@ -3,7 +3,7 @@ package com.shiroha.mmdskin.renderer.runtime.model.factory;
 import com.shiroha.mmdskin.renderer.api.IMMDModel;
 import com.shiroha.mmdskin.renderer.runtime.mode.IMMDModelFactory;
 import com.shiroha.mmdskin.renderer.runtime.mode.RenderCategory;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelOpenGL;
+import com.shiroha.mmdskin.renderer.runtime.model.opengl.MMDModelOpenGL;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -34,6 +34,11 @@ public class OpenGLModelFactory implements IMMDModelFactory {
     @Override
     public boolean isAvailable() {
 
+        return true;
+    }
+
+    @Override
+    public boolean isEnabledByDefault() {
         return true;
     }
 

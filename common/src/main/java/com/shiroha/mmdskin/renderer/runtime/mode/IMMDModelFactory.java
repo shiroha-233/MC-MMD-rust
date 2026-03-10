@@ -16,6 +16,14 @@ public interface IMMDModelFactory {
 
     boolean isAvailable();
 
+    default boolean isEnabledByDefault() {
+        return false;
+    }
+
+    default boolean isEnabledInCurrentEnvironment() {
+        return isEnabledByDefault();
+    }
+
     default boolean supportsPMD() {
         return true;
     }

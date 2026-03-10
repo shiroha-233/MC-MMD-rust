@@ -1,31 +1,25 @@
 package com.shiroha.mmdskin.renderer.runtime.model;
 
-import com.shiroha.mmdskin.NativeFunc;
-import com.shiroha.mmdskin.asset.catalog.ModelInfo;
 import com.shiroha.mmdskin.config.ModelConfigData;
 import com.shiroha.mmdskin.config.ModelConfigManager;
 import com.shiroha.mmdskin.renderer.runtime.animation.MMDAnimManager;
 import com.shiroha.mmdskin.player.runtime.EntityAnimState;
 import com.shiroha.mmdskin.renderer.api.IMMDModel;
+import com.shiroha.mmdskin.renderer.runtime.bridge.ModelRuntimeBridgeHolder;
 import com.shiroha.mmdskin.renderer.compat.IrisCompat;
 import com.shiroha.mmdskin.renderer.runtime.cache.ModelCache;
+import com.shiroha.mmdskin.renderer.runtime.model.loading.ModelLoadCoordinator;
+import com.shiroha.mmdskin.renderer.runtime.model.loading.ModelPropertiesLoader;
 import com.shiroha.mmdskin.renderer.runtime.mode.RenderModeManager;
 import com.shiroha.mmdskin.renderer.runtime.model.factory.ModelFactoryRegistry;
 import com.shiroha.mmdskin.renderer.runtime.texture.MMDTextureManager;
 import com.shiroha.mmdskin.maid.MaidMMDModelManager;
 
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.logging.log4j.LogManager;
@@ -39,28 +33,7 @@ public class MMDModelManager {
 
     private static ModelCache<Model> modelCache;
 
-    private static final ExecutorService loadingExecutor = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "MMD-ModelLoader");
-        t.setDaemon(true);
-        return t;
-    });
-
-    static class AsyncLoadResult {
-        final long modelHandle;
-        final ModelInfo modelInfo;
-        final String modelName;
-
-        AsyncLoadResult(long modelHandle, ModelInfo modelInfo, String modelName) {
-            this.modelHandle = modelHandle;
-            this.modelInfo = modelInfo;
-            this.modelName = modelName;
-        }
-    }
-
-    private static final ConcurrentHashMap<String, Future<AsyncLoadResult>> pendingLoads = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, Long> failedLoads = new ConcurrentHashMap<>();
-    private static final long FAILED_RETRY_INTERVAL_MS = 10_000;
-    private static final Set<String> missingModels = ConcurrentHashMap.newKeySet();
+    private static final ModelLoadCoordinator loadCoordinator = new ModelLoadCoordinator();
 
     private static final AtomicInteger totalModelsLoaded = new AtomicInteger(0);
 
@@ -85,127 +58,11 @@ public class MMDModelManager {
             return null;
         }
 
-        Future<AsyncLoadResult> future = pendingLoads.get(fullCacheKey);
-        if (future != null) {
-            if (!future.isDone()) {
-                return null;
-            }
-
-            pendingLoads.remove(fullCacheKey);
-            try {
-                AsyncLoadResult result = future.get();
-                if (result == null || result.modelHandle == 0) {
-                    logger.error("后台模型加载返回空句柄: {}", fullCacheKey);
-                    markFailed(fullCacheKey);
-                    return null;
-                }
-
-                return finalizeModelOnRenderThread(fullCacheKey, result);
-            } catch (Exception e) {
-                logger.error("获取后台加载结果失败: {}", fullCacheKey, e);
-                markFailed(fullCacheKey);
-                return null;
-            }
-        }
-
-        Long failedTime = failedLoads.get(fullCacheKey);
-        if (failedTime != null && (System.currentTimeMillis() - failedTime) < FAILED_RETRY_INTERVAL_MS) {
-            return null;
-        }
-        failedLoads.remove(fullCacheKey);
-
-        ModelInfo modelInfo = ModelInfo.findByFolderName(modelName);
-        if (modelInfo == null) {
-            if (missingModels.add(modelName)) {
-                logger.warn("模型本地不存在，跳过加载: {}", modelName);
-            }
-            return null;
-        }
-
-        startBackgroundLoad(fullCacheKey, modelInfo, modelName);
-        return null;
+        return loadCoordinator.resolveOrQueue(fullCacheKey, modelName,
+                result -> finalizeModelOnRenderThread(fullCacheKey, result));
     }
 
-    private static void startBackgroundLoad(String fullCacheKey, ModelInfo modelInfo, String modelName) {
-        if (pendingLoads.containsKey(fullCacheKey)) {
-            return;
-        }
-
-        logger.info("[异步加载] 开始后台加载模型: {} ({})", modelName, modelInfo.getModelFileName());
-        long startTime = System.currentTimeMillis();
-
-        Future<AsyncLoadResult> future = loadingExecutor.submit(() -> {
-            long handle = 0;
-            try {
-                NativeFunc nf = NativeFunc.GetInst();
-                if (modelInfo.isVRM()) {
-                    handle = nf.LoadModelVRM(modelInfo.getModelFilePath(), modelInfo.getFolderPath(), 3);
-                } else if (modelInfo.isPMD()) {
-                    handle = nf.LoadModelPMD(modelInfo.getModelFilePath(), modelInfo.getFolderPath(), 3);
-                } else {
-                    handle = nf.LoadModelPMX(modelInfo.getModelFilePath(), modelInfo.getFolderPath(), 3);
-                }
-
-                long elapsed = System.currentTimeMillis() - startTime;
-                if (handle == 0) {
-                    logger.error("[异步加载] 后台加载失败 ({}ms): {}", elapsed, modelName);
-                    return null;
-                }
-
-                if (!pendingLoads.containsKey(fullCacheKey) || Thread.interrupted()) {
-                    logger.info("[异步加载] 后台任务已被取消，释放句柄: {}", modelName);
-                    nf.DeleteModel(handle);
-                    return null;
-                }
-
-                logger.info("[异步加载] 模型解析完成 ({}ms)，开始预解码纹理: {}", elapsed, modelName);
-
-                preloadModelTextures(nf, handle, modelInfo.getFolderPath());
-
-                if (!pendingLoads.containsKey(fullCacheKey) || Thread.interrupted()) {
-                    logger.info("[异步加载] 后台任务已被取消（纹理预解码后），释放句柄: {}", modelName);
-                    nf.DeleteModel(handle);
-                    return null;
-                }
-
-                long totalElapsed = System.currentTimeMillis() - startTime;
-                logger.info("[异步加载] 后台加载全部完成 ({}ms): {}", totalElapsed, modelName);
-                return new AsyncLoadResult(handle, modelInfo, modelName);
-            } catch (Exception e) {
-                long elapsed = System.currentTimeMillis() - startTime;
-                logger.error("[异步加载] 后台加载异常 ({}ms): {}", elapsed, modelName, e);
-                if (handle != 0) {
-                    try { NativeFunc.GetInst().DeleteModel(handle); } catch (Exception ignored) {}
-                }
-                return null;
-            }
-        });
-
-        if (pendingLoads.putIfAbsent(fullCacheKey, future) != null) {
-            future.cancel(false);
-        }
-    }
-
-    private static void preloadModelTextures(NativeFunc nf, long modelHandle, String modelDir) {
-        try {
-            int matCount = (int) nf.GetMaterialCount(modelHandle);
-            int preloaded = 0;
-
-            for (int i = 0; i < matCount; i++) {
-                String texPath = nf.GetMaterialTex(modelHandle, i);
-                if (texPath == null || texPath.isEmpty()) continue;
-
-                MMDTextureManager.preloadTexture(texPath);
-                preloaded++;
-            }
-
-            MMDTextureManager.preloadTexture(modelDir + "/lightMap.png");
-        } catch (Exception e) {
-            logger.warn("[异步加载] 纹理预解码部分失败（不影响后续加载）", e);
-        }
-    }
-
-    private static Model finalizeModelOnRenderThread(String fullCacheKey, AsyncLoadResult result) {
+    private static Model finalizeModelOnRenderThread(String fullCacheKey, ModelLoadCoordinator.AsyncLoadResult result) {
         long startTime = System.currentTimeMillis();
 
         try {
@@ -214,8 +71,7 @@ public class MMDModelManager {
 
             if (m == null) {
                 logger.error("[异步加载] GL 资源创建失败，释放模型句柄: {}", result.modelName);
-                NativeFunc.GetInst().DeleteModel(result.modelHandle);
-                markFailed(fullCacheKey);
+                cleanupLoadedResult(result);
                 return null;
             }
 
@@ -230,17 +86,12 @@ public class MMDModelManager {
         } catch (Exception e) {
             logger.error("[异步加载] GL 资源创建异常: {}", fullCacheKey, e);
             try {
-                NativeFunc.GetInst().DeleteModel(result.modelHandle);
+                cleanupLoadedResult(result);
             } catch (Exception ex) {
                 logger.error("释放模型句柄失败", ex);
             }
-            markFailed(fullCacheKey);
             return null;
         }
-    }
-
-    private static void markFailed(String fullCacheKey) {
-        failedLoads.put(fullCacheKey, System.currentTimeMillis());
     }
 
     public static Model GetModel(String modelName) {
@@ -249,28 +100,14 @@ public class MMDModelManager {
 
     public static void forceReloadModel(String modelName) {
         String prefix = modelName + "_";
-        pendingLoads.entrySet().removeIf(entry -> {
-            if (entry.getKey().startsWith(prefix)) {
-                cleanupFutureHandle(entry.getValue());
-                return true;
-            }
-            return false;
-        });
-        failedLoads.entrySet().removeIf(entry -> entry.getKey().startsWith(prefix));
+        loadCoordinator.removeMatching(key -> key.startsWith(prefix), MMDModelManager::cleanupLoadedResult);
         MMDTextureManager.clearPreloaded();
         modelCache.removeMatching(key -> key.startsWith(prefix), MMDModelManager::disposeModel);
     }
 
     public static void forceReloadPlayerModels(String playerCacheKey) {
         String suffix = "_" + playerCacheKey;
-        pendingLoads.entrySet().removeIf(entry -> {
-            if (entry.getKey().endsWith(suffix)) {
-                cleanupFutureHandle(entry.getValue());
-                return true;
-            }
-            return false;
-        });
-        failedLoads.entrySet().removeIf(entry -> entry.getKey().endsWith(suffix));
+        loadCoordinator.removeMatching(key -> key.endsWith(suffix), MMDModelManager::cleanupLoadedResult);
         modelCache.removeMatching(key -> key.endsWith(suffix), MMDModelManager::disposeModel);
     }
 
@@ -282,28 +119,13 @@ public class MMDModelManager {
     }
 
     private static void cancelAllPendingLoads() {
-        if (!pendingLoads.isEmpty()) {
-            for (var entry : pendingLoads.entrySet()) {
-                cleanupFutureHandle(entry.getValue());
-            }
-            pendingLoads.clear();
-            failedLoads.clear();
-            MMDTextureManager.clearPreloaded();
-        }
+        loadCoordinator.cancelAll(MMDModelManager::cleanupLoadedResult);
+        MMDTextureManager.clearPreloaded();
     }
 
-    private static void cleanupFutureHandle(Future<AsyncLoadResult> future) {
-        if (future.isDone()) {
-            if (!future.isCancelled()) {
-                try {
-                    AsyncLoadResult result = future.get();
-                    if (result != null && result.modelHandle != 0) {
-                        NativeFunc.GetInst().DeleteModel(result.modelHandle);
-                    }
-                } catch (Exception ignored) {}
-            }
-        } else {
-            future.cancel(true);
+    private static void cleanupLoadedResult(ModelLoadCoordinator.AsyncLoadResult result) {
+        if (result != null && result.modelHandle != 0) {
+            ModelRuntimeBridgeHolder.get().deleteModel(result.modelHandle);
         }
     }
 
@@ -332,12 +154,11 @@ public class MMDModelManager {
             ModelConfigData config = ModelConfigManager.getConfig(modelName);
             if (config.hiddenMaterials.isEmpty()) return;
 
-            NativeFunc nf = NativeFunc.GetInst();
-            int materialCount = (int) nf.GetMaterialCount(modelHandle);
+            int materialCount = ModelRuntimeBridgeHolder.get().getMaterialCount(modelHandle);
 
             for (int index : config.hiddenMaterials) {
                 if (index >= 0 && index < materialCount) {
-                    nf.SetMaterialVisible(modelHandle, index, false);
+                    ModelRuntimeBridgeHolder.get().setMaterialVisible(modelHandle, index, false);
                 }
             }
         } catch (Exception e) {
@@ -354,15 +175,15 @@ public class MMDModelManager {
 
     public static boolean isModelPending(String modelName, String cacheKey) {
         String fullCacheKey = modelName + "_" + cacheKey;
-        return pendingLoads.containsKey(fullCacheKey);
+        return loadCoordinator.isPending(fullCacheKey);
     }
 
     public static boolean isAnyModelLoading() {
-        return !pendingLoads.isEmpty();
+        return loadCoordinator.hasPendingLoads();
     }
 
     public static int getPendingLoadCount() {
-        return pendingLoads.size();
+        return loadCoordinator.getPendingLoadCount();
     }
 
     public static int getCachePendingReleaseCount() {
@@ -421,20 +242,7 @@ public class MMDModelManager {
                 return;
             }
 
-            ModelInfo info = ModelInfo.findByFolderName(modelName);
-            if (info == null) {
-                logger.warn("模型属性加载失败，模型未找到: {}", modelName);
-                isPropertiesLoaded = true;
-                return;
-            }
-
-            String path2Properties = info.getFolderPath() + "/model.properties";
-            try (InputStream istream = new FileInputStream(path2Properties)) {
-                properties.load(istream);
-                logger.debug("模型属性加载成功: {}", modelName);
-            } catch (IOException e) {
-                logger.debug("模型属性文件未找到: {}", modelName);
-            }
+            ModelPropertiesLoader.load(modelName, properties);
             isPropertiesLoaded = true;
         }
     }

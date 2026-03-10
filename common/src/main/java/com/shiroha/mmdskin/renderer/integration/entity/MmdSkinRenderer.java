@@ -5,6 +5,7 @@ import com.shiroha.mmdskin.renderer.integration.player.InventoryRenderHelper;
 import com.shiroha.mmdskin.MmdSkin;
 import com.shiroha.mmdskin.renderer.api.RenderContext;
 import com.shiroha.mmdskin.renderer.api.RenderParams;
+import com.shiroha.mmdskin.renderer.integration.ModelPropertyHelper;
 import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -93,20 +94,7 @@ public class MmdSkinRenderer<T extends Entity> extends EntityRenderer<T> {
     }
 
     private static float[] parseModelSize(MMDModelManager.Model model) {
-        float[] size = new float[2];
-        size[0] = parseFloat(model, "size", 1.0f);
-        size[1] = parseFloat(model, "size_in_inventory", 1.0f);
-        return size;
-    }
-
-    private static float parseFloat(MMDModelManager.Model model, String key, float defaultValue) {
-        String value = model.properties.getProperty(key);
-        if (value == null) return defaultValue;
-        try {
-            return Float.parseFloat(value);
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
+        return ModelPropertyHelper.getModelSize(model.properties);
     }
 
     @Override

@@ -1,5 +1,6 @@
-package com.shiroha.mmdskin.renderer.runtime.model;
+package com.shiroha.mmdskin.renderer.runtime.model.opengl;
 
+import com.shiroha.mmdskin.NativeFunc;
 import org.lwjgl.opengl.GL46C;
 import org.lwjgl.system.MemoryUtil;
 
@@ -8,8 +9,7 @@ final class MMDModelOpenGLLifecycle {
     }
 
     static void dispose(MMDModelOpenGL target) {
-        target.releaseTextures();
-        target.disposeModelHandle();
+        target.releaseBaseResources();
 
         if (target.posBuffer != null) { MemoryUtil.memFree(target.posBuffer); target.posBuffer = null; }
         if (target.colorBuffer != null) { MemoryUtil.memFree(target.colorBuffer); target.colorBuffer = null; }
@@ -23,7 +23,6 @@ final class MMDModelOpenGLLifecycle {
         if (target.light0Buff != null) { MemoryUtil.memFree(target.light0Buff); target.light0Buff = null; }
         if (target.light1Buff != null) { MemoryUtil.memFree(target.light1Buff); target.light1Buff = null; }
         if (target.subMeshDataBuf != null) { MemoryUtil.memFree(target.subMeshDataBuf); target.subMeshDataBuf = null; }
-        target.disposeMaterialMorphBuffers();
 
         if (target.lightMapMaterial != null && target.lightMapMaterial.ownsTexture && target.lightMapMaterial.tex > 0) {
             GL46C.glDeleteTextures(target.lightMapMaterial.tex);
@@ -42,7 +41,7 @@ final class MMDModelOpenGLLifecycle {
 
     static long getVramUsage(MMDModelOpenGL target) {
         long total = 0;
-        int indexCount = (int) AbstractMMDModel.getNf().GetIndexCount(target.model);
+        int indexCount = (int) NativeFunc.GetInst().GetIndexCount(target.nativeModelHandle());
         total += (long) indexCount * target.indexElementSize;
         total += (long) target.vertexCount * 12 * 2;
         total += (long) target.vertexCount * 16;
@@ -51,15 +50,15 @@ final class MMDModelOpenGLLifecycle {
     }
 
     static long getRamUsage(MMDModelOpenGL target) {
-        if (target.model == 0) {
+        if (target.nativeModelHandle() == 0) {
             return 0;
         }
 
-        long rustRam = AbstractMMDModel.getNf().GetModelMemoryUsage(target.model);
+        long rustRam = NativeFunc.GetInst().GetModelMemoryUsage(target.nativeModelHandle());
         long javaRam = (long) target.vertexCount * 64;
         javaRam += 152;
-        if (target.materialMorphResultCount > 0) {
-            javaRam += (long) target.materialMorphResultCount * 56 * 4 * 2;
+        if (target.materialMorphResultCountValue() > 0) {
+            javaRam += (long) target.materialMorphResultCountValue() * 56 * 4 * 2;
         }
         return rustRam + javaRam;
     }

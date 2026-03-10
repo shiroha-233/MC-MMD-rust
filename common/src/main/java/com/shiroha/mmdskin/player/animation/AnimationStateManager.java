@@ -8,10 +8,17 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.UseAnim;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 public class AnimationStateManager {
 
     private static final float TRANSITION_TIME = 0.25f;
+    static final String DRINK_ANIMATION = "Drink";
 
     public static void updateAnimationState(AbstractClientPlayer player, Model model) {
         if (model.entityData.playCustomAnim) {
@@ -72,6 +79,7 @@ public class AnimationStateManager {
         if ((!player.isUsingItem() && !player.swinging && player.hurtTime <= 0) || player.isSleeping()) {
             if (model.entityData.stateLayers[1] != EntityAnimState.State.Idle) {
                 model.entityData.stateLayers[1] = EntityAnimState.State.Idle;
+                model.entityData.layerAnimationKeys[1] = null;
                 model.model.setLayerLoop(1, true);
                 model.model.transitionAnim(0, 1, TRANSITION_TIME);
             }
@@ -82,18 +90,35 @@ public class AnimationStateManager {
 
     private static void updateHandAnimation(AbstractClientPlayer player, Model model) {
         if (player.getUsedItemHand() == InteractionHand.MAIN_HAND && player.isUsingItem()) {
-            String itemId = getItemId(player, InteractionHand.MAIN_HAND);
-            applyCustomItemAnimation(model, EntityAnimState.State.ItemRight, itemId, "Right", "using", 1);
+            updateUsingItemAnimation(model, player.getItemInHand(InteractionHand.MAIN_HAND),
+                    EntityAnimState.State.ItemRight, "Right", 1);
         } else if (player.swingingArm == InteractionHand.MAIN_HAND && player.swinging) {
-            String itemId = getItemId(player, InteractionHand.MAIN_HAND);
-            applyCustomItemAnimation(model, EntityAnimState.State.SwingRight, itemId, "Right", "swinging", 1);
+            String itemId = getItemId(player.getItemInHand(InteractionHand.MAIN_HAND));
+            applyCustomItemAnimation(model, EntityAnimState.State.SwingRight, itemId,
+                    "Right", UseAnim.NONE, "swinging", 1);
         } else if (player.getUsedItemHand() == InteractionHand.OFF_HAND && player.isUsingItem()) {
-            String itemId = getItemId(player, InteractionHand.OFF_HAND);
-            applyCustomItemAnimation(model, EntityAnimState.State.ItemLeft, itemId, "Left", "using", 1);
+            updateUsingItemAnimation(model, player.getItemInHand(InteractionHand.OFF_HAND),
+                    EntityAnimState.State.ItemLeft, "Left", 1);
         } else if (player.swingingArm == InteractionHand.OFF_HAND && player.swinging) {
-            String itemId = getItemId(player, InteractionHand.OFF_HAND);
-            applyCustomItemAnimation(model, EntityAnimState.State.SwingLeft, itemId, "Left", "swinging", 1);
+            String itemId = getItemId(player.getItemInHand(InteractionHand.OFF_HAND));
+            applyCustomItemAnimation(model, EntityAnimState.State.SwingLeft, itemId,
+                    "Left", UseAnim.NONE, "swinging", 1);
         }
+    }
+
+    private static void updateUsingItemAnimation(Model model, ItemStack itemStack,
+                                                 EntityAnimState.State targetState, String activeHand, int layer) {
+        String triggerAnimation = resolveUseTriggerAnimationName(itemStack.getUseAnimation());
+        if (triggerAnimation != null) {
+            long triggerAnim = MMDAnimManager.GetAnimModel(model.model, triggerAnimation);
+            if (triggerAnim != 0) {
+                applyLayerAnimation(model, targetState, triggerAnimation, triggerAnim, layer, false);
+                return;
+            }
+        }
+
+        applyCustomItemAnimation(model, targetState, getItemId(itemStack), activeHand,
+                itemStack.getUseAnimation(), "using", layer);
     }
 
     private static void updateLayer2Animation(AbstractClientPlayer player, Model model) {
@@ -104,6 +129,7 @@ public class AnimationStateManager {
 
         if (model.entityData.stateLayers[2] != EntityAnimState.State.Idle) {
             model.entityData.stateLayers[2] = EntityAnimState.State.Idle;
+            model.entityData.layerAnimationKeys[2] = null;
             model.model.transitionAnim(0, 2, TRANSITION_TIME);
         }
     }
@@ -143,44 +169,80 @@ public class AnimationStateManager {
     }
 
     private static void changeAnimationOnce(Model model, EntityAnimState.State targetState, int layer) {
-        if (model.entityData.stateLayers[layer] != targetState) {
+        String animationKey = targetState.propertyName;
+        if (model.entityData.stateLayers[layer] != targetState
+                || !Objects.equals(model.entityData.layerAnimationKeys[layer], animationKey)) {
             model.entityData.stateLayers[layer] = targetState;
-            model.model.transitionAnim(
-                    MMDAnimManager.GetAnimModel(model.model, targetState.propertyName), layer, TRANSITION_TIME);
+            model.entityData.layerAnimationKeys[layer] = animationKey;
+            model.model.transitionAnim(MMDAnimManager.GetAnimModel(model.model, animationKey), layer, TRANSITION_TIME);
         }
     }
 
     private static void applyCustomItemAnimation(Model model, EntityAnimState.State targetState,
-                                                  String itemName, String activeHand, String handState, int layer) {
+                                                 String itemName, String activeHand, UseAnim useAnim,
+                                                 String handState, int layer) {
         boolean shouldLoop = !"using".equals(handState);
-
-        long anim = MMDAnimManager.GetAnimModel(model.model,
-                String.format("itemActive_%s_%s_%s", itemName, activeHand, handState));
-
-        if (anim != 0) {
-            if (model.entityData.stateLayers[layer] != targetState) {
-                model.entityData.stateLayers[layer] = targetState;
-                model.model.setLayerLoop(layer, shouldLoop);
-                model.model.transitionAnim(anim, layer, TRANSITION_TIME);
+        for (String animationKey : resolveItemAnimationKeys(itemName, activeHand, useAnim, handState)) {
+            long anim = MMDAnimManager.GetAnimModel(model.model, animationKey);
+            if (anim != 0) {
+                applyLayerAnimation(model, targetState, animationKey, anim, layer, shouldLoop);
+                return;
             }
-            return;
         }
 
         if (targetState == EntityAnimState.State.ItemRight || targetState == EntityAnimState.State.SwingRight) {
-            if (model.entityData.stateLayers[layer] != EntityAnimState.State.SwingRight) {
-                model.model.setLayerLoop(layer, shouldLoop);
-            }
             changeAnimationOnce(model, EntityAnimState.State.SwingRight, layer);
+            model.model.setLayerLoop(layer, shouldLoop);
         } else if (targetState == EntityAnimState.State.ItemLeft || targetState == EntityAnimState.State.SwingLeft) {
-            if (model.entityData.stateLayers[layer] != EntityAnimState.State.SwingLeft) {
-                model.model.setLayerLoop(layer, shouldLoop);
-            }
             changeAnimationOnce(model, EntityAnimState.State.SwingLeft, layer);
+            model.model.setLayerLoop(layer, shouldLoop);
         }
     }
 
-    private static String getItemId(AbstractClientPlayer player, InteractionHand hand) {
-        String descriptionId = player.getItemInHand(hand).getItem().getDescriptionId();
-        return descriptionId.substring(descriptionId.indexOf(".") + 1);
+    private static void applyLayerAnimation(Model model, EntityAnimState.State targetState, String animationKey,
+                                            long animHandle, int layer, boolean shouldLoop) {
+        if (animHandle == 0) {
+            return;
+        }
+        if (model.entityData.stateLayers[layer] != targetState
+                || !Objects.equals(model.entityData.layerAnimationKeys[layer], animationKey)) {
+            model.entityData.stateLayers[layer] = targetState;
+            model.entityData.layerAnimationKeys[layer] = animationKey;
+            model.model.setLayerLoop(layer, shouldLoop);
+            model.model.transitionAnim(animHandle, layer, TRANSITION_TIME);
+        }
+    }
+
+    static String resolveUseTriggerAnimationName(UseAnim useAnim) {
+        if (useAnim == null) {
+            return null;
+        }
+        return switch (useAnim) {
+            case EAT, DRINK -> DRINK_ANIMATION;
+            default -> null;
+        };
+    }
+
+    static List<String> resolveItemAnimationKeys(String itemName, String activeHand, UseAnim useAnim,
+                                                 String handState) {
+        List<String> animationKeys = new ArrayList<>();
+        animationKeys.add(buildItemAnimationKey(itemName, activeHand, handState));
+
+        if (useAnim == UseAnim.BOW) {
+            String alternateHand = "Right".equals(activeHand) ? "Left" : "Right";
+            animationKeys.add(buildItemAnimationKey(itemName, alternateHand, handState));
+        }
+
+        return animationKeys;
+    }
+
+    private static String buildItemAnimationKey(String itemName, String activeHand, String handState) {
+        return String.format("itemActive_%s_%s_%s", itemName, activeHand, handState);
+    }
+
+    private static String getItemId(ItemStack itemStack) {
+        String descriptionId = itemStack.getItem().getDescriptionId();
+        int dotIndex = descriptionId.indexOf('.');
+        return dotIndex >= 0 ? descriptionId.substring(dotIndex + 1) : descriptionId;
     }
 }

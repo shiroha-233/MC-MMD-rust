@@ -21,7 +21,7 @@ final class MmdClientResourceBootstrap {
     private static final long TOO_BIG = 0x6400000;
     private static final int TOO_MANY = 1024;
     private static final String[] DEFAULT_ANIM_FILES = {
-            "crawl.vmd", "die.vmd", "elytraFly.vmd", "idle.vmd",
+            "Drink.vmd", "crawl.vmd", "die.vmd", "elytraFly.vmd", "idle.vmd",
             "itemActive_minecraft.bow_Left_using.vmd", "itemActive_minecraft.iron_sword_Right_swinging.vmd",
             "itemActive_minecraft.shield_Left_using.vmd", "itemActive_minecraft.shield_Right_using.vmd",
             "lieDown.vmd", "onClimbable.vmd", "onClimbableDown.vmd", "onClimbableUp.vmd",

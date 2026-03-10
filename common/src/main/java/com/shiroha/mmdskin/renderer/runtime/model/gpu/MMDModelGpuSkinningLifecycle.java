@@ -1,4 +1,4 @@
-package com.shiroha.mmdskin.renderer.runtime.model;
+package com.shiroha.mmdskin.renderer.runtime.model.gpu;
 
 import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ShaderConstants;
@@ -14,9 +14,9 @@ final class MMDModelGpuSkinningLifecycle {
             return 0;
         }
 
-        NativeFunc nf = AbstractMMDModel.getNf();
+        NativeFunc nf = NativeFunc.GetInst();
         long total = 0;
-        int indexCount = (int) nf.GetIndexCount(target.model);
+        int indexCount = (int) nf.GetIndexCount(target.nativeModelHandle());
         total += (long) indexCount * target.indexElementSize;
         total += (long) target.vertexCount * 12 * 2;
         total += (long) target.vertexCount * 8;
@@ -26,11 +26,11 @@ final class MMDModelGpuSkinningLifecycle {
         total += (long) target.vertexCount * 12 * 2;
         total += (long) ShaderConstants.MAX_BONES * 64;
         if (target.vertexMorphCount > 0) {
-            total += nf.GetGpuMorphOffsetsSize(target.model);
+            total += nf.GetGpuMorphOffsetsSize(target.nativeModelHandle());
             total += (long) target.vertexMorphCount * 4;
         }
         if (target.uvMorphCount > 0) {
-            total += nf.GetGpuUvMorphOffsetsSize(target.model);
+            total += nf.GetGpuUvMorphOffsetsSize(target.nativeModelHandle());
             total += (long) target.uvMorphCount * 4;
         }
         if (target.skinnedUvBuffer > 0) {
@@ -44,7 +44,7 @@ final class MMDModelGpuSkinningLifecycle {
             return 0;
         }
 
-        long rustRam = AbstractMMDModel.getNf().GetModelMemoryUsage(target.model);
+        long rustRam = NativeFunc.GetInst().GetModelMemoryUsage(target.nativeModelHandle());
         long javaRam = (long) target.vertexCount * 64;
         javaRam += 128;
         if (target.boneMatricesBuffer != null) {
@@ -65,8 +65,8 @@ final class MMDModelGpuSkinningLifecycle {
         if (target.uvMorphWeightsByteBuffer != null) {
             javaRam += target.uvMorphWeightsByteBuffer.capacity();
         }
-        if (target.materialMorphResultCount > 0) {
-            javaRam += (long) target.materialMorphResultCount * 56 * 4 * 2;
+        if (target.materialMorphResultCountValue() > 0) {
+            javaRam += (long) target.materialMorphResultCountValue() * 56 * 4 * 2;
         }
         if (target.subMeshDataBuf != null) {
             javaRam += target.subMeshDataBuf.capacity();
@@ -80,8 +80,7 @@ final class MMDModelGpuSkinningLifecycle {
         }
 
         target.initialized = false;
-        target.releaseTextures();
-        target.disposeModelHandle();
+        target.releaseBaseResources();
 
         GL46C.glDeleteVertexArrays(target.vertexArrayObject);
         GL46C.glDeleteBuffers(target.indexBufferObject);
@@ -114,7 +113,6 @@ final class MMDModelGpuSkinningLifecycle {
             target.lightMapMaterial.tex = 0;
         }
 
-        target.disposeMaterialMorphBuffers();
         if (target.boneMatricesBuffer != null) { MemoryUtil.memFree(target.boneMatricesBuffer); target.boneMatricesBuffer = null; }
         if (target.boneMatricesByteBuffer != null) { MemoryUtil.memFree(target.boneMatricesByteBuffer); target.boneMatricesByteBuffer = null; }
         if (target.morphWeightsBuffer != null) { MemoryUtil.memFree(target.morphWeightsBuffer); target.morphWeightsBuffer = null; }

@@ -1,7 +1,8 @@
 package com.shiroha.mmdskin.renderer.integration.player;
 
-import com.shiroha.mmdskin.NativeFunc;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.shiroha.mmdskin.renderer.runtime.bridge.ModelRuntimeBridge;
+import com.shiroha.mmdskin.renderer.runtime.bridge.ModelRuntimeBridgeHolder;
 import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager.Model;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
@@ -29,21 +30,17 @@ public class ItemRenderHelper {
     }
 
     private static void renderHandItem(AbstractClientPlayer player, Model model,
-                                        PoseStack matrixStack, MultiBufferSource vertexConsumers,
-                                        int packedLight, InteractionHand hand) {
+                                         PoseStack matrixStack, MultiBufferSource vertexConsumers,
+                                         int packedLight, InteractionHand hand) {
         boolean isMainHand = (hand == InteractionHand.MAIN_HAND);
-        NativeFunc nf = NativeFunc.GetInst();
+        ModelRuntimeBridge runtimeBridge = ModelRuntimeBridgeHolder.get();
         long modelHandle = model.model.getModelHandle();
         long handMat = isMainHand ? model.entityData.rightHandMat : model.entityData.leftHandMat;
 
-        if (isMainHand) {
-            nf.GetRightHandMat(modelHandle, handMat);
-        } else {
-            nf.GetLeftHandMat(modelHandle, handMat);
-        }
+        runtimeBridge.populateHandMatrix(modelHandle, handMat, isMainHand);
 
         matrixStack.pushPose();
-        matrixStack.last().pose().mul(convertToMatrix4f(nf, handMat, model.entityData.matBuffer));
+        matrixStack.last().pose().mul(convertToMatrix4f(runtimeBridge, handMat, model.entityData.matBuffer));
 
         matrixStack.mulPose(new Quaternionf().rotateX(90.0f * DEG_TO_RAD));
         matrixStack.mulPose(new Quaternionf().rotateY(180.0f * DEG_TO_RAD));
@@ -123,10 +120,10 @@ public class ItemRenderHelper {
         return descriptionId.substring(descriptionId.indexOf(".") + 1);
     }
 
-    private static Matrix4f convertToMatrix4f(NativeFunc nf, long matId, ByteBuffer buf) {
+    private static Matrix4f convertToMatrix4f(ModelRuntimeBridge runtimeBridge, long matId, ByteBuffer buf) {
         buf.clear();
         buf.order(ByteOrder.LITTLE_ENDIAN);
-        if (!nf.CopyMatToBuffer(matId, buf)) {
+        if (!runtimeBridge.copyMatrixToBuffer(matId, buf)) {
             return new Matrix4f();
         }
         buf.position(0);

@@ -3,8 +3,8 @@ package com.shiroha.mmdskin.renderer.integration.entity;
 import com.shiroha.mmdskin.renderer.runtime.animation.MMDAnimManager;
 import com.shiroha.mmdskin.player.runtime.EntityAnimState;
 import com.shiroha.mmdskin.renderer.api.RenderParams;
+import com.shiroha.mmdskin.renderer.integration.ModelPropertyHelper;
 import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
-import com.shiroha.mmdskin.util.VectorParseUtil;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -36,11 +36,8 @@ public final class EntityAnimationResolver {
             }
             if (living.isSleeping()) {
                 params.bodyYaw = living.getBedOrientation().toYRot() + 180.0f;
-                params.bodyPitch = parseFloat(model, "sleepingPitch", 0.0f);
-                String transStr = model.properties.getProperty("sleepingTrans");
-                if (transStr != null) {
-                    params.translation = VectorParseUtil.parseVec3f(transStr);
-                }
+                params.bodyPitch = ModelPropertyHelper.getFloat(model.properties, "sleepingPitch", 0.0f);
+                params.translation = ModelPropertyHelper.getVector(model.properties, "sleepingTrans");
                 changeAnimOnce(model, EntityAnimState.State.Sleep, 0);
                 return;
             }
@@ -68,16 +65,6 @@ public final class EntityAnimationResolver {
             model.entityData.stateLayers[layer] = targetState;
             String property = EntityAnimState.getPropertyName(targetState);
             model.model.changeAnim(MMDAnimManager.GetAnimModel(model.model, property), layer);
-        }
-    }
-
-    private static float parseFloat(MMDModelManager.Model model, String key, float defaultValue) {
-        String value = model.properties.getProperty(key);
-        if (value == null) return defaultValue;
-        try {
-            return Float.parseFloat(value);
-        } catch (NumberFormatException e) {
-            return defaultValue;
         }
     }
 }

@@ -1,4 +1,4 @@
-package com.shiroha.mmdskin.renderer.runtime.model;
+package com.shiroha.mmdskin.renderer.runtime.model.helper;
 
 import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.config.ModelConfigData;

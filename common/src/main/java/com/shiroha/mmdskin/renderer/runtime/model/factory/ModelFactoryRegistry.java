@@ -2,14 +2,17 @@ package com.shiroha.mmdskin.renderer.runtime.model.factory;
 
 import com.shiroha.mmdskin.renderer.runtime.mode.RenderModeManager;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * 模型工厂注册器。
  */
 public final class ModelFactoryRegistry {
-    private static final Logger logger = LogManager.getLogger();
+    private static final List<Supplier<com.shiroha.mmdskin.renderer.runtime.mode.IMMDModelFactory>> BUILT_IN_FACTORIES = List.of(
+            OpenGLModelFactory::new,
+            GpuSkinningModelFactory::new
+    );
 
     private static boolean registered = false;
 
@@ -22,8 +25,9 @@ public final class ModelFactoryRegistry {
             return;
         }
 
-        RenderModeManager.registerFactory(new OpenGLModelFactory());
-        RenderModeManager.registerFactory(new GpuSkinningModelFactory());
+        for (Supplier<com.shiroha.mmdskin.renderer.runtime.mode.IMMDModelFactory> factorySupplier : BUILT_IN_FACTORIES) {
+            RenderModeManager.registerFactory(factorySupplier.get());
+        }
 
         registered = true;
     }
