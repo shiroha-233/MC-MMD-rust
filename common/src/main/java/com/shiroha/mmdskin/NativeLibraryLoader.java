@@ -66,8 +66,9 @@ public final class NativeLibraryLoader {
     public static boolean isAndroid() { return isAndroid; }
 
     static final String LIBRARY_VERSION = "v1.0.4";
+    private static final String RELEASE_TAG = "v1.0.4-1.20.1";
     private static final String RELEASE_BASE_URL =
-            "https://github.com/shiroha-23/MC-MMD-rust/releases/download/" + LIBRARY_VERSION + "/";
+            "https://github.com/shiroha-233/MC-MMD-rust/releases/download/" + RELEASE_TAG + "/";
 
     private static volatile String gameDirectory;
     private static final Object DIR_LOCK = new Object();
@@ -399,9 +400,9 @@ public final class NativeLibraryLoader {
     private static String getVersionedFileName(String baseFileName) {
         int dotIndex = baseFileName.lastIndexOf('.');
         if (dotIndex > 0) {
-            return baseFileName.substring(0, dotIndex) + "_" + LIBRARY_VERSION + baseFileName.substring(dotIndex);
+            return baseFileName.substring(0, dotIndex) + "_" + RELEASE_TAG + baseFileName.substring(dotIndex);
         }
-        return baseFileName + "_" + LIBRARY_VERSION;
+        return baseFileName + "_" + RELEASE_TAG;
     }
 
     private static File extractNativeLibrary(String resourcePath, String fileName) {
