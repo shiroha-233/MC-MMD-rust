@@ -40,10 +40,10 @@ public class YsmCompat {
             ysmPresent = FabricLoader.getInstance().isModLoaded("yes_steve_model");
             if (ysmPresent) {
                 try {
-                    Class<?> ysmConfigClass = Class.forName("com.elfmcys.yesstevemodel.O00OO0oOOO0OoO0OOOo0OooO");
-                    disableSelfModelValue = ysmConfigClass.getDeclaredField("oOooOoOO00OOooo0OooOO0o0").get(null);
-                    disableOtherModelValue = ysmConfigClass.getDeclaredField("oo0o0OO0Oo0oOOo00o00Ooo0").get(null);
-                    disableSelfHandsValue = ysmConfigClass.getDeclaredField("ooO00O0oOooO0OoOO000OoOo").get(null);
+                    Class<?> ysmConfigClass = Class.forName("com.elfmcys.yesstevemodel.OOO0OOOOo0O0Oo00oOOooo0O");
+                    disableSelfModelValue = ysmConfigClass.getDeclaredField("Oo00OoO0o000oOOooOoOOoO0").get(null);
+                    disableOtherModelValue = ysmConfigClass.getDeclaredField("oOO0000ooo0oOOo0OO0oo0Oo").get(null);
+                    disableSelfHandsValue = ysmConfigClass.getDeclaredField("O0Oo0000OoOoOOOo0oo0o000").get(null);
 
                     Class<?> ysmMainClass = Class.forName("com.elfmcys.yesstevemodel.YesSteveModel");
                     isModelActiveMethod = ysmMainClass.getMethod("isAvailable");

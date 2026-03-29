@@ -4,14 +4,16 @@
 /// 生成静态库链接到 Rust cdylib。
 
 fn main() {
-    let bullet3_dir = "deps/bullet3/src";
-    let wrapper_dir = "bullet_wrapper";
+    let base_dir = std::env::var("CORE_MOD_RUST_DIR").unwrap_or_else(|_| ".".to_string());
+    let bullet3_dir = format!("{}/deps/bullet3/src", base_dir);
+    let wrapper_dir = format!("{}/bullet_wrapper", base_dir);
 
     // 收集所有 Bullet3 .cpp 文件
     let mut cpp_files: Vec<String> = Vec::new();
 
     // LinearMath（排除 TaskScheduler 线程相关文件，我们不需要多线程物理）
-    for entry in std::fs::read_dir(format!("{}/LinearMath", bullet3_dir)).unwrap() {
+    let linear_math_dir = format!("{}/LinearMath", bullet3_dir);
+    for entry in std::fs::read_dir(&linear_math_dir).expect(&format!("无法读取目录: {}", linear_math_dir)) {
         let path = entry.unwrap().path();
         if path.extension().map_or(false, |e| e == "cpp") {
             cpp_files.push(path.to_string_lossy().into_owned());
@@ -75,8 +77,8 @@ fn main() {
     let mut build = cc::Build::new();
     build
         .cpp(true)
-        .include(bullet3_dir)
-        .include(wrapper_dir)
+        .include(&bullet3_dir)
+        .include(&wrapper_dir)
         .warnings(false)
         .opt_level(2);
 

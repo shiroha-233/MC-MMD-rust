@@ -116,6 +116,26 @@ public final class FirstPersonManager {
         return new Vec3(px + worldOffX, py + eyeOffset[1], pz + worldOffZ);
     }
 
+    public static Vec3 getVanillaEyePosition(LivingEntity entity, float partialTick) {
+        double px = Mth.lerp(partialTick, entity.xo, entity.getX());
+        double py = Mth.lerp(partialTick, entity.yo, entity.getY()) + entity.getEyeHeight();
+        double pz = Mth.lerp(partialTick, entity.zo, entity.getZ());
+        return new Vec3(px, py, pz);
+    }
+
+    public static boolean shouldUseVanillaReachValidation(LivingEntity entity) {
+        if (!isActive() || !isEyeBoneValid()) {
+            return false;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || !mc.player.getUUID().equals(entity.getUUID())) {
+            return false;
+        }
+
+        return mc.options.getCameraType() == CameraType.FIRST_PERSON;
+    }
+
     public static void reset() {
         disableTrackedModel();
         activeFirstPerson = false;
