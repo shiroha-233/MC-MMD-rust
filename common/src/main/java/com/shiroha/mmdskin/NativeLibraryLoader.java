@@ -328,37 +328,27 @@ public final class NativeLibraryLoader {
         String fclLibs = System.getenv("FCL_NATIVEDIR");
         String javaLib = System.getProperty("java.home") + "/lib";
 
-        var dirsToSearch = new java.util.ArrayList<Path>();
+        var dirsToSearch = new java.util.ArrayList<File>();
         if (libPaths != null && !libPaths.isEmpty()) {
             for (String part : libPaths.split(":")) {
                 if (!part.isEmpty()) {
-                    dirsToSearch.add(Paths.get(part));
+                    dirsToSearch.add(new File(part));
                 }
             }
         }
         if (pojavLibs != null && !pojavLibs.isEmpty()) {
-            dirsToSearch.add(Paths.get(pojavLibs));
+            dirsToSearch.add(new File(pojavLibs));
         }
         if (fclLibs != null && !fclLibs.isEmpty()) {
-            dirsToSearch.add(Paths.get(fclLibs));
+            dirsToSearch.add(new File(fclLibs));
         }
-        dirsToSearch.add(Paths.get(javaLib));
+        dirsToSearch.add(new File(javaLib));
 
-        for (Path dir : dirsToSearch) {
-            try {
-                if (!Files.exists(dir) || !Files.isDirectory(dir)) continue;
-                try (var stream = Files.find(dir, Integer.MAX_VALUE,
-                        (p, attr) -> attr.isRegularFile() && !attr.isSymbolicLink()
-                                && p.getFileName().toString().equals(libcName))) {
-                    var first = stream.findFirst();
-                    if (first.isPresent()) {
-                        return first.get().toAbsolutePath().toString();
-                    }
-                }
-            } catch (IOException e) {
-                logger.warn("[Android] 查找 libc++_shared.so 库时发生错误: " + dir + " -> " + e.getMessage());
-            }
-        }
+        for (var dir : dirsToSearch)
+            if (dir.isDirectory() && dir.isAbsolute() && dir.canRead())
+                for (var file : dir.listFiles())
+                    if (file.getName().equals(libcName) && file.isFile())
+                        return file.getAbsolutePath();
         return null;
     }
 
