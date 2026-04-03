@@ -20,6 +20,7 @@
   "gui.mmdskin.mod_settings.title": "MMD Skin - Settings",
   "gui.mmdskin.mod_settings.category.render": "Render Settings",
   "gui.mmdskin.mod_settings.category.performance": "Performance Settings",
+  "gui.mmdskin.mod_settings.category.mob_replacement": "Mob Replacement",
   "gui.mmdskin.mod_settings.opengl_lighting": "Enable OpenGL Lighting",
   "gui.mmdskin.mod_settings.opengl_lighting.tooltip": "Enable OpenGL lighting effects for better visuals",
   "gui.mmdskin.mod_settings.mmd_shader": "Enable MMD Shader",
@@ -156,6 +157,10 @@
   
   "gui.mmdskin.mod_settings.texture_cache_budget": "Texture Cache Budget",
   "gui.mmdskin.mod_settings.texture_cache_budget.tooltip": "Texture cache VRAM soft budget (MB). Only constrains unreferenced pending-release textures, does not affect active textures. Lower to save VRAM, raise for faster model switching",
+  "gui.mmdskin.mod_settings.mob_replacement.description": "Choose which MMD model should replace each vanilla mob locally. Each row shows the current mapping, with Choose opening the model picker and Reset returning to Vanilla Render.",
+  "gui.mmdskin.mod_settings.mob_replacement.choose": "Choose",
+  "gui.mmdskin.mod_settings.mob_replacement.reset": "Reset",
+  "gui.mmdskin.mod_settings.mob_replacement.vanilla": "Vanilla Render",
   
   "gui.mmdskin.mod_settings.category.debug": "Debug Settings",
   "gui.mmdskin.mod_settings.debug_hud": "Performance Debug HUD",

@@ -163,6 +163,11 @@ public class ConfigManager {
         return provider != null ? provider.getVRArmIKStrength() : 1.0f;
     }
 
+    public static String getMobModelReplacement(String entityTypeId) {
+        return provider != null ? provider.getMobModelReplacement(entityTypeId) : "";
+    }
+
     public interface IConfigProvider extends IRenderConfig, IToonConfig, IPhysicsConfig, IVRConfig {
+        String getMobModelReplacement(String entityTypeId);
     }
 }

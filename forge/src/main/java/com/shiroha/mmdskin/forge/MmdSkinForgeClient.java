@@ -3,6 +3,7 @@ package com.shiroha.mmdskin.forge;
 import com.shiroha.mmdskin.MmdSkin;
 import com.shiroha.mmdskin.MmdSkinClient;
 import com.shiroha.mmdskin.forge.config.MmdSkinConfig;
+import com.shiroha.mmdskin.forge.entity.MobReplacementRenderEventHandler;
 import com.shiroha.mmdskin.forge.maid.MaidRenderEventHandler;
 import com.shiroha.mmdskin.forge.register.MmdSkinRegisterClient;
 import com.shiroha.mmdskin.renderer.runtime.model.opengl.MMDModelOpenGL;
@@ -35,6 +36,7 @@ public class MmdSkinForgeClient {
         MmdSkinClient.initClient();
         MmdSkinRegisterClient.Register();
         MMDModelOpenGL.isMMDShaderEnabled = com.shiroha.mmdskin.config.ConfigManager.isMMDShaderEnabled();
+        MinecraftForge.EVENT_BUS.register(new MobReplacementRenderEventHandler());
         MinecraftForge.EVENT_BUS.register(new MaidRenderEventHandler());
     }
 }

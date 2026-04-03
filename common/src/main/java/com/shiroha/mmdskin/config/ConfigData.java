@@ -10,6 +10,8 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * 统一配置数据类
@@ -64,6 +66,8 @@ public class ConfigData {
     public boolean vrEnabled = false;
     public float vrArmIKStrength = 1.0f;
 
+    public Map<String, String> mobModelReplacements = new LinkedHashMap<>();
+
     public static ConfigData load(Path configPath) {
         Path configFile = configPath.resolve("config.json");
 
@@ -79,6 +83,7 @@ public class ConfigData {
                 logger.warn("配置文件为空，使用默认配置");
                 return new ConfigData();
             }
+            config.normalize();
             return config;
         } catch (Exception e) {
             logger.error("配置加载失败，使用默认配置: {}", e.getMessage());
@@ -99,6 +104,12 @@ public class ConfigData {
             }
         } catch (IOException e) {
             logger.error("保存配置失败: {}", e.getMessage());
+        }
+    }
+
+    private void normalize() {
+        if (mobModelReplacements == null) {
+            mobModelReplacements = new LinkedHashMap<>();
         }
     }
 

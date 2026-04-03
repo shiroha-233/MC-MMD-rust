@@ -20,6 +20,7 @@
   "gui.mmdskin.mod_settings.title": "MMD皮肤 - 设置",
   "gui.mmdskin.mod_settings.category.render": "渲染设置",
   "gui.mmdskin.mod_settings.category.performance": "性能设置",
+  "gui.mmdskin.mod_settings.category.mob_replacement": "生物替换",
   "gui.mmdskin.mod_settings.opengl_lighting": "启用 OpenGL 光照",
   "gui.mmdskin.mod_settings.opengl_lighting.tooltip": "启用 OpenGL 光照效果以获得更好的视觉效果",
   "gui.mmdskin.mod_settings.mmd_shader": "启用 MMD Shader",
@@ -156,6 +157,10 @@
   
   "gui.mmdskin.mod_settings.texture_cache_budget": "纹理缓存预算",
   "gui.mmdskin.mod_settings.texture_cache_budget.tooltip": "纹理缓存 VRAM 软预算（MB）。仅约束已无模型引用的待释放纹理，不影响活跃纹理。降低可减少显存占用，升高可加快模型切换速度",
+  "gui.mmdskin.mod_settings.mob_replacement.description": "为原版生物选择要替换成的 MMD 模型。每一行都会显示当前映射，点击“选择”打开模型选择器，点击“重置”即可恢复到原版渲染。",
+  "gui.mmdskin.mod_settings.mob_replacement.choose": "选择",
+  "gui.mmdskin.mod_settings.mob_replacement.reset": "重置",
+  "gui.mmdskin.mod_settings.mob_replacement.vanilla": "原版渲染",
   
   "gui.mmdskin.mod_settings.category.debug": "调试设置",
   "gui.mmdskin.mod_settings.debug_hud": "性能调试 HUD",
