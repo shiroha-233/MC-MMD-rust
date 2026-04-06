@@ -6,6 +6,7 @@ import com.mojang.blaze3d.vertex.BufferUploader;
 import com.shiroha.mmdskin.NativeFunc;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.TextureManager;
+import org.joml.Vector3f;
 import org.lwjgl.opengl.GL46C;
 
 /**
@@ -14,8 +15,24 @@ import org.lwjgl.opengl.GL46C;
 public class ToonRenderHelper {
 
     private static final ToonConfig toonConfig = ToonConfig.getInstance();
+    private static final float ALPHA_CUTOFF = 0.1f;
 
-    public static void setupToonUniforms(ToonShaderBase shader, float lightIntensity) {
+    public static void setupToonUniforms(ToonShaderBase shader, float lightIntensity, Vector3f lightDirection) {
+        float lightX = 0.35f;
+        float lightY = 0.85f;
+        float lightZ = -0.4f;
+        if (lightDirection != null) {
+            float lenSq = lightDirection.x * lightDirection.x
+                    + lightDirection.y * lightDirection.y
+                    + lightDirection.z * lightDirection.z;
+            if (lenSq > 1.0E-6f) {
+                float invLen = (float) (1.0 / Math.sqrt(lenSq));
+                lightX = lightDirection.x * invLen;
+                lightY = lightDirection.y * invLen;
+                lightZ = lightDirection.z * invLen;
+            }
+        }
+
         shader.setSampler0(0);
         shader.setLightIntensity(lightIntensity);
         shader.setToonLevels(toonConfig.getToonLevels());
@@ -26,9 +43,13 @@ public class ToonRenderHelper {
             toonConfig.getShadowColorB()
         );
         shader.setSpecular(toonConfig.getSpecularPower(), toonConfig.getSpecularIntensity());
+        shader.setLightDirection(lightX, lightY, lightZ);
+        shader.setAlphaCutoff(ALPHA_CUTOFF);
     }
 
     public static void setupOutlineUniforms(ToonShaderBase shader) {
+        shader.setOutlineSampler0(0);
+        shader.setOutlineAlphaCutoff(ALPHA_CUTOFF);
         shader.setOutlineWidth(toonConfig.getOutlineWidth());
         shader.setOutlineColor(
             toonConfig.getOutlineColorR(),

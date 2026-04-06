@@ -21,7 +21,6 @@ public final class PlayerMixinDelegate {
             boolean isYsmActive) {
         PlayerRenderSelection selection = PlayerRenderSelectionResolver.resolve(player, isYsmActive);
         if (selection.hasTerminalAction()) {
-            renderSceneModelIfNeeded(selection, player, tickDelta, matrixStack, packedLight);
             return selection.terminalAction();
         }
 
@@ -29,14 +28,12 @@ public final class PlayerMixinDelegate {
 
         if (modelData == null) {
             if (MMDModelManager.isModelPending(selection.selectedModel(), selection.playerCacheKey())) {
-                renderSceneModelIfNeeded(selection, player, tickDelta, matrixStack, packedLight);
                 return PlayerRenderAction.CANCEL;
             }
-            renderSceneModelIfNeeded(selection, player, tickDelta, matrixStack, packedLight);
             return PlayerRenderAction.SUPER_RENDER;
         }
 
-        PlayerRenderAction action = PlayerModelRenderCoordinator.render(
+        return PlayerModelRenderCoordinator.render(
                 selection,
                 player,
                 entityYaw,
@@ -45,23 +42,9 @@ public final class PlayerMixinDelegate {
                 vertexConsumers,
                 packedLight,
                 modelData);
-        renderSceneModelIfNeeded(selection, player, tickDelta, matrixStack, packedLight);
-        return action;
     }
 
-    private static void renderSceneModelIfNeeded(PlayerRenderSelection selection,
-                                                 AbstractClientPlayer player,
-                                                 float tickDelta,
-                                                 PoseStack matrixStack,
-                                                 int packedLight) {
-        if (selection.shouldSkipSceneModel()) {
-            return;
-        }
-
-        renderSceneModel(player, tickDelta, matrixStack, packedLight);
-    }
-
-    private static void renderSceneModel(AbstractClientPlayer player, float tickDelta,
+    public static void renderSceneModel(AbstractClientPlayer player, float tickDelta,
                                          PoseStack matrixStack, int packedLight) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || !mc.player.getUUID().equals(player.getUUID())) return;

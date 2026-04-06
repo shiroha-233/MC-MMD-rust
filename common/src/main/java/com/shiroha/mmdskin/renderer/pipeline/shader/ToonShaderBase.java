@@ -33,17 +33,22 @@ public abstract class ToonShaderBase {
     protected int shadowColorLocation = -1;
     protected int specularPowerLocation = -1;
     protected int specularIntensityLocation = -1;
+    protected int lightDirLocation = -1;
+    protected int alphaCutoffLocation = -1;
 
     protected int outlineProjMatLocation = -1;
     protected int outlineModelViewMatLocation = -1;
     protected int outlineWidthLocation = -1;
     protected int outlineColorLocation = -1;
+    protected int outlineSampler0Location = -1;
+    protected int outlineAlphaCutoffLocation = -1;
 
     protected int positionLocation = -1;
     protected int normalLocation = -1;
     protected int uv0Location = -1;
     protected int outlinePositionLocation = -1;
     protected int outlineNormalLocation = -1;
+    protected int outlineUv0Location = -1;
 
     protected abstract String getMainVertexShader();
 
@@ -62,8 +67,8 @@ public abstract class ToonShaderBase {
                                         getShaderName() + "主着色器");
             if (mainProgram == 0) return false;
 
-            outlineProgram = compileProgram(getOutlineVertexShader(), MAIN_FRAGMENT_SHADER_BODY,
-                                           getShaderName() + "描边着色器");
+            outlineProgram = compileProgram(getOutlineVertexShader(), OUTLINE_FRAGMENT_SHADER_BODY,
+                                            getShaderName() + "描边着色器");
             if (outlineProgram == 0) {
                 GL46C.glDeleteProgram(mainProgram);
                 mainProgram = 0;
@@ -97,11 +102,15 @@ public abstract class ToonShaderBase {
         shadowColorLocation = GL46C.glGetUniformLocation(mainProgram, "ShadowColor");
         specularPowerLocation = GL46C.glGetUniformLocation(mainProgram, "SpecularPower");
         specularIntensityLocation = GL46C.glGetUniformLocation(mainProgram, "SpecularIntensity");
+        lightDirLocation = GL46C.glGetUniformLocation(mainProgram, "LightDir");
+        alphaCutoffLocation = GL46C.glGetUniformLocation(mainProgram, "AlphaCutoff");
 
         outlineProjMatLocation = GL46C.glGetUniformLocation(outlineProgram, "ProjMat");
         outlineModelViewMatLocation = GL46C.glGetUniformLocation(outlineProgram, "ModelViewMat");
         outlineWidthLocation = GL46C.glGetUniformLocation(outlineProgram, "OutlineWidth");
         outlineColorLocation = GL46C.glGetUniformLocation(outlineProgram, "OutlineColor");
+        outlineSampler0Location = GL46C.glGetUniformLocation(outlineProgram, "Sampler0");
+        outlineAlphaCutoffLocation = GL46C.glGetUniformLocation(outlineProgram, "AlphaCutoff");
     }
 
     private void initCommonAttributes() {
@@ -112,6 +121,7 @@ public abstract class ToonShaderBase {
 
         outlinePositionLocation = GL46C.glGetAttribLocation(outlineProgram, "Position");
         outlineNormalLocation = GL46C.glGetAttribLocation(outlineProgram, "Normal");
+        outlineUv0Location = GL46C.glGetAttribLocation(outlineProgram, "UV0");
     }
 
     protected int compileProgram(String vertexSource, String fragmentSource, String name) {
@@ -186,6 +196,18 @@ public abstract class ToonShaderBase {
         }
     }
 
+    public void setLightDirection(float x, float y, float z) {
+        if (lightDirLocation >= 0) {
+            GL46C.glUniform3f(lightDirLocation, x, y, z);
+        }
+    }
+
+    public void setAlphaCutoff(float cutoff) {
+        if (alphaCutoffLocation >= 0) {
+            GL46C.glUniform1f(alphaCutoffLocation, cutoff);
+        }
+    }
+
     public void setOutlineProjectionMatrix(FloatBuffer matrix) {
         if (outlineProjMatLocation >= 0) {
             matrix.position(0);
@@ -212,6 +234,18 @@ public abstract class ToonShaderBase {
         }
     }
 
+    public void setOutlineSampler0(int textureUnit) {
+        if (outlineSampler0Location >= 0) {
+            GL46C.glUniform1i(outlineSampler0Location, textureUnit);
+        }
+    }
+
+    public void setOutlineAlphaCutoff(float cutoff) {
+        if (outlineAlphaCutoffLocation >= 0) {
+            GL46C.glUniform1f(outlineAlphaCutoffLocation, cutoff);
+        }
+    }
+
     public int getMainProgram() { return mainProgram; }
     public int getOutlineProgram() { return outlineProgram; }
 
@@ -221,6 +255,7 @@ public abstract class ToonShaderBase {
 
     public int getOutlinePositionLocation() { return outlinePositionLocation; }
     public int getOutlineNormalLocation() { return outlineNormalLocation; }
+    public int getOutlineUv0Location() { return outlineUv0Location; }
 
     public boolean isInitialized() { return initialized; }
 
