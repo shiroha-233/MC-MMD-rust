@@ -17,6 +17,13 @@ public abstract class AbstractMmdSkinConfig implements ConfigManager.IConfigProv
     @Override public boolean isGpuSkinningEnabled() { return data.gpuSkinningEnabled; }
     @Override public boolean isGpuMorphEnabled() { return data.gpuMorphEnabled; }
     @Override public int getMaxBones() { return data.maxBones; }
+    @Override public boolean isPerformanceProfilingEnabled() { return data.performanceProfilingEnabled; }
+    @Override public int getPerformanceLogIntervalSeconds() { return data.performanceLogIntervalSeconds; }
+    @Override public int getMaxVisibleModelsPerFrame() { return data.maxVisibleModelsPerFrame; }
+    @Override public float getAnimationLodMediumDistance() { return data.animationLodMediumDistance; }
+    @Override public float getAnimationLodFarDistance() { return data.animationLodFarDistance; }
+    @Override public int getAnimationLodMediumUpdateInterval() { return data.animationLodMediumUpdateInterval; }
+    @Override public int getAnimationLodFarUpdateInterval() { return data.animationLodFarUpdateInterval; }
 
     @Override public boolean isToonRenderingEnabled() { return data.toonRenderingEnabled; }
     @Override public int getToonLevels() { return data.toonLevels; }
@@ -42,6 +49,8 @@ public abstract class AbstractMmdSkinConfig implements ConfigManager.IConfigProv
     @Override public boolean isPhysicsJointsEnabled() { return data.physicsJointsEnabled; }
     @Override public boolean isPhysicsKinematicFilter() { return data.physicsKinematicFilter; }
     @Override public boolean isPhysicsDebugLog() { return data.physicsDebugLog; }
+    @Override public int getMaxPhysicsModelsPerFrame() { return data.maxPhysicsModelsPerFrame; }
+    @Override public float getPhysicsLodMaxDistance() { return data.physicsLodMaxDistance; }
 
     @Override public boolean isFirstPersonModelEnabled() { return data.firstPersonModelEnabled; }
     @Override public float getFirstPersonCameraForwardOffset() { return data.firstPersonCameraForwardOffset; }

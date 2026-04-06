@@ -5,7 +5,7 @@ import com.shiroha.mmdskin.compat.vr.VRArmHider;
 import com.shiroha.mmdskin.forge.YsmCompat;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import com.shiroha.mmdskin.renderer.integration.player.PlayerMixinDelegate;
-import com.shiroha.mmdskin.renderer.integration.player.PlayerMixinDelegate.RenderAction;
+import com.shiroha.mmdskin.renderer.integration.player.PlayerRenderAction;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.PlayerModel;
@@ -38,7 +38,7 @@ public abstract class ForgePlayerRendererMixin extends LivingEntityRenderer<Abst
             return;
         }
 
-        RenderAction action = PlayerMixinDelegate.handleRender(
+        PlayerRenderAction action = PlayerMixinDelegate.handleRender(
                 player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight,
                 YsmCompat.isYsmActive(player));
 
@@ -47,6 +47,7 @@ public abstract class ForgePlayerRendererMixin extends LivingEntityRenderer<Abst
         switch (action) {
             case CANCEL -> ci.cancel();
             case SUPER_RENDER -> {
+                ci.cancel();
                 super.render(player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight);
                 return;
             }

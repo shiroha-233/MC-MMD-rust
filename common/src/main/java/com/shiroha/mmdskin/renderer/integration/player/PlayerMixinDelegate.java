@@ -15,13 +15,7 @@ public final class PlayerMixinDelegate {
 
     private PlayerMixinDelegate() {}
 
-    public enum RenderAction {
-        CANCEL,
-        FALLTHROUGH,
-        SUPER_RENDER
-    }
-
-    public static RenderAction handleRender(
+    public static PlayerRenderAction handleRender(
             AbstractClientPlayer player, float entityYaw, float tickDelta,
             PoseStack matrixStack, MultiBufferSource vertexConsumers, int packedLight,
             boolean isYsmActive) {
@@ -34,9 +28,9 @@ public final class PlayerMixinDelegate {
 
         if (modelData == null) {
             if (MMDModelManager.isModelPending(selection.selectedModel(), selection.playerCacheKey())) {
-                return RenderAction.CANCEL;
+                return PlayerRenderAction.CANCEL;
             }
-            return RenderAction.SUPER_RENDER;
+            return PlayerRenderAction.SUPER_RENDER;
         }
 
         return PlayerModelRenderCoordinator.render(

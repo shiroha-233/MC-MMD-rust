@@ -25,4 +25,8 @@ public interface IPhysicsConfig {
     default boolean isPhysicsKinematicFilter() { return true; }
 
     default boolean isPhysicsDebugLog() { return false; }
+
+    default int getMaxPhysicsModelsPerFrame() { return 10; }
+
+    default float getPhysicsLodMaxDistance() { return 24.0f; }
 }

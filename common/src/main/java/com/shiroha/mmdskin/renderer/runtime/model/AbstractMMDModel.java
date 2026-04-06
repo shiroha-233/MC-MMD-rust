@@ -1,10 +1,13 @@
 package com.shiroha.mmdskin.renderer.runtime.model;
 
 import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.renderer.api.IMMDModel;
 import com.shiroha.mmdskin.renderer.api.RenderContext;
 import com.shiroha.mmdskin.renderer.runtime.bridge.ModelRuntimeBridgeHolder;
 import com.shiroha.mmdskin.renderer.runtime.model.helper.LivingEntityModelStateHelper;
+import com.shiroha.mmdskin.renderer.runtime.model.helper.MMDPerformanceProfiler;
+import com.shiroha.mmdskin.renderer.runtime.model.helper.MMDWorldRenderPolicy;
 import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -48,6 +51,9 @@ public abstract class AbstractMMDModel implements IMMDModel {
     protected List<String> textureKeys;
 
     private volatile boolean vrActive;
+    protected long nativeUpdateRevision = 0L;
+    private boolean physicsStateInitialized = false;
+    private boolean physicsEnabled = true;
 
     public void setVrActive(boolean active) { this.vrActive = active; }
 
@@ -64,12 +70,26 @@ public abstract class AbstractMMDModel implements IMMDModel {
                        int packedLight, RenderContext context) {
         if (model == 0 || !isReady()) return;
 
+        MMDWorldRenderPolicy.Decision worldDecision = nonWorldDecision();
+        if (context != null && context.isWorldScene()) {
+            worldDecision = MMDWorldRenderPolicy.get().resolve(model, entityIn);
+            if (!worldDecision.shouldRender()) {
+                return;
+            }
+        } else {
+            applyPhysicsState(ConfigManager.isPhysicsEnabled());
+        }
+
         if (entityIn instanceof LivingEntity living) {
             handleLivingEntity(living, entityYaw, entityPitch, entityTrans,
-                    tickDelta, mat, packedLight, context);
+                    tickDelta, mat, packedLight, context, worldDecision);
             return;
         }
-        update();
+
+        applyPhysicsState(worldDecision.physicsEnabled());
+        if (worldDecision.shouldUpdate()) {
+            update();
+        }
         doRenderModel(entityIn, entityYaw, entityPitch, entityTrans, mat, packedLight);
     }
 
@@ -140,38 +160,52 @@ public abstract class AbstractMMDModel implements IMMDModel {
 
     private void handleLivingEntity(LivingEntity entityIn, float entityYaw, float entityPitch,
                                      Vector3f entityTrans, float tickDelta, PoseStack mat,
-                                     int packedLight, RenderContext context) {
+                                     int packedLight, RenderContext context, MMDWorldRenderPolicy.Decision worldDecision) {
         boolean stagePlaying = MMDCameraController.getInstance().isStagePlayingModel(model);
 
-        LivingEntityModelStateHelper.syncModelState(
-                getNf(),
-                model,
-                entityIn,
-                entityYaw,
-                tickDelta,
-                context,
-                getModelName(),
-                stagePlaying,
-                vrActive);
+        applyPhysicsState(worldDecision.physicsEnabled());
 
-        update();
+        if (worldDecision.shouldUpdate()) {
+            long syncTimer = MMDPerformanceProfiler.get().startTimer();
+            LivingEntityModelStateHelper.syncModelState(
+                    getNf(),
+                    model,
+                    entityIn,
+                    entityYaw,
+                    tickDelta,
+                    context,
+                    getModelName(),
+                    stagePlaying,
+                    vrActive);
+            MMDPerformanceProfiler.get().endTimer(MMDPerformanceProfiler.SECTION_LIVING_STATE_SYNC, syncTimer);
+
+            update();
+        }
         doRenderModel(entityIn, entityYaw, entityPitch, entityTrans, mat, packedLight);
     }
 
-    protected void update() {
+    protected boolean update() {
         long currentTime = System.currentTimeMillis();
         if (lastUpdateTime < 0) {
             lastUpdateTime = currentTime;
-            return;
+            return false;
         }
 
         float deltaTime = (currentTime - lastUpdateTime) / 1000.0f;
         lastUpdateTime = currentTime;
 
-        if (deltaTime <= 0.0f) return;
+        if (deltaTime <= 0.0f) return false;
         if (deltaTime > MAX_DELTA_TIME) deltaTime = MAX_DELTA_TIME;
 
+        long updateTimer = MMDPerformanceProfiler.get().startTimer();
         onUpdate(deltaTime);
+        MMDPerformanceProfiler.get().endTimer(MMDPerformanceProfiler.SECTION_NATIVE_MODEL_UPDATE, updateTimer);
+        nativeUpdateRevision++;
+        return true;
+    }
+
+    protected long getNativeUpdateRevision() {
+        return nativeUpdateRevision;
     }
 
     protected void fetchMaterialMorphResults() {
@@ -263,5 +297,21 @@ public abstract class AbstractMMDModel implements IMMDModel {
 
     protected boolean isReady() {
         return true;
+    }
+
+    private void applyPhysicsState(boolean enabled) {
+        if (model == 0) {
+            return;
+        }
+
+        if (!physicsStateInitialized || physicsEnabled != enabled) {
+            getNf().SetPhysicsEnabled(model, enabled);
+            physicsEnabled = enabled;
+            physicsStateInitialized = true;
+        }
+    }
+
+    private MMDWorldRenderPolicy.Decision nonWorldDecision() {
+        return new MMDWorldRenderPolicy.Decision(true, true, ConfigManager.isPhysicsEnabled());
     }
 }

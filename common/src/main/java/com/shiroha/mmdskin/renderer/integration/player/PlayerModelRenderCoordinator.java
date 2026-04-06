@@ -26,8 +26,8 @@ final class PlayerModelRenderCoordinator {
     private PlayerModelRenderCoordinator() {
     }
 
-    static PlayerMixinDelegate.RenderAction render(PlayerRenderSelection selection,
-                                                   AbstractClientPlayer player,
+    static PlayerRenderAction render(PlayerRenderSelection selection,
+                                                    AbstractClientPlayer player,
                                                    float entityYaw,
                                                    float tickDelta,
                                                    PoseStack matrixStack,
@@ -71,7 +71,7 @@ final class PlayerModelRenderCoordinator {
             }
 
             ItemRenderHelper.renderItems(player, modelData, matrixStack, vertexConsumers, packedLight);
-            return PlayerMixinDelegate.RenderAction.CANCEL;
+            return PlayerRenderAction.CANCEL;
         } finally {
             try {
                 if (needsFirstPersonCleanup) {

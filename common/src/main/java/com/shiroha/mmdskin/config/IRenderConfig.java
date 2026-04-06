@@ -15,6 +15,20 @@ public interface IRenderConfig {
 
     default int getMaxBones() { return 2048; }
 
+    default boolean isPerformanceProfilingEnabled() { return false; }
+
+    default int getPerformanceLogIntervalSeconds() { return 5; }
+
+    default int getMaxVisibleModelsPerFrame() { return 10; }
+
+    default float getAnimationLodMediumDistance() { return 24.0f; }
+
+    default float getAnimationLodFarDistance() { return 48.0f; }
+
+    default int getAnimationLodMediumUpdateInterval() { return 2; }
+
+    default int getAnimationLodFarUpdateInterval() { return 4; }
+
     default boolean isFirstPersonModelEnabled() { return false; }
 
     default float getFirstPersonCameraForwardOffset() { return 0.0f; }

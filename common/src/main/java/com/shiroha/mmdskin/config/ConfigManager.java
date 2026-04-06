@@ -39,6 +39,34 @@ public class ConfigManager {
         return provider != null ? provider.getMaxBones() : 2048;
     }
 
+    public static boolean isPerformanceProfilingEnabled() {
+        return provider != null ? provider.isPerformanceProfilingEnabled() : false;
+    }
+
+    public static int getPerformanceLogIntervalSeconds() {
+        return provider != null ? provider.getPerformanceLogIntervalSeconds() : 5;
+    }
+
+    public static int getMaxVisibleModelsPerFrame() {
+        return provider != null ? provider.getMaxVisibleModelsPerFrame() : 10;
+    }
+
+    public static float getAnimationLodMediumDistance() {
+        return provider != null ? provider.getAnimationLodMediumDistance() : 24.0f;
+    }
+
+    public static float getAnimationLodFarDistance() {
+        return provider != null ? provider.getAnimationLodFarDistance() : 48.0f;
+    }
+
+    public static int getAnimationLodMediumUpdateInterval() {
+        return provider != null ? provider.getAnimationLodMediumUpdateInterval() : 2;
+    }
+
+    public static int getAnimationLodFarUpdateInterval() {
+        return provider != null ? provider.getAnimationLodFarUpdateInterval() : 4;
+    }
+
     public static boolean isToonRenderingEnabled() {
         return provider != null ? provider.isToonRenderingEnabled() : true;
     }
@@ -133,6 +161,14 @@ public class ConfigManager {
 
     public static boolean isPhysicsDebugLog() {
         return provider != null ? provider.isPhysicsDebugLog() : false;
+    }
+
+    public static int getMaxPhysicsModelsPerFrame() {
+        return provider != null ? provider.getMaxPhysicsModelsPerFrame() : 10;
+    }
+
+    public static float getPhysicsLodMaxDistance() {
+        return provider != null ? provider.getPhysicsLodMaxDistance() : 24.0f;
     }
 
     public static boolean isFirstPersonModelEnabled() {

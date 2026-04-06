@@ -131,6 +131,15 @@ public class ModConfigScreen {
             .setSaveConsumer(value -> data.textureCacheBudgetMB = value)
             .build());
 
+        performanceCategory.addEntry(entryBuilder
+            .startIntSlider(
+                Component.translatable("gui.mmdskin.mod_settings.max_visible_models"),
+                data.maxVisibleModelsPerFrame, 1, 50)
+            .setDefaultValue(10)
+            .setTooltip(Component.translatable("gui.mmdskin.mod_settings.max_visible_models.tooltip"))
+            .setSaveConsumer(value -> data.maxVisibleModelsPerFrame = value)
+            .build());
+
         ConfigCategory toonCategory = builder.getOrCreateCategory(
             Component.translatable("gui.mmdskin.mod_settings.category.toon"));
 
@@ -347,6 +356,15 @@ public class ModConfigScreen {
             .setDefaultValue(false)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_debug_log.tooltip"))
             .setSaveConsumer(value -> data.physicsDebugLog = value)
+            .build());
+
+        physicsCategory.addEntry(entryBuilder
+            .startIntSlider(
+                Component.translatable("gui.mmdskin.mod_settings.max_physics_models"),
+                data.maxPhysicsModelsPerFrame, 1, 50)
+            .setDefaultValue(10)
+            .setTooltip(Component.translatable("gui.mmdskin.mod_settings.max_physics_models.tooltip"))
+            .setSaveConsumer(value -> data.maxPhysicsModelsPerFrame = value)
             .build());
 
         ConfigCategory debugCategory = builder.getOrCreateCategory(

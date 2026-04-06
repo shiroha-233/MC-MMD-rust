@@ -2,12 +2,12 @@ package com.shiroha.mmdskin.renderer.integration.player;
 
 final class PlayerRenderSelection {
 
-    private final PlayerMixinDelegate.RenderAction terminalAction;
+    private final PlayerRenderAction terminalAction;
     private final String selectedModel;
     private final String playerCacheKey;
     private final boolean localPlayer;
 
-    private PlayerRenderSelection(PlayerMixinDelegate.RenderAction terminalAction,
+    private PlayerRenderSelection(PlayerRenderAction terminalAction,
                                   String selectedModel,
                                   String playerCacheKey,
                                   boolean localPlayer) {
@@ -17,7 +17,7 @@ final class PlayerRenderSelection {
         this.localPlayer = localPlayer;
     }
 
-    static PlayerRenderSelection terminal(PlayerMixinDelegate.RenderAction action) {
+    static PlayerRenderSelection terminal(PlayerRenderAction action) {
         return new PlayerRenderSelection(action, null, null, false);
     }
 
@@ -29,7 +29,7 @@ final class PlayerRenderSelection {
         return terminalAction != null;
     }
 
-    PlayerMixinDelegate.RenderAction terminalAction() {
+    PlayerRenderAction terminalAction() {
         return terminalAction;
     }
 

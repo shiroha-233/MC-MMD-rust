@@ -78,6 +78,8 @@ public class MMDModelOpenGL extends AbstractMMDModel {
 
     int subMeshCount;
     ByteBuffer subMeshDataBuf;
+    int lastBlockBrightness = Integer.MIN_VALUE;
+    int lastSkyBrightness = Integer.MIN_VALUE;
 
     MMDModelOpenGL() {
     }

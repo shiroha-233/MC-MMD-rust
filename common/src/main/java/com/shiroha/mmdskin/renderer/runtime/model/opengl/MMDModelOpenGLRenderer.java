@@ -10,6 +10,7 @@ import com.shiroha.mmdskin.renderer.compat.IrisCompat;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonShaderCpu;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonRenderHelper;
 import com.shiroha.mmdskin.renderer.runtime.model.helper.LightingHelper;
+import com.shiroha.mmdskin.renderer.runtime.model.helper.MMDPerformanceProfiler;
 import com.shiroha.mmdskin.renderer.runtime.model.shared.SubMeshDrawHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
@@ -46,17 +47,32 @@ final class MMDModelOpenGLRenderer {
         float baseScale = target.modelScaleValue();
         deliverStack.scale(baseScale, baseScale, baseScale);
 
+        long materialMorphTimer = MMDPerformanceProfiler.get().startTimer();
         target.loadMaterialMorphResults();
+        MMDPerformanceProfiler.get().endTimer(MMDPerformanceProfiler.SECTION_MATERIAL_MORPH_FETCH, materialMorphTimer);
+
+        long subMeshTimer = MMDPerformanceProfiler.get().startTimer();
         target.subMeshDataBuf.clear();
         nativeFunc.BatchGetSubMeshData(modelHandle, target.subMeshDataBuf);
+        MMDPerformanceProfiler.get().endTimer(MMDPerformanceProfiler.SECTION_SUB_MESH_FETCH, subMeshTimer);
 
         boolean useToon = initializeToonShaderIfNeeded();
         if (useToon) {
-            renderToon(target, minecraft, light.intensity(), deliverStack);
+            long drawTimer = MMDPerformanceProfiler.get().startTimer();
+            try {
+                renderToon(target, minecraft, light.intensity(), deliverStack);
+            } finally {
+                MMDPerformanceProfiler.get().endTimer(MMDPerformanceProfiler.SECTION_DRAW, drawTimer);
+            }
             return;
         }
 
-        renderStandard(target, minecraft, light, deliverStack);
+        long drawTimer = MMDPerformanceProfiler.get().startTimer();
+        try {
+            renderStandard(target, minecraft, light, deliverStack);
+        } finally {
+            MMDPerformanceProfiler.get().endTimer(MMDPerformanceProfiler.SECTION_DRAW, drawTimer);
+        }
     }
 
     private static boolean initializeToonShaderIfNeeded() {
@@ -152,6 +168,14 @@ final class MMDModelOpenGLRenderer {
         int blockBrightness = 16 * blockLight;
         int skyBrightness = irisActive ? (16 * skyLight)
                 : Math.round((15.0f - skyDarken) * (skyLight / 15.0f) * 16);
+        uploadLightBufferIfNeeded(target, blockBrightness, skyBrightness);
+    }
+
+    private static void uploadLightBufferIfNeeded(MMDModelOpenGL target, int blockBrightness, int skyBrightness) {
+        if (target.lastBlockBrightness == blockBrightness && target.lastSkyBrightness == skyBrightness) {
+            return;
+        }
+
         target.uv2Buffer.clear();
         for (int i = 0; i < target.vertexCount; i++) {
             target.uv2Buffer.putInt(blockBrightness);
@@ -160,6 +184,8 @@ final class MMDModelOpenGLRenderer {
         target.uv2Buffer.flip();
         GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.uv2BufferObject);
         GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv2Buffer);
+        target.lastBlockBrightness = blockBrightness;
+        target.lastSkyBrightness = skyBrightness;
     }
 
     private static void uploadMatrixUniforms(MMDModelOpenGL target, PoseStack deliverStack) {

@@ -110,6 +110,9 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
     PoseStack currentDeliverStack;
 
     boolean initialized = false;
+    long lastGpuUploadRevision = -1L;
+    int lastBlockBrightness = Integer.MIN_VALUE;
+    int lastSkyBrightness = Integer.MIN_VALUE;
 
     private MMDModelGpuSkinning() {}
 
@@ -527,6 +530,10 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
 
     long nativeModelHandle() {
         return model;
+    }
+
+    long nativeUpdateRevisionValue() {
+        return getNativeUpdateRevision();
     }
 
     Quaternionf workingQuaternion() {

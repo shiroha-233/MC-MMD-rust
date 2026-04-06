@@ -33,6 +33,8 @@
   "gui.mmdskin.mod_settings.gpu_morph.tooltip": "使用 GPU 计算顶点变形（表情等），提升包含大量 Morph 的模型性能（需要 OpenGL 4.3+，重启生效）",
   "gui.mmdskin.mod_settings.max_bones": "最大骨骼数量",
   "gui.mmdskin.mod_settings.max_bones.tooltip": "GPU 蒙皮支持的最大骨骼数量（512-4096），超大模型需要更高值（需重启生效）",
+  "gui.mmdskin.mod_settings.max_visible_models": "最大 MMD 显示数量",
+  "gui.mmdskin.mod_settings.max_visible_models.tooltip": "每帧允许使用 MMD 渲染的最大模型数。超出后将按距离优先保留最近的目标，其余玩家/原版生物回退原版渲染",
   
   "gui.mmdskin.mod_settings.category.toon": "3渲2设置",
   "gui.mmdskin.mod_settings.toon_enabled": "启用 3渲2",
@@ -81,6 +83,8 @@
   "gui.mmdskin.mod_settings.physics_kinematic_filter.tooltip": "过滤头发与胸部等部位的碰撞，防止穿模导致的抖动",
   "gui.mmdskin.mod_settings.physics_debug_log": "调试日志",
   "gui.mmdskin.mod_settings.physics_debug_log.tooltip": "输出物理系统调试日志",
+  "gui.mmdskin.mod_settings.max_physics_models": "最大物理模拟数量",
+  "gui.mmdskin.mod_settings.max_physics_models.tooltip": "每帧允许启用物理模拟的最大模型数。超出后较远模型将保留渲染但关闭物理",
   "gui.mmdskin.mod_settings.first_person_model": "第一人称模型显示",
   "gui.mmdskin.mod_settings.first_person_model.tooltip": "在第一人称视角下显示 MMD 模型（自动隐藏头部，相机高度匹配模型头部）",
   "gui.mmdskin.mod_settings.first_person_camera_forward_offset": "第一人称相机前后偏移",

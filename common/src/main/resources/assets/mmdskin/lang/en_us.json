@@ -33,6 +33,8 @@
   "gui.mmdskin.mod_settings.gpu_morph.tooltip": "Use GPU for vertex morph calculation (expressions, etc.), improves performance for models with many morphs (requires OpenGL 4.3+, restart required)",
   "gui.mmdskin.mod_settings.max_bones": "Max Bones",
   "gui.mmdskin.mod_settings.max_bones.tooltip": "Maximum bone count for GPU skinning (512-4096), increase for complex models (restart required)",
+  "gui.mmdskin.mod_settings.max_visible_models": "Max Visible MMD Models",
+  "gui.mmdskin.mod_settings.max_visible_models.tooltip": "Maximum number of models allowed to use MMD rendering per frame. When exceeded, the nearest targets keep MMD and the rest of players/vanilla mobs fall back to vanilla rendering.",
   
   "gui.mmdskin.mod_settings.category.toon": "Toon Shading",
   "gui.mmdskin.mod_settings.toon_enabled": "Enable Toon Shading",
@@ -81,6 +83,8 @@
   "gui.mmdskin.mod_settings.physics_kinematic_filter.tooltip": "Filter collisions between hair and body parts (e.g. chest) to prevent jitter from clipping",
   "gui.mmdskin.mod_settings.physics_debug_log": "Debug Log",
   "gui.mmdskin.mod_settings.physics_debug_log.tooltip": "Output physics system debug logs",
+  "gui.mmdskin.mod_settings.max_physics_models": "Max Physics Models",
+  "gui.mmdskin.mod_settings.max_physics_models.tooltip": "Maximum number of models allowed to keep physics active per frame. More distant models still render but physics is disabled.",
   "gui.mmdskin.mod_settings.first_person_model": "First Person Model",
   "gui.mmdskin.mod_settings.first_person_model.tooltip": "Show MMD model in first-person view (auto-hides head, camera height matches model head)",
   "gui.mmdskin.mod_settings.first_person_camera_forward_offset": "First Person Camera Forward Offset",

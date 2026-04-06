@@ -28,6 +28,13 @@ public class ConfigData {
     public boolean gpuSkinningEnabled = false;
     public boolean gpuMorphEnabled = false;
     public int maxBones = 2048;
+    public boolean performanceProfilingEnabled = false;
+    public int performanceLogIntervalSeconds = 5;
+    public int maxVisibleModelsPerFrame = 10;
+    public float animationLodMediumDistance = 24.0f;
+    public float animationLodFarDistance = 48.0f;
+    public int animationLodMediumUpdateInterval = 2;
+    public int animationLodFarUpdateInterval = 4;
 
     public boolean toonRenderingEnabled = false;
     public int toonLevels = 3;
@@ -54,6 +61,8 @@ public class ConfigData {
     public boolean physicsJointsEnabled = true;
     public boolean physicsKinematicFilter = true;
     public boolean physicsDebugLog = false;
+    public int maxPhysicsModelsPerFrame = 10;
+    public float physicsLodMaxDistance = 24.0f;
 
     public boolean firstPersonModelEnabled = false;
     public float firstPersonCameraForwardOffset = 0.0f;
@@ -111,6 +120,15 @@ public class ConfigData {
         if (mobModelReplacements == null) {
             mobModelReplacements = new LinkedHashMap<>();
         }
+
+        performanceLogIntervalSeconds = Math.max(1, performanceLogIntervalSeconds);
+        maxVisibleModelsPerFrame = Math.max(1, maxVisibleModelsPerFrame);
+        animationLodMediumDistance = Math.max(0.0f, animationLodMediumDistance);
+        animationLodFarDistance = Math.max(animationLodMediumDistance, animationLodFarDistance);
+        animationLodMediumUpdateInterval = Math.max(1, animationLodMediumUpdateInterval);
+        animationLodFarUpdateInterval = Math.max(animationLodMediumUpdateInterval, animationLodFarUpdateInterval);
+        maxPhysicsModelsPerFrame = Math.max(1, maxPhysicsModelsPerFrame);
+        physicsLodMaxDistance = Math.max(0.0f, physicsLodMaxDistance);
     }
 
     public void copyTo(ConfigData other) {

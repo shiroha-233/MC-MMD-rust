@@ -6,6 +6,7 @@ import com.shiroha.mmdskin.renderer.api.RenderContext;
 import com.shiroha.mmdskin.renderer.api.RenderParams;
 import com.shiroha.mmdskin.renderer.integration.ModelPropertyHelper;
 import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
+import com.shiroha.mmdskin.renderer.runtime.model.helper.MMDRenderPriorityService;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.world.entity.LivingEntity;
 import org.apache.logging.log4j.LogManager;
@@ -24,6 +25,10 @@ public final class MobReplacementRenderer {
     public static boolean render(LivingEntity entity, float entityYaw, float tickDelta, PoseStack poseStack, int packedLight) {
         String modelName = MobReplacementService.getReplacementModelName(entity);
         if (modelName == null) {
+            return false;
+        }
+
+        if (!MMDRenderPriorityService.get().shouldUseMobReplacement(entity)) {
             return false;
         }
 
