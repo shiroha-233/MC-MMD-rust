@@ -1,13 +1,10 @@
 package com.shiroha.mmdskin.mixin.fabric;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.shiroha.mmdskin.compat.vr.VRArmHider;
 import com.shiroha.mmdskin.fabric.YsmCompat;
-import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import com.shiroha.mmdskin.renderer.integration.player.PlayerMixinDelegate;
 import com.shiroha.mmdskin.renderer.integration.player.PlayerRenderAction;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -30,19 +27,9 @@ public abstract class FabricPlayerRendererMixin extends LivingEntityRenderer<Abs
     @Inject(method = "render(Lnet/minecraft/client/player/AbstractClientPlayer;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("HEAD"), cancellable = true)
     public void onRender(AbstractClientPlayer player, float entityYaw, float tickDelta, PoseStack matrixStack,
                          MultiBufferSource vertexConsumers, int packedLight, CallbackInfo ci) {
-        Minecraft minecraft = Minecraft.getInstance();
-        boolean isLocalPlayer = minecraft.player != null && minecraft.player.getUUID().equals(player.getUUID());
-        if (isLocalPlayer && minecraft.options.getCameraType().isFirstPerson()
-                && !FirstPersonManager.shouldRenderFirstPerson() && !VRArmHider.isLocalPlayerInVR()) {
-            FirstPersonManager.reset();
-            return;
-        }
-
         PlayerRenderAction action = PlayerMixinDelegate.handleRender(
                 player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight,
                 YsmCompat.isYsmActive(player));
-
-        PlayerMixinDelegate.renderSceneModel(player, tickDelta, matrixStack, packedLight);
 
         switch (action) {
             case CANCEL -> ci.cancel();

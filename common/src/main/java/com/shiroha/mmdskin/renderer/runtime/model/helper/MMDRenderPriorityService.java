@@ -1,10 +1,12 @@
 package com.shiroha.mmdskin.renderer.runtime.model.helper;
 
 import com.shiroha.mmdskin.config.UIConstants;
+import com.shiroha.mmdskin.renderer.integration.entity.MmdSkinRenderer;
 import com.shiroha.mmdskin.renderer.integration.entity.MobReplacementService;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 
@@ -69,6 +71,11 @@ public final class MMDRenderPriorityService {
     }
 
     public synchronized boolean shouldUseMobReplacement(LivingEntity entity) {
+        beginWorldFrame();
+        return entity != null && prioritizedVisibleEntities.contains(entity.getUUID());
+    }
+
+    public synchronized boolean shouldUseCustomEntity(Entity entity) {
         beginWorldFrame();
         return entity != null && prioritizedVisibleEntities.contains(entity.getUUID());
     }
@@ -153,20 +160,22 @@ public final class MMDRenderPriorityService {
         }
 
         List<PrioritizedEntity> candidates = new ArrayList<>();
+        Set<UUID> candidateIds = new HashSet<>();
 
         for (AbstractClientPlayer player : minecraft.level.players()) {
             if (shouldConsiderPlayer(player)) {
                 boolean localPlayer = minecraft.player != null && minecraft.player.getUUID().equals(player.getUUID());
-                candidates.add(new PrioritizedEntity(player, distanceSqToCamera(player, localPlayer), localPlayer));
+                addCandidate(candidates, candidateIds, player, distanceSqToCamera(player, localPlayer), localPlayer);
             }
         }
 
         for (Entity entity : minecraft.level.entitiesForRendering()) {
-            if (entity instanceof LivingEntity living && !(entity instanceof AbstractClientPlayer)) {
-                String replacementModel = MobReplacementService.getReplacementModelName(living);
-                if (replacementModel != null) {
-                    candidates.add(new PrioritizedEntity(living, distanceSqToCamera(living, false), false));
-                }
+            if (entity instanceof AbstractClientPlayer) {
+                continue;
+            }
+
+            if (shouldConsiderWorldMmdEntity(entity)) {
+                addCandidate(candidates, candidateIds, entity, distanceSqToCamera(entity, false), false);
             }
         }
 
@@ -216,6 +225,29 @@ public final class MMDRenderPriorityService {
         return selectedModel != null
                 && !selectedModel.isBlank()
                 && !UIConstants.DEFAULT_MODEL_NAME.equals(selectedModel);
+    }
+
+    private boolean shouldConsiderWorldMmdEntity(Entity entity) {
+        if (entity instanceof LivingEntity living && MobReplacementService.getReplacementModelName(living) != null) {
+            return true;
+        }
+
+        Minecraft minecraft = Minecraft.getInstance();
+        EntityRenderer<?> renderer = minecraft.getEntityRenderDispatcher().getRenderer(entity);
+        return renderer instanceof MmdSkinRenderer<?>;
+    }
+
+    private void addCandidate(List<PrioritizedEntity> candidates,
+                              Set<UUID> candidateIds,
+                              Entity entity,
+                              double distanceSq,
+                              boolean localPlayer) {
+        UUID uuid = entity.getUUID();
+        if (!candidateIds.add(uuid)) {
+            return;
+        }
+
+        candidates.add(new PrioritizedEntity(entity, distanceSq, localPlayer));
     }
 
     private record PrioritizedEntity(Entity entity, double distanceSq, boolean localPlayer) {

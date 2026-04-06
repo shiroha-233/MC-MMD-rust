@@ -22,9 +22,9 @@ final class PlayerRenderSelectionResolver {
                 isLocalPlayer,
                 isYsmActive);
 
-        PlayerRenderAction terminalAction = PlayerVanillaRenderPolicy.resolveTerminalAction(request);
-        if (terminalAction != null) {
-            return PlayerRenderSelection.terminal(terminalAction);
+        PlayerRenderSelection terminalSelection = PlayerVanillaRenderPolicy.resolveTerminalSelection(request);
+        if (terminalSelection != null) {
+            return terminalSelection;
         }
 
         if (!PlayerPerformanceGate.allowsMmd(request.player())) {

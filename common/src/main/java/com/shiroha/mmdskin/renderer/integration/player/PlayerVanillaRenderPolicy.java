@@ -8,25 +8,26 @@ final class PlayerVanillaRenderPolicy {
     private PlayerVanillaRenderPolicy() {
     }
 
-    static PlayerRenderAction resolveTerminalAction(PlayerRenderRequest request) {
+    static PlayerRenderSelection resolveTerminalSelection(PlayerRenderRequest request) {
         Minecraft minecraft = Minecraft.getInstance();
         boolean isLocalFirstPerson = request.localPlayer() && minecraft.options.getCameraType().isFirstPerson();
 
         if (isLocalFirstPerson && !FirstPersonManager.shouldRenderFirstPerson() && !VRArmHider.isLocalPlayerInVR()) {
-            return PlayerRenderAction.FALLTHROUGH;
+            FirstPersonManager.reset();
+            return PlayerRenderSelection.terminal(PlayerRenderAction.FALLTHROUGH, true);
         }
 
         if (request.localPlayer() && FirstPersonManager.shouldRenderFirstPerson()) {
             if (request.ysmActive()) {
-                return PlayerRenderAction.CANCEL;
+                return PlayerRenderSelection.terminal(PlayerRenderAction.CANCEL);
             }
             if (shouldUseVanillaRenderer(request.selectedModel(), request.player())) {
-                return PlayerRenderAction.CANCEL;
+                return PlayerRenderSelection.terminal(PlayerRenderAction.CANCEL);
             }
         }
 
         if (shouldUseVanillaRenderer(request.selectedModel(), request.player()) || request.ysmActive()) {
-            return PlayerRenderAction.FALLTHROUGH;
+            return PlayerRenderSelection.terminal(PlayerRenderAction.FALLTHROUGH);
         }
 
         return null;
