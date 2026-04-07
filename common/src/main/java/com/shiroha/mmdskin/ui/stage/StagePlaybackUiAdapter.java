@@ -2,7 +2,9 @@ package com.shiroha.mmdskin.ui.stage;
 
 import com.shiroha.mmdskin.stage.client.camera.port.StageCameraUiPort;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackUiPort;
+import com.shiroha.mmdskin.ui.stage.imgui.StageWorkbenchScreen;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 
 import java.util.UUID;
 
@@ -21,7 +23,7 @@ public final class StagePlaybackUiAdapter implements StagePlaybackUiPort, StageC
     public void markStageSelectionStartedAndClose() {
         Minecraft mc = Minecraft.getInstance();
         Runnable action = () -> {
-            if (mc.screen instanceof StageSelectScreen screen) {
+            if (mc.screen instanceof StageWorkbenchScreen screen) {
                 screen.markStartedByHost();
                 mc.setScreen(null);
             }
@@ -36,7 +38,10 @@ public final class StagePlaybackUiAdapter implements StagePlaybackUiPort, StageC
     @Override
     public void openStageSelection() {
         Minecraft mc = Minecraft.getInstance();
-        Runnable action = () -> mc.setScreen(new StageSelectScreen());
+        Runnable action = () -> {
+            Screen screen = StageWorkbenchScreen.createPrimary();
+            mc.setScreen(screen);
+        };
         if (mc.isSameThread()) {
             action.run();
         } else {
@@ -48,7 +53,7 @@ public final class StagePlaybackUiAdapter implements StagePlaybackUiPort, StageC
     public void closeStageSelectionIfOpen() {
         Minecraft mc = Minecraft.getInstance();
         Runnable action = () -> {
-            if (mc.screen instanceof StageSelectScreen screen) {
+            if (mc.screen instanceof StageWorkbenchScreen screen) {
                 screen.prepareForExternalClose();
                 mc.setScreen(null);
             }

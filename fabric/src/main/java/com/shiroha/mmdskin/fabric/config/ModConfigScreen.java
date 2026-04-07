@@ -156,7 +156,7 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_levels"),
                 data.toonLevels, 2, 5)
-            .setDefaultValue(3)
+            .setDefaultValue(4)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_levels.tooltip"))
             .setSaveConsumer(value -> data.toonLevels = value)
             .build());
@@ -165,7 +165,7 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_rim_power"),
                 (int) (data.toonRimPower * 10), 10, 100)
-            .setDefaultValue(30)
+            .setDefaultValue(56)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_rim_power.tooltip"))
             .setSaveConsumer(value -> data.toonRimPower = value / 10.0f)
             .build());
@@ -174,7 +174,7 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_rim_intensity"),
                 (int) (data.toonRimIntensity * 100), 0, 100)
-            .setDefaultValue(30)
+            .setDefaultValue(2)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_rim_intensity.tooltip"))
             .setSaveConsumer(value -> data.toonRimIntensity = value / 100.0f)
             .build());
@@ -183,7 +183,7 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_shadow_r"),
                 (int) (data.toonShadowR * 100), 0, 100)
-            .setDefaultValue(60)
+            .setDefaultValue(78)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_shadow.tooltip"))
             .setSaveConsumer(value -> data.toonShadowR = value / 100.0f)
             .build());
@@ -192,7 +192,7 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_shadow_g"),
                 (int) (data.toonShadowG * 100), 0, 100)
-            .setDefaultValue(50)
+            .setDefaultValue(84)
             .setSaveConsumer(value -> data.toonShadowG = value / 100.0f)
             .build());
 
@@ -200,7 +200,7 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_shadow_b"),
                 (int) (data.toonShadowB * 100), 0, 100)
-            .setDefaultValue(70)
+            .setDefaultValue(94)
             .setSaveConsumer(value -> data.toonShadowB = value / 100.0f)
             .build());
 
@@ -208,7 +208,7 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_specular_power"),
                 (int) data.toonSpecularPower, 1, 128)
-            .setDefaultValue(32)
+            .setDefaultValue(96)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_specular_power.tooltip"))
             .setSaveConsumer(value -> data.toonSpecularPower = value)
             .build());
@@ -217,7 +217,7 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_specular_intensity"),
                 (int) (data.toonSpecularIntensity * 100), 0, 100)
-            .setDefaultValue(50)
+            .setDefaultValue(2)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_specular_intensity.tooltip"))
             .setSaveConsumer(value -> data.toonSpecularIntensity = value / 100.0f)
             .build());
@@ -235,7 +235,7 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_outline_width"),
                 (int) (data.toonOutlineWidth * 1000), 1, 100)
-            .setDefaultValue(20)
+            .setDefaultValue(2)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_outline_width.tooltip"))
             .setSaveConsumer(value -> data.toonOutlineWidth = value / 1000.0f)
             .build());
@@ -244,7 +244,7 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_outline_r"),
                 (int) (data.toonOutlineR * 100), 0, 100)
-            .setDefaultValue(10)
+            .setDefaultValue(6)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_outline_color.tooltip"))
             .setSaveConsumer(value -> data.toonOutlineR = value / 100.0f)
             .build());
@@ -253,7 +253,7 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_outline_g"),
                 (int) (data.toonOutlineG * 100), 0, 100)
-            .setDefaultValue(10)
+            .setDefaultValue(8)
             .setSaveConsumer(value -> data.toonOutlineG = value / 100.0f)
             .build());
 
@@ -261,7 +261,7 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.toon_outline_b"),
                 (int) (data.toonOutlineB * 100), 0, 100)
-            .setDefaultValue(10)
+            .setDefaultValue(12)
             .setSaveConsumer(value -> data.toonOutlineB = value / 100.0f)
             .build());
 

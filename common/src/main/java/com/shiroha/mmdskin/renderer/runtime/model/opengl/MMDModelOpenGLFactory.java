@@ -112,7 +112,9 @@ final class MMDModelOpenGLFactory {
             MMDMaterial[] mats = new MMDMaterial[(int) nf.GetMaterialCount(model)];
             for (int i = 0; i < mats.length; ++i) {
                 mats[i] = new MMDMaterial();
+                mats[i].name = nf.GetMaterialName(model, i);
                 String texFilename = nf.GetMaterialTex(model, i);
+                mats[i].texturePath = texFilename != null ? texFilename : "";
                 if (texFilename != null && !texFilename.isEmpty()) {
                     MMDTextureManager.Texture mgrTex = MMDTextureManager.GetTexture(texFilename);
                     if (mgrTex != null) {
@@ -122,6 +124,7 @@ final class MMDModelOpenGLFactory {
                         texKeys.add(texFilename);
                     }
                 }
+                mats[i].updateOutlinePolicy();
             }
 
             lightMapMaterial = new MMDMaterial();

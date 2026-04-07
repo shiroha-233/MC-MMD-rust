@@ -46,28 +46,33 @@ void main() {
 
     float diffuse = saturate(dot(normal, lightDir));
     float bands = float(max(ToonLevels, 2));
-    float softness = mix(0.20, 0.08, clamp((float(ToonLevels) - 2.0) / 3.0, 0.0, 1.0));
-    float toonDiffuse = softBand(diffuse, bands, softness);
-    toonDiffuse = max(toonDiffuse, diffuse * 0.28 + 0.08);
+    float softness = mix(0.14, 0.05, clamp((float(ToonLevels) - 2.0) / 3.0, 0.0, 1.0));
+    float toonDiffuse = softBand(diffuse * 0.96 + 0.02, bands, softness);
+    float litMask = smoothstep(0.68, 0.90, diffuse);
 
     vec3 halfDir = normalize(lightDir + viewDir);
     float specular = pow(saturate(dot(normal, halfDir)), max(SpecularPower, 1.0));
-    float highlightThreshold = mix(0.55, 0.85, clamp(SpecularPower / 128.0, 0.0, 1.0));
-    float toonSpecular = smoothstep(highlightThreshold - 0.08, highlightThreshold + 0.08, specular)
-            * SpecularIntensity;
+    float highlightThreshold = mix(0.88, 0.975, clamp(SpecularPower / 128.0, 0.0, 1.0));
+    float specularBand = smoothstep(highlightThreshold - 0.012, highlightThreshold + 0.015, specular);
 
-    float rim = 1.0 - saturate(dot(viewDir, normal));
-    rim = pow(rim, max(RimPower, 0.0001));
-    rim = smoothstep(0.20, 1.0, rim) * RimIntensity;
+    float fresnel = 1.0 - saturate(dot(viewDir, normal));
+    float rim = pow(fresnel, max(RimPower, 0.0001));
+    rim = smoothstep(0.82, 0.97, rim) * RimIntensity;
+    rim *= (1.0 - litMask * 0.8);
 
-    vec3 shadowedColor = albedo * mix(ShadowColor, vec3(1.0), 0.18);
+    vec3 shadowedColor = albedo * ShadowColor;
     vec3 baseColor = mix(shadowedColor, albedo, toonDiffuse);
 
-    float ambient = 0.18;
+    float ambient = 0.16;
     vec3 finalColor = baseColor * max(LightIntensity, ambient);
     finalColor = max(finalColor, albedo * ambient);
-    finalColor += vec3(toonSpecular);
-    finalColor += albedo * rim;
+
+    float toonSpecular = specularBand * SpecularIntensity * litMask * (1.0 - rim * 0.75);
+    vec3 specularColor = vec3(1.0);
+    vec3 rimColor = mix(vec3(1.0), ShadowColor, 0.55);
+
+    finalColor += specularColor * (toonSpecular * 0.35);
+    finalColor += albedo * rimColor * rim;
 
     fragColor = vec4(finalColor, texColor.a);
     fragData1 = vec4(normal * 0.5 + 0.5, 1.0);

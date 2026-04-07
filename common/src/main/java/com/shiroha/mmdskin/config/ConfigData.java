@@ -37,19 +37,19 @@ public class ConfigData {
     public int animationLodFarUpdateInterval = 4;
 
     public boolean toonRenderingEnabled = false;
-    public int toonLevels = 3;
-    public float toonRimPower = 5.0f;
-    public float toonRimIntensity = 0.1f;
-    public float toonShadowR = 0.8f;
-    public float toonShadowG = 0.8f;
-    public float toonShadowB = 0.8f;
-    public float toonSpecularPower = 30.0f;
-    public float toonSpecularIntensity = 0.08f;
-    public boolean toonOutlineEnabled = false;
-    public float toonOutlineWidth = 0.003f;
-    public float toonOutlineR = 0.0f;
-    public float toonOutlineG = 0.0f;
-    public float toonOutlineB = 0.0f;
+    public int toonLevels = 4;
+    public float toonRimPower = 5.6f;
+    public float toonRimIntensity = 0.02f;
+    public float toonShadowR = 0.78f;
+    public float toonShadowG = 0.84f;
+    public float toonShadowB = 0.94f;
+    public float toonSpecularPower = 96.0f;
+    public float toonSpecularIntensity = 0.015f;
+    public boolean toonOutlineEnabled = true;
+    public float toonOutlineWidth = 0.0022f;
+    public float toonOutlineR = 0.06f;
+    public float toonOutlineG = 0.08f;
+    public float toonOutlineB = 0.12f;
 
     public boolean physicsEnabled = true;
     public float physicsGravityY = -98.0f;
@@ -127,8 +127,24 @@ public class ConfigData {
         animationLodFarDistance = Math.max(animationLodMediumDistance, animationLodFarDistance);
         animationLodMediumUpdateInterval = Math.max(1, animationLodMediumUpdateInterval);
         animationLodFarUpdateInterval = Math.max(animationLodMediumUpdateInterval, animationLodFarUpdateInterval);
+        toonLevels = Math.max(2, Math.min(5, toonLevels));
+        toonRimPower = clamp(toonRimPower, 0.1f, 10.0f);
+        toonRimIntensity = clamp(toonRimIntensity, 0.0f, 1.0f);
+        toonShadowR = clamp(toonShadowR, 0.0f, 1.0f);
+        toonShadowG = clamp(toonShadowG, 0.0f, 1.0f);
+        toonShadowB = clamp(toonShadowB, 0.0f, 1.0f);
+        toonSpecularPower = clamp(toonSpecularPower, 1.0f, 128.0f);
+        toonSpecularIntensity = clamp(toonSpecularIntensity, 0.0f, 1.0f);
+        toonOutlineWidth = clamp(toonOutlineWidth, 0.001f, 0.02f);
+        toonOutlineR = clamp(toonOutlineR, 0.0f, 1.0f);
+        toonOutlineG = clamp(toonOutlineG, 0.0f, 1.0f);
+        toonOutlineB = clamp(toonOutlineB, 0.0f, 1.0f);
         maxPhysicsModelsPerFrame = Math.max(1, maxPhysicsModelsPerFrame);
         physicsLodMaxDistance = Math.max(0.0f, physicsLodMaxDistance);
+    }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     public void copyTo(ConfigData other) {

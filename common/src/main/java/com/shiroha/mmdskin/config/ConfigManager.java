@@ -68,59 +68,59 @@ public class ConfigManager {
     }
 
     public static boolean isToonRenderingEnabled() {
-        return provider != null ? provider.isToonRenderingEnabled() : true;
+        return provider != null ? provider.isToonRenderingEnabled() : false;
     }
 
     public static int getToonLevels() {
-        return provider != null ? provider.getToonLevels() : 3;
+        return provider != null ? provider.getToonLevels() : 4;
     }
 
     public static boolean isToonOutlineEnabled() {
-        return provider != null ? provider.isToonOutlineEnabled() : false;
+        return provider != null ? provider.isToonOutlineEnabled() : true;
     }
 
     public static float getToonOutlineWidth() {
-        return provider != null ? provider.getToonOutlineWidth() : 0.003f;
+        return provider != null ? provider.getToonOutlineWidth() : 0.0022f;
     }
 
     public static float getToonRimPower() {
-        return provider != null ? provider.getToonRimPower() : 5.0f;
+        return provider != null ? provider.getToonRimPower() : 5.6f;
     }
 
     public static float getToonRimIntensity() {
-        return provider != null ? provider.getToonRimIntensity() : 0.1f;
+        return provider != null ? provider.getToonRimIntensity() : 0.02f;
     }
 
     public static float getToonShadowR() {
-        return provider != null ? provider.getToonShadowR() : 0.8f;
+        return provider != null ? provider.getToonShadowR() : 0.78f;
     }
 
     public static float getToonShadowG() {
-        return provider != null ? provider.getToonShadowG() : 0.8f;
+        return provider != null ? provider.getToonShadowG() : 0.84f;
     }
 
     public static float getToonShadowB() {
-        return provider != null ? provider.getToonShadowB() : 0.8f;
+        return provider != null ? provider.getToonShadowB() : 0.94f;
     }
 
     public static float getToonSpecularPower() {
-        return provider != null ? provider.getToonSpecularPower() : 30.0f;
+        return provider != null ? provider.getToonSpecularPower() : 96.0f;
     }
 
     public static float getToonSpecularIntensity() {
-        return provider != null ? provider.getToonSpecularIntensity() : 0.08f;
+        return provider != null ? provider.getToonSpecularIntensity() : 0.015f;
     }
 
     public static float getToonOutlineR() {
-        return provider != null ? provider.getToonOutlineR() : 0.0f;
+        return provider != null ? provider.getToonOutlineR() : 0.06f;
     }
 
     public static float getToonOutlineG() {
-        return provider != null ? provider.getToonOutlineG() : 0.0f;
+        return provider != null ? provider.getToonOutlineG() : 0.08f;
     }
 
     public static float getToonOutlineB() {
-        return provider != null ? provider.getToonOutlineB() : 0.0f;
+        return provider != null ? provider.getToonOutlineB() : 0.12f;
     }
 
     public static boolean isPhysicsEnabled() {

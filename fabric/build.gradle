@@ -83,6 +83,24 @@ dependencies {
 	// JLayer - MP3 解码器（舞台模式音频播放，Fabric jar-in-jar 打包）
 	implementation("javazoom:jlayer:1.0.1")
 	include("javazoom:jlayer:1.0.1")
+
+	// ImGui workbench（开发/本地运行）
+	implementation("io.github.spair:imgui-java-binding:${project.imgui_java_version}")
+	include("io.github.spair:imgui-java-binding:${project.imgui_java_version}")
+	implementation("io.github.spair:imgui-java-lwjgl3:${project.imgui_java_version}") {
+		exclude group: "org.lwjgl"
+		exclude group: "org.lwjgl.lwjgl"
+	}
+	include("io.github.spair:imgui-java-lwjgl3:${project.imgui_java_version}") {
+		exclude group: "org.lwjgl"
+		exclude group: "org.lwjgl.lwjgl"
+	}
+	runtimeOnly("io.github.spair:imgui-java-natives-windows:${project.imgui_java_version}")
+	runtimeOnly("io.github.spair:imgui-java-natives-linux:${project.imgui_java_version}")
+	runtimeOnly("io.github.spair:imgui-java-natives-macos:${project.imgui_java_version}")
+	include("io.github.spair:imgui-java-natives-windows:${project.imgui_java_version}")
+	include("io.github.spair:imgui-java-natives-linux:${project.imgui_java_version}")
+	include("io.github.spair:imgui-java-natives-macos:${project.imgui_java_version}")
 	
 	// Fabric Loader
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
