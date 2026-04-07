@@ -1,7 +1,11 @@
 package com.shiroha.mmdskin.ui.config;
 
+import com.shiroha.mmdskin.ui.imgui.ImGuiScreenRenderer;
+import imgui.ImGui;
+import imgui.flag.ImGuiCond;
+import imgui.flag.ImGuiWindowFlags;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.apache.logging.log4j.LogManager;
@@ -10,37 +14,21 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 动作轮盘配置界面。 */
 public class ActionWheelConfigScreen extends Screen {
-    private static final Logger logger = LogManager.getLogger();
+    private static final Logger LOGGER = LogManager.getLogger();
+    private static final float WINDOW_MIN_WIDTH = 620.0f;
+    private static final float WINDOW_MIN_HEIGHT = 360.0f;
+    private static final float WINDOW_MARGIN = 14.0f;
+
     private final Screen parent;
-
-    private static final int PANEL_WIDTH = 200;
-    private static final int ITEM_HEIGHT = 36;
-    private static final int ITEM_SPACING = 4;
-    private static final int HEADER_HEIGHT = 50;
-    private static final int FOOTER_HEIGHT = 45;
-    private static final int PANEL_PADDING = 10;
-
-    private static final int COLOR_PANEL_BG = 0x80000000;
-    private static final int COLOR_ITEM_BG = 0x60333333;
-    private static final int COLOR_ITEM_HOVER = 0x80555555;
-    private static final int COLOR_TEXT_PRIMARY = 0xFFFFFF;
-    private static final int COLOR_TEXT_SECONDARY = 0xAAAAAA;
-    private static final int COLOR_SOURCE_DEFAULT = 0x88AAFF;
-    private static final int COLOR_SOURCE_CUSTOM = 0x88FF88;
-    private static final int COLOR_SOURCE_MODEL = 0xFFAA88;
+    private final ImGuiScreenRenderer imguiRenderer = new ImGuiScreenRenderer();
 
     private List<ActionWheelConfig.ActionEntry> availableActions;
     private List<ActionWheelConfig.ActionEntry> selectedActions;
 
-    private int leftScrollOffset = 0;
-    private int rightScrollOffset = 0;
-    private int leftMaxScroll = 0;
-    private int rightMaxScroll = 0;
-
-    private int hoveredLeftIndex = -1;
-    private int hoveredRightIndex = -1;
+    private int activeAvailableIndex = -1;
+    private int activeSelectedIndex = -1;
+    private boolean pendingClose;
 
     public ActionWheelConfigScreen(Screen parent) {
         super(Component.translatable("gui.mmdskin.action_config"));
@@ -48,240 +36,53 @@ public class ActionWheelConfigScreen extends Screen {
         loadData();
     }
 
-    private void loadData() {
-        ActionWheelConfig config = ActionWheelConfig.getInstance();
-        this.availableActions = new ArrayList<>(config.getAvailableActions());
-        this.selectedActions = new ArrayList<>(config.getDisplayedActions());
-
-        availableActions.removeIf(available ->
-            selectedActions.stream().anyMatch(selected ->
-                selected.matches(available)
-            )
-        );
-    }
-
     @Override
     protected void init() {
         super.init();
-
-        int centerX = this.width / 2;
-        int buttonY = this.height - FOOTER_HEIGHT + 12;
-
-        int panelHeight = this.height - HEADER_HEIGHT - FOOTER_HEIGHT;
-        leftMaxScroll = Math.max(0, availableActions.size() * (ITEM_HEIGHT + ITEM_SPACING) - panelHeight + PANEL_PADDING * 2);
-        rightMaxScroll = Math.max(0, selectedActions.size() * (ITEM_HEIGHT + ITEM_SPACING) - panelHeight + PANEL_PADDING * 2);
-
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.mmdskin.refresh"), btn -> rescan())
-            .bounds(centerX - 155, buttonY, 70, 20).build());
-
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.mmdskin.select_all"), btn -> selectAll())
-            .bounds(centerX - 80, buttonY, 50, 20).build());
-
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.mmdskin.clear_all"), btn -> clearAll())
-            .bounds(centerX - 25, buttonY, 50, 20).build());
-
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), btn -> saveAndClose())
-            .bounds(centerX + 30, buttonY, 60, 20).build());
-
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), btn -> this.onClose())
-            .bounds(centerX + 95, buttonY, 60, 20).build());
-    }
-
-    private void rescan() {
-        ActionWheelConfig.getInstance().rescan();
-        loadData();
-        this.clearWidgets();
-        this.init();
-    }
-
-    private void selectAll() {
-        selectedActions.addAll(availableActions);
-        availableActions.clear();
-        updateScrollBounds();
-    }
-
-    private void clearAll() {
-        availableActions.addAll(selectedActions);
-        selectedActions.clear();
-
-        availableActions.sort((a, b) -> a.animId.compareToIgnoreCase(b.animId));
-        updateScrollBounds();
-    }
-
-    private void updateScrollBounds() {
-        int panelHeight = this.height - HEADER_HEIGHT - FOOTER_HEIGHT;
-        leftMaxScroll = Math.max(0, availableActions.size() * (ITEM_HEIGHT + ITEM_SPACING) - panelHeight + PANEL_PADDING * 2);
-        rightMaxScroll = Math.max(0, selectedActions.size() * (ITEM_HEIGHT + ITEM_SPACING) - panelHeight + PANEL_PADDING * 2);
-        leftScrollOffset = Math.min(leftScrollOffset, leftMaxScroll);
-        rightScrollOffset = Math.min(rightScrollOffset, rightMaxScroll);
-    }
-
-    private void saveAndClose() {
-        ActionWheelConfig config = ActionWheelConfig.getInstance();
-        config.setDisplayedActions(new ArrayList<>(selectedActions));
-        config.save();
-        this.onClose();
+        try {
+            imguiRenderer.ensureInitialized();
+        } catch (Throwable throwable) {
+            closeAfterFailure(throwable);
+        }
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(guiGraphics);
+        Minecraft minecraft = Minecraft.getInstance();
+        try {
+            float framebufferScaleX = this.width > 0
+                    ? (float) minecraft.getWindow().getWidth() / (float) this.width
+                    : 1.0f;
+            float framebufferScaleY = this.height > 0
+                    ? (float) minecraft.getWindow().getHeight() / (float) this.height
+                    : 1.0f;
 
-        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 12, COLOR_TEXT_PRIMARY);
-
-        Component subtitle = Component.translatable("gui.mmdskin.config.stats", availableActions.size(), selectedActions.size());
-        guiGraphics.drawCenteredString(this.font, subtitle, this.width / 2, 28, COLOR_TEXT_SECONDARY);
-
-        int leftPanelX = this.width / 2 - PANEL_WIDTH - 30;
-        renderPanel(guiGraphics, leftPanelX, Component.translatable("gui.mmdskin.action_config.available").getString(), availableActions, leftScrollOffset, mouseX, mouseY, true);
-
-        int rightPanelX = this.width / 2 + 30;
-        renderPanel(guiGraphics, rightPanelX, Component.translatable("gui.mmdskin.action_config.selected").getString(), selectedActions, rightScrollOffset, mouseX, mouseY, false);
-
-        int arrowY = this.height / 2;
-        guiGraphics.drawCenteredString(this.font, Component.translatable("gui.mmdskin.config.click_add"), this.width / 2, arrowY - 10, COLOR_TEXT_SECONDARY);
-        guiGraphics.drawCenteredString(this.font, Component.translatable("gui.mmdskin.config.click_remove"), this.width / 2, arrowY + 5, 0x888888);
-
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
-    }
-
-    private void renderPanel(GuiGraphics guiGraphics, int x, String title,
-                             List<ActionWheelConfig.ActionEntry> items, int scrollOffset,
-                             int mouseX, int mouseY, boolean isLeft) {
-        int y = HEADER_HEIGHT;
-        int panelHeight = this.height - HEADER_HEIGHT - FOOTER_HEIGHT;
-
-        guiGraphics.fill(x, y, x + PANEL_WIDTH, y + panelHeight, COLOR_PANEL_BG);
-
-        guiGraphics.drawCenteredString(this.font, Component.literal(title),
-            x + PANEL_WIDTH / 2, y + 5, COLOR_TEXT_PRIMARY);
-
-        int listY = y + 20;
-        int listHeight = panelHeight - 25;
-        guiGraphics.enableScissor(x, listY, x + PANEL_WIDTH, listY + listHeight);
-
-        if (isLeft) hoveredLeftIndex = -1;
-        else hoveredRightIndex = -1;
-
-        for (int i = 0; i < items.size(); i++) {
-            int itemY = listY + PANEL_PADDING + i * (ITEM_HEIGHT + ITEM_SPACING) - scrollOffset;
-
-            if (itemY + ITEM_HEIGHT < listY || itemY > listY + listHeight) continue;
-
-            ActionWheelConfig.ActionEntry entry = items.get(i);
-            boolean isHovered = mouseX >= x + 5 && mouseX <= x + PANEL_WIDTH - 5
-                             && mouseY >= itemY && mouseY <= itemY + ITEM_HEIGHT
-                             && mouseY >= listY && mouseY <= listY + listHeight;
-
-            if (isHovered) {
-                if (isLeft) hoveredLeftIndex = i;
-                else hoveredRightIndex = i;
-            }
-
-            renderItem(guiGraphics, x + 5, itemY, PANEL_WIDTH - 10, entry, isHovered);
-        }
-
-        guiGraphics.disableScissor();
-
-        int maxScroll = isLeft ? leftMaxScroll : rightMaxScroll;
-        if (maxScroll > 0) {
-            int scrollbarX = x + PANEL_WIDTH - 5;
-            int scrollbarHeight = listHeight;
-            int thumbHeight = Math.max(20, scrollbarHeight * scrollbarHeight / (scrollbarHeight + maxScroll));
-            int thumbY = listY + (int)((scrollbarHeight - thumbHeight) * ((float)scrollOffset / maxScroll));
-
-            guiGraphics.fill(scrollbarX, listY, scrollbarX + 3, listY + scrollbarHeight, 0x40FFFFFF);
-            guiGraphics.fill(scrollbarX, thumbY, scrollbarX + 3, thumbY + thumbHeight, 0xAAFFFFFF);
-        }
-    }
-
-    private void renderItem(GuiGraphics guiGraphics, int x, int y, int width,
-                            ActionWheelConfig.ActionEntry entry, boolean isHovered) {
-
-        int bgColor = isHovered ? COLOR_ITEM_HOVER : COLOR_ITEM_BG;
-        guiGraphics.fill(x, y, x + width, y + ITEM_HEIGHT, bgColor);
-
-        String name = entry.name;
-        int maxWidth = width - 10;
-        if (this.font.width(name) > maxWidth) {
-            while (this.font.width(name + "...") > maxWidth && name.length() > 1) {
-                name = name.substring(0, name.length() - 1);
-            }
-            name = name + "...";
-        }
-        guiGraphics.drawString(this.font, name, x + 5, y + 4, COLOR_TEXT_PRIMARY);
-
-        int sourceColor = getSourceColor(entry.source);
-        String sourceText = "[" + getSourceShort(entry.source) + "]";
-        guiGraphics.drawString(this.font, sourceText, x + 5, y + 18, sourceColor);
-
-        if (entry.fileSize != null && !entry.fileSize.isEmpty()) {
-            guiGraphics.drawString(this.font, entry.fileSize, x + 45, y + 18, COLOR_TEXT_SECONDARY);
-        }
-
-        String animId = entry.animId;
-        if (animId.length() > 28) animId = animId.substring(0, 25) + "...";
-        guiGraphics.drawString(this.font, animId, x + 5, y + ITEM_HEIGHT - 10, 0x666666);
-    }
-
-    private int getSourceColor(String source) {
-        if (source == null) return COLOR_TEXT_SECONDARY;
-        switch (source) {
-            case "DEFAULT": return COLOR_SOURCE_DEFAULT;
-            case "CUSTOM": return COLOR_SOURCE_CUSTOM;
-            case "MODEL": return COLOR_SOURCE_MODEL;
-            default: return COLOR_TEXT_SECONDARY;
-        }
-    }
-
-    private String getSourceShort(String source) {
-        if (source == null) return "?";
-        switch (source) {
-            case "DEFAULT": return Component.translatable("gui.mmdskin.source.default").getString();
-            case "CUSTOM": return Component.translatable("gui.mmdskin.source.custom").getString();
-            case "MODEL": return Component.translatable("gui.mmdskin.source.model").getString();
-            default: return source;
+            imguiRenderer.setGlyphHintTexts(collectVisibleGlyphHints());
+            imguiRenderer.beginFrame(this.width, this.height, framebufferScaleX, framebufferScaleY, mouseX, mouseY);
+            renderConfigWindow();
+            imguiRenderer.renderFrame();
+            flushPendingActions(minecraft);
+        } catch (Throwable throwable) {
+            closeAfterFailure(throwable);
         }
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) {
+        imguiRenderer.onMouseButton(button, true);
+        return true;
+    }
 
-            if (hoveredLeftIndex >= 0 && hoveredLeftIndex < availableActions.size()) {
-                ActionWheelConfig.ActionEntry entry = availableActions.remove(hoveredLeftIndex);
-                selectedActions.add(entry);
-                updateScrollBounds();
-                return true;
-            }
-
-            if (hoveredRightIndex >= 0 && hoveredRightIndex < selectedActions.size()) {
-                ActionWheelConfig.ActionEntry entry = selectedActions.remove(hoveredRightIndex);
-                availableActions.add(entry);
-                availableActions.sort((a, b) -> a.animId.compareToIgnoreCase(b.animId));
-                updateScrollBounds();
-                return true;
-            }
-        }
-        return super.mouseClicked(mouseX, mouseY, button);
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        imguiRenderer.onMouseButton(button, false);
+        return true;
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        int leftPanelX = this.width / 2 - PANEL_WIDTH - 30;
-        int rightPanelX = this.width / 2 + 30;
-
-        if (mouseX >= leftPanelX && mouseX <= leftPanelX + PANEL_WIDTH) {
-            leftScrollOffset = Math.max(0, Math.min(leftMaxScroll, leftScrollOffset - (int)(delta * 25)));
-            return true;
-        }
-
-        if (mouseX >= rightPanelX && mouseX <= rightPanelX + PANEL_WIDTH) {
-            rightScrollOffset = Math.max(0, Math.min(rightMaxScroll, rightScrollOffset - (int)(delta * 25)));
-            return true;
-        }
-
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        imguiRenderer.onMouseScroll(0.0, delta);
+        return true;
     }
 
     @Override
@@ -295,11 +96,246 @@ public class ActionWheelConfigScreen extends Screen {
 
     @Override
     public void onClose() {
-        this.minecraft.setScreen(parent);
+        imguiRenderer.dispose();
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen == this) {
+            minecraft.setScreen(parent);
+            return;
+        }
+        super.onClose();
+    }
+
+    @Override
+    public void removed() {
+        imguiRenderer.dispose();
+        super.removed();
     }
 
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    private void loadData() {
+        ActionWheelConfig config = ActionWheelConfig.getInstance();
+        this.availableActions = new ArrayList<>(config.getAvailableActions());
+        this.selectedActions = new ArrayList<>(config.getDisplayedActions());
+
+        availableActions.removeIf(available ->
+                selectedActions.stream().anyMatch(selected -> selected.matches(available)));
+
+        activeAvailableIndex = -1;
+        activeSelectedIndex = -1;
+    }
+
+    private void renderConfigWindow() {
+        float panelWidth = Math.max(WINDOW_MIN_WIDTH, this.width * 0.66f);
+        float panelHeight = Math.max(WINDOW_MIN_HEIGHT, this.height * 0.72f);
+        float panelX = (this.width - panelWidth) * 0.5f;
+        float panelY = Math.max(WINDOW_MARGIN, (this.height - panelHeight) * 0.5f);
+        int windowFlags = ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoSavedSettings;
+
+        ImGui.setNextWindowPos(panelX, panelY, ImGuiCond.Appearing);
+        ImGui.setNextWindowSize(panelWidth, panelHeight, ImGuiCond.Appearing);
+        ImGui.begin(this.title.getString() + "##action_wheel_config_window", windowFlags);
+
+        renderHeader();
+        ImGui.separator();
+        renderListsArea();
+        ImGui.separator();
+        renderFooterActions();
+
+        ImGui.end();
+    }
+
+    private void renderHeader() {
+        String stats = Component.translatable(
+                "gui.mmdskin.config.stats",
+                availableActions.size(),
+                selectedActions.size()
+        ).getString();
+        ImGui.textDisabled(stats);
+    }
+
+    private void renderListsArea() {
+        float totalWidth = Math.max(1.0f, ImGui.getContentRegionAvailX());
+        float totalHeight = Math.max(160.0f, ImGui.getContentRegionAvailY() - 40.0f);
+        float listWidth = Math.max(120.0f, (totalWidth - 10.0f) * 0.5f);
+
+        ImGui.beginChild("##available_actions_panel", listWidth, totalHeight, true);
+        ImGui.textDisabled(Component.translatable("gui.mmdskin.action_config.available").getString());
+        ImGui.separator();
+        renderActionList(availableActions, true);
+        ImGui.endChild();
+
+        ImGui.sameLine();
+
+        ImGui.beginChild("##selected_actions_panel", listWidth, totalHeight, true);
+        ImGui.textDisabled(Component.translatable("gui.mmdskin.action_config.selected").getString());
+        ImGui.separator();
+        renderActionList(selectedActions, false);
+        ImGui.endChild();
+    }
+
+    private void renderActionList(List<ActionWheelConfig.ActionEntry> items, boolean availableSide) {
+        for (int i = 0; i < items.size(); i++) {
+            ActionWheelConfig.ActionEntry entry = items.get(i);
+            boolean selected = availableSide ? i == activeAvailableIndex : i == activeSelectedIndex;
+
+            if (ImGui.selectable(buildEntryTitle(entry) + "##entry_" + availableSide + "_" + i, selected, 0, fullWidth(), 0.0f)) {
+                if (availableSide) {
+                    moveToSelected(i);
+                } else {
+                    moveToAvailable(i);
+                }
+                return;
+            }
+
+            ImGui.textDisabled(buildEntryMeta(entry));
+            ImGui.separator();
+        }
+
+        if (items.isEmpty()) {
+            ImGui.textDisabled("-");
+        }
+    }
+
+    private void moveToSelected(int index) {
+        if (index < 0 || index >= availableActions.size()) {
+            return;
+        }
+        ActionWheelConfig.ActionEntry entry = availableActions.remove(index);
+        selectedActions.add(entry);
+        activeAvailableIndex = -1;
+        activeSelectedIndex = selectedActions.size() - 1;
+    }
+
+    private void moveToAvailable(int index) {
+        if (index < 0 || index >= selectedActions.size()) {
+            return;
+        }
+        ActionWheelConfig.ActionEntry entry = selectedActions.remove(index);
+        availableActions.add(entry);
+        availableActions.sort((a, b) -> a.animId.compareToIgnoreCase(b.animId));
+        activeSelectedIndex = -1;
+        activeAvailableIndex = availableActions.indexOf(entry);
+    }
+
+    private void renderFooterActions() {
+        float totalWidth = Math.max(1.0f, ImGui.getContentRegionAvailX());
+        float buttonWidth = Math.max(72.0f, (totalWidth - 16.0f) / 5.0f);
+
+        if (ImGui.button(Component.translatable("gui.mmdskin.refresh").getString() + "##action_rescan", buttonWidth, 0.0f)) {
+            rescan();
+        }
+        ImGui.sameLine();
+        if (ImGui.button(Component.translatable("gui.mmdskin.select_all").getString() + "##action_select_all", buttonWidth, 0.0f)) {
+            selectAll();
+        }
+        ImGui.sameLine();
+        if (ImGui.button(Component.translatable("gui.mmdskin.clear_all").getString() + "##action_clear_all", buttonWidth, 0.0f)) {
+            clearAll();
+        }
+        ImGui.sameLine();
+        if (ImGui.button(Component.translatable("gui.done").getString() + "##action_save", buttonWidth, 0.0f)) {
+            saveAndClose();
+            return;
+        }
+        ImGui.sameLine();
+        if (ImGui.button(Component.translatable("gui.cancel").getString() + "##action_cancel", buttonWidth, 0.0f)) {
+            pendingClose = true;
+        }
+    }
+
+    private void rescan() {
+        ActionWheelConfig.getInstance().rescan();
+        loadData();
+    }
+
+    private void selectAll() {
+        selectedActions.addAll(availableActions);
+        availableActions.clear();
+        activeAvailableIndex = -1;
+        activeSelectedIndex = selectedActions.isEmpty() ? -1 : selectedActions.size() - 1;
+    }
+
+    private void clearAll() {
+        availableActions.addAll(selectedActions);
+        selectedActions.clear();
+        availableActions.sort((a, b) -> a.animId.compareToIgnoreCase(b.animId));
+        activeAvailableIndex = -1;
+        activeSelectedIndex = -1;
+    }
+
+    private void saveAndClose() {
+        ActionWheelConfig config = ActionWheelConfig.getInstance();
+        config.setDisplayedActions(new ArrayList<>(selectedActions));
+        config.save();
+        pendingClose = true;
+    }
+
+    private void flushPendingActions(Minecraft minecraft) {
+        if (pendingClose && minecraft.screen == this) {
+            pendingClose = false;
+            minecraft.setScreen(parent);
+        }
+    }
+
+    private void closeAfterFailure(Throwable throwable) {
+        LOGGER.error("[ActionWheelConfig] ImGui config screen failed and will close", throwable);
+        imguiRenderer.dispose();
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen == this) {
+            minecraft.setScreen(parent);
+        }
+    }
+
+    private List<String> collectVisibleGlyphHints() {
+        List<String> hints = new ArrayList<>();
+        hints.add(this.title.getString());
+        hints.add(Component.translatable("gui.mmdskin.refresh").getString());
+        hints.add(Component.translatable("gui.mmdskin.select_all").getString());
+        hints.add(Component.translatable("gui.mmdskin.clear_all").getString());
+        hints.add(Component.translatable("gui.done").getString());
+        hints.add(Component.translatable("gui.cancel").getString());
+        hints.add(Component.translatable("gui.mmdskin.action_config.available").getString());
+        hints.add(Component.translatable("gui.mmdskin.action_config.selected").getString());
+        for (ActionWheelConfig.ActionEntry entry : availableActions) {
+            hints.add(entry.name);
+            hints.add(entry.animId);
+            hints.add(buildEntryTitle(entry));
+            hints.add(buildEntryMeta(entry));
+        }
+        for (ActionWheelConfig.ActionEntry entry : selectedActions) {
+            hints.add(entry.name);
+            hints.add(entry.animId);
+            hints.add(buildEntryTitle(entry));
+            hints.add(buildEntryMeta(entry));
+        }
+        return hints;
+    }
+
+    private static String buildEntryTitle(ActionWheelConfig.ActionEntry entry) {
+        return shorten(entry.name, 30);
+    }
+
+    private static String buildEntryMeta(ActionWheelConfig.ActionEntry entry) {
+        String source = entry.source == null ? "?" : entry.source;
+        String size = entry.fileSize == null || entry.fileSize.isEmpty() ? "-" : entry.fileSize;
+        return shorten(entry.animId, 36) + " · " + source + " · " + size;
+    }
+
+    private static float fullWidth() {
+        return Math.max(1.0f, ImGui.getContentRegionAvailX());
+    }
+
+    private static String shorten(String text, int maxChars) {
+        if (text == null || text.length() <= maxChars) {
+            return text;
+        }
+        if (maxChars <= 3) {
+            return text.substring(0, Math.max(0, maxChars));
+        }
+        return text.substring(0, maxChars - 3) + "...";
     }
 }

@@ -3,8 +3,12 @@ package com.shiroha.mmdskin.ui.selector;
 import com.shiroha.mmdskin.asset.catalog.ModelInfo;
 import com.shiroha.mmdskin.scene.client.SceneModelCatalog;
 import com.shiroha.mmdskin.scene.client.SceneModelManager;
+import com.shiroha.mmdskin.ui.imgui.ImGuiScreenRenderer;
+import imgui.ImGui;
+import imgui.flag.ImGuiCond;
+import imgui.flag.ImGuiWindowFlags;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.apache.logging.log4j.LogManager;
@@ -13,210 +17,74 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * 场景模型选择界面 — 复用 ModelSelectorScreen 的面板风格
- */
 public class SceneSelectorScreen extends Screen {
-    private static final Logger logger = LogManager.getLogger();
+    private static final Logger LOGGER = LogManager.getLogger();
     private static final SceneModelCatalog SCENE_CATALOG = SceneModelCatalog.getInstance();
+    private static final float WINDOW_MARGIN = 8.0f;
+    private static final float MIN_WINDOW_WIDTH = 220.0f;
+    private static final float MAX_WINDOW_WIDTH = 320.0f;
+    private static final float MIN_WINDOW_HEIGHT = 220.0f;
 
-    private static final int PANEL_WIDTH = 140;
-    private static final int PANEL_MARGIN = 4;
-    private static final int HEADER_HEIGHT = 28;
-    private static final int FOOTER_HEIGHT = 20;
-    private static final int ITEM_HEIGHT = 14;
-    private static final int ITEM_SPACING = 1;
+    private final ImGuiScreenRenderer imguiRenderer = new ImGuiScreenRenderer();
+    private final List<SceneCardEntry> sceneCards = new ArrayList<>();
 
-    private static final int COLOR_PANEL_BG = 0xC0101418;
-    private static final int COLOR_PANEL_BORDER = 0xFF2A3A4A;
-    private static final int COLOR_ITEM_HOVER = 0x30FFFFFF;
-    private static final int COLOR_ITEM_SELECTED = 0x3060A0D0;
-    private static final int COLOR_ACCENT = 0xFF60A0D0;
-    private static final int COLOR_TEXT = 0xFFDDDDDD;
-    private static final int COLOR_TEXT_DIM = 0xFF888888;
-    private static final int COLOR_TEXT_SELECTED = 0xFF60A0D0;
-    private static final int COLOR_SEPARATOR = 0x30FFFFFF;
-    private static final int COLOR_CANCEL = 0xFFD06060;
-
-    private final List<SceneCardEntry> sceneCards;
-    private int scrollOffset = 0;
-    private int maxScroll = 0;
     private String currentScene;
-    private int hoveredCardIndex = -1;
-
-    private int panelX, panelY, panelH;
-    private int listTop, listBottom;
+    private boolean pendingClose;
 
     public SceneSelectorScreen() {
         super(Component.translatable("gui.mmdskin.scene_selector"));
-        this.sceneCards = new ArrayList<>();
-        SceneModelManager mgr = SceneModelManager.getInstance();
-        this.currentScene = mgr.isActive() || mgr.isLoading() ? mgr.getSceneModelName() : null;
+        SceneModelManager manager = SceneModelManager.getInstance();
+        this.currentScene = manager.isActive() || manager.isLoading() ? manager.getSceneModelName() : null;
         loadAvailableScenes();
-    }
-
-    private void loadAvailableScenes() {
-        sceneCards.clear();
-        List<ModelInfo> models = SCENE_CATALOG.listModels();
-        for (ModelInfo info : models) {
-            sceneCards.add(new SceneCardEntry(info.getFolderName(), info));
-        }
     }
 
     @Override
     protected void init() {
         super.init();
-
-        panelX = this.width - PANEL_WIDTH - PANEL_MARGIN;
-        panelY = PANEL_MARGIN;
-        panelH = this.height - PANEL_MARGIN * 2;
-
-        listTop = panelY + HEADER_HEIGHT;
-        listBottom = panelY + panelH - FOOTER_HEIGHT;
-
-        int contentHeight = sceneCards.size() * (ITEM_HEIGHT + ITEM_SPACING);
-        int visibleHeight = listBottom - listTop;
-        maxScroll = Math.max(0, contentHeight - visibleHeight);
-        scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset));
-
-        int btnY = listBottom + 4;
-        int btnW = (PANEL_WIDTH - 12) / 2;
-
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), btn -> this.onClose())
-                .bounds(panelX + 4, btnY, btnW, 14).build());
-
-        boolean hasScene = SceneModelManager.getInstance().isActive() || SceneModelManager.getInstance().isLoading();
-        Component cancelText = Component.translatable("gui.mmdskin.scene_selector.cancel");
-        this.addRenderableWidget(Button.builder(hasScene ? cancelText : Component.translatable("gui.mmdskin.refresh"), btn -> {
-            if (SceneModelManager.getInstance().isActive() || SceneModelManager.getInstance().isLoading()) {
-                SceneModelManager.getInstance().removeScene();
-                this.currentScene = null;
-                this.clearWidgets();
-                this.init();
-            } else {
-                refreshScenes();
-            }
-        }).bounds(panelX + 4 + btnW + 4, btnY, btnW, 14).build());
-    }
-
-    private void refreshScenes() {
-        SCENE_CATALOG.invalidate();
-        loadAvailableScenes();
-        scrollOffset = 0;
-        this.clearWidgets();
-        this.init();
-    }
-
-    private void selectScene(SceneCardEntry card) {
-        this.currentScene = card.displayName;
-        SceneModelManager.getInstance().placeScene(card.displayName);
-        logger.info("放置场景模型: {}", card.displayName);
-        this.clearWidgets();
-        this.init();
+        try {
+            imguiRenderer.ensureInitialized();
+        } catch (Throwable throwable) {
+            closeAfterFailure(throwable);
+        }
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        guiGraphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + panelH, COLOR_PANEL_BG);
-        guiGraphics.fill(panelX, panelY, panelX + 1, panelY + panelH, COLOR_PANEL_BORDER);
+        Minecraft minecraft = Minecraft.getInstance();
+        try {
+            float framebufferScaleX = this.width > 0
+                    ? (float) minecraft.getWindow().getWidth() / (float) this.width
+                    : 1.0f;
+            float framebufferScaleY = this.height > 0
+                    ? (float) minecraft.getWindow().getHeight() / (float) this.height
+                    : 1.0f;
 
-        renderHeader(guiGraphics);
-        renderSceneList(guiGraphics, mouseX, mouseY);
-        renderScrollbar(guiGraphics);
-
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
-    }
-
-    private void renderHeader(GuiGraphics guiGraphics) {
-        int cx = panelX + PANEL_WIDTH / 2;
-        guiGraphics.drawCenteredString(this.font, this.title, cx, panelY + 4, COLOR_ACCENT);
-
-        String status;
-        SceneModelManager mgr = SceneModelManager.getInstance();
-        if (mgr.isLoading()) {
-            status = Component.translatable("gui.mmdskin.scene_selector.loading").getString();
-        } else if (mgr.isActive()) {
-            status = Component.translatable("gui.mmdskin.scene_selector.active", truncate(currentScene, 8)).getString();
-        } else {
-            status = sceneCards.size() + " " + Component.translatable("gui.mmdskin.scene_selector.models").getString();
+            imguiRenderer.setGlyphHintTexts(collectVisibleGlyphHints());
+            imguiRenderer.beginFrame(this.width, this.height, framebufferScaleX, framebufferScaleY, mouseX, mouseY);
+            renderSelectorWindow();
+            imguiRenderer.renderFrame();
+            flushPendingActions(minecraft);
+        } catch (Throwable throwable) {
+            closeAfterFailure(throwable);
         }
-        guiGraphics.drawCenteredString(this.font, status, cx, panelY + 16, COLOR_TEXT_DIM);
-        guiGraphics.fill(panelX + 8, listTop - 2, panelX + PANEL_WIDTH - 8, listTop - 1, COLOR_SEPARATOR);
-    }
-
-    private void renderSceneList(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        guiGraphics.enableScissor(panelX, listTop, panelX + PANEL_WIDTH, listBottom);
-
-        hoveredCardIndex = -1;
-
-        for (int i = 0; i < sceneCards.size(); i++) {
-            SceneCardEntry card = sceneCards.get(i);
-            int itemY = listTop + i * (ITEM_HEIGHT + ITEM_SPACING) - scrollOffset;
-
-            if (itemY + ITEM_HEIGHT < listTop || itemY > listBottom) continue;
-
-            int itemX = panelX + 6;
-            int itemW = PANEL_WIDTH - 12;
-            boolean isSelected = card.displayName.equals(currentScene);
-            boolean isHovered = mouseX >= itemX && mouseX <= itemX + itemW
-                    && mouseY >= Math.max(itemY, listTop) && mouseY <= Math.min(itemY + ITEM_HEIGHT, listBottom);
-
-            if (isHovered) hoveredCardIndex = i;
-
-            renderItem(guiGraphics, card, itemX, itemY, itemW, isSelected, isHovered);
-        }
-
-        guiGraphics.disableScissor();
-    }
-
-    private void renderItem(GuiGraphics guiGraphics, SceneCardEntry card, int x, int y, int w,
-                            boolean isSelected, boolean isHovered) {
-        if (isSelected) {
-            guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, COLOR_ITEM_SELECTED);
-            guiGraphics.fill(x, y + 1, x + 2, y + ITEM_HEIGHT - 1, COLOR_ACCENT);
-        } else if (isHovered) {
-            guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, COLOR_ITEM_HOVER);
-        }
-
-        int textX = x + 8;
-        String displayName = truncate(card.displayName, 16);
-        int nameColor = isSelected ? COLOR_TEXT_SELECTED : COLOR_TEXT;
-        guiGraphics.drawString(this.font, displayName, textX, y + 3, nameColor);
-
-        if (isSelected) {
-            guiGraphics.drawString(this.font, "\u2713", x + w - 10, y + 3, COLOR_ACCENT);
-        }
-    }
-
-    private void renderScrollbar(GuiGraphics guiGraphics) {
-        if (maxScroll <= 0) return;
-
-        int barX = panelX + PANEL_WIDTH - 4;
-        int barH = listBottom - listTop;
-
-        guiGraphics.fill(barX, listTop, barX + 2, listBottom, 0x20FFFFFF);
-
-        int thumbH = Math.max(16, barH * barH / (barH + maxScroll));
-        int thumbY = listTop + (int) ((barH - thumbH) * ((float) scrollOffset / maxScroll));
-        guiGraphics.fill(barX, thumbY, barX + 2, thumbY + thumbH, COLOR_ACCENT);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0 && hoveredCardIndex >= 0 && hoveredCardIndex < sceneCards.size()) {
-            selectScene(sceneCards.get(hoveredCardIndex));
-            return true;
-        }
-        return super.mouseClicked(mouseX, mouseY, button);
+        imguiRenderer.onMouseButton(button, true);
+        return true;
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        imguiRenderer.onMouseButton(button, false);
+        return true;
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (mouseX >= panelX && mouseX <= panelX + PANEL_WIDTH) {
-            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) (delta * 24)));
-            return true;
-        }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        imguiRenderer.onMouseScroll(0.0, delta);
+        return true;
     }
 
     @Override
@@ -229,20 +97,178 @@ public class SceneSelectorScreen extends Screen {
     }
 
     @Override
+    public void onClose() {
+        imguiRenderer.dispose();
+        super.onClose();
+    }
+
+    @Override
+    public void removed() {
+        imguiRenderer.dispose();
+        super.removed();
+    }
+
+    @Override
     public boolean isPauseScreen() {
         return false;
     }
 
-    private static String truncate(String s, int max) {
-        if (s == null) return "";
-        return s.length() > max ? s.substring(0, max - 2) + ".." : s;
+    private void renderSelectorWindow() {
+        float panelWidth = clamp(this.width * 0.18f, MIN_WINDOW_WIDTH, MAX_WINDOW_WIDTH);
+        float panelHeight = Math.max(MIN_WINDOW_HEIGHT, this.height - WINDOW_MARGIN);
+        float panelX = this.width - panelWidth - WINDOW_MARGIN;
+        float panelY = WINDOW_MARGIN;
+        int windowFlags = ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoSavedSettings;
+
+        ImGui.setNextWindowPos(panelX, panelY, ImGuiCond.Appearing);
+        ImGui.setNextWindowSize(panelWidth, panelHeight, ImGuiCond.Appearing);
+        ImGui.begin(this.title.getString() + "##scene_selector_window", windowFlags);
+
+        renderHeader();
+        ImGui.separator();
+        renderSceneList();
+
+        ImGui.end();
     }
 
-    private static class SceneCardEntry {
+    private void renderHeader() {
+        ImGui.textDisabled(buildStatusText());
+
+        if (fullWidthButton(Component.translatable("gui.done").getString() + "##scene_done")) {
+            pendingClose = true;
+        }
+
+        SceneModelManager manager = SceneModelManager.getInstance();
+        boolean hasScene = manager.isActive() || manager.isLoading();
+        String secondaryLabel = hasScene
+                ? Component.translatable("gui.mmdskin.scene_selector.cancel").getString()
+                : Component.translatable("gui.mmdskin.refresh").getString();
+
+        if (fullWidthButton(secondaryLabel + "##scene_secondary")) {
+            if (hasScene) {
+                manager.removeScene();
+                currentScene = null;
+                loadAvailableScenes();
+            } else {
+                refreshScenes();
+            }
+        }
+    }
+
+    private void renderSceneList() {
+        if (sceneCards.isEmpty()) {
+            ImGui.textDisabled("No scenes");
+            return;
+        }
+
+        float listHeight = Math.max(80.0f, ImGui.getContentRegionAvailY());
+        ImGui.beginChild("##scene_selector_list", 0.0f, listHeight, true);
+
+        for (SceneCardEntry card : sceneCards) {
+            boolean selected = card.displayName.equals(currentScene);
+            String label = shorten(card.displayName, 24);
+            if (ImGui.selectable(label + "##scene_card_" + card.displayName, selected, 0, fullWidth(), 0.0f)) {
+                selectScene(card);
+            }
+        }
+
+        ImGui.endChild();
+    }
+
+    private void loadAvailableScenes() {
+        sceneCards.clear();
+        List<ModelInfo> models = SCENE_CATALOG.listModels();
+        for (ModelInfo info : models) {
+            sceneCards.add(new SceneCardEntry(info.getFolderName(), info));
+        }
+    }
+
+    private void refreshScenes() {
+        SCENE_CATALOG.invalidate();
+        loadAvailableScenes();
+    }
+
+    private void selectScene(SceneCardEntry card) {
+        currentScene = card.displayName;
+        SceneModelManager.getInstance().placeScene(card.displayName);
+        LOGGER.info("Placed scene model: {}", card.displayName);
+    }
+
+    private void flushPendingActions(Minecraft minecraft) {
+        if (pendingClose && minecraft.screen == this) {
+            pendingClose = false;
+            minecraft.setScreen(null);
+        }
+    }
+
+    private void closeAfterFailure(Throwable throwable) {
+        LOGGER.error("[SceneSelector] ImGui selector failed and will close", throwable);
+        imguiRenderer.dispose();
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen == this) {
+            minecraft.setScreen(null);
+        }
+    }
+
+    private String buildStatusText() {
+        SceneModelManager manager = SceneModelManager.getInstance();
+        if (manager.isLoading()) {
+            return Component.translatable("gui.mmdskin.scene_selector.loading").getString();
+        }
+        if (manager.isActive()) {
+            return Component.translatable(
+                    "gui.mmdskin.scene_selector.active",
+                    shorten(currentScene, 14)
+            ).getString();
+        }
+        return sceneCards.size() + " " + Component.translatable("gui.mmdskin.scene_selector.models").getString();
+    }
+
+    private List<String> collectVisibleGlyphHints() {
+        List<String> hints = new ArrayList<>();
+        hints.add(this.title.getString());
+        hints.add(Component.translatable("gui.done").getString());
+        hints.add(Component.translatable("gui.mmdskin.refresh").getString());
+        hints.add(Component.translatable("gui.mmdskin.scene_selector.cancel").getString());
+        hints.add(Component.translatable("gui.mmdskin.scene_selector.loading").getString());
+        if (currentScene != null) {
+            hints.add(currentScene);
+            hints.add(Component.translatable("gui.mmdskin.scene_selector.active", currentScene).getString());
+        }
+        for (SceneCardEntry card : sceneCards) {
+            hints.add(card.displayName);
+        }
+        return hints;
+    }
+
+    private static boolean fullWidthButton(String label) {
+        return ImGui.button(label, fullWidth(), 0.0f);
+    }
+
+    private static float fullWidth() {
+        return Math.max(1.0f, ImGui.getContentRegionAvailX());
+    }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static String shorten(String value, int maxChars) {
+        if (value == null || value.length() <= maxChars) {
+            return value;
+        }
+        if (maxChars <= 3) {
+            return value.substring(0, Math.max(0, maxChars));
+        }
+        return value.substring(0, maxChars - 3) + "...";
+    }
+
+    private static final class SceneCardEntry {
         final String displayName;
+        @SuppressWarnings("unused")
         final ModelInfo modelInfo;
 
-        SceneCardEntry(String displayName, ModelInfo modelInfo) {
+        private SceneCardEntry(String displayName, ModelInfo modelInfo) {
             this.displayName = displayName;
             this.modelInfo = modelInfo;
         }

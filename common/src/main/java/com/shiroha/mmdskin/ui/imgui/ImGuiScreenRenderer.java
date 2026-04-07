@@ -1,4 +1,4 @@
-package com.shiroha.mmdskin.ui.stage.imgui;
+package com.shiroha.mmdskin.ui.imgui;
 
 import imgui.ImFont;
 import imgui.ImFontConfig;
@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-final class StageImGuiRenderer {
+public final class ImGuiScreenRenderer {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final String GLSL_VERSION = "#version 150";
     private static final float BASE_FONT_SIZE = 8.5f;
@@ -39,14 +39,14 @@ final class StageImGuiRenderer {
     private String appliedGlyphHintText = "";
     private FontCandidate selectedFontCandidate;
 
-    void setGlyphHintTexts(List<String> hintTexts) {
+    public void setGlyphHintTexts(List<String> hintTexts) {
         if (fontsInitialized) {
             return;
         }
         pendingGlyphHintText = mergeGlyphHintText(pendingGlyphHintText, hintTexts);
     }
 
-    void ensureInitialized() {
+    public void ensureInitialized() {
         if (initialized) {
             return;
         }
@@ -62,6 +62,64 @@ final class StageImGuiRenderer {
         gl3.init(GLSL_VERSION);
         initialized = true;
         lastFrameNanos = System.nanoTime();
+    }
+
+    public void beginFrame(int guiWidth, int guiHeight, float framebufferScaleX, float framebufferScaleY,
+                           double mouseX, double mouseY) {
+        ensureInitialized();
+
+        ImGuiIO io = ImGui.getIO();
+        io.setDisplaySize(guiWidth, guiHeight);
+        io.setDisplayFramebufferScale(framebufferScaleX, framebufferScaleY);
+        configureFonts(io, framebufferScaleX, framebufferScaleY);
+
+        long now = System.nanoTime();
+        float deltaTime = (now - lastFrameNanos) / 1_000_000_000.0f;
+        lastFrameNanos = now;
+        io.setDeltaTime(deltaTime > 0.0f ? deltaTime : (1.0f / 60.0f));
+        io.addMousePosEvent((float) mouseX, (float) mouseY);
+
+        gl3.newFrame();
+        ImGui.newFrame();
+    }
+
+    public void renderFrame() {
+        if (!initialized) {
+            return;
+        }
+        ImGui.render();
+        gl3.renderDrawData(ImGui.getDrawData());
+    }
+
+    public void onMouseButton(int button, boolean down) {
+        if (!initialized) {
+            return;
+        }
+        ImGui.getIO().addMouseButtonEvent(button, down);
+    }
+
+    public void onMouseScroll(double horizontal, double vertical) {
+        if (!initialized) {
+            return;
+        }
+        ImGui.getIO().addMouseWheelEvent((float) horizontal, (float) vertical);
+    }
+
+    public void dispose() {
+        if (!initialized) {
+            return;
+        }
+
+        gl3.shutdown();
+        ImGui.destroyContext();
+        initialized = false;
+        fontsInitialized = false;
+        lastFrameNanos = 0L;
+        appliedFontRasterScale = Float.NaN;
+        appliedFontGlobalScale = 1.0f;
+        pendingGlyphHintText = "";
+        appliedGlyphHintText = "";
+        selectedFontCandidate = null;
     }
 
     private void configureFonts(ImGuiIO io, float framebufferScaleX, float framebufferScaleY) {
@@ -90,7 +148,7 @@ final class StageImGuiRenderer {
         boolean usingSystemFont = candidate != null
                 && buildCandidateFontAtlas(io, candidate, glyphRanges, fontPixelSize);
         if (!usingSystemFont) {
-            LOGGER.warn("[StageWorkbench] No usable system UI font found for ImGui. Falling back to the default atlas font.");
+            LOGGER.warn("[ImGuiScreenRenderer] No usable system UI font found for ImGui. Falling back to default atlas font.");
             io.getFonts().clear();
             io.getFonts().addFontDefault();
             io.getFonts().build();
@@ -182,7 +240,7 @@ final class StageImGuiRenderer {
             }
 
             int score = countSupportedGlyphs(font, probeText);
-            LOGGER.info("[StageWorkbench] Font candidate {} (face {}) covers {}/{} probe glyphs",
+            LOGGER.info("[ImGuiScreenRenderer] Font candidate {} (face {}) covers {}/{} probe glyphs",
                     candidate.path(), candidate.faceIndex(), score, probeLength);
 
             if (score > bestScore) {
@@ -195,7 +253,7 @@ final class StageImGuiRenderer {
         }
 
         if (bestCandidate != null && bestScore > 0) {
-            LOGGER.info("[StageWorkbench] Selected ImGui primary font {} (face {}) after glyph probe scoring",
+            LOGGER.info("[ImGuiScreenRenderer] Selected ImGui primary font {} (face {}) after glyph probe scoring",
                     bestCandidate.path(), bestCandidate.faceIndex());
             return bestCandidate;
         }
@@ -236,7 +294,7 @@ final class StageImGuiRenderer {
             io.getFonts().build();
             return font;
         } catch (Throwable throwable) {
-            LOGGER.warn("[StageWorkbench] Failed to load ImGui primary font from {} (face {})",
+            LOGGER.warn("[ImGuiScreenRenderer] Failed to load ImGui primary font from {} (face {})",
                     candidate.path(), candidate.faceIndex(), throwable);
             return null;
         } finally {
@@ -259,7 +317,7 @@ final class StageImGuiRenderer {
     private void refreshFontsTexture() {
         gl3.destroyFontsTexture();
         if (!gl3.createFontsTexture()) {
-            LOGGER.warn("[StageWorkbench] Failed to recreate ImGui font texture after atlas rebuild.");
+            LOGGER.warn("[ImGuiScreenRenderer] Failed to recreate ImGui font texture after atlas rebuild.");
         }
     }
 
@@ -402,63 +460,5 @@ final class StageImGuiRenderer {
     }
 
     private record FontCandidate(Path path, int faceIndex) {
-    }
-
-    void beginFrame(int guiWidth, int guiHeight, float framebufferScaleX, float framebufferScaleY,
-                    double mouseX, double mouseY) {
-        ensureInitialized();
-
-        ImGuiIO io = ImGui.getIO();
-        io.setDisplaySize(guiWidth, guiHeight);
-        io.setDisplayFramebufferScale(framebufferScaleX, framebufferScaleY);
-        configureFonts(io, framebufferScaleX, framebufferScaleY);
-
-        long now = System.nanoTime();
-        float deltaTime = (now - lastFrameNanos) / 1_000_000_000.0f;
-        lastFrameNanos = now;
-        io.setDeltaTime(deltaTime > 0.0f ? deltaTime : (1.0f / 60.0f));
-        io.addMousePosEvent((float) mouseX, (float) mouseY);
-
-        gl3.newFrame();
-        ImGui.newFrame();
-    }
-
-    void renderFrame() {
-        if (!initialized) {
-            return;
-        }
-        ImGui.render();
-        gl3.renderDrawData(ImGui.getDrawData());
-    }
-
-    void onMouseButton(int button, boolean down) {
-        if (!initialized) {
-            return;
-        }
-        ImGui.getIO().addMouseButtonEvent(button, down);
-    }
-
-    void onMouseScroll(double horizontal, double vertical) {
-        if (!initialized) {
-            return;
-        }
-        ImGui.getIO().addMouseWheelEvent((float) horizontal, (float) vertical);
-    }
-
-    void dispose() {
-        if (!initialized) {
-            return;
-        }
-
-        gl3.shutdown();
-        ImGui.destroyContext();
-        initialized = false;
-        fontsInitialized = false;
-        lastFrameNanos = 0L;
-        appliedFontRasterScale = Float.NaN;
-        appliedFontGlobalScale = 1.0f;
-        pendingGlyphHintText = "";
-        appliedGlyphHintText = "";
-        selectedFontCandidate = null;
     }
 }

@@ -2,51 +2,37 @@ package com.shiroha.mmdskin.maid;
 
 import com.shiroha.mmdskin.maid.service.DefaultMaidModelSelectionService;
 import com.shiroha.mmdskin.maid.service.MaidModelSelectionService;
+import com.shiroha.mmdskin.ui.imgui.ImGuiScreenRenderer;
+import imgui.ImGui;
+import imgui.flag.ImGuiCond;
+import imgui.flag.ImGuiWindowFlags;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * 女仆 MMD 模型选择界面 — 简约右侧面板风格
- */
-
 public class MaidModelSelectorScreen extends Screen {
-
-    private static final int PANEL_WIDTH = 140;
-    private static final int PANEL_MARGIN = 4;
-    private static final int HEADER_HEIGHT = 40;
-    private static final int FOOTER_HEIGHT = 20;
-    private static final int ITEM_HEIGHT = 14;
-    private static final int ITEM_SPACING = 1;
-
-    private static final int COLOR_PANEL_BG = 0xC0181420;
-    private static final int COLOR_PANEL_BORDER = 0xFF4A2A4A;
-    private static final int COLOR_ITEM_HOVER = 0x30FFFFFF;
-    private static final int COLOR_ITEM_SELECTED = 0x30D060A0;
-    private static final int COLOR_ACCENT = 0xFFD060A0;
-    private static final int COLOR_TEXT = 0xFFDDDDDD;
-    private static final int COLOR_TEXT_DIM = 0xFF888888;
-    private static final int COLOR_TEXT_SELECTED = 0xFFD060A0;
-    private static final int COLOR_SEPARATOR = 0x30FFFFFF;
+    private static final Logger LOGGER = LogManager.getLogger();
+    private static final float WINDOW_MARGIN = 8.0f;
+    private static final float MIN_WINDOW_WIDTH = 220.0f;
+    private static final float MAX_WINDOW_WIDTH = 320.0f;
+    private static final float MIN_WINDOW_HEIGHT = 220.0f;
 
     private final UUID maidUUID;
     private final int maidEntityId;
     private final String maidName;
     private final MaidModelSelectionService maidModelSelectionService;
-    private final List<ModelCardEntry> modelCards;
+    private final ImGuiScreenRenderer imguiRenderer = new ImGuiScreenRenderer();
+    private final List<String> modelCards = new ArrayList<>();
 
-    private int scrollOffset = 0;
-    private int maxScroll = 0;
     private String currentModel;
-    private int hoveredCardIndex = -1;
-
-    private int panelX, panelY, panelH;
-    private int listTop, listBottom;
+    private boolean pendingClose;
 
     public MaidModelSelectorScreen(UUID maidUUID, int maidEntityId, String maidName) {
         this(maidUUID, maidEntityId, maidName, new DefaultMaidModelSelectionService());
@@ -59,165 +45,56 @@ public class MaidModelSelectorScreen extends Screen {
         this.maidEntityId = maidEntityId;
         this.maidName = maidName;
         this.maidModelSelectionService = maidModelSelectionService;
-        this.modelCards = new ArrayList<>();
-        this.currentModel = maidModelSelectionService.getCurrentModel(maidUUID);
-        loadAvailableModels();
-    }
-
-    private void loadAvailableModels() {
-        modelCards.clear();
-
-        for (String modelName : maidModelSelectionService.loadAvailableModels()) {
-            modelCards.add(new ModelCardEntry(modelName));
-        }
+        reloadModelCards();
     }
 
     @Override
     protected void init() {
         super.init();
-
-        panelX = this.width - PANEL_WIDTH - PANEL_MARGIN;
-        panelY = PANEL_MARGIN;
-        panelH = this.height - PANEL_MARGIN * 2;
-
-        listTop = panelY + HEADER_HEIGHT;
-        listBottom = panelY + panelH - FOOTER_HEIGHT;
-
-        int contentHeight = modelCards.size() * (ITEM_HEIGHT + ITEM_SPACING);
-        int visibleHeight = listBottom - listTop;
-        maxScroll = Math.max(0, contentHeight - visibleHeight);
-        scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset));
-
-        int btnY = listBottom + 4;
-        int btnW = (PANEL_WIDTH - 12) / 2;
-
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), btn -> this.onClose())
-            .bounds(panelX + 4, btnY, btnW, 14).build());
-
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.mmdskin.refresh"), btn -> refreshModels())
-            .bounds(panelX + 4 + btnW + 4, btnY, btnW, 14).build());
-    }
-
-    private void refreshModels() {
-        loadAvailableModels();
-        scrollOffset = 0;
-        this.clearWidgets();
-        this.init();
-    }
-
-    private void selectModel(ModelCardEntry card) {
-        this.currentModel = card.displayName;
-        maidModelSelectionService.selectModel(maidUUID, maidEntityId, card.displayName);
+        try {
+            imguiRenderer.ensureInitialized();
+        } catch (Throwable throwable) {
+            closeAfterFailure(throwable);
+        }
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        Minecraft minecraft = Minecraft.getInstance();
+        try {
+            float framebufferScaleX = this.width > 0
+                    ? (float) minecraft.getWindow().getWidth() / (float) this.width
+                    : 1.0f;
+            float framebufferScaleY = this.height > 0
+                    ? (float) minecraft.getWindow().getHeight() / (float) this.height
+                    : 1.0f;
 
-        guiGraphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + panelH, COLOR_PANEL_BG);
-
-        guiGraphics.fill(panelX, panelY, panelX + 1, panelY + panelH, COLOR_PANEL_BORDER);
-
-        renderHeader(guiGraphics);
-
-        renderModelList(guiGraphics, mouseX, mouseY);
-
-        renderScrollbar(guiGraphics);
-
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
-    }
-
-    private void renderHeader(GuiGraphics guiGraphics) {
-        int cx = panelX + PANEL_WIDTH / 2;
-
-        guiGraphics.drawCenteredString(this.font, this.title, cx, panelY + 4, COLOR_ACCENT);
-
-        String maidInfo = truncate(maidName, 16);
-        guiGraphics.drawCenteredString(this.font, maidInfo, cx, panelY + 16, COLOR_TEXT_DIM);
-
-        String info = Component.translatable("gui.mmdskin.model_selector.stats", modelCards.size() - 1, truncate(currentModel, 10)).getString();
-        guiGraphics.drawCenteredString(this.font, info, cx, panelY + 28, COLOR_TEXT_DIM);
-
-        guiGraphics.fill(panelX + 8, listTop - 2, panelX + PANEL_WIDTH - 8, listTop - 1, COLOR_SEPARATOR);
-    }
-
-    private void renderModelList(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        guiGraphics.enableScissor(panelX, listTop, panelX + PANEL_WIDTH, listBottom);
-
-        hoveredCardIndex = -1;
-
-        for (int i = 0; i < modelCards.size(); i++) {
-            ModelCardEntry card = modelCards.get(i);
-            int itemY = listTop + i * (ITEM_HEIGHT + ITEM_SPACING) - scrollOffset;
-
-            if (itemY + ITEM_HEIGHT < listTop || itemY > listBottom) continue;
-
-            int itemX = panelX + 6;
-            int itemW = PANEL_WIDTH - 12;
-            boolean isSelected = card.displayName.equals(currentModel);
-            boolean isHovered = mouseX >= itemX && mouseX <= itemX + itemW
-                             && mouseY >= Math.max(itemY, listTop) && mouseY <= Math.min(itemY + ITEM_HEIGHT, listBottom);
-
-            if (isHovered) {
-                hoveredCardIndex = i;
-            }
-
-            renderItem(guiGraphics, card, itemX, itemY, itemW, isSelected, isHovered);
+            imguiRenderer.setGlyphHintTexts(collectVisibleGlyphHints());
+            imguiRenderer.beginFrame(this.width, this.height, framebufferScaleX, framebufferScaleY, mouseX, mouseY);
+            renderSelectorWindow();
+            imguiRenderer.renderFrame();
+            flushPendingActions(minecraft);
+        } catch (Throwable throwable) {
+            closeAfterFailure(throwable);
         }
-
-        guiGraphics.disableScissor();
-    }
-
-    private void renderItem(GuiGraphics guiGraphics, ModelCardEntry card, int x, int y, int w, boolean isSelected, boolean isHovered) {
-
-        if (isSelected) {
-            guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, COLOR_ITEM_SELECTED);
-
-            guiGraphics.fill(x, y + 1, x + 2, y + ITEM_HEIGHT - 1, COLOR_ACCENT);
-        } else if (isHovered) {
-            guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, COLOR_ITEM_HOVER);
-        }
-
-        int textX = x + 8;
-
-        String displayName = truncate(card.displayName, 16);
-        int nameColor = isSelected ? COLOR_TEXT_SELECTED : COLOR_TEXT;
-        guiGraphics.drawString(this.font, displayName, textX, y + 3, nameColor);
-
-        if (isSelected) {
-            guiGraphics.drawString(this.font, "\u2713", x + w - 10, y + 3, COLOR_ACCENT);
-        }
-    }
-
-    private void renderScrollbar(GuiGraphics guiGraphics) {
-        if (maxScroll <= 0) return;
-
-        int barX = panelX + PANEL_WIDTH - 4;
-        int barH = listBottom - listTop;
-
-        guiGraphics.fill(barX, listTop, barX + 2, listBottom, 0x20FFFFFF);
-
-        int thumbH = Math.max(16, barH * barH / (barH + maxScroll));
-        int thumbY = listTop + (int)((barH - thumbH) * ((float) scrollOffset / maxScroll));
-        guiGraphics.fill(barX, thumbY, barX + 2, thumbY + thumbH, COLOR_ACCENT);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0 && hoveredCardIndex >= 0 && hoveredCardIndex < modelCards.size()) {
-            selectModel(modelCards.get(hoveredCardIndex));
-            return true;
-        }
-        return super.mouseClicked(mouseX, mouseY, button);
+        imguiRenderer.onMouseButton(button, true);
+        return true;
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        imguiRenderer.onMouseButton(button, false);
+        return true;
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-
-        if (mouseX >= panelX && mouseX <= panelX + PANEL_WIDTH) {
-            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int)(delta * 24)));
-            return true;
-        }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        imguiRenderer.onMouseScroll(0.0, delta);
+        return true;
     }
 
     @Override
@@ -230,19 +107,141 @@ public class MaidModelSelectorScreen extends Screen {
     }
 
     @Override
+    public void onClose() {
+        disposeRenderer();
+        super.onClose();
+    }
+
+    @Override
+    public void removed() {
+        disposeRenderer();
+        super.removed();
+    }
+
+    @Override
     public boolean isPauseScreen() {
         return false;
     }
 
-    private static String truncate(String s, int max) {
-        return s.length() > max ? s.substring(0, max - 2) + ".." : s;
+    private void renderSelectorWindow() {
+        float panelWidth = clamp(this.width * 0.18f, MIN_WINDOW_WIDTH, MAX_WINDOW_WIDTH);
+        float panelHeight = Math.max(MIN_WINDOW_HEIGHT, this.height - WINDOW_MARGIN);
+        float panelX = this.width - panelWidth - WINDOW_MARGIN;
+        float panelY = WINDOW_MARGIN;
+
+        int windowFlags = ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoSavedSettings;
+
+        ImGui.setNextWindowPos(panelX, panelY, ImGuiCond.Appearing);
+        ImGui.setNextWindowSize(panelWidth, panelHeight, ImGuiCond.Appearing);
+        ImGui.begin(this.title.getString() + "##maid_model_selector_window", windowFlags);
+
+        renderHeader();
+        ImGui.separator();
+        renderModelList();
+
+        ImGui.end();
     }
 
-    private static class ModelCardEntry {
-        final String displayName;
+    private void renderHeader() {
+        ImGui.textDisabled(shorten(maidName, 24));
+        ImGui.textDisabled(Component.translatable(
+                "gui.mmdskin.model_selector.stats",
+                Math.max(0, modelCards.size() - 1),
+                shorten(currentModel, 14)
+        ).getString());
 
-        ModelCardEntry(String displayName) {
-            this.displayName = displayName;
+        if (fullWidthButton(Component.translatable("gui.done").getString() + "##maid_model_done")) {
+            pendingClose = true;
         }
+
+        if (fullWidthButton(Component.translatable("gui.mmdskin.refresh").getString() + "##maid_model_refresh")) {
+            reloadModelCards();
+        }
+    }
+
+    private void renderModelList() {
+        if (modelCards.isEmpty()) {
+            ImGui.textDisabled("No models");
+            return;
+        }
+
+        float listHeight = Math.max(80.0f, ImGui.getContentRegionAvailY());
+        ImGui.beginChild("##maid_model_selector_list", 0.0f, listHeight, true);
+
+        for (String modelName : modelCards) {
+            boolean selected = modelName.equals(currentModel);
+            String label = shorten(modelName, 24);
+            if (ImGui.selectable(label + "##maid_model_card_" + modelName, selected, 0, fullWidth(), 0.0f)) {
+                selectModel(modelName);
+            }
+        }
+
+        ImGui.endChild();
+    }
+
+    private void reloadModelCards() {
+        modelCards.clear();
+        modelCards.addAll(maidModelSelectionService.loadAvailableModels());
+        currentModel = maidModelSelectionService.getCurrentModel(maidUUID);
+    }
+
+    private void selectModel(String modelName) {
+        currentModel = modelName;
+        maidModelSelectionService.selectModel(maidUUID, maidEntityId, modelName);
+    }
+
+    private void flushPendingActions(Minecraft minecraft) {
+        if (pendingClose && minecraft.screen == this) {
+            pendingClose = false;
+            minecraft.setScreen(null);
+        }
+    }
+
+    private void closeAfterFailure(Throwable throwable) {
+        LOGGER.error("[MaidModelSelector] ImGui selector failed and will close", throwable);
+        disposeRenderer();
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen == this) {
+            minecraft.setScreen(null);
+        }
+    }
+
+    private void disposeRenderer() {
+        imguiRenderer.dispose();
+    }
+
+    private List<String> collectVisibleGlyphHints() {
+        List<String> hints = new ArrayList<>();
+        hints.add(this.title.getString());
+        hints.add(maidName);
+        hints.add(Component.translatable("gui.done").getString());
+        hints.add(Component.translatable("gui.mmdskin.refresh").getString());
+        if (currentModel != null) {
+            hints.add(currentModel);
+        }
+        hints.addAll(modelCards);
+        return hints;
+    }
+
+    private static float fullWidth() {
+        return Math.max(1.0f, ImGui.getContentRegionAvailX());
+    }
+
+    private static boolean fullWidthButton(String label) {
+        return ImGui.button(label, fullWidth(), 0.0f);
+    }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static String shorten(String value, int maxChars) {
+        if (value == null || value.length() <= maxChars) {
+            return value;
+        }
+        if (maxChars <= 3) {
+            return value.substring(0, Math.max(0, maxChars));
+        }
+        return value.substring(0, maxChars - 3) + "...";
     }
 }
