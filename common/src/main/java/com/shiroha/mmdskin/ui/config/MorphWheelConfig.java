@@ -3,6 +3,7 @@ package com.shiroha.mmdskin.ui.config;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import com.shiroha.mmdskin.expression.BuiltinExpressionRegistry;
 import com.shiroha.mmdskin.config.PathConstants;
 import com.shiroha.mmdskin.asset.catalog.MorphInfo;
 import org.apache.logging.log4j.LogManager;
@@ -30,8 +31,10 @@ public class MorphWheelConfig {
     private List<MorphEntry> displayedMorphs = new ArrayList<>();
 
     public static class MorphEntry {
+        public String entryType;
         public String displayName;
         public String morphName;
+        public String presetId;
         public String source;
         public String modelName;
         public String fileSize;
@@ -43,8 +46,10 @@ public class MorphWheelConfig {
 
         public MorphEntry(String displayName, String morphName, String source,
                           String modelName, String fileSize) {
+            this.entryType = "FILE";
             this.displayName = displayName;
             this.morphName = morphName;
+            this.presetId = null;
             this.source = source;
             this.modelName = modelName;
             this.fileSize = fileSize;
@@ -55,8 +60,10 @@ public class MorphWheelConfig {
 
         public MorphEntry(String displayName, String morphName, String source,
                           String modelName, String fileSize, String filePath, String catalogKey) {
+            this.entryType = "FILE";
             this.displayName = displayName;
             this.morphName = morphName;
+            this.presetId = null;
             this.source = source;
             this.modelName = modelName;
             this.fileSize = fileSize;
@@ -77,6 +84,25 @@ public class MorphWheelConfig {
             );
         }
 
+        public static MorphEntry fromPreset(String presetId, String displayName) {
+            MorphEntry entry = new MorphEntry();
+            entry.entryType = "PRESET";
+            entry.displayName = displayName;
+            entry.morphName = presetId;
+            entry.presetId = presetId;
+            entry.source = "BUILTIN";
+            entry.modelName = null;
+            entry.fileSize = "-";
+            entry.filePath = null;
+            entry.catalogKey = "preset:" + presetId;
+            entry.selected = false;
+            return entry;
+        }
+
+        public boolean isPreset() {
+            return "PRESET".equalsIgnoreCase(entryType) || (presetId != null && !presetId.isEmpty());
+        }
+    
         public boolean matches(MorphEntry other) {
             if (other == null) {
                 return false;
@@ -100,6 +126,8 @@ public class MorphWheelConfig {
 
     public void scanAvailableMorphs() {
         availableMorphs.clear();
+
+        availableMorphs.addAll(BuiltinExpressionRegistry.createConfigEntries());
 
         List<MorphInfo> morphs = MorphInfo.scanAllMorphs();
 

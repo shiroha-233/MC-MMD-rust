@@ -35,12 +35,14 @@ public class MorphWheelScreen extends AbstractWheelScreen {
         String displayName;
         String morphName;
         String filePath;
+        String syncToken;
         boolean resetAction;
 
-        MorphSlot(String displayName, String morphName, String filePath, boolean resetAction) {
+        MorphSlot(String displayName, String morphName, String filePath, String syncToken, boolean resetAction) {
             this.displayName = displayName;
             this.morphName = morphName;
             this.filePath = filePath;
+            this.syncToken = syncToken;
             this.resetAction = resetAction;
         }
     }
@@ -75,7 +77,7 @@ public class MorphWheelScreen extends AbstractWheelScreen {
     private void initMorphSlots() {
         morphSlots.clear();
         for (MorphOption option : morphWheelService.loadMorphs()) {
-            morphSlots.add(new MorphSlot(option.displayName(), option.morphName(), option.filePath(), option.resetAction()));
+            morphSlots.add(new MorphSlot(option.displayName(), option.morphName(), option.filePath(), option.syncToken(), option.resetAction()));
         }
     }
     
@@ -158,6 +160,6 @@ public class MorphWheelScreen extends AbstractWheelScreen {
     }
     
     private void executeMorph(MorphSlot slot) {
-        morphWheelService.selectMorph(new MorphOption(slot.displayName, slot.morphName, slot.filePath, slot.resetAction));
+        morphWheelService.selectMorph(new MorphOption(slot.displayName, slot.morphName, slot.filePath, slot.syncToken, slot.resetAction));
     }
 }

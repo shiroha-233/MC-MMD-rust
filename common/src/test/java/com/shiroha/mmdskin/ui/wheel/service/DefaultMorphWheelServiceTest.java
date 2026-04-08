@@ -1,6 +1,7 @@
 package com.shiroha.mmdskin.ui.wheel.service;
 
 import com.shiroha.mmdskin.ui.config.MorphWheelConfig;
+import com.shiroha.mmdskin.expression.ExpressionSelection;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -27,6 +28,7 @@ class DefaultMorphWheelServiceTest {
         assertEquals(2, options.size());
         assertEquals("Smile", options.get(0).displayName());
         assertEquals("smile", options.get(0).morphName());
+        assertEquals("vpd:smile", options.get(0).syncToken());
         assertEquals(true, options.get(1).resetAction());
     }
 
@@ -39,11 +41,25 @@ class DefaultMorphWheelServiceTest {
                 new FakeMorphRuntimePort(false, true),
                 syncedMorph::set);
 
-        service.selectMorph(new MorphOption("Smile", "smile", "morphs/smile.vpd", false));
+        service.selectMorph(new MorphOption("Smile", "smile", "morphs/smile.vpd", "vpd:smile", false));
         assertEquals(null, syncedMorph.get());
 
-        service.selectMorph(new MorphOption("Reset", "__reset__", null, true));
+        service.selectMorph(new MorphOption("Reset", "__reset__", null, "__reset__", true));
         assertEquals("__reset__", syncedMorph.get());
+    }
+
+    @Test
+    void shouldSyncPresetTokenWhenPresetApplySucceeds() {
+        AtomicReference<String> syncedMorph = new AtomicReference<>();
+        DefaultMorphWheelService service = new DefaultMorphWheelService(
+                List::of,
+                entry -> null,
+                new FakeMorphRuntimePort(true, true),
+                syncedMorph::set);
+
+        service.selectMorph(new MorphOption("Smile", "smile", null, "preset:smile", false));
+
+        assertEquals("preset:smile", syncedMorph.get());
     }
 
     private record FakeMorphRuntimePort(boolean applyResult, boolean resetResult)
@@ -53,13 +69,8 @@ class DefaultMorphWheelServiceTest {
         }
 
         @Override
-        public boolean resetCurrentPlayerMorphs() {
-            return resetResult;
-        }
-
-        @Override
-        public boolean applyCurrentPlayerMorph(String filePath) {
-            return applyResult;
+        public boolean applyCurrentPlayerMorph(ExpressionSelection selection, String filePath) {
+            return selection.type() == ExpressionSelection.Type.RESET ? resetResult : applyResult;
         }
     }
 }

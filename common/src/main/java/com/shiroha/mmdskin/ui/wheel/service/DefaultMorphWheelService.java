@@ -3,6 +3,9 @@ package com.shiroha.mmdskin.ui.wheel.service;
 import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.asset.catalog.MorphInfo;
 import com.shiroha.mmdskin.config.UIConstants;
+import com.shiroha.mmdskin.expression.ExpressionApplicationService;
+import com.shiroha.mmdskin.expression.ExpressionSelection;
+import com.shiroha.mmdskin.expression.ExpressionSelectionCodec;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
 import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
@@ -20,7 +23,6 @@ import java.util.function.Supplier;
 
 public class DefaultMorphWheelService implements MorphWheelService {
     private static final Logger logger = LogManager.getLogger();
-    private static final String RESET_MORPH_NAME = "__reset__";
 
     private final Supplier<List<MorphWheelConfig.MorphEntry>> morphEntriesSupplier;
     private final Function<MorphWheelConfig.MorphEntry, String> fileResolver;
@@ -46,30 +48,29 @@ public class DefaultMorphWheelService implements MorphWheelService {
     public List<MorphOption> loadMorphs() {
         List<MorphOption> options = new ArrayList<>();
         for (MorphWheelConfig.MorphEntry entry : morphEntriesSupplier.get()) {
-            options.add(new MorphOption(entry.displayName, entry.morphName, fileResolver.apply(entry), false));
+            String filePath = entry.isPreset() ? null : fileResolver.apply(entry);
+            String syncToken = entry.isPreset()
+                    ? ExpressionSelectionCodec.encode(ExpressionSelection.preset(entry.presetId))
+                    : ExpressionSelectionCodec.encode(ExpressionSelection.file(entry.morphName));
+            options.add(new MorphOption(entry.displayName, entry.morphName, filePath, syncToken, false));
         }
         options.add(new MorphOption(net.minecraft.network.chat.Component.translatable("gui.mmdskin.reset_morph").getString(),
-                RESET_MORPH_NAME, null, true));
+                ExpressionSelectionCodec.RESET_TOKEN, null, ExpressionSelectionCodec.RESET_TOKEN, true));
         return List.copyOf(options);
     }
 
     @Override
     public void selectMorph(MorphOption option) {
-        if (option == null || option.morphName() == null || option.morphName().isEmpty()) {
+        if (option == null || option.syncToken() == null || option.syncToken().isEmpty()) {
             return;
         }
 
         boolean applied;
-        if (option.resetAction()) {
-            applied = runtimePort.resetCurrentPlayerMorphs();
-        } else if (option.filePath() == null || option.filePath().isEmpty()) {
-            applied = false;
-        } else {
-            applied = runtimePort.applyCurrentPlayerMorph(option.filePath());
-        }
+        ExpressionSelection selection = ExpressionSelectionCodec.decode(option.syncToken());
+        applied = runtimePort.applyCurrentPlayerMorph(selection, option.filePath());
 
         if (applied) {
-            syncPort.syncMorph(option.morphName());
+            syncPort.syncMorph(option.syncToken());
         }
     }
 
@@ -89,39 +90,24 @@ public class DefaultMorphWheelService implements MorphWheelService {
     }
 
     interface MorphRuntimePort {
-        boolean resetCurrentPlayerMorphs();
-
-        boolean applyCurrentPlayerMorph(String filePath);
+        boolean applyCurrentPlayerMorph(ExpressionSelection selection, String filePath);
     }
 
     private static final class MinecraftMorphRuntimePort implements MorphRuntimePort {
         @Override
-        public boolean resetCurrentPlayerMorphs() {
+        public boolean applyCurrentPlayerMorph(ExpressionSelection selection, String filePath) {
+            if (selection == null) {
+                return false;
+            }
+
+            ExpressionSelection resolvedSelection = selection.type() == ExpressionSelection.Type.FILE
+                    ? ExpressionSelection.file(filePath)
+                    : selection;
             Long modelHandle = resolveModelHandle();
             if (modelHandle == null) {
                 return false;
             }
-            NativeFunc.GetInst().ResetAllMorphs(modelHandle);
-            return true;
-        }
-
-        @Override
-        public boolean applyCurrentPlayerMorph(String filePath) {
-            Long modelHandle = resolveModelHandle();
-            if (modelHandle == null) {
-                return false;
-            }
-
-            int result = NativeFunc.GetInst().ApplyVpdMorph(modelHandle, filePath);
-            if (result >= 0) {
-                return true;
-            }
-            if (result == -1) {
-                logger.error("VPD 文件加载失败: {}", filePath);
-            } else if (result == -2) {
-                logger.error("模型不存在, handle={}", modelHandle);
-            }
-            return false;
+            return ExpressionApplicationService.apply(modelHandle, resolvedSelection, "local_player");
         }
 
         private Long resolveModelHandle() {
