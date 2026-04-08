@@ -33,6 +33,7 @@ public class ModelSettingsScreen extends Screen {
     private ModelConfigData config;
     private boolean pendingClose;
     private boolean pendingOpenAnimConfig;
+    private boolean pendingOpenVoiceConfig;
 
     public ModelSettingsScreen(String modelName, Screen parentScreen) {
         super(Component.translatable("gui.mmdskin.model_settings.title"));
@@ -221,6 +222,10 @@ public class ModelSettingsScreen extends Screen {
             pendingOpenAnimConfig = true;
         }
 
+        if (fullWidthButton(Component.translatable("gui.mmdskin.model_settings.voice_config").getString() + "##voice")) {
+            pendingOpenVoiceConfig = true;
+        }
+
         if (fullWidthButton(Component.translatable("gui.done").getString() + "##done")) {
             pendingClose = true;
         }
@@ -235,6 +240,12 @@ public class ModelSettingsScreen extends Screen {
         if (pendingOpenAnimConfig && minecraft.screen == this) {
             pendingOpenAnimConfig = false;
             minecraft.setScreen(new ModelAnimationScreen(modelName, this));
+            return;
+        }
+
+        if (pendingOpenVoiceConfig && minecraft.screen == this) {
+            pendingOpenVoiceConfig = false;
+            minecraft.setScreen(VoicePackBindingScreen.createForPlayer(this, modelName));
             return;
         }
 
@@ -260,6 +271,7 @@ public class ModelSettingsScreen extends Screen {
         hints.add(Component.translatable("gui.mmdskin.model_settings.save").getString());
         hints.add(Component.translatable("gui.mmdskin.model_settings.reset").getString());
         hints.add(Component.translatable("gui.mmdskin.model_settings.anim_config").getString());
+        hints.add(Component.translatable("gui.mmdskin.model_settings.voice_config").getString());
         hints.add(Component.translatable("gui.done").getString());
         hints.add(Component.translatable("gui.mmdskin.model_settings.eye_tracking").getString());
         hints.add(Component.translatable("gui.mmdskin.model_settings.eye_tracking_enabled").getString());

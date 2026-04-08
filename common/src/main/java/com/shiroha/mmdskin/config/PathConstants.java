@@ -20,8 +20,10 @@ public final class PathConstants {
     public static final String DEFAULT_ANIM_DIR = "DefaultAnim";
     public static final String CUSTOM_ANIM_DIR = "CustomAnim";
     public static final String STAGE_ANIM_DIR = "StageAnim";
+    public static final String VOICE_PACK_DIR = "VoicePack";
     public static final String MODEL_ANIMS_DIR = "anims";
     public static final String MODEL_ANIM_CONFIG = "animations.json";
+    public static final String VOICE_PACK_MANIFEST = "voice_pack.json";
 
     public static final String DEFAULT_MORPH_DIR = "DefaultMorph";
     public static final String CUSTOM_MORPH_DIR = "CustomMorph";
@@ -33,6 +35,7 @@ public final class PathConstants {
     public static final String MORPH_WHEEL_CONFIG = "morph_wheel.json";
     public static final String MAIN_CONFIG = "config.json";
     public static final String STAGE_CONFIG = "stage_config.json";
+    public static final String VOICE_PACK_BINDINGS_CONFIG = "voice_pack_bindings.json";
 
     public static final String VMD_EXTENSION = ".vmd";
     public static final String VPD_EXTENSION = ".vpd";
@@ -86,6 +89,10 @@ public final class PathConstants {
         return new File(getSkinRootDir(), STAGE_ANIM_DIR);
     }
 
+    public static File getVoicePackDir() {
+        return new File(getSkinRootDir(), VOICE_PACK_DIR);
+    }
+
     public static File getDefaultMorphDir() {
         return new File(getSkinRootDir(), DEFAULT_MORPH_DIR);
     }
@@ -116,6 +123,10 @@ public final class PathConstants {
 
     public static File getMorphWheelConfigFile() {
         return getConfigFile(MORPH_WHEEL_CONFIG);
+    }
+
+    public static File getVoicePackBindingsConfigFile() {
+        return getConfigFile(VOICE_PACK_BINDINGS_CONFIG);
     }
 
     public static File getModelAnimsDir(String modelName) {
@@ -172,6 +183,13 @@ public final class PathConstants {
         File sceneDir = getSceneModelDir();
         if (!sceneDir.exists()) {
             sceneDir.mkdirs();
+        }
+    }
+
+    public static void ensureVoicePackDir() {
+        File voiceDir = getVoicePackDir();
+        if (!voiceDir.exists()) {
+            voiceDir.mkdirs();
         }
     }
 }

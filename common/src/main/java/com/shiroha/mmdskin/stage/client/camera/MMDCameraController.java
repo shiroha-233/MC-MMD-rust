@@ -249,6 +249,7 @@ public class MMDCameraController {
         }
 
         this.modelHandle = modelHandle;
+        this.modelName = modelName;
         if (modelHandle != 0) {
             nf.SetAutoBlinkEnabled(modelHandle, false);
             nf.SetEyeTrackingEnabled(modelHandle, false);
@@ -713,6 +714,10 @@ public class MMDCameraController {
 
     public float getPlaybackSpeed() {
         return playbackSpeed;
+    }
+
+    public String getActiveStageModelName() {
+        return modelName;
     }
 
     public boolean isWaitingForHost() {

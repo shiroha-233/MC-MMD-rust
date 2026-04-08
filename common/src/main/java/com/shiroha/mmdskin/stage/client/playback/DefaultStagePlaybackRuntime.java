@@ -8,6 +8,7 @@ import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
 import com.shiroha.mmdskin.stage.client.playback.port.StageLocalModelBindingPort;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackRuntimePort;
 import com.shiroha.mmdskin.stage.domain.model.StageDescriptor;
+import com.shiroha.mmdskin.voice.runtime.VoicePlaybackManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -62,20 +63,29 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
     @Override
     public void exitStageSelection() {
         MMDCameraController controller = MMDCameraController.getInstance();
+        boolean wasInStageMode = controller.isInStageMode();
         controller.setWaitingForHost(false);
         if (controller.isInStageMode()) {
             controller.exitStageMode();
+            if (wasInStageMode) {
+                VoicePlaybackManager.getInstance().onLocalPlayerStageEnd(resolveCurrentStageModelName());
+            }
         }
     }
 
     @Override
     public void stopActivePlaybackForRemoteEnd() {
         MMDCameraController controller = MMDCameraController.getInstance();
+        boolean wasWatching = controller.isWatching();
+        boolean wasInStageMode = controller.isInStageMode();
         controller.setWaitingForHost(false);
         if (controller.isWatching()) {
             controller.exitWatchMode(false);
         } else if (controller.isInStageMode()) {
             controller.exitStageMode();
+        }
+        if (wasWatching || wasInStageMode) {
+            VoicePlaybackManager.getInstance().onLocalPlayerStageEnd(resolveCurrentStageModelName());
         }
     }
 
@@ -172,6 +182,7 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
             LOGGER.warn("[舞台模式] 相机控制器启动失败，已释放动画句柄");
             return HostStartResult.failed();
         }
+        VoicePlaybackManager.getInstance().onLocalPlayerStageStart(localModelBinding.modelName());
 
         StageDescriptor remoteDescriptor = buildRemoteStageDescriptor(sessionDescriptor, null);
         return HostStartResult.success(sessionDescriptor, remoteDescriptor);
@@ -260,6 +271,7 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
                 if (audioPath != null && !audioPath.isEmpty()) {
                     controller.loadWatchAudio(audioPath);
                 }
+                VoicePlaybackManager.getInstance().onLocalPlayerStageStart(localModelBinding.modelName());
                 return GuestStartResult.success(
                         effectiveDescriptor,
                         buildRemoteStageDescriptor(effectiveDescriptor, motionPackName)
@@ -280,6 +292,7 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
                 LOGGER.warn("[多人舞台] 启动播放失败");
                 return GuestStartResult.failed();
             }
+            VoicePlaybackManager.getInstance().onLocalPlayerStageStart(localModelBinding.modelName());
 
             return GuestStartResult.success(
                     effectiveDescriptor,
@@ -355,5 +368,11 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
         if (cameraAnim != 0 && cameraAnim != mergedAnim) {
             nativeFunc.DeleteAnimation(cameraAnim);
         }
+    }
+
+    private String resolveCurrentStageModelName() {
+        MMDCameraController controller = MMDCameraController.getInstance();
+        String modelName = controller.getActiveStageModelName();
+        return modelName == null || modelName.isBlank() ? null : modelName;
     }
 }

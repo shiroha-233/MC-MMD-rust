@@ -24,6 +24,8 @@ import com.shiroha.mmdskin.ui.wheel.MaidConfigWheelScreen;
 import com.shiroha.mmdskin.util.KeyMappingUtil;
 import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
 import com.shiroha.mmdskin.stage.client.sync.StageAnimSyncHelper;
+import com.shiroha.mmdskin.voice.runtime.PlayerVoiceSceneObserver;
+import com.shiroha.mmdskin.voice.runtime.VoicePlaybackManager;
 import com.shiroha.mmdskin.debug.client.PerformanceHud;
 
 import java.io.File;
@@ -156,6 +158,8 @@ public class MmdSkinRegisterClient {
             if (MCinstance.player == null) return;
 
             MMDModelManager.tick();
+            VoicePlaybackManager.getInstance().tick();
+            PlayerVoiceSceneObserver.getInstance().tick(MCinstance);
 
             StageAnimSyncHelper.tickPending();
 
@@ -242,6 +246,8 @@ public class MmdSkinRegisterClient {
             PlayerModelSyncManager.onDisconnect();
             MmdSkinRendererPlayerHelper.onDisconnect();
             BoneSyncManager.onDisconnect();
+            PlayerVoiceSceneObserver.getInstance().onDisconnect();
+            VoicePlaybackManager.getInstance().onDisconnect();
             StageSessionService.getInstance().onDisconnect();
         });
 

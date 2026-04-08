@@ -3,6 +3,7 @@ package com.shiroha.mmdskin.ui.wheel.service;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.ui.config.ActionWheelConfig;
 import com.shiroha.mmdskin.ui.network.ActionWheelNetworkHandler;
+import com.shiroha.mmdskin.voice.runtime.VoicePlaybackManager;
 import net.minecraft.client.Minecraft;
 
 import java.util.List;
@@ -40,6 +41,7 @@ public class DefaultActionWheelService implements ActionWheelService {
             return;
         }
         if (runtimePort.playLocalAction(animId)) {
+            VoicePlaybackManager.getInstance().onLocalPlayerCustomAction(animId);
             syncPort.syncAction(animId);
         }
     }

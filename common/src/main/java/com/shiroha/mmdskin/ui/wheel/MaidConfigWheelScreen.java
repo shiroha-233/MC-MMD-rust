@@ -1,9 +1,11 @@
 package com.shiroha.mmdskin.ui.wheel;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.shiroha.mmdskin.maid.MaidMMDModelManager;
 import com.shiroha.mmdskin.maid.MaidActionWheelScreen;
 import com.shiroha.mmdskin.maid.MaidModelSelectorScreen;
 import com.shiroha.mmdskin.ui.selector.MaterialVisibilityScreen;
+import com.shiroha.mmdskin.ui.selector.VoicePackBindingScreen;
 import com.shiroha.mmdskin.util.KeyMappingUtil;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -53,6 +55,9 @@ public class MaidConfigWheelScreen extends AbstractWheelScreen {
         configSlots.add(new ConfigSlot("material", 
             Component.translatable("gui.mmdskin.maid.material_control").getString(),
             "👕", this::openMaidMaterialVisibility));
+        configSlots.add(new ConfigSlot("voice",
+            Component.translatable("gui.mmdskin.maid.voice_pack").getString(),
+            "🔊", this::openMaidVoiceBindings));
     }
 
     @Override
@@ -157,6 +162,12 @@ public class MaidConfigWheelScreen extends AbstractWheelScreen {
         } else {
             Minecraft.getInstance().gui.getChat().addMessage(
                 Component.translatable("message.mmdskin.maid.model_not_found"));
+        }
+    }
+
+    private void openMaidVoiceBindings() {
+        if (MaidMMDModelManager.hasMMDModel(maidUUID)) {
+            Minecraft.getInstance().setScreen(VoicePackBindingScreen.createForMaid(this, maidUUID));
         }
     }
 
