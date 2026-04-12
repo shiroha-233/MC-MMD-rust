@@ -11,10 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * 女仆动作选择轮盘界面
- */
-
+/** 女仆动作选择轮盘界面。 */
 public class MaidActionWheelScreen extends AbstractWheelScreen {
     private static final WheelStyle STYLE = new WheelStyle(
             0.70f, 0.25f,
@@ -24,7 +21,6 @@ public class MaidActionWheelScreen extends AbstractWheelScreen {
 
     private final MaidActionService maidActionService;
     private final List<ActionSlot> actionSlots;
-
     private final UUID maidUUID;
     private final int maidEntityId;
     private final String maidName;
@@ -65,66 +61,27 @@ public class MaidActionWheelScreen extends AbstractWheelScreen {
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         if (actionSlots.isEmpty()) {
-            renderEmptyHint(guiGraphics);
+            renderWheelBase(guiGraphics, mouseX, mouseY, partialTick, List.of());
+            renderEmptyState(guiGraphics, Component.translatable("gui.mmdskin.maid_action_wheel.no_actions"));
+            renderCenterBubble(guiGraphics, maidName, style.lineColor());
         } else {
-            updateSelectedSlot(mouseX, mouseY);
-            renderHighlight(guiGraphics);
-            renderDividerLines(guiGraphics);
-            renderOuterRing(guiGraphics);
+            renderWheelBase(guiGraphics, mouseX, mouseY, partialTick, buildEntries());
 
             String centerText = selectedSlot >= 0
-                ? Component.translatable("gui.mmdskin.action_wheel.click_select").getString()
-                : maidName;
-            renderCenterCircle(guiGraphics, centerText, 0xFFD060A0);
-            renderActionLabels(guiGraphics);
+                    ? Component.translatable("gui.mmdskin.action_wheel.click_select").getString()
+                    : maidName;
+            renderCenterBubble(guiGraphics, centerText, style.lineColor());
         }
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
-    private void renderEmptyHint(GuiGraphics guiGraphics) {
-        int boxWidth = 220;
-        int boxHeight = 40;
-        int boxX = centerX - boxWidth / 2;
-        int boxY = centerY - boxHeight / 2;
-
-        guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, 0xC0301828);
-        drawRectOutline(guiGraphics, boxX, boxY, boxWidth, boxHeight, style.lineColor());
-
-        Component hint = Component.translatable("gui.mmdskin.maid_action_wheel.no_actions");
-        guiGraphics.drawCenteredString(this.font, hint, centerX, centerY - 4, 0xFFFFFF);
-    }
-
-    private void renderActionLabels(GuiGraphics guiGraphics) {
-        double segmentAngle = 360.0 / actionSlots.size();
-        int maxTextWidth = (int) (outerRadius * 0.6);
-
-        for (int i = 0; i < actionSlots.size(); i++) {
-            ActionSlot slot = actionSlots.get(i);
-            double angle = Math.toRadians(i * segmentAngle + segmentAngle / 2 - 90);
-
-            int textRadius = (innerRadius + outerRadius) / 2 + 5;
-            int textX = centerX + (int) (Math.cos(angle) * textRadius);
-            int textY = centerY + (int) (Math.sin(angle) * textRadius);
-
-            String displayName = slot.name;
-            if (this.font.width(displayName) > maxTextWidth) {
-                while (this.font.width(displayName + "..") > maxTextWidth && displayName.length() > 3) {
-                    displayName = displayName.substring(0, displayName.length() - 1);
-                }
-                displayName += "..";
-            }
-
-            Component text = Component.literal(displayName);
-            int textWidthVal = this.font.width(text);
-
-            boolean isSelected = (i == selectedSlot);
-            int textColor = isSelected ? 0xFFFFFFFF : 0xFFCCDDEE;
-
-            guiGraphics.drawString(this.font, text, textX - textWidthVal / 2 + 1, textY - 3, style.textShadow(), false);
-            guiGraphics.drawString(this.font, text, textX - textWidthVal / 2 - 1, textY - 5, style.textShadow(), false);
-            guiGraphics.drawString(this.font, text, textX - textWidthVal / 2, textY - 4, textColor, false);
+    private List<WheelEntry> buildEntries() {
+        List<WheelEntry> entries = new ArrayList<>(actionSlots.size());
+        for (ActionSlot slot : actionSlots) {
+            entries.add(new WheelEntry(slot.name, null));
         }
+        return entries;
     }
 
     @Override

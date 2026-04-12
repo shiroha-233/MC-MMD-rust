@@ -15,14 +15,15 @@ allprojects {
 	group = maven_group
 	version = '1.0.4-1.20.1'
 	
-	repositories {
-		maven { url = 'https://maven.architectury.dev/' }
-		maven { url = 'https://maven.fabricmc.net/' }
-		maven { url = 'https://maven.minecraftforge.net/' }
-		maven { url = 'https://maven.shedaniel.me/' }
-		maven { url = 'https://maven.terraformersmc.com/' }
-		// Cardinal Components API (Touhou Little Maid Fabric 移植版依赖)
-		maven { url = 'https://maven.ladysnake.org/releases' }
+			repositories {
+			maven { url = 'https://maven.architectury.dev/' }
+			maven { url = 'https://maven.fabricmc.net/' }
+			maven { url = 'https://maven.minecraftforge.net/' }
+			maven { url = 'https://maven.shedaniel.me/' }
+			maven { url = 'https://maven.terraformersmc.com/' }
+			maven { url = 'https://redirector.kotlinlang.org/maven/compose-dev' }
+			// Cardinal Components API (Touhou Little Maid Fabric 移植版依赖)
+			maven { url = 'https://maven.ladysnake.org/releases' }
         // curseforge与modrinth平台仓库
         exclusiveContent {
             forRepository {

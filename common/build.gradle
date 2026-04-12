@@ -7,6 +7,9 @@ dependencies {
     modImplementation("dev.architectury:architectury:9.2.14")
     compileOnly("net.fabricmc:fabric-loader:${project.loader_version}")
 
+    // Skiko / Skia（轮盘 UI 平滑渲染）
+    compileOnly("org.jetbrains.skiko:skiko-awt:${project.skiko_version}")
+
     // ImGui workbench（舞台编辑工作台）
     compileOnly("io.github.spair:imgui-java-binding:${project.imgui_java_version}")
     compileOnly("io.github.spair:imgui-java-lwjgl3:${project.imgui_java_version}") {

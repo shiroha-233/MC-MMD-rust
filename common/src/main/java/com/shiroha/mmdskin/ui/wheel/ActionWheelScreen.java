@@ -5,7 +5,6 @@ import com.shiroha.mmdskin.ui.wheel.service.ActionOption;
 import com.shiroha.mmdskin.ui.wheel.service.ActionWheelService;
 import com.shiroha.mmdskin.ui.wheel.service.DefaultActionWheelService;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -51,74 +50,35 @@ public class ActionWheelScreen extends AbstractWheelScreen {
         super.init();
         initWheelLayout();
 
-        this.addRenderableWidget(Button.builder(Component.literal("⚙"), btn -> {
+        this.addRenderableWidget(createWheelIconButton(Component.literal("⚙"), btn -> {
             this.minecraft.setScreen(new ActionWheelConfigScreen(this));
-        }).bounds(this.width - 28, this.height - 28, 22, 22).build());
+        }));
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         if (actionSlots.isEmpty()) {
-            renderEmptyHint(guiGraphics);
+            renderWheelBase(guiGraphics, mouseX, mouseY, partialTick, List.of());
+            renderEmptyState(guiGraphics, Component.translatable("gui.mmdskin.action_wheel.no_actions"));
+            renderCenterBubble(guiGraphics, Component.translatable("gui.mmdskin.select_action").getString(), style.lineColor());
         } else {
-            updateSelectedSlot(mouseX, mouseY);
-            renderHighlight(guiGraphics);
-            renderDividerLines(guiGraphics);
-            renderOuterRing(guiGraphics);
+            renderWheelBase(guiGraphics, mouseX, mouseY, partialTick, buildEntries());
 
             String centerText = selectedSlot >= 0
-                ? Component.translatable("gui.mmdskin.action_wheel.click_select").getString()
-                : Component.translatable("gui.mmdskin.select_action").getString();
-            renderCenterCircle(guiGraphics, centerText, 0xFF60A0D0);
-            renderActionLabels(guiGraphics);
+                    ? Component.translatable("gui.mmdskin.action_wheel.click_select").getString()
+                    : Component.translatable("gui.mmdskin.select_action").getString();
+            renderCenterBubble(guiGraphics, centerText, style.lineColor());
         }
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
-    private void renderEmptyHint(GuiGraphics guiGraphics) {
-        int boxWidth = 220;
-        int boxHeight = 40;
-        int boxX = centerX - boxWidth / 2;
-        int boxY = centerY - boxHeight / 2;
-
-        guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, 0xC0182030);
-        drawRectOutline(guiGraphics, boxX, boxY, boxWidth, boxHeight, style.lineColor());
-
-        Component hint = Component.translatable("gui.mmdskin.action_wheel.no_actions");
-        guiGraphics.drawCenteredString(this.font, hint, centerX, centerY - 4, 0xFFFFFF);
-    }
-
-    private void renderActionLabels(GuiGraphics guiGraphics) {
-        double segmentAngle = 360.0 / actionSlots.size();
-        int maxTextWidth = (int) (outerRadius * 0.6);
-
-        for (int i = 0; i < actionSlots.size(); i++) {
-            ActionSlot slot = actionSlots.get(i);
-            double angle = Math.toRadians(i * segmentAngle + segmentAngle / 2 - 90);
-
-            int textRadius = (innerRadius + outerRadius) / 2 + 5;
-            int textX = centerX + (int) (Math.cos(angle) * textRadius);
-            int textY = centerY + (int) (Math.sin(angle) * textRadius);
-
-            String displayName = slot.name;
-            if (this.font.width(displayName) > maxTextWidth) {
-                while (this.font.width(displayName + "..") > maxTextWidth && displayName.length() > 3) {
-                    displayName = displayName.substring(0, displayName.length() - 1);
-                }
-                displayName += "..";
-            }
-
-            Component text = Component.literal(displayName);
-            int textWidth = this.font.width(text);
-
-            boolean isSelected = (i == selectedSlot);
-            int textColor = isSelected ? 0xFFFFFFFF : 0xFFCCDDEE;
-
-            guiGraphics.drawString(this.font, text, textX - textWidth / 2 + 1, textY - 3, style.textShadow(), false);
-            guiGraphics.drawString(this.font, text, textX - textWidth / 2 - 1, textY - 5, style.textShadow(), false);
-            guiGraphics.drawString(this.font, text, textX - textWidth / 2, textY - 4, textColor, false);
+    private List<WheelEntry> buildEntries() {
+        List<WheelEntry> entries = new ArrayList<>(actionSlots.size());
+        for (ActionSlot slot : actionSlots) {
+            entries.add(new WheelEntry(slot.name, null));
         }
+        return entries;
     }
 
     @Override

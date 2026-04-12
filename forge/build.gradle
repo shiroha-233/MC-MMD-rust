@@ -119,6 +119,20 @@ dependencies {
     common("javazoom:jlayer:1.0.1") { transitive = false }
     include("javazoom:jlayer:1.0.1")
 
+    // Skiko / Skia（轮盘 UI 平滑渲染）
+    implementation("org.jetbrains.skiko:skiko-awt:${project.skiko_version}")
+    include("org.jetbrains.skiko:skiko-awt:${project.skiko_version}")
+    runtimeOnly("org.jetbrains.skiko:skiko-awt-runtime-windows-x64:${project.skiko_version}")
+    runtimeOnly("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:${project.skiko_version}")
+    runtimeOnly("org.jetbrains.skiko:skiko-awt-runtime-linux-arm64:${project.skiko_version}")
+    runtimeOnly("org.jetbrains.skiko:skiko-awt-runtime-macos-x64:${project.skiko_version}")
+    runtimeOnly("org.jetbrains.skiko:skiko-awt-runtime-macos-arm64:${project.skiko_version}")
+    include("org.jetbrains.skiko:skiko-awt-runtime-windows-x64:${project.skiko_version}")
+    include("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:${project.skiko_version}")
+    include("org.jetbrains.skiko:skiko-awt-runtime-linux-arm64:${project.skiko_version}")
+    include("org.jetbrains.skiko:skiko-awt-runtime-macos-x64:${project.skiko_version}")
+    include("org.jetbrains.skiko:skiko-awt-runtime-macos-arm64:${project.skiko_version}")
+
     // ImGui workbench（开发/本地运行）
     implementation("io.github.spair:imgui-java-binding:${project.imgui_java_version}")
     include("io.github.spair:imgui-java-binding:${project.imgui_java_version}")

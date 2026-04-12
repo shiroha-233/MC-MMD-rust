@@ -26,52 +26,47 @@ public class ConfigWheelScreen extends AbstractWheelScreen {
             0xFF60A0D0, 0xCC60A0D0, 0x60FFFFFF,
             0xE0182030, 0xFF60A0D0, 0xFF000000
     );
-    
+
     private final List<ConfigSlot> configSlots;
-    
-
     private final KeyMapping monitoredKey;
-    
-
     private static Supplier<Screen> modSettingsScreenFactory;
-    
+
     public ConfigWheelScreen(KeyMapping keyMapping) {
         super(Component.translatable("gui.mmdskin.config_wheel"), STYLE);
         this.monitoredKey = keyMapping;
         this.configSlots = new ArrayList<>();
         initConfigSlots();
     }
-    
-    
+
     public static void setModSettingsScreenFactory(Supplier<Screen> factory) {
         modSettingsScreenFactory = factory;
     }
-    
+
     private void initConfigSlots() {
-        configSlots.add(new ConfigSlot("model", 
-            Component.translatable("gui.mmdskin.config.model_switch").getString(),
-            "🎭", this::openModelSelector));
-        configSlots.add(new ConfigSlot("action", 
-            Component.translatable("gui.mmdskin.config.action_select").getString(),
-            "🎬", this::openActionWheel));
-        configSlots.add(new ConfigSlot("morph", 
-            Component.translatable("gui.mmdskin.config.morph_select").getString(),
-            "😊", this::openMorphWheel));
-        configSlots.add(new ConfigSlot("material", 
-            Component.translatable("gui.mmdskin.config.material_control").getString(),
-            "👕", this::openMaterialVisibility));
+        configSlots.add(new ConfigSlot("model",
+                Component.translatable("gui.mmdskin.config.model_switch").getString(),
+                "model", this::openModelSelector));
+        configSlots.add(new ConfigSlot("action",
+                Component.translatable("gui.mmdskin.config.action_select").getString(),
+                "action", this::openActionWheel));
+        configSlots.add(new ConfigSlot("morph",
+                Component.translatable("gui.mmdskin.config.morph_select").getString(),
+                "morph", this::openMorphWheel));
+        configSlots.add(new ConfigSlot("material",
+                Component.translatable("gui.mmdskin.config.material_control").getString(),
+                "mat", this::openMaterialVisibility));
         configSlots.add(new ConfigSlot("voice",
-            Component.translatable("gui.mmdskin.config.voice_pack").getString(),
-            "🔊", this::openVoiceBindings));
-        configSlots.add(new ConfigSlot("scene", 
-            Component.translatable("gui.mmdskin.config.scene_mode").getString(),
-            "🏠", this::openSceneSelector));
-        configSlots.add(new ConfigSlot("stage", 
-            Component.translatable("gui.mmdskin.config.stage_mode").getString(),
-            "🎥", this::openStageSelect));
-        configSlots.add(new ConfigSlot("settings", 
-            Component.translatable("gui.mmdskin.config.mod_settings").getString(),
-            "⚙", this::openModSettings));
+                Component.translatable("gui.mmdskin.config.voice_pack").getString(),
+                "voice", this::openVoiceBindings));
+        configSlots.add(new ConfigSlot("scene",
+                Component.translatable("gui.mmdskin.config.scene_mode").getString(),
+                "scene", this::openSceneSelector));
+        configSlots.add(new ConfigSlot("stage",
+                Component.translatable("gui.mmdskin.config.stage_mode").getString(),
+                "stage", this::openStageSelect));
+        configSlots.add(new ConfigSlot("settings",
+                Component.translatable("gui.mmdskin.config.mod_settings").getString(),
+                "cfg", this::openModSettings));
     }
 
     @Override
@@ -87,44 +82,35 @@ public class ConfigWheelScreen extends AbstractWheelScreen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        updateSelectedSlot(mouseX, mouseY);
-        renderHighlight(guiGraphics);
-        renderDividerLines(guiGraphics);
-        renderOuterRing(guiGraphics);
-        
+        renderWheelBase(guiGraphics, mouseX, mouseY, partialTick, buildEntries());
+
         String centerText = selectedSlot >= 0 ? configSlots.get(selectedSlot).name : "MMD Skin";
-        renderCenterCircle(guiGraphics, centerText, 0xFF60A0D0);
-        renderSlotLabels(guiGraphics);
-        
+        renderCenterBubble(guiGraphics, centerText, style.lineColor());
+
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
-    
+
     @Override
     public void tick() {
         super.tick();
-
-
         if (Minecraft.getInstance().screen != this) {
             return;
         }
 
-
         if (monitoredKey != null) {
-            boolean isDown = false;
-
-
+            boolean isDown;
             if (monitoredKey.isDown()) {
                 isDown = true;
             } else {
                 long window = Minecraft.getInstance().getWindow().getWindow();
                 InputConstants.Key key = KeyMappingUtil.getBoundKey(monitoredKey);
-                if (key != null && key.getType() == InputConstants.Type.KEYSYM && key.getValue() != -1) {
-                    isDown = GLFW.glfwGetKey(window, key.getValue()) == GLFW.GLFW_PRESS;
-                }
+                isDown = key != null
+                        && key.getType() == InputConstants.Type.KEYSYM
+                        && key.getValue() != -1
+                        && GLFW.glfwGetKey(window, key.getValue()) == GLFW.GLFW_PRESS;
             }
 
             if (!isDown) {
-
                 if (selectedSlot >= 0 && selectedSlot < configSlots.size()) {
                     ConfigSlot slot = configSlots.get(selectedSlot);
                     this.onClose();
@@ -136,66 +122,49 @@ public class ConfigWheelScreen extends AbstractWheelScreen {
         }
     }
 
-    private void renderSlotLabels(GuiGraphics guiGraphics) {
-        double segmentAngle = 360.0 / configSlots.size();
-        
-        for (int i = 0; i < configSlots.size(); i++) {
-            ConfigSlot slot = configSlots.get(i);
-            double angle = Math.toRadians(i * segmentAngle + segmentAngle / 2 - 90);
-            
-            int textRadius = (innerRadius + outerRadius) / 2;
-            int textX = centerX + (int) (Math.cos(angle) * textRadius);
-            int textY = centerY + (int) (Math.sin(angle) * textRadius);
-            
-            int iconWidth = this.font.width(slot.icon);
-            boolean isSelected = (i == selectedSlot);
-            int iconColor = isSelected ? 0xFFFFFFFF : 0xFFCCDDEE;
-            
-            guiGraphics.drawString(this.font, slot.icon, textX - iconWidth / 2 + 1, textY - 11, style.textShadow(), false);
-            guiGraphics.drawString(this.font, slot.icon, textX - iconWidth / 2, textY - 12, iconColor, false);
-            
-            int nameWidth = this.font.width(slot.name);
-            guiGraphics.drawString(this.font, slot.name, textX - nameWidth / 2 + 1, textY + 3, style.textShadow(), false);
-            guiGraphics.drawString(this.font, slot.name, textX - nameWidth / 2, textY + 2, iconColor, false);
+    private List<WheelEntry> buildEntries() {
+        List<WheelEntry> entries = new ArrayList<>(configSlots.size());
+        for (ConfigSlot slot : configSlots) {
+            entries.add(new WheelEntry(slot.name, null));
         }
+        return entries;
     }
-    
 
     private void openModelSelector() {
         Minecraft.getInstance().setScreen(new ModelSelectorScreen());
     }
-    
+
     private void openActionWheel() {
         Minecraft.getInstance().setScreen(new ActionWheelScreen());
     }
-    
+
     private void openMorphWheel() {
         Minecraft.getInstance().setScreen(new MorphWheelScreen(monitoredKey));
     }
-    
+
     private void openMaterialVisibility() {
         MaterialVisibilityScreen screen = MaterialVisibilityScreen.createForPlayer();
         if (screen != null) {
             Minecraft.getInstance().setScreen(screen);
         } else {
             Minecraft.getInstance().gui.getChat().addMessage(
-                Component.translatable("message.mmdskin.player.model_not_found"));
+                    Component.translatable("message.mmdskin.player.model_not_found"));
         }
     }
 
     private void openVoiceBindings() {
-        Minecraft.getInstance().setScreen(VoicePackBindingScreen.createForPlayer(this,
-                ModelSelectorConfig.getInstance().getSelectedModel()));
+        Minecraft.getInstance().setScreen(VoicePackBindingScreen.createForPlayer(
+                this, ModelSelectorConfig.getInstance().getSelectedModel()));
     }
-    
+
     private void openSceneSelector() {
         Minecraft.getInstance().setScreen(new SceneSelectorScreen());
     }
-    
+
     private void openStageSelect() {
         StagePlaybackUiAdapter.INSTANCE.openStageSelection();
     }
-    
+
     private void openModSettings() {
         if (modSettingsScreenFactory != null) {
             Screen settingsScreen = modSettingsScreenFactory.get();
@@ -204,10 +173,8 @@ public class ConfigWheelScreen extends AbstractWheelScreen {
                 return;
             }
         }
-        {
-            Minecraft.getInstance().gui.getChat().addMessage(
+        Minecraft.getInstance().gui.getChat().addMessage(
                 Component.translatable("message.mmdskin.mod_settings.not_initialized"));
-        }
     }
 
     private static class ConfigSlot {

@@ -1,15 +1,12 @@
 package com.shiroha.mmdskin.ui.selector;
 
 import com.shiroha.mmdskin.config.ModelConfigData;
-import com.shiroha.mmdskin.ui.imgui.ImGuiScreenRenderer;
 import com.shiroha.mmdskin.ui.selector.application.ModelSettingsApplicationService;
-import imgui.ImGui;
-import imgui.flag.ImGuiCond;
-import imgui.flag.ImGuiWindowFlags;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -18,22 +15,53 @@ import java.util.List;
 
 public class ModelSettingsScreen extends Screen {
     private static final Logger LOGGER = LogManager.getLogger();
-    private static final float WINDOW_MARGIN = 8.0f;
-    private static final float MIN_WINDOW_WIDTH = 240.0f;
-    private static final float MAX_WINDOW_WIDTH = 340.0f;
-    private static final float MIN_WINDOW_HEIGHT = 260.0f;
     private static final ModelSettingsApplicationService SERVICE = ModelSelectorServices.modelSettings();
+
+    private static final int WINDOW_MARGIN = 10;
+    private static final int MIN_WINDOW_WIDTH = 168;
+    private static final int MAX_WINDOW_WIDTH = 210;
+    private static final int MIN_WINDOW_HEIGHT = 292;
+
+    private static final int HEADER_HEIGHT = 34;
+    private static final int SECTION_GAP = 4;
+    private static final int CARD_HEIGHT = 44;
+    private static final int QUICK_CARD_HEIGHT = 56;
+    private static final int BUTTON_HEIGHT = 16;
+    private static final int BUTTON_GAP = 4;
 
     private final String modelName;
     private final Screen parentScreen;
-    private final ImGuiScreenRenderer imguiRenderer = new ImGuiScreenRenderer();
-    private final float[] eyeMaxAngleSlider = new float[1];
-    private final float[] modelScaleSlider = new float[1];
+    private final SkiaModelSettingsRenderer skiaRenderer = new SkiaModelSettingsRenderer();
 
     private ModelConfigData config;
     private boolean pendingClose;
     private boolean pendingOpenAnimConfig;
     private boolean pendingOpenVoiceConfig;
+    private HoverTarget hoveredTarget = HoverTarget.NONE;
+    private Layout layout = Layout.empty();
+    private ActiveSlider activeSlider = ActiveSlider.NONE;
+
+    private enum ActiveSlider {
+        NONE,
+        EYE,
+        SCALE
+    }
+
+    private enum HoverTarget {
+        NONE,
+        EYE_TOGGLE,
+        EYE_SLIDER,
+        SCALE_SLIDER,
+        SLOT_0,
+        SLOT_1,
+        SLOT_2,
+        SLOT_3,
+        SAVE,
+        RESET,
+        ANIM,
+        VOICE,
+        DONE
+    }
 
     public ModelSettingsScreen(String modelName, Screen parentScreen) {
         super(Component.translatable("gui.mmdskin.model_settings.title"));
@@ -45,28 +73,20 @@ public class ModelSettingsScreen extends Screen {
     @Override
     protected void init() {
         super.init();
-        try {
-            imguiRenderer.ensureInitialized();
-        } catch (Throwable throwable) {
-            closeAfterFailure(throwable);
-        }
+        updateLayout();
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         Minecraft minecraft = Minecraft.getInstance();
         try {
-            float framebufferScaleX = this.width > 0
-                    ? (float) minecraft.getWindow().getWidth() / (float) this.width
-                    : 1.0f;
-            float framebufferScaleY = this.height > 0
-                    ? (float) minecraft.getWindow().getHeight() / (float) this.height
-                    : 1.0f;
+            updateLayout();
+            updateHoverState(mouseX, mouseY);
 
-            imguiRenderer.setGlyphHintTexts(collectVisibleGlyphHints());
-            imguiRenderer.beginFrame(this.width, this.height, framebufferScaleX, framebufferScaleY, mouseX, mouseY);
-            renderSettingsWindow();
-            imguiRenderer.renderFrame();
+            SkiaModelSettingsRenderer.SettingsView view = buildView();
+            if (!skiaRenderer.renderSettings(this, view)) {
+                renderFallback(guiGraphics, view);
+            }
             flushPendingActions(minecraft);
         } catch (Throwable throwable) {
             closeAfterFailure(throwable);
@@ -75,20 +95,80 @@ public class ModelSettingsScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        imguiRenderer.onMouseButton(button, true);
+        if (button != 0) {
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
+        if (!layout.panel.contains(mouseX, mouseY)) {
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
+
+        if (layout.eyeToggle.contains(mouseX, mouseY)) {
+            config.eyeTrackingEnabled = !config.eyeTrackingEnabled;
+            return true;
+        }
+        if (layout.eyeSlider.contains(mouseX, mouseY)) {
+            activeSlider = ActiveSlider.EYE;
+            updateSliderValue(activeSlider, mouseX);
+            return true;
+        }
+        if (layout.scaleSlider.contains(mouseX, mouseY)) {
+            activeSlider = ActiveSlider.SCALE;
+            updateSliderValue(activeSlider, mouseX);
+            return true;
+        }
+
+        for (int i = 0; i < layout.quickSlotButtons.length; i++) {
+            UiRect slotButton = layout.quickSlotButtons[i];
+            if (slotButton != null && slotButton.contains(mouseX, mouseY)) {
+                SERVICE.toggleQuickSlot(modelName, i);
+                return true;
+            }
+        }
+
+        if (layout.saveButton.contains(mouseX, mouseY)) {
+            saveAndClose();
+            return true;
+        }
+        if (layout.resetButton.contains(mouseX, mouseY)) {
+            config = SERVICE.resetToDefaults();
+            return true;
+        }
+        if (layout.animButton.contains(mouseX, mouseY)) {
+            pendingOpenAnimConfig = true;
+            return true;
+        }
+        if (layout.voiceButton.contains(mouseX, mouseY)) {
+            pendingOpenVoiceConfig = true;
+            return true;
+        }
+        if (layout.doneButton.contains(mouseX, mouseY)) {
+            pendingClose = true;
+            return true;
+        }
         return true;
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        imguiRenderer.onMouseButton(button, false);
-        return true;
+        if (button == 0) {
+            activeSlider = ActiveSlider.NONE;
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (button == 0 && activeSlider != ActiveSlider.NONE) {
+            updateSliderValue(activeSlider, mouseX);
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        imguiRenderer.onMouseScroll(0.0, delta);
-        return true;
+        return layout.panel.contains(mouseX, mouseY) || super.mouseScrolled(mouseX, mouseY, delta);
     }
 
     @Override
@@ -102,7 +182,7 @@ public class ModelSettingsScreen extends Screen {
 
     @Override
     public void onClose() {
-        imguiRenderer.dispose();
+        skiaRenderer.dispose();
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen == this) {
             minecraft.setScreen(parentScreen);
@@ -113,7 +193,7 @@ public class ModelSettingsScreen extends Screen {
 
     @Override
     public void removed() {
-        imguiRenderer.dispose();
+        skiaRenderer.dispose();
         super.removed();
     }
 
@@ -122,113 +202,221 @@ public class ModelSettingsScreen extends Screen {
         return false;
     }
 
-    private void renderSettingsWindow() {
-        float panelWidth = clamp(this.width * 0.19f, MIN_WINDOW_WIDTH, MAX_WINDOW_WIDTH);
-        float panelHeight = Math.max(MIN_WINDOW_HEIGHT, this.height - WINDOW_MARGIN);
-        float panelX = this.width - panelWidth - WINDOW_MARGIN;
-        float panelY = WINDOW_MARGIN;
-        int windowFlags = ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoSavedSettings;
+    private void updateLayout() {
+        int panelWidth = Mth.clamp(Math.round(this.width * 0.16f), MIN_WINDOW_WIDTH, MAX_WINDOW_WIDTH);
+        int panelHeight = Math.max(MIN_WINDOW_HEIGHT, this.height - WINDOW_MARGIN * 2);
+        int panelX = this.width - panelWidth - WINDOW_MARGIN;
+        int panelY = WINDOW_MARGIN;
 
-        ImGui.setNextWindowPos(panelX, panelY, ImGuiCond.Appearing);
-        ImGui.setNextWindowSize(panelWidth, panelHeight, ImGuiCond.Appearing);
-        ImGui.begin(this.title.getString() + "##model_settings_window", windowFlags);
+        UiRect panel = new UiRect(panelX, panelY, panelWidth, panelHeight);
+        UiRect header = new UiRect(panelX + 8, panelY + 5, panelWidth - 16, HEADER_HEIGHT);
 
-        renderHeader();
-        ImGui.separator();
-        renderConfigSection();
-        ImGui.separator();
-        renderQuickSlots();
-        ImGui.separator();
-        renderActionButtons();
+        int eyeY = header.y + header.h + 2;
+        UiRect eyeCard = new UiRect(header.x, eyeY, header.w, CARD_HEIGHT);
+        UiRect eyeToggle = new UiRect(eyeCard.x + eyeCard.w - 34, eyeCard.y + 10, 26, 10);
+        UiRect eyeSlider = new UiRect(eyeCard.x + 4, eyeCard.y + 26, eyeCard.w - 8, 10);
 
-        ImGui.end();
+        int scaleY = eyeCard.y + eyeCard.h + SECTION_GAP;
+        UiRect scaleCard = new UiRect(header.x, scaleY, header.w, CARD_HEIGHT);
+        UiRect scaleSlider = new UiRect(scaleCard.x + 4, scaleCard.y + 26, scaleCard.w - 8, 10);
+
+        int quickY = scaleCard.y + scaleCard.h + SECTION_GAP;
+        UiRect quickCard = new UiRect(header.x, quickY, header.w, QUICK_CARD_HEIGHT);
+        UiRect[] quickButtons = new UiRect[4];
+        int quickButtonWidth = (quickCard.w - BUTTON_GAP) / 2;
+        quickButtons[0] = new UiRect(quickCard.x + 4, quickCard.y + 16, quickButtonWidth - 4, BUTTON_HEIGHT);
+        quickButtons[1] = new UiRect(quickCard.x + 4 + quickButtonWidth, quickCard.y + 16, quickButtonWidth - 4, BUTTON_HEIGHT);
+        quickButtons[2] = new UiRect(quickCard.x + 4, quickCard.y + 16 + BUTTON_HEIGHT + BUTTON_GAP, quickButtonWidth - 4, BUTTON_HEIGHT);
+        quickButtons[3] = new UiRect(quickCard.x + 4 + quickButtonWidth, quickCard.y + 16 + BUTTON_HEIGHT + BUTTON_GAP, quickButtonWidth - 4, BUTTON_HEIGHT);
+
+        int actionsBottom = panel.y + panel.h - 6;
+        UiRect doneButton = new UiRect(header.x, actionsBottom - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
+        UiRect voiceButton = new UiRect(header.x, doneButton.y - BUTTON_GAP - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
+        UiRect animButton = new UiRect(header.x, voiceButton.y - BUTTON_GAP - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
+        UiRect resetButton = new UiRect(header.x, animButton.y - BUTTON_GAP - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
+        UiRect saveButton = new UiRect(header.x, resetButton.y - BUTTON_GAP - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
+
+        layout = new Layout(panel, header, eyeCard, eyeToggle, eyeSlider, scaleCard, scaleSlider, quickCard, quickButtons,
+                saveButton, resetButton, animButton, voiceButton, doneButton);
     }
 
-    private void renderHeader() {
-        ImGui.textDisabled(shorten(modelName, 28));
-    }
-
-    private void renderConfigSection() {
-        ImGui.textDisabled(Component.translatable("gui.mmdskin.model_settings.eye_tracking").getString());
-
-        boolean eyeTrackingEnabled = config.eyeTrackingEnabled;
-        if (ImGui.checkbox(Component.translatable("gui.mmdskin.model_settings.eye_tracking_enabled").getString()
-                + "##eye_tracking_enabled", eyeTrackingEnabled)) {
-            config.eyeTrackingEnabled = !eyeTrackingEnabled;
-        }
-
-        eyeMaxAngleSlider[0] = config.eyeMaxAngle;
-        String eyeAngleLabel = Component.translatable(
-                "gui.mmdskin.model_settings.eye_max_angle",
-                String.format("%.0f", Math.toDegrees(config.eyeMaxAngle))
-        ).getString();
-        ImGui.textDisabled(eyeAngleLabel);
-        ImGui.setNextItemWidth(-1.0f);
-        if (ImGui.sliderFloat("##eye_max_angle", eyeMaxAngleSlider, 0.05f, 1.0f, "%.3f")) {
-            config.eyeMaxAngle = eyeMaxAngleSlider[0];
-        }
-
-        ImGui.separator();
-        ImGui.textDisabled(Component.translatable("gui.mmdskin.model_settings.model_display").getString());
-
-        modelScaleSlider[0] = config.modelScale;
-        String modelScaleLabel = Component.translatable(
-                "gui.mmdskin.model_settings.model_scale",
-                String.format("%.2f", config.modelScale)
-        ).getString();
-        ImGui.textDisabled(modelScaleLabel);
-        ImGui.setNextItemWidth(-1.0f);
-        if (ImGui.sliderFloat("##model_scale", modelScaleSlider, 0.5f, 2.0f, "%.2f")) {
-            config.modelScale = modelScaleSlider[0];
-        }
-    }
-
-    private void renderQuickSlots() {
-        ImGui.textDisabled(Component.translatable("gui.mmdskin.model_settings.quick_bind").getString());
-
-        List<ModelSettingsApplicationService.QuickSlotBinding> bindings = SERVICE.getQuickSlotBindings(modelName);
-        float fullWidth = Math.max(1.0f, ImGui.getContentRegionAvailX());
-        float buttonWidth = Math.max(1.0f, (fullWidth - 4.0f) * 0.5f);
-
-        for (int i = 0; i < bindings.size(); i++) {
-            ModelSettingsApplicationService.QuickSlotBinding binding = bindings.get(i);
-            String label = buildQuickSlotLabel(binding);
-            if (ImGui.button(label + "##quick_slot_" + binding.slot(), buttonWidth, 0.0f)) {
-                SERVICE.toggleQuickSlot(modelName, binding.slot());
-            }
-            if (i % 2 == 0 && i + 1 < bindings.size()) {
-                ImGui.sameLine();
-            }
-
-            if (binding.boundModel() != null && !binding.boundModel().isEmpty()) {
-                ImGui.textDisabled(shorten(binding.boundModel(), 26));
-            } else {
-                ImGui.textDisabled("-");
-            }
-        }
-    }
-
-    private void renderActionButtons() {
-        if (fullWidthButton(Component.translatable("gui.mmdskin.model_settings.save").getString() + "##save")) {
-            saveAndClose();
+    private void updateHoverState(int mouseX, int mouseY) {
+        hoveredTarget = HoverTarget.NONE;
+        if (layout.eyeToggle.contains(mouseX, mouseY)) {
+            hoveredTarget = HoverTarget.EYE_TOGGLE;
             return;
         }
+        if (layout.eyeSlider.contains(mouseX, mouseY)) {
+            hoveredTarget = HoverTarget.EYE_SLIDER;
+            return;
+        }
+        if (layout.scaleSlider.contains(mouseX, mouseY)) {
+            hoveredTarget = HoverTarget.SCALE_SLIDER;
+            return;
+        }
+        for (int i = 0; i < layout.quickSlotButtons.length; i++) {
+            UiRect slotButton = layout.quickSlotButtons[i];
+            if (slotButton != null && slotButton.contains(mouseX, mouseY)) {
+                hoveredTarget = switch (i) {
+                    case 0 -> HoverTarget.SLOT_0;
+                    case 1 -> HoverTarget.SLOT_1;
+                    case 2 -> HoverTarget.SLOT_2;
+                    default -> HoverTarget.SLOT_3;
+                };
+                return;
+            }
+        }
+        if (layout.saveButton.contains(mouseX, mouseY)) {
+            hoveredTarget = HoverTarget.SAVE;
+            return;
+        }
+        if (layout.resetButton.contains(mouseX, mouseY)) {
+            hoveredTarget = HoverTarget.RESET;
+            return;
+        }
+        if (layout.animButton.contains(mouseX, mouseY)) {
+            hoveredTarget = HoverTarget.ANIM;
+            return;
+        }
+        if (layout.voiceButton.contains(mouseX, mouseY)) {
+            hoveredTarget = HoverTarget.VOICE;
+            return;
+        }
+        if (layout.doneButton.contains(mouseX, mouseY)) {
+            hoveredTarget = HoverTarget.DONE;
+        }
+    }
 
-        if (fullWidthButton(Component.translatable("gui.mmdskin.model_settings.reset").getString() + "##reset")) {
-            config = SERVICE.resetToDefaults();
+    private void updateSliderValue(ActiveSlider slider, double mouseX) {
+        if (slider == ActiveSlider.EYE) {
+            config.eyeMaxAngle = valueFromSlider(layout.eyeSlider, mouseX, 0.05f, 1.0f);
+            return;
+        }
+        if (slider == ActiveSlider.SCALE) {
+            config.modelScale = valueFromSlider(layout.scaleSlider, mouseX, 0.5f, 2.0f);
+        }
+    }
+
+    private float valueFromSlider(UiRect sliderRect, double mouseX, float min, float max) {
+        float t = (float) ((mouseX - sliderRect.x) / Math.max(1.0, sliderRect.w));
+        return Mth.clamp(min + (max - min) * Mth.clamp(t, 0.0f, 1.0f), min, max);
+    }
+
+    private SkiaModelSettingsRenderer.SettingsView buildView() {
+        List<ModelSettingsApplicationService.QuickSlotBinding> quickSlots = SERVICE.getQuickSlotBindings(modelName);
+        List<SkiaModelSettingsRenderer.QuickSlotView> slotViews = new ArrayList<>(quickSlots.size());
+        for (int i = 0; i < quickSlots.size(); i++) {
+            ModelSettingsApplicationService.QuickSlotBinding binding = quickSlots.get(i);
+            slotViews.add(new SkiaModelSettingsRenderer.QuickSlotView(
+                    buildQuickSlotLabel(binding),
+                    shorten(binding.boundModel(), 12),
+                    binding.boundToCurrentModel(),
+                    hoveredTarget == slotHoverTarget(i),
+                    i,
+                    layout.quickSlotButtons[i]
+            ));
         }
 
-        if (fullWidthButton(Component.translatable("gui.mmdskin.model_settings.anim_config").getString() + "##anim")) {
-            pendingOpenAnimConfig = true;
+        return new SkiaModelSettingsRenderer.SettingsView(
+                this.title.getString(),
+                shorten(modelName, 14),
+                Component.translatable("gui.mmdskin.model_settings.eye_tracking").getString(),
+                Component.translatable("gui.mmdskin.model_settings.eye_tracking_enabled").getString(),
+                Component.translatable("gui.mmdskin.model_settings.eye_max_angle", String.format("%.0f", Math.toDegrees(config.eyeMaxAngle))).getString(),
+                Component.translatable("gui.mmdskin.model_settings.model_display").getString(),
+                Component.translatable("gui.mmdskin.model_settings.model_scale", String.format("%.2f", config.modelScale)).getString(),
+                Component.translatable("gui.mmdskin.model_settings.quick_bind").getString(),
+                Component.translatable("gui.mmdskin.model_settings.save").getString(),
+                Component.translatable("gui.mmdskin.model_settings.reset").getString(),
+                Component.translatable("gui.mmdskin.model_settings.anim_config").getString(),
+                Component.translatable("gui.mmdskin.model_settings.voice_config").getString(),
+                Component.translatable("gui.done").getString(),
+                layout.panel,
+                layout.header,
+                layout.eyeCard,
+                layout.eyeToggle,
+                layout.eyeSlider,
+                layout.scaleCard,
+                layout.scaleSlider,
+                layout.quickCard,
+                layout.saveButton,
+                layout.resetButton,
+                layout.animButton,
+                layout.voiceButton,
+                layout.doneButton,
+                config.eyeTrackingEnabled,
+                normalized(config.eyeMaxAngle, 0.05f, 1.0f),
+                normalized(config.modelScale, 0.5f, 2.0f),
+                hoveredTarget == HoverTarget.EYE_TOGGLE,
+                hoveredTarget == HoverTarget.EYE_SLIDER,
+                hoveredTarget == HoverTarget.SCALE_SLIDER,
+                hoveredTarget == HoverTarget.SAVE,
+                hoveredTarget == HoverTarget.RESET,
+                hoveredTarget == HoverTarget.ANIM,
+                hoveredTarget == HoverTarget.VOICE,
+                hoveredTarget == HoverTarget.DONE,
+                slotViews
+        );
+    }
+
+    private float normalized(float value, float min, float max) {
+        return Mth.clamp((value - min) / (max - min), 0.0f, 1.0f);
+    }
+
+    private HoverTarget slotHoverTarget(int index) {
+        return switch (index) {
+            case 0 -> HoverTarget.SLOT_0;
+            case 1 -> HoverTarget.SLOT_1;
+            case 2 -> HoverTarget.SLOT_2;
+            default -> HoverTarget.SLOT_3;
+        };
+    }
+
+    private void renderFallback(GuiGraphics guiGraphics, SkiaModelSettingsRenderer.SettingsView view) {
+        guiGraphics.fill(0, 0, this.width, this.height, 0x28000000);
+        guiGraphics.fill(view.panel().x(), view.panel().y(), view.panel().x() + view.panel().w(), view.panel().y() + view.panel().h(), 0x2A000000);
+        guiGraphics.fill(view.panel().x() + 1, view.panel().y() + 1, view.panel().x() + view.panel().w() - 1, view.panel().y() + view.panel().h() - 1, 0x20000000);
+
+        guiGraphics.drawString(this.font, view.title(), view.header().x(), view.header().y() + 1, 0xFFF1F5FB, false);
+        guiGraphics.drawString(this.font, view.modelName(), view.header().x(), view.header().y() + 10, 0xC8D5DFEC, false);
+
+        drawFallbackCard(guiGraphics, view.eyeCard(), view.eyeSectionTitle());
+        guiGraphics.drawString(this.font, view.eyeToggleText(), view.eyeCard().x() + 4, view.eyeCard().y() + 13, 0xFFE9F1FA, false);
+        drawFallbackSlider(guiGraphics, view.eyeSlider(), view.eyeAngleLabel(), view.eyeAngleNormalized());
+
+        drawFallbackCard(guiGraphics, view.scaleCard(), view.scaleSectionTitle());
+        drawFallbackSlider(guiGraphics, view.scaleSlider(), view.modelScaleLabel(), view.modelScaleNormalized());
+
+        drawFallbackCard(guiGraphics, view.quickCard(), view.quickSectionTitle());
+        for (SkiaModelSettingsRenderer.QuickSlotView slot : view.quickSlots()) {
+            int bg = slot.boundToCurrentModel() ? 0x52FFFFFF : (slot.hovered() ? 0x38FFFFFF : 0x24000000);
+            guiGraphics.fill(slot.rect().x(), slot.rect().y(), slot.rect().x() + slot.rect().w(), slot.rect().y() + slot.rect().h(), bg);
+            guiGraphics.drawCenteredString(this.font, slot.slotLabel(), slot.rect().centerX(), slot.rect().y() + 4, 0xFFF1F6FD);
         }
 
-        if (fullWidthButton(Component.translatable("gui.mmdskin.model_settings.voice_config").getString() + "##voice")) {
-            pendingOpenVoiceConfig = true;
-        }
+        drawFallbackButton(guiGraphics, view.saveButton(), view.saveText(), view.saveHovered());
+        drawFallbackButton(guiGraphics, view.resetButton(), view.resetText(), view.resetHovered());
+        drawFallbackButton(guiGraphics, view.animButton(), view.animText(), view.animHovered());
+        drawFallbackButton(guiGraphics, view.voiceButton(), view.voiceText(), view.voiceHovered());
+        drawFallbackButton(guiGraphics, view.doneButton(), view.doneText(), view.doneHovered());
+    }
 
-        if (fullWidthButton(Component.translatable("gui.done").getString() + "##done")) {
-            pendingClose = true;
-        }
+    private void drawFallbackCard(GuiGraphics guiGraphics, UiRect rect, String title) {
+        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, 0x22000000);
+        guiGraphics.drawString(this.font, title, rect.x + 4, rect.y + 3, 0xFFE9F1FA, false);
+    }
+
+    private void drawFallbackSlider(GuiGraphics guiGraphics, UiRect rect, String label, float normalized) {
+        guiGraphics.drawString(this.font, label, rect.x, rect.y - 8, 0xC8D5DFEC, false);
+        guiGraphics.fill(rect.x, rect.y + 3, rect.x + rect.w, rect.y + 7, 0x28FFFFFF);
+        int fillRight = rect.x + Math.round(rect.w * normalized);
+        guiGraphics.fill(rect.x, rect.y + 3, fillRight, rect.y + 7, 0x58FFFFFF);
+    }
+
+    private void drawFallbackButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
+        int bg = hovered ? 0x4AFFFFFF : 0x30000000;
+        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, bg);
+        guiGraphics.drawCenteredString(this.font, text, rect.centerX(), rect.y + 4, 0xFFF1F6FD);
     }
 
     private void saveAndClose() {
@@ -242,13 +430,11 @@ public class ModelSettingsScreen extends Screen {
             minecraft.setScreen(new ModelAnimationScreen(modelName, this));
             return;
         }
-
         if (pendingOpenVoiceConfig && minecraft.screen == this) {
             pendingOpenVoiceConfig = false;
             minecraft.setScreen(VoicePackBindingScreen.createForPlayer(this, modelName));
             return;
         }
-
         if (pendingClose && minecraft.screen == this) {
             pendingClose = false;
             minecraft.setScreen(parentScreen);
@@ -256,38 +442,12 @@ public class ModelSettingsScreen extends Screen {
     }
 
     private void closeAfterFailure(Throwable throwable) {
-        LOGGER.error("[ModelSettings] ImGui settings failed and will close", throwable);
-        imguiRenderer.dispose();
+        LOGGER.error("[ModelSettings] Skia settings failed and will close", throwable);
+        skiaRenderer.dispose();
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen == this) {
             minecraft.setScreen(parentScreen);
         }
-    }
-
-    private List<String> collectVisibleGlyphHints() {
-        List<String> hints = new ArrayList<>();
-        hints.add(this.title.getString());
-        hints.add(modelName);
-        hints.add(Component.translatable("gui.mmdskin.model_settings.save").getString());
-        hints.add(Component.translatable("gui.mmdskin.model_settings.reset").getString());
-        hints.add(Component.translatable("gui.mmdskin.model_settings.anim_config").getString());
-        hints.add(Component.translatable("gui.mmdskin.model_settings.voice_config").getString());
-        hints.add(Component.translatable("gui.done").getString());
-        hints.add(Component.translatable("gui.mmdskin.model_settings.eye_tracking").getString());
-        hints.add(Component.translatable("gui.mmdskin.model_settings.eye_tracking_enabled").getString());
-        hints.add(Component.translatable("gui.mmdskin.model_settings.model_display").getString());
-        hints.add(Component.translatable("gui.mmdskin.model_settings.quick_bind").getString());
-        hints.add(Component.translatable("gui.mmdskin.model_settings.eye_max_angle",
-                String.format("%.0f", Math.toDegrees(config.eyeMaxAngle))).getString());
-        hints.add(Component.translatable("gui.mmdskin.model_settings.model_scale",
-                String.format("%.2f", config.modelScale)).getString());
-        for (ModelSettingsApplicationService.QuickSlotBinding binding : SERVICE.getQuickSlotBindings(modelName)) {
-            hints.add(buildQuickSlotLabel(binding));
-            if (binding.boundModel() != null) {
-                hints.add(binding.boundModel());
-            }
-        }
-        return hints;
     }
 
     private static String buildQuickSlotLabel(ModelSettingsApplicationService.QuickSlotBinding binding) {
@@ -301,21 +461,53 @@ public class ModelSettingsScreen extends Screen {
         return "[ ] " + base;
     }
 
-    private static boolean fullWidthButton(String label) {
-        return ImGui.button(label, Math.max(1.0f, ImGui.getContentRegionAvailX()), 0.0f);
-    }
-
-    private static float clamp(float value, float min, float max) {
-        return Math.max(min, Math.min(max, value));
-    }
-
     private static String shorten(String value, int maxChars) {
         if (value == null || value.length() <= maxChars) {
-            return value;
+            return value == null ? "" : value;
         }
         if (maxChars <= 3) {
             return value.substring(0, Math.max(0, maxChars));
         }
-        return value.substring(0, maxChars - 3) + "...";
+        return value.substring(0, maxChars - 2) + "..";
+    }
+
+    record UiRect(int x, int y, int w, int h) {
+        static UiRect empty() {
+            return new UiRect(0, 0, 0, 0);
+        }
+
+        boolean contains(double px, double py) {
+            return px >= x && py >= y && px <= x + w && py <= y + h;
+        }
+
+        int centerX() {
+            return x + w / 2;
+        }
+
+        int centerY() {
+            return y + h / 2;
+        }
+    }
+
+    private record Layout(
+            UiRect panel,
+            UiRect header,
+            UiRect eyeCard,
+            UiRect eyeToggle,
+            UiRect eyeSlider,
+            UiRect scaleCard,
+            UiRect scaleSlider,
+            UiRect quickCard,
+            UiRect[] quickSlotButtons,
+            UiRect saveButton,
+            UiRect resetButton,
+            UiRect animButton,
+            UiRect voiceButton,
+            UiRect doneButton
+    ) {
+        static Layout empty() {
+            UiRect empty = UiRect.empty();
+            return new Layout(empty, empty, empty, empty, empty, empty, empty, empty, new UiRect[4], empty, empty, empty, empty, empty);
+        }
     }
 }
