@@ -111,3 +111,8 @@ shader/
 AGENT.md
 /docs
 /.gradle-clean-home
+!rust_engine/src/bin/
+!rust_engine/src/bin/**
+!rust_engine/src/vrm_runtime/
+!rust_engine/src/vrm_runtime/**
+rust_engine/VR_RUNTIME_HANDOFF.md

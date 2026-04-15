@@ -75,6 +75,7 @@ pub fn vrm_to_mmd_bone_name(vrm_name: &str) -> &str {
 /// MMD 日文骨骼名 → VRM humanoid bone name（反向映射，用于 VMD 动画）
 ///
 /// MMD 独有骨骼（センター、グルーブ、IK 骨骼）返回 None
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn mmd_to_vrm_bone_name(mmd_name: &str) -> Option<&'static str> {
     match mmd_name {
         // === 必需骨骼 ===
@@ -144,7 +145,9 @@ pub fn mmd_to_vrm_bone_name(mmd_name: &str) -> Option<&'static str> {
         "センター" => Some("hips"),
 
         // MMD 独有骨骼，VRM 中无对应
-        "グルーブ" | "左足ＩＫ" | "右足ＩＫ" | "左つま先ＩＫ" | "右つま先ＩＫ" => None,
+        "グルーブ" | "左足ＩＫ" | "右足ＩＫ" | "左つま先ＩＫ" | "右つま先ＩＫ" => {
+            None
+        }
 
         _ => None,
     }
@@ -153,6 +156,7 @@ pub fn mmd_to_vrm_bone_name(mmd_name: &str) -> Option<&'static str> {
 /// 判断 MMD 骨骼名是否为センター（中心）骨骼
 ///
 /// センター在 VRM 中映射到 hips 的父级，需要特殊处理
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn is_mmd_center_bone(mmd_name: &str) -> bool {
     mmd_name == "センター"
 }
@@ -216,7 +220,10 @@ mod tests {
         assert_eq!(mmd_to_vrm_bone_name("頭"), Some("head"));
         assert_eq!(mmd_to_vrm_bone_name("左腕"), Some("leftUpperArm"));
         assert_eq!(mmd_to_vrm_bone_name("右足首"), Some("rightFoot"));
-        assert_eq!(mmd_to_vrm_bone_name("左親指０"), Some("leftThumbMetacarpal"));
+        assert_eq!(
+            mmd_to_vrm_bone_name("左親指０"),
+            Some("leftThumbMetacarpal")
+        );
         assert_eq!(mmd_to_vrm_bone_name("右小指３"), Some("rightLittleDistal"));
     }
 
@@ -240,17 +247,40 @@ mod tests {
     #[test]
     fn test_bidirectional_consistency() {
         let vrm_bones = [
-            "hips", "spine", "chest", "upperChest", "neck", "head",
-            "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand",
-            "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand",
-            "leftUpperLeg", "leftLowerLeg", "leftFoot",
-            "rightUpperLeg", "rightLowerLeg", "rightFoot",
-            "leftToes", "rightToes", "leftEye", "rightEye", "jaw",
+            "hips",
+            "spine",
+            "chest",
+            "upperChest",
+            "neck",
+            "head",
+            "leftShoulder",
+            "leftUpperArm",
+            "leftLowerArm",
+            "leftHand",
+            "rightShoulder",
+            "rightUpperArm",
+            "rightLowerArm",
+            "rightHand",
+            "leftUpperLeg",
+            "leftLowerLeg",
+            "leftFoot",
+            "rightUpperLeg",
+            "rightLowerLeg",
+            "rightFoot",
+            "leftToes",
+            "rightToes",
+            "leftEye",
+            "rightEye",
+            "jaw",
         ];
         for vrm_name in &vrm_bones {
             let mmd_name = vrm_to_mmd_bone_name(vrm_name);
             let back = mmd_to_vrm_bone_name(mmd_name);
-            assert_eq!(back, Some(*vrm_name), "双向映射不一致: {vrm_name} → {mmd_name}");
+            assert_eq!(
+                back,
+                Some(*vrm_name),
+                "双向映射不一致: {vrm_name} → {mmd_name}"
+            );
         }
     }
 }

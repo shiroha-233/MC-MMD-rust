@@ -9,14 +9,18 @@ pub mod skeleton;
 pub mod skinning;
 pub mod texture;
 pub mod vr;
+pub mod vrm_runtime;
 
 pub use animation::{VmdAnimation, VmdFile};
 pub use model::MmdModel;
 pub use morph::{Morph, MorphManager};
-pub use physics::{MMDPhysics, MmdRigidBodyData, MmdJointData, PhysicsMode};
+pub use physics::{MMDPhysics, MmdJointData, MmdRigidBodyData, PhysicsMode};
 pub use skeleton::{Bone, BoneManager, IkSolver};
 pub use texture::Texture;
 pub use vr::VrIkSolver;
+pub use vrm_runtime::{
+    ExpressionKey, ExpressionPreset, LookAtInput, VrmRuntime, VrmRuntimeInput, VrmRuntimeOutput,
+};
 
 use thiserror::Error;
 

@@ -2,8 +2,8 @@
 
 use glam::{Vec2, Vec3};
 
-use super::{RuntimeVertex, VertexWeight, SubMesh};
 use super::vrm_skeleton::VIRTUAL_BONE_COUNT;
+use super::{RuntimeVertex, SubMesh, VertexWeight};
 use crate::Result;
 
 /// Morph Target 偏移数据
@@ -21,7 +21,6 @@ pub(crate) struct MergedMesh {
     pub weights: Vec<VertexWeight>,
     pub submeshes: Vec<SubMesh>,
     pub morph_targets: Vec<MorphTargetData>,
-    pub material_indices: Vec<usize>,
 }
 
 /// 合并所有 mesh primitives 为统一的顶点/索引数组
@@ -33,7 +32,6 @@ pub(crate) fn merge_meshes(
     let mut indices = Vec::new();
     let mut weights = Vec::new();
     let mut submeshes = Vec::new();
-    let mut material_indices = Vec::new();
     let mut max_morph_count: usize = 0;
     let mut primitive_morphs: Vec<(usize, Vec<MorphTargetData>)> = Vec::new();
 
@@ -43,19 +41,26 @@ pub(crate) fn merge_meshes(
             let vertex_offset = vertices.len() as u32;
 
             // 左手→右手坐标系对齐：X-flip + Z-flip（等价于绕 Y 轴旋转 180°）
-            let positions: Vec<Vec3> = reader.read_positions()
+            let positions: Vec<Vec3> = reader
+                .read_positions()
                 .map(|iter| iter.map(|p| Vec3::new(-p[0], p[1], -p[2])).collect())
                 .unwrap_or_default();
             let vertex_count = positions.len();
 
             // NORMAL — 同样 X-flip + Z-flip
-            let normals: Vec<Vec3> = reader.read_normals()
+            let normals: Vec<Vec3> = reader
+                .read_normals()
                 .map(|iter| iter.map(|n| Vec3::new(-n[0], n[1], -n[2])).collect())
                 .unwrap_or_else(|| vec![Vec3::new(0.0, 0.0, 1.0); vertex_count]);
 
             // TEXCOORD_0 → RuntimeVertex.uv（V 轴翻转：glTF V=0 在顶部，纹理加载时做了 flip_vertical 需要匹配）
-            let uvs: Vec<Vec2> = reader.read_tex_coords(0)
-                .map(|tc| tc.into_f32().map(|uv| Vec2::new(uv[0], 1.0 - uv[1])).collect())
+            let uvs: Vec<Vec2> = reader
+                .read_tex_coords(0)
+                .map(|tc| {
+                    tc.into_f32()
+                        .map(|uv| Vec2::new(uv[0], 1.0 - uv[1]))
+                        .collect()
+                })
                 .unwrap_or_else(|| vec![Vec2::ZERO; vertex_count]);
 
             for i in 0..vertex_count {
@@ -67,10 +72,10 @@ pub(crate) fn merge_meshes(
             }
 
             // JOINTS_0 + WEIGHTS_0 → VertexWeight::Bdef4
-            let joints: Option<Vec<[u16; 4]>> = reader.read_joints(0)
-                .map(|j| j.into_u16().collect());
-            let weight_values: Option<Vec<[f32; 4]>> = reader.read_weights(0)
-                .map(|w| w.into_f32().collect());
+            let joints: Option<Vec<[u16; 4]>> =
+                reader.read_joints(0).map(|j| j.into_u16().collect());
+            let weight_values: Option<Vec<[f32; 4]>> =
+                reader.read_weights(0).map(|w| w.into_f32().collect());
 
             match (joints, weight_values) {
                 (Some(j), Some(w)) => {
@@ -78,8 +83,10 @@ pub(crate) fn merge_meshes(
                         let offset = VIRTUAL_BONE_COUNT as i32;
                         weights.push(VertexWeight::Bdef4 {
                             bones: [
-                                j[i][0] as i32 + offset, j[i][1] as i32 + offset,
-                                j[i][2] as i32 + offset, j[i][3] as i32 + offset,
+                                j[i][0] as i32 + offset,
+                                j[i][1] as i32 + offset,
+                                j[i][2] as i32 + offset,
+                                j[i][3] as i32 + offset,
                             ],
                             weights: w[i],
                         });
@@ -111,10 +118,10 @@ pub(crate) fn merge_meshes(
             // SubMesh 生成
             let material_id = primitive.material().index().unwrap_or(0);
             submeshes.push(SubMesh::new(index_begin, index_count, material_id as i32));
-            material_indices.push(material_id);
 
             // Morph targets — X-flip + Z-flip
-            let prim_targets: Vec<MorphTargetData> = reader.read_morph_targets()
+            let prim_targets: Vec<MorphTargetData> = reader
+                .read_morph_targets()
                 .map(|(positions, normals, _tangents)| {
                     let position_offsets = positions
                         .map(|iter| iter.map(|p| Vec3::new(-p[0], p[1], -p[2])).collect())
@@ -122,7 +129,10 @@ pub(crate) fn merge_meshes(
                     let normal_offsets = normals
                         .map(|iter| iter.map(|n| Vec3::new(-n[0], n[1], -n[2])).collect())
                         .unwrap_or_default();
-                    MorphTargetData { position_offsets, normal_offsets }
+                    MorphTargetData {
+                        position_offsets,
+                        normal_offsets,
+                    }
                 })
                 .collect();
             max_morph_count = max_morph_count.max(prim_targets.len());
@@ -139,7 +149,6 @@ pub(crate) fn merge_meshes(
         weights,
         submeshes,
         morph_targets,
-        material_indices,
     })
 }
 
@@ -169,7 +178,10 @@ fn merge_morph_targets(
                 }
             }
 
-            MorphTargetData { position_offsets, normal_offsets }
+            MorphTargetData {
+                position_offsets,
+                normal_offsets,
+            }
         })
         .collect()
 }
