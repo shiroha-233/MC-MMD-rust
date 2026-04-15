@@ -1,6 +1,7 @@
 package com.shiroha.mmdskin.ui.selector;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.shiroha.mmdskin.ui.SkiaBlurBackground;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import org.apache.logging.log4j.LogManager;
@@ -18,6 +19,7 @@ import org.jetbrains.skia.FramebufferFormat;
 import org.jetbrains.skia.Image;
 import org.jetbrains.skia.ImageFilter;
 import org.jetbrains.skia.Paint;
+import org.jetbrains.skia.PaintMode;
 import org.jetbrains.skia.RRect;
 import org.jetbrains.skia.Rect;
 import org.jetbrains.skia.Surface;
@@ -152,7 +154,7 @@ final class SkiaModelSelectorRenderer {
     }
 
     private void drawBackdrop(Canvas canvas) {
-        try (Paint dim = fillPaint(0x1C000000)) {
+        try (Paint dim = fillPaint(0x06000000)) {
             canvas.drawRect(Rect.makeLTRB(0.0f, 0.0f, 10000.0f, 10000.0f), dim);
         }
     }
@@ -162,27 +164,7 @@ final class SkiaModelSelectorRenderer {
         float y = view.panel().y();
         float w = view.panel().w();
         float h = view.panel().h();
-
-        RRect shell = RRect.makeLTRB(x, y, x + w, y + h, 6.0f);
-        RRect inner = RRect.makeLTRB(x + 1.0f, y + 1.0f, x + w - 1.0f, y + h - 1.0f, 5.0f);
-
-        Rect src = Rect.makeLTRB(x * scaleX, y * scaleY, (x + w) * scaleX, (y + h) * scaleY);
-        Rect dst = Rect.makeLTRB(x, y, x + w, y + h);
-        try (ImageFilter blurFilter = ImageFilter.Companion.makeBlur(12.0f, 12.0f, FilterTileMode.CLAMP, null, null);
-             Paint blurPaint = new Paint();
-             Paint border = fillPaint(0x4CFFFFFF);
-             Paint fill = fillPaint(0x18000000)) {
-            blurPaint.setAntiAlias(true);
-            blurPaint.setImageFilter(blurFilter);
-
-            canvas.save();
-            canvas.clipRRect(shell, true);
-            canvas.drawImageRect(sceneSnapshot, src, dst, blurPaint);
-            canvas.restore();
-
-            canvas.drawRRect(shell, border);
-            canvas.drawRRect(inner, fill);
-        }
+        SkiaBlurBackground.drawPanel(canvas, sceneSnapshot, scaleX, scaleY, x, y, x + w, y + h, 6.0f);
     }
 
     private void drawHeader(Canvas canvas, SelectorView view) {
@@ -205,20 +187,20 @@ final class SkiaModelSelectorRenderer {
     private void drawButton(Canvas canvas, ModelSelectorScreen.UiRect rect, String text, boolean hovered, boolean primary, boolean enabled) {
         boolean activeHover = enabled && hovered;
         int border = enabled
-                ? (primary ? 0x6AFFFFFF : 0x5CFFFFFF)
-                : 0x3CFFFFFF;
+                ? (activeHover ? 0x4CFFFFFF : (primary ? 0x34FFFFFF : 0x28FFFFFF))
+                : 0x18FFFFFF;
         int fill = enabled
-                ? (primary ? (activeHover ? 0x52FFFFFF : 0x30FFFFFF) : (activeHover ? 0x42FFFFFF : 0x22000000))
-                : 0x1A000000;
+                ? (primary ? (activeHover ? 0x18FFFFFF : 0x0CFFFFFF) : (activeHover ? 0x14FFFFFF : 0x00000000))
+                : 0x00000000;
         RRect outer = RRect.makeLTRB(rect.x(), rect.y(), rect.x() + rect.w(), rect.y() + rect.h(), 2.0f);
-        RRect inner = RRect.makeLTRB(rect.x() + 1.0f, rect.y() + 1.0f, rect.x() + rect.w() - 1.0f, rect.y() + rect.h() - 1.0f, 1.0f);
 
-        try (Paint borderPaint = fillPaint(border);
-             Paint fillPaint = fillPaint(fill);
-             Paint glowPaint = fillPaint(activeHover ? 0x22FFFFFF : 0x0AFFFFFF)) {
+        try (Paint borderPaint = strokePaint(border, 1.0f)) {
             canvas.drawRRect(outer, borderPaint);
-            canvas.drawRRect(inner, fillPaint);
-            canvas.drawRRect(RRect.makeLTRB(rect.x() + 1.0f, rect.y() + 1.0f, rect.x() + rect.w() - 1.0f, rect.y() + rect.h() * 0.42f, 1.0f), glowPaint);
+        }
+        if (fill != 0) {
+            try (Paint fillPaint = fillPaint(fill)) {
+                canvas.drawRRect(RRect.makeLTRB(rect.x() + 1.0f, rect.y() + 1.0f, rect.x() + rect.w() - 1.0f, rect.y() + rect.h() - 1.0f, 1.0f), fillPaint);
+            }
         }
 
         drawCenteredText(canvas, bodyFont, text, rect.centerX(), rect.centerY() + 0.5f, enabled ? 0xFFF3F8FF : 0xA7C0D1E3, 0x880F1722);
@@ -227,11 +209,8 @@ final class SkiaModelSelectorRenderer {
     private void drawList(Canvas canvas, SelectorView view) {
         ModelSelectorScreen.UiRect list = view.listBox();
         RRect listOuter = RRect.makeLTRB(list.x(), list.y(), list.x() + list.w(), list.y() + list.h(), 2.0f);
-        RRect listInner = RRect.makeLTRB(list.x() + 1.0f, list.y() + 1.0f, list.x() + list.w() - 1.0f, list.y() + list.h() - 1.0f, 1.0f);
-        try (Paint border = fillPaint(0x42FFFFFF);
-             Paint fill = fillPaint(0x14000000)) {
+        try (Paint border = strokePaint(0x20FFFFFF, 1.0f)) {
             canvas.drawRRect(listOuter, border);
-            canvas.drawRRect(listInner, fill);
         }
 
         if (view.cards().isEmpty()) {
@@ -262,15 +241,18 @@ final class SkiaModelSelectorRenderer {
             RRect cardRect = RRect.makeLTRB(cardLeft, cardTop, cardRight, cardBottom, 3.0f);
 
             int cardFill = card.selected()
-                    ? (card.hovered() ? 0x66FFFFFF : 0x4AFFFFFF)
-                    : (card.hovered() ? 0x3EFFFFFF : 0x24000000);
-            int cardBorder = card.selected() ? 0x88FFFFFF : 0x44FFFFFF;
-            try (Paint border = fillPaint(cardBorder);
-                  Paint fill = fillPaint(cardFill);
-                  Paint sheen = fillPaint(card.selected() ? 0x18FFFFFF : 0x0AFFFFFF)) {
+                    ? (card.hovered() ? 0x20FFFFFF : 0x14FFFFFF)
+                    : (card.hovered() ? 0x12FFFFFF : 0x00000000);
+            int cardBorder = card.selected()
+                    ? (card.hovered() ? 0x54FFFFFF : 0x40FFFFFF)
+                    : (card.hovered() ? 0x34FFFFFF : 0x18FFFFFF);
+            try (Paint border = strokePaint(cardBorder, 1.0f)) {
                 canvas.drawRRect(cardRect, border);
-                canvas.drawRRect(RRect.makeLTRB(cardLeft + 1.0f, cardTop + 1.0f, cardRight - 1.0f, cardBottom - 1.0f, 2.0f), fill);
-                canvas.drawRRect(RRect.makeLTRB(cardLeft + 2.0f, cardTop + 1.0f, cardRight - 2.0f, cardTop + view.cardHeight() * 0.38f, 2.0f), sheen);
+            }
+            if (cardFill != 0) {
+                try (Paint fill = fillPaint(cardFill)) {
+                    canvas.drawRRect(RRect.makeLTRB(cardLeft + 1.0f, cardTop + 1.0f, cardRight - 1.0f, cardBottom - 1.0f, 2.0f), fill);
+                }
             }
 
             float textX = cardLeft + 4.0f;
@@ -389,6 +371,13 @@ final class SkiaModelSelectorRenderer {
         return paint;
     }
 
+    private Paint strokePaint(int color, float width) {
+        Paint paint = fillPaint(color);
+        paint.setMode(PaintMode.STROKE);
+        paint.setStrokeWidth(width);
+        return paint;
+    }
+
     private boolean disableRenderer(String message, Throwable throwable) {
         unavailable = true;
         retryAfterNanos = System.nanoTime() + 3_000_000_000L;
@@ -404,6 +393,11 @@ final class SkiaModelSelectorRenderer {
 
     private void restoreMinecraftRenderState(Minecraft minecraft) {
         minecraft.getMainRenderTarget().bindWrite(false);
+        RenderSystem.viewport(0, 0, minecraft.getWindow().getWidth(), minecraft.getWindow().getHeight());
+        GL11C.glDisable(GL11C.GL_SCISSOR_TEST);
+        GL11C.glDisable(GL11C.GL_STENCIL_TEST);
+        GL11C.glColorMask(true, true, true, true);
+        GL11C.glDepthMask(true);
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
         RenderSystem.defaultBlendFunc();

@@ -1,6 +1,7 @@
 package com.shiroha.mmdskin.ui.wheel;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.shiroha.mmdskin.ui.SkiaBlurBackground;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
@@ -80,12 +81,8 @@ final class SkiaWheelRenderer {
             float height = 24.0f;
             float x = screen.centerX - width / 2.0f;
             float y = screen.centerY + screen.outerRadius * 0.46f;
-            RRect shell = RRect.makeLTRB(x, y, x + width, y + height, 9.0f);
-            try (Paint fill = fillPaint(0x12000000);
-                 Paint border = fillPaint(0x26FFFFFF)) {
-                canvas.drawRRect(shell, border);
-                canvas.drawRRect(RRect.makeLTRB(x + 1.0f, y + 1.0f, x + width - 1.0f, y + height - 1.0f, 8.0f), fill);
-            }
+            SkiaBlurBackground.drawChip(canvas, sceneSnapshot, scaleX, scaleY,
+                    x, y, x + width, y + height, 9.0f, 0x12000000, 0x26FFFFFF);
             drawCenteredText(canvas, bodyFont, hint.getString(), screen.centerX, y + height * 0.58f, TEXT_PRIMARY, screen.style.textShadow(), 1.0f);
         });
     }
@@ -196,20 +193,7 @@ final class SkiaWheelRenderer {
         float top = screen.centerY - radius;
         float right = screen.centerX + radius;
         float bottom = screen.centerY + radius;
-
-        Rect src = Rect.makeLTRB(left * scaleX, top * scaleY, right * scaleX, bottom * scaleY);
-        Rect dst = Rect.makeLTRB(left, top, right, bottom);
-        try (ImageFilter blurFilter = ImageFilter.Companion.makeBlur(4.0f, 4.0f, FilterTileMode.CLAMP, null, null);
-             Paint blurPaint = new Paint();
-             Paint tint = fillPaint(0x06FFFFFF)) {
-            blurPaint.setAntiAlias(true);
-            blurPaint.setImageFilter(blurFilter);
-            canvas.save();
-            canvas.clipRRect(RRect.makeLTRB(left, top, right, bottom, radius));
-            canvas.drawImageRect(sceneSnapshot, src, dst, blurPaint);
-            canvas.drawRect(dst, tint);
-            canvas.restore();
-        }
+        SkiaBlurBackground.drawWheelGlass(canvas, sceneSnapshot, scaleX, scaleY, left, top, right, bottom, radius);
     }
 
     private void drawSegments(Canvas canvas,

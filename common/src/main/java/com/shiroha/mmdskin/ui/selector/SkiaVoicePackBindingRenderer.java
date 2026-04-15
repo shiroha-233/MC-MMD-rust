@@ -10,14 +10,12 @@ import org.jetbrains.skia.BackendRenderTarget;
 import org.jetbrains.skia.Canvas;
 import org.jetbrains.skia.ColorSpace;
 import org.jetbrains.skia.DirectContext;
-import org.jetbrains.skia.FilterTileMode;
 import org.jetbrains.skia.Font;
 import org.jetbrains.skia.FontMetrics;
 import org.jetbrains.skia.FontMgr;
 import org.jetbrains.skia.FontStyle;
 import org.jetbrains.skia.FramebufferFormat;
 import org.jetbrains.skia.Image;
-import org.jetbrains.skia.ImageFilter;
 import org.jetbrains.skia.Paint;
 import org.jetbrains.skia.PaintMode;
 import org.jetbrains.skia.RRect;
@@ -31,13 +29,12 @@ import org.lwjgl.opengl.GL30C;
 
 import java.util.List;
 
-final class SkiaMaterialVisibilityRenderer {
+final class SkiaVoicePackBindingRenderer {
     private static final Logger LOGGER = LogManager.getLogger();
 
     private boolean unavailable;
     private long retryAfterNanos;
     private DirectContext directContext;
-
     private FontMgr fontMgr;
     private FontStyle normalStyle;
     private Typeface uiTypeface;
@@ -45,8 +42,8 @@ final class SkiaMaterialVisibilityRenderer {
     private Font bodyFont;
     private Font smallFont;
 
-    boolean renderMaterialScreen(MaterialVisibilityScreen screen, MaterialView view) {
-        return withCanvas(screen, (canvas, sceneSnapshot, scaleX, scaleY) -> drawScreen(canvas, view, sceneSnapshot, scaleX, scaleY));
+    boolean renderBindings(VoicePackBindingScreen screen, BindingView view) {
+        return withCanvas(screen, (canvas, sceneSnapshot, scaleX, scaleY) -> drawBindings(canvas, view, sceneSnapshot, scaleX, scaleY));
     }
 
     void dispose() {
@@ -56,12 +53,10 @@ final class SkiaMaterialVisibilityRenderer {
         titleFont = null;
         bodyFont = null;
         smallFont = null;
-
         closeTypeface(uiTypeface);
         uiTypeface = null;
         fontMgr = null;
         normalStyle = null;
-
         if (directContext != null) {
             try {
                 directContext.close();
@@ -72,7 +67,7 @@ final class SkiaMaterialVisibilityRenderer {
         unavailable = false;
     }
 
-    private boolean withCanvas(MaterialVisibilityScreen screen, CanvasDraw draw) {
+    private boolean withCanvas(VoicePackBindingScreen screen, CanvasDraw draw) {
         if (unavailable && System.nanoTime() < retryAfterNanos) {
             return false;
         }
@@ -128,7 +123,7 @@ final class SkiaMaterialVisibilityRenderer {
             restoreMinecraftRenderState(minecraft);
             return true;
         } catch (Throwable throwable) {
-            return disableRenderer("Skia material visibility rendering failed", throwable);
+            return disableRenderer("Skia voice binding rendering failed", throwable);
         } finally {
             if (surface != null) {
                 try {
@@ -145,12 +140,13 @@ final class SkiaMaterialVisibilityRenderer {
         }
     }
 
-    private void drawScreen(Canvas canvas, MaterialView view, Image sceneSnapshot, float scaleX, float scaleY) {
+    private void drawBindings(Canvas canvas, BindingView view, Image sceneSnapshot, float scaleX, float scaleY) {
         drawBackdrop(canvas);
         drawPanel(canvas, view, sceneSnapshot, scaleX, scaleY);
         drawHeader(canvas, view);
-        drawButtons(canvas, view);
-        drawList(canvas, view);
+        drawRows(canvas, view.rows());
+        drawButton(canvas, view.doneButton(), view.doneText(), view.doneHovered(), true);
+        drawButton(canvas, view.cancelButton(), view.cancelText(), view.cancelHovered(), false);
     }
 
     private void drawBackdrop(Canvas canvas) {
@@ -159,7 +155,7 @@ final class SkiaMaterialVisibilityRenderer {
         }
     }
 
-    private void drawPanel(Canvas canvas, MaterialView view, Image sceneSnapshot, float scaleX, float scaleY) {
+    private void drawPanel(Canvas canvas, BindingView view, Image sceneSnapshot, float scaleX, float scaleY) {
         float x = view.panel().x();
         float y = view.panel().y();
         float w = view.panel().w();
@@ -167,25 +163,51 @@ final class SkiaMaterialVisibilityRenderer {
         SkiaBlurBackground.drawPanel(canvas, sceneSnapshot, scaleX, scaleY, x, y, x + w, y + h, 6.0f);
     }
 
-    private void drawHeader(Canvas canvas, MaterialView view) {
-        float titleX = view.header().x();
-        drawText(canvas, titleFont, view.title(), titleX, view.header().y() + 11.0f, 0xFFF2F7FD, 0x880F1722);
-        drawText(canvas, smallFont, view.modelName(), titleX, view.header().y() + 22.0f, 0xC9D7E2EE, 0x840E1620);
-        drawText(canvas, smallFont, view.counter(), titleX, view.header().y() + 31.0f, 0xBCD0DCE9, 0x840E1620);
+    private void drawHeader(Canvas canvas, BindingView view) {
+        drawText(canvas, titleFont, view.title(), view.header().x(), view.header().y() + 11.0f, 0xFFF2F7FD, 0x880F1722);
+        drawText(canvas, smallFont, fitText(view.modelText(), smallFont, view.header().w()),
+                view.header().x(), view.header().y() + 22.0f, 0xC9D7E2EE, 0x840E1620);
     }
 
-    private void drawButtons(Canvas canvas, MaterialView view) {
-        drawButton(canvas, view.showAllButton(), view.showAllText(), view.showAllHovered());
-        drawButton(canvas, view.hideAllButton(), view.hideAllText(), view.hideAllHovered());
-        drawButton(canvas, view.invertButton(), view.invertText(), view.invertHovered());
-        drawButton(canvas, view.doneButton(), view.doneText(), view.doneHovered());
+    private void drawRows(Canvas canvas, List<RowView> rows) {
+        for (RowView row : rows) {
+            drawRow(canvas, row);
+        }
     }
 
-    private void drawButton(Canvas canvas, MaterialVisibilityScreen.UiRect rect, String text, boolean hovered) {
-        int border = hovered ? 0x4CFFFFFF : 0x28FFFFFF;
-        int fill = hovered ? 0x14FFFFFF : 0x00000000;
+    private void drawRow(Canvas canvas, RowView row) {
+        float left = row.rect().x();
+        float top = row.rect().y();
+        float right = row.rect().x() + row.rect().w();
+        float bottom = row.rect().y() + row.rect().h();
+        int borderColor = row.assigned()
+                ? (row.hovered() ? 0x54FFFFFF : 0x38FFFFFF)
+                : (row.hovered() ? 0x3CFFFFFF : 0x20FFFFFF);
+        int fillColor = row.assigned()
+                ? (row.hovered() ? 0x18FFFFFF : 0x0EFFFFFF)
+                : (row.hovered() ? 0x12FFFFFF : 0x04000000);
+
+        RRect outer = RRect.makeLTRB(left, top, right, bottom, 3.0f);
+        try (Paint border = strokePaint(borderColor, 1.0f)) {
+            canvas.drawRRect(outer, border);
+        }
+        if (fillColor != 0) {
+            try (Paint fill = fillPaint(fillColor)) {
+                canvas.drawRRect(RRect.makeLTRB(left + 1.0f, top + 1.0f, right - 1.0f, bottom - 1.0f, 2.0f), fill);
+            }
+        }
+
+        drawText(canvas, smallFont, fitText(row.label(), smallFont, row.rect().w() - 22.0f),
+                left + 6.0f, top + 8.0f, 0xD7E5F2FF, 0x7A0F1722);
+        drawText(canvas, bodyFont, fitText(row.value(), bodyFont, row.rect().w() - 22.0f),
+                left + 6.0f, top + 21.0f, row.assigned() ? 0xFFF3F8FF : 0xC9D7E2EE, 0x880F1722);
+        drawCenteredText(canvas, bodyFont, ">", right - 10.0f, top + row.rect().h() * 0.5f + 0.5f, 0xE4F0FCFF, 0x660F1722);
+    }
+
+    private void drawButton(Canvas canvas, VoicePackBindingScreen.UiRect rect, String text, boolean hovered, boolean primary) {
+        int border = hovered ? 0x4CFFFFFF : (primary ? 0x34FFFFFF : 0x28FFFFFF);
+        int fill = primary ? (hovered ? 0x18FFFFFF : 0x0CFFFFFF) : (hovered ? 0x14FFFFFF : 0x00000000);
         RRect outer = RRect.makeLTRB(rect.x(), rect.y(), rect.x() + rect.w(), rect.y() + rect.h(), 2.0f);
-
         try (Paint borderPaint = strokePaint(border, 1.0f)) {
             canvas.drawRRect(outer, borderPaint);
         }
@@ -194,64 +216,31 @@ final class SkiaMaterialVisibilityRenderer {
                 canvas.drawRRect(RRect.makeLTRB(rect.x() + 1.0f, rect.y() + 1.0f, rect.x() + rect.w() - 1.0f, rect.y() + rect.h() - 1.0f, 1.0f), fillPaint);
             }
         }
-
-        drawCenteredText(canvas, bodyFont, text, rect.centerX(), rect.centerY() + 0.5f, 0xFFF3F8FF, 0x880F1722);
+        drawCenteredText(canvas, bodyFont, fitText(text, bodyFont, Math.max(32.0f, rect.w() - 8.0f)),
+                rect.centerX(), rect.centerY() + 0.5f, 0xFFF3F8FF, 0x880F1722);
     }
 
-    private void drawList(Canvas canvas, MaterialView view) {
-        MaterialVisibilityScreen.UiRect list = view.listBox();
-        RRect listOuter = RRect.makeLTRB(list.x(), list.y(), list.x() + list.w(), list.y() + list.h(), 2.0f);
-        try (Paint border = strokePaint(0x20FFFFFF, 1.0f)) {
-            canvas.drawRRect(listOuter, border);
-        }
-
-        if (view.cards().isEmpty()) {
-            drawCenteredText(canvas, bodyFont, view.emptyText(), list.centerX(), list.centerY() + 4.0f, 0xE3E8F2FF, 0xA0101822);
+    private void drawText(Canvas canvas, Font font, String text, float x, float baselineY, int color, int shadowColor) {
+        if (text == null || text.isEmpty()) {
             return;
         }
+        try (Paint shadow = fillPaint(shadowColor); Paint fill = fillPaint(color)) {
+            canvas.drawString(text, x + 0.8f, baselineY + 0.8f, font, shadow);
+            canvas.drawString(text, x, baselineY, font, fill);
+        }
+    }
 
-        float visibleTop = list.y() + 2.0f;
-        float visibleBottom = list.y() + list.h() - 2.0f;
-        float y = list.y() + view.listPadding() - view.scrollOffset();
-        for (MaterialCardView card : view.cards()) {
-            float cardTop = y;
-            float cardBottom = y + view.cardHeight();
-            if (cardBottom < visibleTop) {
-                y += view.cardHeight() + view.cardGap();
-                continue;
-            }
-            if (cardTop > visibleBottom) {
-                break;
-            }
-            if (cardTop < visibleTop || cardBottom > visibleBottom) {
-                y += view.cardHeight() + view.cardGap();
-                continue;
-            }
-
-            float cardLeft = list.x() + 3.0f;
-            float cardRight = list.x() + list.w() - 3.0f;
-            RRect cardRect = RRect.makeLTRB(cardLeft, cardTop, cardRight, cardBottom, 3.0f);
-
-            int cardFill = card.visible()
-                    ? (card.hovered() ? 0x12FFFFFF : 0x00000000)
-                    : (card.hovered() ? 0x20FFFFFF : 0x14FFFFFF);
-            int cardBorder = card.visible()
-                    ? (card.hovered() ? 0x34FFFFFF : 0x18FFFFFF)
-                    : (card.hovered() ? 0x54FFFFFF : 0x40FFFFFF);
-            try (Paint border = strokePaint(cardBorder, 1.0f)) {
-                canvas.drawRRect(cardRect, border);
-            }
-            if (cardFill != 0) {
-                try (Paint fill = fillPaint(cardFill)) {
-                    canvas.drawRRect(RRect.makeLTRB(cardLeft + 1.0f, cardTop + 1.0f, cardRight - 1.0f, cardBottom - 1.0f, 2.0f), fill);
-                }
-            }
-
-            float textX = cardLeft + 4.0f;
-            float textY = cardTop + view.cardHeight() * 0.70f;
-            drawText(canvas, bodyFont, fitText(card.label(), bodyFont, Math.max(26.0f, cardRight - cardLeft - 8.0f)),
-                    textX, textY, 0xFFEDF4FF, 0xA0101822);
-            y += view.cardHeight() + view.cardGap();
+    private void drawCenteredText(Canvas canvas, Font font, String text, float centerX, float centerY, int color, int shadowColor) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        try (Paint shadow = fillPaint(shadowColor); Paint fill = fillPaint(color)) {
+            Rect bounds = font.measureText(text, fill);
+            FontMetrics metrics = font.getMetrics();
+            float baseline = centerY - (metrics.getAscent() + metrics.getDescent()) * 0.5f;
+            float left = centerX - bounds.getWidth() * 0.5f;
+            canvas.drawString(text, left + 0.8f, baseline + 0.8f, font, shadow);
+            canvas.drawString(text, left, baseline, font, fill);
         }
     }
 
@@ -275,32 +264,6 @@ final class SkiaMaterialVisibilityRenderer {
         }
     }
 
-    private void drawText(Canvas canvas, Font font, String text, float x, float baselineY, int color, int shadowColor) {
-        if (text == null || text.isEmpty()) {
-            return;
-        }
-        try (Paint shadow = fillPaint(shadowColor);
-             Paint fill = fillPaint(color)) {
-            canvas.drawString(text, x + 0.8f, baselineY + 0.8f, font, shadow);
-            canvas.drawString(text, x, baselineY, font, fill);
-        }
-    }
-
-    private void drawCenteredText(Canvas canvas, Font font, String text, float centerX, float centerY, int color, int shadowColor) {
-        if (text == null || text.isEmpty()) {
-            return;
-        }
-        try (Paint shadow = fillPaint(shadowColor);
-             Paint fill = fillPaint(color)) {
-            Rect bounds = font.measureText(text, fill);
-            FontMetrics metrics = font.getMetrics();
-            float baseline = centerY - (metrics.getAscent() + metrics.getDescent()) * 0.5f;
-            float left = centerX - bounds.getWidth() * 0.5f;
-            canvas.drawString(text, left + 0.8f, baseline + 0.8f, font, shadow);
-            canvas.drawString(text, left, baseline, font, fill);
-        }
-    }
-
     private void ensureFonts() {
         if (titleFont != null && bodyFont != null && smallFont != null) {
             return;
@@ -312,7 +275,7 @@ final class SkiaMaterialVisibilityRenderer {
             uiTypeface = Typeface.Companion.makeDefault();
         }
         if (uiTypeface == null) {
-            throw new IllegalStateException("No usable system typeface for material visibility UI");
+            throw new IllegalStateException("No usable system typeface for voice binding UI");
         }
 
         titleFont = new Font(uiTypeface, 8.0f);
@@ -358,9 +321,9 @@ final class SkiaMaterialVisibilityRenderer {
         unavailable = true;
         retryAfterNanos = System.nanoTime() + 3_000_000_000L;
         if (throwable == null) {
-            LOGGER.error("[SkiaMaterialVisibilityRenderer] {}", message);
+            LOGGER.error("[SkiaVoicePackBindingRenderer] {}", message);
         } else {
-            LOGGER.error("[SkiaMaterialVisibilityRenderer] {}", message, throwable);
+            LOGGER.error("[SkiaVoicePackBindingRenderer] {}", message, throwable);
         }
         dispose();
         unavailable = true;
@@ -401,34 +364,27 @@ final class SkiaMaterialVisibilityRenderer {
         }
     }
 
-    record MaterialCardView(String label, boolean visible, boolean hovered, int index) {
+    record RowView(
+            String label,
+            String value,
+            boolean assigned,
+            boolean hovered,
+            VoicePackBindingScreen.UiRect rect
+    ) {
     }
 
-    record MaterialView(
+    record BindingView(
             String title,
-            String modelName,
-            String counter,
-            String showAllText,
-            String hideAllText,
-            String invertText,
+            String modelText,
             String doneText,
-            MaterialVisibilityScreen.UiRect panel,
-            MaterialVisibilityScreen.UiRect header,
-            MaterialVisibilityScreen.UiRect listBox,
-            MaterialVisibilityScreen.UiRect showAllButton,
-            MaterialVisibilityScreen.UiRect hideAllButton,
-            MaterialVisibilityScreen.UiRect invertButton,
-            MaterialVisibilityScreen.UiRect doneButton,
-            boolean showAllHovered,
-            boolean hideAllHovered,
-            boolean invertHovered,
+            String cancelText,
+            VoicePackBindingScreen.UiRect panel,
+            VoicePackBindingScreen.UiRect header,
+            VoicePackBindingScreen.UiRect doneButton,
+            VoicePackBindingScreen.UiRect cancelButton,
             boolean doneHovered,
-            float scrollOffset,
-            List<MaterialCardView> cards,
-            int listPadding,
-            int cardHeight,
-            int cardGap,
-            String emptyText
+            boolean cancelHovered,
+            List<RowView> rows
     ) {
     }
 
