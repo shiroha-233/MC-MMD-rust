@@ -17,14 +17,9 @@ pub(crate) struct VrmModelRuntimeState {
 }
 
 impl VrmModelRuntimeState {
-    pub(crate) fn new(model: &MmdModel, extensions: VrmExtensions) -> Self {
-        let head_rest_y = model
-            .tracked_head_bone_index()
-            .and_then(|index| model.bone_manager.get_bone(index))
-            .map(|bone| bone.initial_position.y)
-            .unwrap_or(0.0);
+    pub(crate) fn new(model: &mut MmdModel, extensions: VrmExtensions) -> Self {
         Self {
-            control_rig: ControlRigRuntime::new(head_rest_y),
+            control_rig: ControlRigRuntime::new(model),
             constraints: ConstraintRuntime::new(extensions.node_constraints, &model.bone_manager),
             look_at: LookAtRuntime::new(extensions.look_at.clone()),
             expression: ExpressionRuntime::new(&extensions.expressions),
@@ -49,7 +44,12 @@ impl VrmModelRuntimeState {
     }
 
     pub(crate) fn apply_inputs(&mut self, model: &mut MmdModel) {
-        self.control_rig.apply_tracking(model, self.input.tracking);
+        self.control_rig.apply_tracking(
+            model,
+            self.input.tracking,
+            self.input.hand_calibration,
+            self.input.body_calibration,
+        );
     }
 
     pub(crate) fn process_expressions(&mut self, model: &mut MmdModel) {
@@ -103,6 +103,15 @@ impl VrmModelRuntimeState {
                 glam::Quat::from_mat4(&model.bone_manager.get_global_transform(index)).normalize()
             })
             .unwrap_or(glam::Quat::IDENTITY);
+        let vr_debug = model.vr_debug_state();
+        self.output.head_local_model = vr_debug.head_local_model;
+        self.output.body_anchor_model = vr_debug.body_anchor_model;
+        self.output.left_palm_target_model = vr_debug.left_palm_target_model;
+        self.output.right_palm_target_model = vr_debug.right_palm_target_model;
+        self.output.left_wrist_solved_model = vr_debug.left_wrist_solved_model;
+        self.output.right_wrist_solved_model = vr_debug.right_wrist_solved_model;
+        self.output.left_wrist_error_cm = vr_debug.left_wrist_error_cm;
+        self.output.right_wrist_error_cm = vr_debug.right_wrist_error_cm;
 
         model.replace_material_visibility(if self.input.first_person {
             snapshot.hmd_visible_materials

@@ -5,8 +5,9 @@ use anyhow::{Context, Result};
 use glam::{Mat4, Quat, Vec3};
 use mmd_engine::model::{MmdMaterial, SubMesh};
 use mmd_engine::vrm_runtime::{
-    LookAtInput, TrackedPose as RuntimePose, VrmRenderState, VrmRuntime, VrmRuntimeInput,
-    VrmTrackingInput, VrmView,
+    BodyTrackingCalibration, HandGripOffset, HandTrackingCalibration, LookAtInput,
+    TrackedPose as RuntimePose, VrmRenderState, VrmRuntime, VrmRuntimeInput, VrmTrackingInput,
+    VrmView,
 };
 
 use crate::xr::TrackedPose;
@@ -17,6 +18,11 @@ const MIRROR_CAMERA_FOV_Y: f32 = 36.0_f32.to_radians();
 const MIRROR_CAMERA_NEAR: f32 = 0.05;
 const MIRROR_CAMERA_FAR: f32 = 50.0;
 const MODEL_FORWARD_CORRECTION: f32 = std::f32::consts::PI;
+// OpenXR grip pose is already close to the palm center on most controllers,
+// so keep only a small hardware bias here and let the model bind pose provide
+// the palm-to-wrist offset.
+const LEFT_GRIP_TO_PALM_XR: Vec3 = Vec3::new(0.0, -0.012, -0.018);
+const RIGHT_GRIP_TO_PALM_XR: Vec3 = Vec3::new(0.0, -0.012, -0.018);
 
 #[derive(Clone)]
 pub struct SceneAssets {
@@ -51,6 +57,8 @@ pub struct MirrorCamera {
 struct Calibration {
     root_origin_xr: Vec3,
     world_to_avatar_yaw: Quat,
+    tracking_origin_world: Vec3,
+    avatar_root_world_yaw: Quat,
     mirror_root_world: Vec3,
     calibrated: bool,
 }
@@ -103,28 +111,17 @@ impl AvatarScene {
     }
 
     pub fn xr_model_matrix(&self) -> Mat4 {
-        let head_pose = self.last_raw_tracking.head;
-        if !head_pose.valid {
-            return self.mirror_model_matrix();
-        }
-
-        let head_model_rotation = (self.runtime.output().head_rotation
-            * Quat::from_rotation_y(MODEL_FORWARD_CORRECTION))
-        .normalize();
-        let root_rotation = (head_pose.orientation * head_model_rotation.inverse()).normalize();
-        let view_anchor_world =
-            root_rotation * (self.current_view_anchor_model * MODEL_TO_WORLD_SCALE);
-        let root_translation = head_pose.position - view_anchor_world;
-
-        Mat4::from_translation(root_translation)
-            * Mat4::from_quat(root_rotation)
-            * Mat4::from_scale(Vec3::splat(MODEL_TO_WORLD_SCALE))
+        compose_tracking_root_matrix(
+            self.calibration.tracking_origin_world,
+            self.calibration.avatar_root_world_yaw,
+        )
     }
 
     pub fn mirror_model_matrix(&self) -> Mat4 {
-        Mat4::from_translation(self.calibration.mirror_root_world)
-            * Mat4::from_quat(Quat::from_rotation_y(MODEL_FORWARD_CORRECTION))
-            * Mat4::from_scale(Vec3::splat(MODEL_TO_WORLD_SCALE))
+        compose_tracking_root_matrix(
+            self.calibration.mirror_root_world,
+            self.calibration.avatar_root_world_yaw,
+        )
     }
 
     pub fn update(&mut self, tracking: &TrackingFrame, delta_time: f32) {
@@ -132,6 +129,13 @@ impl AvatarScene {
 
         if tracking.head.valid && !self.calibration.calibrated {
             self.recenter_from_head(tracking.head);
+        }
+        if tracking.head.valid && self.calibration.calibrated {
+            self.calibration.tracking_origin_world = resolve_tracking_origin_world(
+                tracking.head.position,
+                self.calibration.avatar_root_world_yaw,
+                self.current_view_anchor_model,
+            );
         }
 
         let head = self.resolve_head_pose(self.anchor_head_pose(tracking.head));
@@ -151,8 +155,11 @@ impl AvatarScene {
             left_hand: left,
             right_hand: right,
         };
+        let hand_calibration = demo_hand_calibration();
         self.runtime.process(VrmRuntimeInput {
             tracking: Some(runtime_tracking),
+            hand_calibration,
+            body_calibration: BodyTrackingCalibration::default(),
             look_at: LookAtInput::default(),
             expression_weights: HashMap::new(),
             first_person: true,
@@ -175,14 +182,23 @@ impl AvatarScene {
 
         self.calibration.root_origin_xr = Vec3::new(head.position.x, 0.0, head.position.z);
         self.calibration.world_to_avatar_yaw = inverse_yaw_from_head(head.orientation);
+        self.calibration.avatar_root_world_yaw = self.calibration.world_to_avatar_yaw.inverse();
+        self.calibration.tracking_origin_world = resolve_tracking_origin_world(
+            head.position,
+            self.calibration.avatar_root_world_yaw,
+            self.current_view_anchor_model,
+        );
         self.calibration.mirror_root_world =
             Vec3::new(mirror_head_world.x, 0.0, mirror_head_world.z);
         self.calibration.calibrated = true;
         log::info!(
-            "VR 角色已重定中心 head=({:.2},{:.2},{:.2}) mirror_root=({:.2},{:.2},{:.2})",
+            "VR 角色已重定中心 head=({:.2},{:.2},{:.2}) tracking_root=({:.2},{:.2},{:.2}) mirror_root=({:.2},{:.2},{:.2})",
             head.position.x,
             head.position.y,
             head.position.z,
+            self.calibration.tracking_origin_world.x,
+            self.calibration.tracking_origin_world.y,
+            self.calibration.tracking_origin_world.z,
             self.calibration.mirror_root_world.x,
             self.calibration.mirror_root_world.y,
             self.calibration.mirror_root_world.z,
@@ -196,7 +212,7 @@ impl AvatarScene {
 
         RuntimePose {
             position: self.calibration.world_to_avatar_yaw
-                * (pose.position - self.calibration.root_origin_xr),
+                * (pose.position - self.calibration.tracking_origin_world),
             orientation: (self.calibration.world_to_avatar_yaw * pose.orientation).normalize(),
             valid: true,
         }
@@ -209,7 +225,7 @@ impl AvatarScene {
 
         RuntimePose {
             position: self.calibration.world_to_avatar_yaw
-                * (pose.position - self.calibration.root_origin_xr),
+                * (pose.position - self.calibration.tracking_origin_world),
             orientation: (self.calibration.world_to_avatar_yaw * pose.orientation).normalize(),
             valid: true,
         }
@@ -273,20 +289,25 @@ impl AvatarScene {
     }
 
     pub fn status_line(&self, runtime_label: &str) -> String {
-        let head = self.last_tracking.head.position;
-        let left = self.last_tracking.left_hand.position;
-        let right = self.last_tracking.right_hand.position;
+        let output = self.runtime.output();
+        let head_local = output.head_local_model * MODEL_TO_WORLD_SCALE;
+        let body_anchor = output.body_anchor_model * MODEL_TO_WORLD_SCALE;
+        let left = output.left_palm_target_model * MODEL_TO_WORLD_SCALE;
+        let right = output.right_palm_target_model * MODEL_TO_WORLD_SCALE;
         let raw_left = self.last_raw_tracking.left_hand.position;
         let raw_right = self.last_raw_tracking.right_hand.position;
-        let left_wrist = self.runtime.left_hand_matrix().w_axis.truncate() * MODEL_TO_WORLD_SCALE;
-        let right_wrist = self.runtime.right_hand_matrix().w_axis.truncate() * MODEL_TO_WORLD_SCALE;
+        let left_wrist = output.left_wrist_solved_model * MODEL_TO_WORLD_SCALE;
+        let right_wrist = output.right_wrist_solved_model * MODEL_TO_WORLD_SCALE;
         format!(
-            "mode={} runtime={} head=({:.1},{:.1},{:.1}) lh=({:.1},{:.1},{:.1}) rh=({:.1},{:.1},{:.1}) raw_l=({:.1},{:.1},{:.1}) raw_r=({:.1},{:.1},{:.1}) wrist_l=({:.2},{:.2},{:.2}) wrist_r=({:.2},{:.2},{:.2})",
+            "mode={} runtime={} head_local=({:.2},{:.2},{:.2}) body_anchor=({:.2},{:.2},{:.2}) palm_l=({:.2},{:.2},{:.2}) palm_r=({:.2},{:.2},{:.2}) raw_l=({:.2},{:.2},{:.2}) raw_r=({:.2},{:.2},{:.2}) wrist_l=({:.2},{:.2},{:.2}) wrist_r=({:.2},{:.2},{:.2}) wrist_err_cm=({:.1},{:.1})",
             self.assets.name,
             runtime_label,
-            head.x,
-            head.y,
-            head.z,
+            head_local.x,
+            head_local.y,
+            head_local.z,
+            body_anchor.x,
+            body_anchor.y,
+            body_anchor.z,
             left.x,
             left.y,
             left.z,
@@ -305,6 +326,8 @@ impl AvatarScene {
             right_wrist.x,
             right_wrist.y,
             right_wrist.z,
+            output.left_wrist_error_cm,
+            output.right_wrist_error_cm,
         )
     }
 
@@ -341,5 +364,76 @@ fn planar_forward(orientation: Quat) -> Vec3 {
         Vec3::NEG_Z
     } else {
         planar.normalize()
+    }
+}
+
+fn compose_tracking_root_matrix(origin_world: Vec3, avatar_root_world_yaw: Quat) -> Mat4 {
+    let root_rotation =
+        (avatar_root_world_yaw * Quat::from_rotation_y(MODEL_FORWARD_CORRECTION)).normalize();
+    Mat4::from_translation(origin_world)
+        * Mat4::from_quat(root_rotation)
+        * Mat4::from_scale(Vec3::splat(MODEL_TO_WORLD_SCALE))
+}
+
+fn resolve_tracking_origin_world(
+    head_world: Vec3,
+    avatar_root_world_yaw: Quat,
+    view_anchor_model: Vec3,
+) -> Vec3 {
+    let root_rotation =
+        (avatar_root_world_yaw * Quat::from_rotation_y(MODEL_FORWARD_CORRECTION)).normalize();
+    head_world - root_rotation * (view_anchor_model * MODEL_TO_WORLD_SCALE)
+}
+
+fn demo_hand_calibration() -> HandTrackingCalibration {
+    HandTrackingCalibration {
+        left: HandGripOffset {
+            position_offset: LEFT_GRIP_TO_PALM_XR,
+        },
+        right: HandGripOffset {
+            position_offset: RIGHT_GRIP_TO_PALM_XR,
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compose_tracking_root_matrix_should_keep_recenter_origin_stable() {
+        let origin = Vec3::new(1.5, 0.0, -2.0);
+        let yaw = Quat::from_rotation_y(0.75);
+        let matrix = compose_tracking_root_matrix(origin, yaw);
+
+        assert_vec3_near(matrix.w_axis.truncate(), origin, 1e-5);
+    }
+
+    #[test]
+    fn inverse_yaw_from_head_should_leave_identity_unchanged() {
+        let yaw = inverse_yaw_from_head(Quat::IDENTITY);
+        let forward = yaw * Vec3::NEG_Z;
+
+        assert_vec3_near(forward, Vec3::NEG_Z, 1e-5);
+    }
+
+    #[test]
+    fn resolve_tracking_origin_world_should_place_view_anchor_at_head_position() {
+        let head_world = Vec3::new(2.0, 1.6, -0.5);
+        let yaw = Quat::from_rotation_y(0.35);
+        let view_anchor_model = Vec3::new(0.0, 18.0, 1.5);
+        let origin = resolve_tracking_origin_world(head_world, yaw, view_anchor_model);
+        let matrix = compose_tracking_root_matrix(origin, yaw);
+        let solved_head_world = matrix.transform_point3(view_anchor_model);
+
+        assert_vec3_near(solved_head_world, head_world, 1e-5);
+    }
+
+    fn assert_vec3_near(actual: Vec3, expected: Vec3, tolerance: f32) {
+        let delta = actual - expected;
+        assert!(
+            delta.length() <= tolerance,
+            "vec mismatch: actual={actual:?} expected={expected:?} tolerance={tolerance}",
+        );
     }
 }

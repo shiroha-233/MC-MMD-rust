@@ -34,6 +34,14 @@ pub struct VrmRuntimeOutput {
     pub view_anchor_model: Vec3,
     pub head_rotation: Quat,
     pub first_person_source: String,
+    pub head_local_model: Vec3,
+    pub body_anchor_model: Vec3,
+    pub left_palm_target_model: Vec3,
+    pub right_palm_target_model: Vec3,
+    pub left_wrist_solved_model: Vec3,
+    pub right_wrist_solved_model: Vec3,
+    pub left_wrist_error_cm: f32,
+    pub right_wrist_error_cm: f32,
 }
 
 pub struct VrmRuntime {

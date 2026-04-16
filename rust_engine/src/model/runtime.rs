@@ -4,7 +4,7 @@ use crate::animation::{AnimationLayerManager, VmdAnimation};
 use crate::morph::MorphManager;
 use crate::physics::MMDPhysics;
 use crate::skeleton::BoneManager;
-use crate::vr::VrIkSolver;
+use crate::vr::{VrDebugState, VrIkSolver, VrTrackingFrame};
 use crate::vrm_runtime::{VrmModelRuntimeState, VrmRuntimeInput, VrmRuntimeOutput};
 use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 use rayon::prelude::*;
@@ -184,10 +184,14 @@ pub struct MmdModel {
     vr_enabled: bool,
     /// VR 追踪数据（3 追踪点 × 7 float = 21）
     vr_tracking_data: [f32; 21],
+    /// 结构化 VR 追踪帧（共享 runtime 主通道）
+    vr_tracking_frame: Option<VrTrackingFrame>,
     /// VR 手臂 IK 强度 (0.0~1.0)
     vr_ik_strength: f32,
     /// VR IK 求解器（缓存骨骼索引）
     vr_ik_solver: VrIkSolver,
+    /// 最新一帧 VR 调试遥测
+    vr_debug_state: VrDebugState,
 
     // ======== 矩阵插值过渡 ========
     /// 缓存的蒙皮矩阵（过渡开始时的状态）
@@ -271,8 +275,10 @@ impl MmdModel {
             hand_mode_visible_backup: Vec::new(),
             vr_enabled: false,
             vr_tracking_data: [0.0; 21],
+            vr_tracking_frame: None,
             vr_ik_strength: 1.0,
             vr_ik_solver: VrIkSolver::new(),
+            vr_debug_state: VrDebugState::default(),
             transition_matrices: Vec::new(),
             transition_progress: 0.0,
             transition_duration: 0.0,
@@ -366,10 +372,8 @@ impl MmdModel {
 
     pub fn set_vrm_runtime_input(&mut self, input: VrmRuntimeInput) {
         self.first_person_enabled = input.first_person;
-        if let Some(mut runtime_state) = self.vrm_runtime_state.take() {
+        if let Some(runtime_state) = self.vrm_runtime_state.as_mut() {
             runtime_state.input = input;
-            runtime_state.apply_inputs(self);
-            self.vrm_runtime_state = Some(runtime_state);
         }
     }
 
@@ -1076,10 +1080,17 @@ impl MmdModel {
 
         // VR IK 求解（在全局变换计算之后，确保用当前帧的骨骼位置）
         if self.vr_enabled {
-            let tracking = self.vr_tracking_data;
             let strength = self.vr_ik_strength;
-            self.vr_ik_solver
-                .solve(&mut self.bone_manager, &tracking, strength);
+            if let Some(frame) = self.vr_tracking_frame {
+                self.vr_debug_state =
+                    self.vr_ik_solver
+                        .solve_tracking_frame(&mut self.bone_manager, &frame, strength);
+            } else {
+                let tracking = self.vr_tracking_data;
+                self.vr_ik_solver
+                    .solve(&mut self.bone_manager, &tracking, strength);
+                self.vr_debug_state = VrDebugState::default();
+            }
         }
 
         // 物理更新
@@ -2045,10 +2056,19 @@ impl MmdModel {
 
         // VR IK 求解（在全局变换计算之后，确保用当前帧的骨骼位置）
         if self.vr_enabled {
-            let tracking = self.vr_tracking_data;
             let strength = self.vr_ik_strength;
-            self.vr_ik_solver
-                .solve(&mut self.bone_manager, &tracking, strength);
+            if let Some(frame) = self.vr_tracking_frame {
+                self.vr_debug_state =
+                    self.vr_ik_solver
+                        .solve_tracking_frame(&mut self.bone_manager, &frame, strength);
+            } else {
+                let tracking = self.vr_tracking_data;
+                self.vr_ik_solver
+                    .solve(&mut self.bone_manager, &tracking, strength);
+                self.vr_debug_state = VrDebugState::default();
+            }
+        } else {
+            self.vr_debug_state = VrDebugState::default();
         }
 
         // 记录物理更新前的动态骨骼数量
@@ -2338,10 +2358,25 @@ impl MmdModel {
         self.vr_enabled
     }
 
+    pub(crate) fn set_vr_tracking_frame(&mut self, frame: Option<VrTrackingFrame>) {
+        self.vr_tracking_frame = frame;
+        if let Some(frame) = frame {
+            self.vr_tracking_data = frame.to_tracking_packet();
+        } else {
+            self.vr_tracking_data = [0.0; 21];
+        }
+    }
+
     /// 设置 VR 追踪数据（长度必须为 21）
     pub fn set_vr_tracking_data(&mut self, data: &[f32]) {
         if data.len() == 21 {
             self.vr_tracking_data.copy_from_slice(data);
+            let calibration = self
+                .vr_tracking_frame
+                .map(|frame| frame.body_calibration)
+                .unwrap_or_default();
+            self.vr_tracking_frame =
+                Some(VrTrackingFrame::from_tracking_packet(&self.vr_tracking_data, calibration));
         }
     }
 
@@ -2355,6 +2390,10 @@ impl MmdModel {
 
     pub fn vr_ik_strength(&self) -> f32 {
         self.vr_ik_strength
+    }
+
+    pub(crate) fn vr_debug_state(&self) -> VrDebugState {
+        self.vr_debug_state
     }
 
     // ======== VR 手部模式 ========

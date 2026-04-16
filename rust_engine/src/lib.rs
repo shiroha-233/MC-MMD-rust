@@ -19,7 +19,8 @@ pub use skeleton::{Bone, BoneManager, IkSolver};
 pub use texture::Texture;
 pub use vr::VrIkSolver;
 pub use vrm_runtime::{
-    ExpressionKey, ExpressionPreset, LookAtInput, VrmRuntime, VrmRuntimeInput, VrmRuntimeOutput,
+    BodyTrackingCalibration, ExpressionKey, ExpressionPreset, HandGripOffset,
+    HandTrackingCalibration, LookAtInput, VrmRuntime, VrmRuntimeInput, VrmRuntimeOutput,
 };
 
 use thiserror::Error;
