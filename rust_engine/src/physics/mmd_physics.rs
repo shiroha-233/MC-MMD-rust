@@ -7,13 +7,13 @@ use std::collections::HashSet;
 
 use glam::{Mat3, Mat4, Vec3};
 
-use mmd::pmx::rigid_body::RigidBody as PmxRigidBody;
 use mmd::pmx::joint::Joint as PmxJoint;
+use mmd::pmx::rigid_body::RigidBody as PmxRigidBody;
 
 use super::bullet_ffi::{self, BulletWorld};
-use super::mmd_rigid_body::{MmdRigidBodyData, PhysicsMode};
-use super::mmd_joint::MmdJointData;
 use super::config::get_config;
+use super::mmd_joint::MmdJointData;
+use super::mmd_rigid_body::{MmdRigidBodyData, PhysicsMode};
 
 /// MMD 物理世界管理器（Bullet3 引擎）
 ///
@@ -33,7 +33,6 @@ pub struct MMDPhysics {
     max_substep_count: i32,
 
     // --- 预分配缓冲区（避免每帧堆分配） ---
-
     /// 动态刚体关联的骨骼索引集合（构建时计算一次）
     dynamic_bone_indices: HashSet<usize>,
     /// 动态骨骼变换结果缓冲区（复用内存）
@@ -50,7 +49,11 @@ impl MMDPhysics {
         let world = BulletWorld::new(0.0, config.gravity_y, 0.0)?;
 
         if config.debug_log {
-            log::info!("[Bullet3] 物理世界创建: FPS={}, 重力Y={}", config.physics_fps, config.gravity_y);
+            log::info!(
+                "[Bullet3] 物理世界创建: FPS={}, 重力Y={}",
+                config.physics_fps,
+                config.gravity_y
+            );
         }
 
         Some(Self {
@@ -82,15 +85,18 @@ impl MMDPhysics {
 
         // 第一步：创建所有刚体并存入 Vec（还未加入世界）
         for pmx_rb in pmx_rigid_bodies {
-            let bone_transform = if pmx_rb.bone_index >= 0 && (pmx_rb.bone_index as usize) < bone_transforms.len() {
-                Some(bone_transforms[pmx_rb.bone_index as usize])
-            } else {
-                None
-            };
+            let bone_transform =
+                if pmx_rb.bone_index >= 0 && (pmx_rb.bone_index as usize) < bone_transforms.len() {
+                    Some(bone_transforms[pmx_rb.bone_index as usize])
+                } else {
+                    None
+                };
 
             let mut rb_data = MmdRigidBodyData::from_pmx(pmx_rb, bone_transform);
             let shape = MmdRigidBodyData::create_shape(pmx_rb);
-            let body = shape.as_ref().and_then(|s| rb_data.create_rigid_body(pmx_rb, s));
+            let body = shape
+                .as_ref()
+                .and_then(|s| rb_data.create_rigid_body(pmx_rb, s));
 
             if shape.is_none() || body.is_none() {
                 log::warn!("[Bullet3] 刚体 '{}' 创建失败，跳过", rb_data.name);
@@ -120,7 +126,8 @@ impl MMDPhysics {
                 let rb_a_idx = pmx_joint.rigid_body_a_index as usize;
                 let rb_b_idx = pmx_joint.rigid_body_b_index as usize;
 
-                if rb_a_idx >= self.rigid_bodies.len() || rb_b_idx >= self.rigid_bodies.len()
+                if rb_a_idx >= self.rigid_bodies.len()
+                    || rb_b_idx >= self.rigid_bodies.len()
                     || rb_a_idx == rb_b_idx
                 {
                     continue;
@@ -130,18 +137,15 @@ impl MMDPhysics {
                     let rb_a = &self.rigid_bodies[rb_a_idx];
                     let rb_b = &self.rigid_bodies[rb_b_idx];
                     match (&rb_a.bullet_body, &rb_b.bullet_body) {
-                        (Some(a), Some(b)) => (a, b, rb_a.initial_transform, rb_b.initial_transform),
+                        (Some(a), Some(b)) => {
+                            (a, b, rb_a.initial_transform, rb_b.initial_transform)
+                        }
                         _ => continue,
                     }
                 };
 
-                let joint_data = MmdJointData::from_pmx(
-                    pmx_joint,
-                    rb_a_body,
-                    rb_b_body,
-                    rb_a_init,
-                    rb_b_init,
-                );
+                let joint_data =
+                    MmdJointData::from_pmx(pmx_joint, rb_a_body, rb_b_body, rb_a_init, rb_b_init);
 
                 // 先存入 Vec，再添加到世界
                 self.joints.push(joint_data);
@@ -156,27 +160,41 @@ impl MMDPhysics {
         }
 
         // 第四步：预计算动态骨骼索引集合（一次性，避免每帧重算）
-        self.dynamic_bone_indices = self.rigid_bodies.iter()
+        self.dynamic_bone_indices = self
+            .rigid_bodies
+            .iter()
             .filter(|rb| rb.physics_mode != PhysicsMode::FollowBone && rb.bone_index >= 0)
             .map(|rb| rb.bone_index as usize)
             .collect();
 
         // 预分配动态骨骼缓冲区
-        self.dynamic_bone_buf.reserve(self.dynamic_bone_indices.len());
+        self.dynamic_bone_buf
+            .reserve(self.dynamic_bone_indices.len());
 
         self.world.set_kinematic_filter(config.kinematic_filter);
 
-        let kinematic_count = self.rigid_bodies.iter()
-            .filter(|rb| rb.physics_mode == PhysicsMode::FollowBone).count();
-        let dynamic_count = self.rigid_bodies.iter()
-            .filter(|rb| rb.physics_mode == PhysicsMode::Physics).count();
-        let dynamic_bone_count = self.rigid_bodies.iter()
-            .filter(|rb| rb.physics_mode == PhysicsMode::PhysicsWithBone).count();
+        let kinematic_count = self
+            .rigid_bodies
+            .iter()
+            .filter(|rb| rb.physics_mode == PhysicsMode::FollowBone)
+            .count();
+        let dynamic_count = self
+            .rigid_bodies
+            .iter()
+            .filter(|rb| rb.physics_mode == PhysicsMode::Physics)
+            .count();
+        let dynamic_bone_count = self
+            .rigid_bodies
+            .iter()
+            .filter(|rb| rb.physics_mode == PhysicsMode::PhysicsWithBone)
+            .count();
 
         log::info!(
             "Bullet3 物理构建完成: {} 刚体 ({}跟骨 + {}物理 + {}物理跟骨), {} 关节",
             self.rigid_bodies.len(),
-            kinematic_count, dynamic_count, dynamic_bone_count,
+            kinematic_count,
+            dynamic_count,
+            dynamic_bone_count,
             self.joints.len()
         );
     }
@@ -285,7 +303,8 @@ impl MMDPhysics {
     /// 防止卡顿帧或极端力导致的物理爆炸。
     pub fn step_simulation(&self, delta_time: f32) {
         let fixed_dt = 1.0 / self.fps;
-        self.world.step(delta_time, self.max_substep_count, fixed_dt);
+        self.world
+            .step(delta_time, self.max_substep_count, fixed_dt);
 
         // 速度钳制
         let config = get_config();
@@ -331,9 +350,7 @@ impl MMDPhysics {
             if let Some(ref body) = rb_data.bullet_body {
                 let rb_matrix = body.get_transform();
                 let new_bone_left = match rb_data.physics_mode {
-                    PhysicsMode::Physics => {
-                        rb_data.compute_bone_matrix(rb_matrix)
-                    }
+                    PhysicsMode::Physics => rb_data.compute_bone_matrix(rb_matrix),
                     PhysicsMode::PhysicsWithBone => {
                         // 骨骼位置(右手) → inv_z → 左手
                         let bone_right = bone_transforms[bone_idx as usize];
@@ -391,13 +408,20 @@ impl MMDPhysics {
         self.world.set_gravity(x, y, z);
     }
 
-    pub fn rigid_body_count(&self) -> usize { self.rigid_bodies.len() }
-    pub fn joint_count(&self) -> usize { self.joints.len() }
+    pub fn rigid_body_count(&self) -> usize {
+        self.rigid_bodies.len()
+    }
+    pub fn joint_count(&self) -> usize {
+        self.joints.len()
+    }
 
     /// 获取动态刚体关联的骨骼变换（复用内部缓冲区，零堆分配）
     ///
     /// 从 Bullet3 读取左手空间变换，通过 inv_z 转回右手空间返回。
-    pub fn get_dynamic_bone_transforms(&mut self, current_bone_transforms: &[Mat4]) -> &[(usize, Mat4)] {
+    pub fn get_dynamic_bone_transforms(
+        &mut self,
+        current_bone_transforms: &[Mat4],
+    ) -> &[(usize, Mat4)] {
         self.dynamic_bone_buf.clear();
         for rb_data in &self.rigid_bodies {
             if rb_data.physics_mode == PhysicsMode::FollowBone {
@@ -422,7 +446,8 @@ impl MMDPhysics {
                     }
                     PhysicsMode::FollowBone => unreachable!(),
                 };
-                self.dynamic_bone_buf.push((bone_idx as usize, super::inv_z(new_bone_left)));
+                self.dynamic_bone_buf
+                    .push((bone_idx as usize, super::inv_z(new_bone_left)));
             }
         }
         &self.dynamic_bone_buf

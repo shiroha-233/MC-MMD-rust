@@ -1,18 +1,18 @@
 //! FBX 动画加载器
 
-use std::collections::{HashMap, BTreeSet};
+use std::collections::{BTreeSet, HashMap};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 
 use glam::{Quat, Vec3};
 
-use crate::{MmdError, Result};
-use super::fbx_parser::{parse_fbx, FbxNode};
 use super::fbx_bone_mapping::map_fbx_bone_name;
+use super::fbx_parser::{parse_fbx, FbxNode};
 use super::keyframe::{BoneKeyframe, IkKeyframe};
 use super::motion::Motion;
 use super::vmd_loader::VmdAnimation;
+use crate::{MmdError, Result};
 
 /// FBX 时间单位：1秒 = 46186158000
 const FBX_TICKS_PER_SECOND: f64 = 46_186_158_000.0;
@@ -85,7 +85,10 @@ impl FbxCache {
 }
 
 /// 从 FBX 文件加载动画（无缓存，适用于 JNI 单次调用）
-pub fn load_fbx_animation<P: AsRef<Path>>(path: P, stack_name: Option<&str>) -> Result<VmdAnimation> {
+pub fn load_fbx_animation<P: AsRef<Path>>(
+    path: P,
+    stack_name: Option<&str>,
+) -> Result<VmdAnimation> {
     let file = File::open(path.as_ref())
         .map_err(|e| MmdError::FbxParse(format!("打开文件失败: {}", e)))?;
     let mut reader = BufReader::new(file);
@@ -98,9 +101,13 @@ pub fn load_fbx_animation<P: AsRef<Path>>(path: P, stack_name: Option<&str>) -> 
 /// 从解析后的 FBX 节点树中提取动画
 /// stack_name 为 None 时取第一个 Stack，为 Some 时按名称模糊匹配
 fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Motion> {
-    let objects = nodes.iter().find(|n| n.name == "Objects")
+    let objects = nodes
+        .iter()
+        .find(|n| n.name == "Objects")
         .ok_or_else(|| MmdError::FbxParse("未找到 Objects 节点".into()))?;
-    let connections = nodes.iter().find(|n| n.name == "Connections")
+    let connections = nodes
+        .iter()
+        .find(|n| n.name == "Connections")
         .ok_or_else(|| MmdError::FbxParse("未找到 Connections 节点".into()))?;
 
     // 收集各类对象
@@ -112,12 +119,14 @@ fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Moti
     let mut model_parent: HashMap<i64, i64> = HashMap::new();
 
     // 解析 GlobalSettings 坐标系（UpAxis=2 表示 Z-up，如 Blender 导出）
-    let is_z_up = nodes.iter()
+    let is_z_up = nodes
+        .iter()
         .find(|n| n.name == "GlobalSettings")
         .and_then(|gs| gs.find_child("Properties70"))
         .map(|p70| {
             p70.children.iter().any(|p| {
-                p.name == "P" && p.properties.len() >= 5
+                p.name == "P"
+                    && p.properties.len() >= 5
                     && p.properties[0].as_string() == Some("UpAxis")
                     && p.properties[4].as_f64().unwrap_or(1.0) as i32 == 2
             })
@@ -143,7 +152,9 @@ fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Moti
             }
             "AnimationStack" => {
                 if let Some(id) = child.properties.first().and_then(|p| p.as_i64()) {
-                    let name = child.properties.get(1)
+                    let name = child
+                        .properties
+                        .get(1)
                         .and_then(|p| p.as_string())
                         .map(|s| clean_fbx_name(s))
                         .unwrap_or_default();
@@ -164,15 +175,31 @@ fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Moti
     let mut cn_to_layer: HashMap<i64, i64> = HashMap::new();
 
     for conn in &connections.children {
-        if conn.name != "C" { continue; }
+        if conn.name != "C" {
+            continue;
+        }
         let props = &conn.properties;
-        if props.len() < 3 { continue; }
-        let conn_type = match props[0].as_string() { Some(s) => s, None => continue };
-        if conn_type != "OO" { continue; }
-        let child_id = match props[1].as_i64() { Some(v) => v, None => continue };
-        let parent_id = match props[2].as_i64() { Some(v) => v, None => continue };
+        if props.len() < 3 {
+            continue;
+        }
+        let conn_type = match props[0].as_string() {
+            Some(s) => s,
+            None => continue,
+        };
+        if conn_type != "OO" {
+            continue;
+        }
+        let child_id = match props[1].as_i64() {
+            Some(v) => v,
+            None => continue,
+        };
+        let parent_id = match props[2].as_i64() {
+            Some(v) => v,
+            None => continue,
+        };
 
-        if anim_layer_ids.contains(&child_id) && anim_stacks.iter().any(|(id, _)| *id == parent_id) {
+        if anim_layer_ids.contains(&child_id) && anim_stacks.iter().any(|(id, _)| *id == parent_id)
+        {
             layer_to_stack.insert(child_id, parent_id);
         }
         if all_curve_node_ids.contains(&child_id) && anim_layer_ids.contains(&parent_id) {
@@ -189,32 +216,37 @@ fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Moti
     let target_stack_id = if let Some(name) = stack_name {
         // 优先精确匹配（忽略大小写），再 contains 模糊匹配
         let lower = name.to_ascii_lowercase();
-        let exact = anim_stacks.iter()
+        let exact = anim_stacks
+            .iter()
             .find(|(_, sn)| sn.to_ascii_lowercase() == lower);
         let found = exact.or_else(|| {
-            anim_stacks.iter()
+            anim_stacks
+                .iter()
                 .find(|(_, sn)| sn.to_ascii_lowercase().contains(&lower))
         });
-        found.map(|(id, _)| *id)
-            .ok_or_else(|| {
-                let available: Vec<&str> = anim_stacks.iter().map(|(_, n)| n.as_str()).collect();
-                MmdError::FbxParse(format!(
-                    "未找到名为 '{}' 的 AnimationStack，可用: {:?}", name, available
-                ))
-            })?
+        found.map(|(id, _)| *id).ok_or_else(|| {
+            let available: Vec<&str> = anim_stacks.iter().map(|(_, n)| n.as_str()).collect();
+            MmdError::FbxParse(format!(
+                "未找到名为 '{}' 的 AnimationStack，可用: {:?}",
+                name, available
+            ))
+        })?
     } else {
-        anim_stacks.first()
+        anim_stacks
+            .first()
             .ok_or_else(|| MmdError::FbxParse("FBX 文件不包含 AnimationStack".into()))?
             .0
     };
 
     // 确定有效 CurveNode 集合（属于目标 Stack 的 Layer）
     let curve_node_ids: BTreeSet<i64> = if anim_stacks.len() > 1 {
-        let valid_layers: BTreeSet<i64> = layer_to_stack.iter()
+        let valid_layers: BTreeSet<i64> = layer_to_stack
+            .iter()
             .filter(|(_, &stack)| stack == target_stack_id)
             .map(|(&layer, _)| layer)
             .collect();
-        cn_to_layer.iter()
+        cn_to_layer
+            .iter()
             .filter(|(_, layer)| valid_layers.contains(layer))
             .map(|(&cn, _)| cn)
             .collect()
@@ -240,15 +272,21 @@ fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Moti
                 }
                 let m = &models[&mid];
                 let q_pre = euler_to_quat(
-                    m.pre_rotation.x, m.pre_rotation.y, m.pre_rotation.z,
+                    m.pre_rotation.x,
+                    m.pre_rotation.y,
+                    m.pre_rotation.z,
                     0, // PreRotation 固定 XYZ 顺序
                 );
                 let q_rest = euler_to_quat(
-                    m.default_rotation.x, m.default_rotation.y, m.default_rotation.z,
+                    m.default_rotation.x,
+                    m.default_rotation.y,
+                    m.default_rotation.z,
                     m.rotation_order,
                 );
                 let q_post = euler_to_quat(
-                    m.post_rotation.x, m.post_rotation.y, m.post_rotation.z,
+                    m.post_rotation.x,
+                    m.post_rotation.y,
+                    m.post_rotation.z,
                     0, // PostRotation 按 FBX 固定 XYZ 处理
                 );
                 let q_post_inv = q_post.conjugate();
@@ -268,13 +306,26 @@ fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Moti
     let mut curve_to_cn: HashMap<i64, (i64, u8)> = HashMap::new();
 
     for conn in &connections.children {
-        if conn.name != "C" { continue; }
+        if conn.name != "C" {
+            continue;
+        }
         let props = &conn.properties;
-        if props.len() < 3 { continue; }
+        if props.len() < 3 {
+            continue;
+        }
 
-        let conn_type = match props[0].as_string() { Some(s) => s, None => continue };
-        let child_id = match props[1].as_i64() { Some(v) => v, None => continue };
-        let parent_id = match props[2].as_i64() { Some(v) => v, None => continue };
+        let conn_type = match props[0].as_string() {
+            Some(s) => s,
+            None => continue,
+        };
+        let child_id = match props[1].as_i64() {
+            Some(v) => v,
+            None => continue,
+        };
+        let parent_id = match props[2].as_i64() {
+            Some(v) => v,
+            None => continue,
+        };
 
         if conn_type == "OP" && props.len() >= 4 {
             if let Some(prop_name) = props[3].as_string() {
@@ -299,7 +350,10 @@ fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Moti
         } else if conn_type == "OO" {
             if curves.contains_key(&child_id) && curve_node_ids.contains(&parent_id) {
                 if !curve_to_cn.contains_key(&child_id) {
-                    let count = curve_to_cn.values().filter(|(cn, _)| *cn == parent_id).count();
+                    let count = curve_to_cn
+                        .values()
+                        .filter(|(cn, _)| *cn == parent_id)
+                        .count();
                     if count < 3 {
                         curve_to_cn.insert(child_id, (parent_id, count as u8));
                     }
@@ -315,7 +369,9 @@ fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Moti
     for (&curve_id, &(cn_id, axis)) in &curve_to_cn {
         if let Some(&(model_id, ref prop)) = cn_to_model.get(&cn_id) {
             let idx = axis as usize;
-            if idx >= 3 { continue; }
+            if idx >= 3 {
+                continue;
+            }
             match prop {
                 ConnProperty::Translation => {
                     bone_trans.entry(model_id).or_insert([None; 3])[idx] = Some(curve_id);
@@ -331,7 +387,10 @@ fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Moti
     let all_model_ids: BTreeSet<i64> = bone_trans.keys().chain(bone_rot.keys()).copied().collect();
 
     for model_id in &all_model_ids {
-        let model = match models.get(model_id) { Some(m) => m, None => continue };
+        let model = match models.get(model_id) {
+            Some(m) => m,
+            None => continue,
+        };
         let bone_name = map_fbx_bone_name(&model.name);
         log::debug!("FBX bone: '{}' → MMD: '{}'", model.name, bone_name);
 
@@ -339,8 +398,12 @@ fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Moti
         let rot_curves = bone_rot.get(model_id);
 
         // 世界静息旋转（旋转重定向用）和父骨骼世界静息旋转（平移转换用）
-        let world_rest = world_rest_rot.get(model_id).copied().unwrap_or(Quat::IDENTITY);
-        let parent_rest = model_parent.get(model_id)
+        let world_rest = world_rest_rot
+            .get(model_id)
+            .copied()
+            .unwrap_or(Quat::IDENTITY);
+        let parent_rest = model_parent
+            .get(model_id)
             .and_then(|pid| world_rest_rot.get(pid))
             .copied()
             .unwrap_or(Quat::IDENTITY);
@@ -361,7 +424,9 @@ fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Moti
         collect_curve_times(trans_curves, &curves, &mut all_times);
         collect_curve_times(rot_curves, &curves, &mut all_times);
 
-        if all_times.is_empty() { continue; }
+        if all_times.is_empty() {
+            continue;
+        }
 
         for &time in &all_times {
             let frame_index = fbx_time_to_frame(time);
@@ -389,9 +454,9 @@ fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Moti
 
             let (translation, orientation) = if is_z_up {
                 let t = Vec3::new(rel_t.x, rel_t.z, -rel_t.y);
-                let q = Quat::from_xyzw(
-                    orientation.x, orientation.z, -orientation.y, orientation.w,
-                ).normalize();
+                let q =
+                    Quat::from_xyzw(orientation.x, orientation.z, -orientation.y, orientation.w)
+                        .normalize();
                 (t, q)
             } else {
                 (rel_t, orientation.normalize())
@@ -403,9 +468,7 @@ fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Moti
     }
 
     // 禁用 IK（FBX 为纯 FK 数据）
-    const MMD_IK_BONES: &[&str] = &[
-        "左足ＩＫ", "右足ＩＫ", "左つま先ＩＫ", "右つま先ＩＫ",
-    ];
+    const MMD_IK_BONES: &[&str] = &["左足ＩＫ", "右足ＩＫ", "左つま先ＩＫ", "右つま先ＩＫ"];
     for &ik_name in MMD_IK_BONES {
         motion.insert_ik_keyframe(ik_name, IkKeyframe::new(0, ik_name.to_string(), false));
     }
@@ -420,10 +483,16 @@ fn extract_animation(nodes: &[FbxNode], stack_name: Option<&str>) -> Result<Moti
 /// 解析 Model 节点，提取 ID、名称、默认变换
 fn parse_model_node(node: &FbxNode) -> Option<(i64, FbxModel)> {
     let id = node.properties.first()?.as_i64()?;
-    let raw_name = node.properties.get(1).and_then(|p| p.as_string()).unwrap_or("");
+    let raw_name = node
+        .properties
+        .get(1)
+        .and_then(|p| p.as_string())
+        .unwrap_or("");
     let name = clean_fbx_name(raw_name);
 
-    let subtype = node.properties.get(2)
+    let subtype = node
+        .properties
+        .get(2)
         .and_then(|p| p.as_string())
         .unwrap_or("");
     let is_bone = matches!(subtype, "LimbNode" | "Root");
@@ -436,8 +505,13 @@ fn parse_model_node(node: &FbxNode) -> Option<(i64, FbxModel)> {
 
     if let Some(p70) = node.find_child("Properties70") {
         for p in &p70.children {
-            if p.name != "P" || p.properties.len() < 5 { continue; }
-            let prop_name = match p.properties[0].as_string() { Some(s) => s, None => continue };
+            if p.name != "P" || p.properties.len() < 5 {
+                continue;
+            }
+            let prop_name = match p.properties[0].as_string() {
+                Some(s) => s,
+                None => continue,
+            };
             match prop_name {
                 "Lcl Translation" => {
                     if p.properties.len() >= 7 {
@@ -475,28 +549,33 @@ fn parse_model_node(node: &FbxNode) -> Option<(i64, FbxModel)> {
         }
     }
 
-    Some((id, FbxModel {
-        name,
-        default_translation: default_t,
-        default_rotation: default_r,
-        pre_rotation: pre_r,
-        post_rotation: post_r,
-        rotation_order: rot_order,
-        is_bone,
-    }))
+    Some((
+        id,
+        FbxModel {
+            name,
+            default_translation: default_t,
+            default_rotation: default_r,
+            pre_rotation: pre_r,
+            post_rotation: post_r,
+            rotation_order: rot_order,
+            is_bone,
+        },
+    ))
 }
 
 /// 解析 AnimationCurve 节点
 fn parse_animation_curve(node: &FbxNode) -> Option<(i64, FbxCurve)> {
     let id = node.properties.first()?.as_i64()?;
 
-    let key_times: Vec<i64> = node.find_child("KeyTime")
+    let key_times: Vec<i64> = node
+        .find_child("KeyTime")
         .and_then(|n| n.properties.first())
         .and_then(|p| p.as_i64_array())
         .map(|a| a.to_vec())
         .unwrap_or_default();
 
-    let key_values: Vec<f32> = node.find_child("KeyValueFloat")
+    let key_values: Vec<f32> = node
+        .find_child("KeyValueFloat")
         .and_then(|n| n.properties.first())
         .and_then(|p| {
             if let Some(f32s) = p.as_f32_array() {
@@ -513,7 +592,13 @@ fn parse_animation_curve(node: &FbxNode) -> Option<(i64, FbxCurve)> {
         return None;
     }
 
-    Some((id, FbxCurve { key_times, key_values }))
+    Some((
+        id,
+        FbxCurve {
+            key_times,
+            key_values,
+        },
+    ))
 }
 
 /// 收集曲线组中所有时间点
@@ -551,21 +636,33 @@ fn sample_axis(
 
 /// 线性插值曲线在指定时间的值
 fn interpolate_curve(curve: &FbxCurve, time: i64) -> f32 {
-    if curve.key_times.is_empty() { return 0.0; }
-    if time <= curve.key_times[0] { return curve.key_values[0]; }
+    if curve.key_times.is_empty() {
+        return 0.0;
+    }
+    if time <= curve.key_times[0] {
+        return curve.key_values[0];
+    }
     let last = curve.key_times.len() - 1;
-    if time >= curve.key_times[last] { return curve.key_values[last]; }
+    if time >= curve.key_times[last] {
+        return curve.key_values[last];
+    }
 
     let mut lo = 0usize;
     let mut hi = last;
     while lo + 1 < hi {
         let mid = (lo + hi) / 2;
-        if curve.key_times[mid] <= time { lo = mid; } else { hi = mid; }
+        if curve.key_times[mid] <= time {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
     }
 
     let t0 = curve.key_times[lo];
     let t1 = curve.key_times[hi];
-    if t1 == t0 { return curve.key_values[lo]; }
+    if t1 == t0 {
+        return curve.key_values[lo];
+    }
     let alpha = (time - t0) as f32 / (t1 - t0) as f32;
     curve.key_values[lo] + (curve.key_values[hi] - curve.key_values[lo]) * alpha
 }
@@ -628,14 +725,17 @@ fn extract_stack_names(nodes: &[FbxNode]) -> Vec<String> {
 /// 从 AnimationStack 节点提取名称（支持多种FBX格式）
 fn extract_stack_name(node: &FbxNode) -> String {
     // 方式1: 从 properties[1] 获取（标准格式）
-    if let Some(name) = node.properties.get(1)
+    if let Some(name) = node
+        .properties
+        .get(1)
         .and_then(|p| p.as_string())
-        .map(|s| clean_fbx_name(s)) {
+        .map(|s| clean_fbx_name(s))
+    {
         if !name.is_empty() {
             return name;
         }
     }
-    
+
     // 方式2: 遍历所有属性查找非空字符串
     for prop in &node.properties {
         if let Some(s) = prop.as_string() {
@@ -645,7 +745,7 @@ fn extract_stack_name(node: &FbxNode) -> String {
             }
         }
     }
-    
+
     // 方式3: 从子节点 LocalStart/LclAnimationStart 查找
     if let Some(local_time) = node.find_child("LocalStart") {
         if let Some(name_prop) = local_time.properties.first() {
@@ -657,12 +757,12 @@ fn extract_stack_name(node: &FbxNode) -> String {
             }
         }
     }
-    
+
     // 方式4: 使用 ID 作为后备名称
     if let Some(id) = node.properties.first().and_then(|p| p.as_i64()) {
         return format!("Stack_{}", id);
     }
-    
+
     String::new()
 }
 
@@ -733,7 +833,10 @@ fn extract_fbx_arm_reference_dirs(nodes: &[FbxNode]) -> HashMap<String, Vec3> {
             Some(v) => v,
             None => continue,
         };
-        if models.contains_key(&child_id) && models.contains_key(&parent_id) && models[&parent_id].is_bone {
+        if models.contains_key(&child_id)
+            && models.contains_key(&parent_id)
+            && models[&parent_id].is_bone
+        {
             model_parent.insert(child_id, parent_id);
         }
     }
@@ -879,11 +982,19 @@ pub fn apply_arm_retarget_correction_with_reference(
     ];
 
     for &(upper, child, fallback_target, max_correction_deg, weight) in arm_bones {
-        let upper_pos = match bone_positions.get(upper) { Some(p) => *p, None => continue };
-        let child_pos = match bone_positions.get(child) { Some(p) => *p, None => continue };
+        let upper_pos = match bone_positions.get(upper) {
+            Some(p) => *p,
+            None => continue,
+        };
+        let child_pos = match bone_positions.get(child) {
+            Some(p) => *p,
+            None => continue,
+        };
 
         let diff = child_pos - upper_pos;
-        if diff.length_squared() < 1e-6 { continue; }
+        if diff.length_squared() < 1e-6 {
+            continue;
+        }
         let pmx_dir = diff.normalize();
 
         let target_dir = reference_dirs
@@ -918,11 +1029,15 @@ pub fn apply_arm_retarget_correction_with_reference(
             continue;
         }
 
-
         log::info!(
             "手臂姿态校正: {} pmx_dir=({:.3},{:.3},{:.3}) ref_dir=({:.3},{:.3},{:.3}) total={:.1}°",
-            upper, pmx_dir.x, pmx_dir.y, pmx_dir.z,
-            target_dir.x, target_dir.y, target_dir.z,
+            upper,
+            pmx_dir.x,
+            pmx_dir.y,
+            pmx_dir.z,
+            target_dir.x,
+            target_dir.y,
+            target_dir.z,
             total_angle_deg
         );
 
@@ -943,7 +1058,6 @@ pub fn apply_arm_retarget_correction_with_reference(
             }
         }
     }
-
 }
 
 #[cfg(test)]
@@ -965,11 +1079,19 @@ mod tests {
 
         eprintln!("=== 顶层节点 ===");
         for n in &nodes {
-            eprintln!("  {} (属性数: {}, 子节点数: {})", n.name, n.properties.len(), n.children.len());
+            eprintln!(
+                "  {} (属性数: {}, 子节点数: {})",
+                n.name,
+                n.properties.len(),
+                n.children.len()
+            );
         }
 
         // 查找 Objects
-        let objects = nodes.iter().find(|n| n.name == "Objects").expect("无 Objects 节点");
+        let objects = nodes
+            .iter()
+            .find(|n| n.name == "Objects")
+            .expect("无 Objects 节点");
         let mut model_count = 0;
         let mut curve_count = 0;
         let mut curve_node_count = 0;
@@ -980,8 +1102,10 @@ mod tests {
                 "Model" => {
                     model_count += 1;
                     if let Some((_, m)) = parse_model_node(child) {
-                        eprintln!("  Model: '{}' defT={:?} defR={:?} rotOrder={}", 
-                            m.name, m.default_translation, m.default_rotation, m.rotation_order);
+                        eprintln!(
+                            "  Model: '{}' defT={:?} defR={:?} rotOrder={}",
+                            m.name, m.default_translation, m.default_rotation, m.rotation_order
+                        );
                     }
                 }
                 "AnimationCurve" => curve_count += 1,
@@ -999,7 +1123,15 @@ mod tests {
 
         // 测试骨骼名映射
         eprintln!("\n=== 骨骼名映射测试 ===");
-        let test_names = ["pelvis", "spine_01", "clavicle_l", "upperarm_l", "thigh_r", "foot_l", "index_01_l"];
+        let test_names = [
+            "pelvis",
+            "spine_01",
+            "clavicle_l",
+            "upperarm_l",
+            "thigh_r",
+            "foot_l",
+            "index_01_l",
+        ];
         for name in &test_names {
             eprintln!("  {} → {}", name, map_fbx_bone_name(name));
         }
@@ -1008,7 +1140,9 @@ mod tests {
         eprintln!("\n=== AnimationStack 列表 ===");
         for child in &objects.children {
             if child.name == "AnimationStack" {
-                let name = child.properties.get(1)
+                let name = child
+                    .properties
+                    .get(1)
                     .and_then(|p| p.as_string())
                     .map(|s| clean_fbx_name(s))
                     .unwrap_or_default();
@@ -1019,18 +1153,30 @@ mod tests {
         // 加载第一个 Stack（默认）
         let anim = load_fbx_animation(path, None).expect("默认加载失败");
         eprintln!("\n=== 默认 Stack ===");
-        eprintln!("  max_frame: {}, 骨骼轨道: {}", anim.max_frame(), anim.bone_track_names().len());
+        eprintln!(
+            "  max_frame: {}, 骨骼轨道: {}",
+            anim.max_frame(),
+            anim.bone_track_names().len()
+        );
 
         // 按名称加载指定 Stack
         let anim2 = load_fbx_animation(path, Some("Idle"));
         match &anim2 {
-            Ok(a) => eprintln!("=== Stack 'Idle' === max_frame: {}, 轨道: {}", a.max_frame(), a.bone_track_names().len()),
+            Ok(a) => eprintln!(
+                "=== Stack 'Idle' === max_frame: {}, 轨道: {}",
+                a.max_frame(),
+                a.bone_track_names().len()
+            ),
             Err(e) => eprintln!("=== Stack 'Idle' 加载失败: {}", e),
         }
 
         let anim3 = load_fbx_animation(path, Some("Walk"));
         match &anim3 {
-            Ok(a) => eprintln!("=== Stack 'Walk' === max_frame: {}, 轨道: {}", a.max_frame(), a.bone_track_names().len()),
+            Ok(a) => eprintln!(
+                "=== Stack 'Walk' === max_frame: {}, 轨道: {}",
+                a.max_frame(),
+                a.bone_track_names().len()
+            ),
             Err(e) => eprintln!("=== Stack 'Walk' 加载失败: {}", e),
         }
 
@@ -1039,5 +1185,4 @@ mod tests {
         assert!(anim4.is_err(), "不存在的 Stack 应返回错误");
         eprintln!("=== 'NotExist' 正确返回错误 ===");
     }
-
 }

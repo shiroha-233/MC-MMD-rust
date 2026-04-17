@@ -562,7 +562,7 @@ impl MmdModel {
         }
 
         // 4. 查找眼睛骨骼（用于第一人称相机位置）
-        //    优先级：両目 > 目 > 左目+右目中点 > 头部 fallback
+        //    优先级：両目 > 目 > 左目+右目中点
         let single_eye_names = ["両目", "目", "eye", "Eye", "Eyes", "eyes"];
         self.eye_bone_index = None;
         self.eye_bone_pair = None;
@@ -603,9 +603,7 @@ impl MmdModel {
                 self.eye_bone_index = Some(r);
                 log::info!("眼睛骨骼检测: 仅找到右目({})", r);
             } else {
-                // fallback 到头部骨骼
-                self.eye_bone_index = self.head_bone_index;
-                log::info!("眼睛骨骼检测: 未找到眼睛骨骼，fallback 到头部骨骼");
+                log::info!("眼睛骨骼检测: 未找到可用眼睛骨骼");
             }
         }
     }
@@ -1082,9 +1080,11 @@ impl MmdModel {
         if self.vr_enabled {
             let strength = self.vr_ik_strength;
             if let Some(frame) = self.vr_tracking_frame {
-                self.vr_debug_state =
-                    self.vr_ik_solver
-                        .solve_tracking_frame(&mut self.bone_manager, &frame, strength);
+                self.vr_debug_state = self.vr_ik_solver.solve_tracking_frame(
+                    &mut self.bone_manager,
+                    &frame,
+                    strength,
+                );
             } else {
                 let tracking = self.vr_tracking_data;
                 self.vr_ik_solver
@@ -2058,9 +2058,11 @@ impl MmdModel {
         if self.vr_enabled {
             let strength = self.vr_ik_strength;
             if let Some(frame) = self.vr_tracking_frame {
-                self.vr_debug_state =
-                    self.vr_ik_solver
-                        .solve_tracking_frame(&mut self.bone_manager, &frame, strength);
+                self.vr_debug_state = self.vr_ik_solver.solve_tracking_frame(
+                    &mut self.bone_manager,
+                    &frame,
+                    strength,
+                );
             } else {
                 let tracking = self.vr_tracking_data;
                 self.vr_ik_solver
@@ -2129,10 +2131,21 @@ impl MmdModel {
         self.update_node_animation(false);
 
         if self.vr_enabled {
-            let tracking = self.vr_tracking_data;
             let strength = self.vr_ik_strength;
-            self.vr_ik_solver
-                .solve(&mut self.bone_manager, &tracking, strength);
+            if let Some(frame) = self.vr_tracking_frame {
+                self.vr_debug_state = self.vr_ik_solver.solve_tracking_frame(
+                    &mut self.bone_manager,
+                    &frame,
+                    strength,
+                );
+            } else {
+                let tracking = self.vr_tracking_data;
+                self.vr_ik_solver
+                    .solve(&mut self.bone_manager, &tracking, strength);
+                self.vr_debug_state = VrDebugState::default();
+            }
+        } else {
+            self.vr_debug_state = VrDebugState::default();
         }
 
         self.with_vrm_runtime_state(|model, runtime_state| {
@@ -2375,8 +2388,10 @@ impl MmdModel {
                 .vr_tracking_frame
                 .map(|frame| frame.body_calibration)
                 .unwrap_or_default();
-            self.vr_tracking_frame =
-                Some(VrTrackingFrame::from_tracking_packet(&self.vr_tracking_data, calibration));
+            self.vr_tracking_frame = Some(VrTrackingFrame::from_tracking_packet(
+                &self.vr_tracking_data,
+                calibration,
+            ));
         }
     }
 

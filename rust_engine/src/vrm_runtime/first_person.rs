@@ -47,25 +47,35 @@ impl FirstPersonRuntime {
     }
 
     pub fn resolve_view_anchor_model(&self, model: &mut MmdModel) -> Vec3 {
-        if let Some(anchor) = resolve_head_anchor(model, self.config.bone, self.config.bone_offset)
+        let eye_anchor = model.get_eye_bone_animated_position();
+        if eye_anchor.length_squared() > 1e-6 {
+            return eye_anchor;
+        }
+
+        if let Some(anchor) = self
+            .config
+            .bone
+            .and_then(|bone| resolve_bone_anchor(model, bone, self.config.bone_offset))
         {
             return anchor;
         }
 
         if let Some(look_at) = &self.look_at {
-            if let Some(anchor) =
-                resolve_head_anchor(model, self.config.bone, look_at.offset_from_head_bone)
-            {
+            let look_at_anchor = self
+                .config
+                .bone
+                .and_then(|bone| resolve_bone_anchor(model, bone, look_at.offset_from_head_bone))
+                .or_else(|| resolve_named_head_anchor(model, look_at.offset_from_head_bone));
+            if let Some(anchor) = look_at_anchor {
                 return anchor;
             }
         }
 
-        let eye_anchor = model.get_eye_bone_animated_position();
-        if eye_anchor.length_squared() > 1e-6 {
-            eye_anchor
-        } else {
-            Vec3::new(0.0, model.get_head_bone_rest_position_y(), 0.0)
+        if let Some(anchor) = resolve_named_head_anchor(model, [0.0, 0.0, 0.0]) {
+            return anchor;
         }
+
+        Vec3::new(0.0, model.get_head_bone_rest_position_y(), 0.0)
     }
 
     fn capture_from_annotations(
@@ -134,30 +144,32 @@ impl FirstPersonRuntime {
     }
 }
 
-fn resolve_head_anchor(
-    model: &MmdModel,
-    preferred_bone: Option<usize>,
-    offset: [f32; 3],
-) -> Option<Vec3> {
-    let head_index = preferred_bone.or_else(|| {
-        ["頭", "head", "Head", "neck", "Neck"]
-            .iter()
-            .find_map(|name| model.bone_manager.find_bone_by_name(name))
-    })?;
-    Some(
-        model
-            .bone_manager
-            .get_global_transform(head_index)
-            .w_axis
-            .truncate()
-            + Vec3::from_array(offset),
-    )
+fn resolve_bone_anchor(model: &MmdModel, bone_index: usize, offset: [f32; 3]) -> Option<Vec3> {
+    model
+        .bone_manager
+        .get_bone(bone_index)
+        .map(|_| {
+            model
+                .bone_manager
+                .get_global_transform(bone_index)
+                .w_axis
+                .truncate()
+        })
+        .map(|position| position + Vec3::from_array(offset))
+}
+
+fn resolve_named_head_anchor(model: &MmdModel, offset: [f32; 3]) -> Option<Vec3> {
+    ["頭", "head", "Head", "neck", "Neck"]
+        .iter()
+        .find_map(|name| model.bone_manager.find_bone_by_name(name))
+        .and_then(|bone| resolve_bone_anchor(model, bone, offset))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::{FirstPersonMeshAnnotation, FirstPersonType};
+    use crate::skeleton::{BoneLink, BoneManager};
 
     #[test]
     fn capture_from_annotations_should_apply_view_masks() {
@@ -186,5 +198,107 @@ mod tests {
             .expect("annotation snapshot");
         assert_eq!(snapshot.hmd_visible_materials, vec![false, false, true]);
         assert_eq!(snapshot.mirror_visible_materials, vec![true, true, false]);
+    }
+
+    #[test]
+    fn resolve_view_anchor_model_should_prefer_eye_midpoint_over_head_metadata() {
+        let runtime = FirstPersonRuntime::new(
+            FirstPersonConfig {
+                bone: Some(1),
+                bone_offset: [0.0, 0.5, 0.0],
+                ..FirstPersonConfig::default()
+            },
+            None,
+        );
+        let mut model = make_anchor_test_model(true, true);
+
+        let anchor = runtime.resolve_view_anchor_model(&mut model);
+
+        assert_eq!(anchor, Vec3::new(0.0, 17.0, 0.2));
+    }
+
+    #[test]
+    fn resolve_view_anchor_model_should_use_single_eye_when_only_one_is_available() {
+        let runtime = FirstPersonRuntime::new(FirstPersonConfig::default(), None);
+        let mut model = make_anchor_test_model(true, false);
+
+        let anchor = runtime.resolve_view_anchor_model(&mut model);
+
+        assert_eq!(anchor, Vec3::new(-0.3, 17.0, 0.2));
+    }
+
+    #[test]
+    fn resolve_view_anchor_model_should_fall_back_to_configured_bone_when_eyes_are_missing() {
+        let runtime = FirstPersonRuntime::new(
+            FirstPersonConfig {
+                bone: Some(1),
+                bone_offset: [0.0, 0.5, 0.0],
+                ..FirstPersonConfig::default()
+            },
+            None,
+        );
+        let mut model = make_anchor_test_model(false, false);
+
+        let anchor = runtime.resolve_view_anchor_model(&mut model);
+
+        assert_eq!(anchor, Vec3::new(0.0, 17.5, 0.0));
+    }
+
+    #[test]
+    fn resolve_view_anchor_model_should_fall_back_to_look_at_offset_then_head_anchor() {
+        let runtime = FirstPersonRuntime::new(
+            FirstPersonConfig::default(),
+            Some(LookAtConfig {
+                offset_from_head_bone: [0.0, 0.25, 0.1],
+                ..LookAtConfig::default()
+            }),
+        );
+        let mut model = make_anchor_test_model(false, false);
+
+        let anchor = runtime.resolve_view_anchor_model(&mut model);
+
+        assert_eq!(anchor, Vec3::new(0.0, 17.25, 0.1));
+    }
+
+    fn make_anchor_test_model(has_left_eye: bool, has_right_eye: bool) -> MmdModel {
+        let mut model = MmdModel::new();
+        model.bone_manager = make_anchor_test_bones(has_left_eye, has_right_eye);
+        model
+    }
+
+    fn make_anchor_test_bones(has_left_eye: bool, has_right_eye: bool) -> BoneManager {
+        let mut bones = BoneManager::new();
+
+        let mut root = BoneLink::new("root".to_string());
+        root.initial_position = Vec3::ZERO;
+        root.parent_index = -1;
+        bones.add_bone(root);
+
+        let mut head = BoneLink::new("Head".to_string());
+        head.initial_position = Vec3::new(0.0, 17.0, 0.0);
+        head.parent_index = 0;
+        bones.add_bone(head);
+
+        let mut neck = BoneLink::new("Neck".to_string());
+        neck.initial_position = Vec3::new(0.0, 15.0, 0.0);
+        neck.parent_index = 0;
+        bones.add_bone(neck);
+
+        if has_left_eye {
+            let mut left_eye = BoneLink::new("LeftEye".to_string());
+            left_eye.initial_position = Vec3::new(-0.3, 17.0, 0.2);
+            left_eye.parent_index = 1;
+            bones.add_bone(left_eye);
+        }
+
+        if has_right_eye {
+            let mut right_eye = BoneLink::new("RightEye".to_string());
+            right_eye.initial_position = Vec3::new(0.3, 17.0, 0.2);
+            right_eye.parent_index = 1;
+            bones.add_bone(right_eye);
+        }
+
+        bones.build_hierarchy();
+        bones
     }
 }

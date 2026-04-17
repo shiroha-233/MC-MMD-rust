@@ -135,32 +135,43 @@ fn convert_pose(raw: TrackedPose) -> VrTrackedPose {
 fn derive_default_body_calibration(model: &mut MmdModel) -> BodyTrackingCalibration {
     model.init_head_detection();
 
-    let head_anchor = model
-        .tracked_head_bone_index()
-        .and_then(|index| model.bone_manager.get_bone(index))
-        .map(|bone| bone.initial_position)
-        .or_else(|| first_existing_initial_position(model, BONE_HEAD_NAMES))
-        .unwrap_or(Vec3::new(0.0, model.get_head_bone_rest_position_y(), 0.0));
+    let head_anchor = {
+        let eye_anchor = model.get_eye_bone_animated_position();
+        if eye_anchor.length_squared() > 1e-6 {
+            eye_anchor
+        } else {
+            model
+                .tracked_head_bone_index()
+                .and_then(|index| model.bone_manager.get_bone(index))
+                .map(|bone| bone.initial_position)
+                .or_else(|| first_existing_initial_position(model, BONE_HEAD_NAMES))
+                .unwrap_or(Vec3::new(0.0, model.get_head_bone_rest_position_y(), 0.0))
+        }
+    };
     let body_anchor = first_existing_initial_position(model, BONE_BODY_ANCHOR_NAMES)
         .unwrap_or(Vec3::new(0.0, head_anchor.y * 0.55, 0.0));
-    let left_shoulder = first_existing_initial_position(model, BONE_LEFT_SHOULDER_NAMES)
-        .unwrap_or(body_anchor + Vec3::new(-XR_TO_MODEL_SCALE * 0.15, XR_TO_MODEL_SCALE * 0.05, 0.0));
+    let left_shoulder = first_existing_initial_position(model, BONE_LEFT_SHOULDER_NAMES).unwrap_or(
+        body_anchor + Vec3::new(-XR_TO_MODEL_SCALE * 0.15, XR_TO_MODEL_SCALE * 0.05, 0.0),
+    );
     let right_shoulder = first_existing_initial_position(model, BONE_RIGHT_SHOULDER_NAMES)
-        .unwrap_or(body_anchor + Vec3::new(XR_TO_MODEL_SCALE * 0.15, XR_TO_MODEL_SCALE * 0.05, 0.0));
+        .unwrap_or(
+            body_anchor + Vec3::new(XR_TO_MODEL_SCALE * 0.15, XR_TO_MODEL_SCALE * 0.05, 0.0),
+        );
 
     let shoulder_width_model = (right_shoulder - left_shoulder)
         .length()
         .max(XR_TO_MODEL_SCALE * 0.28);
     let shoulder_depth_model = ((left_shoulder.z - body_anchor.z).abs()
         + (right_shoulder.z - body_anchor.z).abs())
-        * 0.5_f32
-        .max(XR_TO_MODEL_SCALE * 0.08);
+        * 0.5_f32.max(XR_TO_MODEL_SCALE * 0.08);
 
     BodyTrackingCalibration {
         head_rest_anchor_model: head_anchor,
         shoulder_width_model,
         shoulder_depth_model,
         body_yaw_follow_gain: 0.65,
+        horizontal_translation_follow_gain: 0.9,
+        vertical_translation_follow_gain: 0.95,
         body_translation_clamp_model: (shoulder_width_model * 0.6).max(XR_TO_MODEL_SCALE * 0.12),
         shoulder_follow_gain: 0.45,
     }
@@ -179,6 +190,7 @@ fn first_existing_initial_position(model: &MmdModel, names: &[&str]) -> Option<V
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::skeleton::{BoneLink, BoneManager};
 
     #[test]
     fn build_tracking_frame_should_apply_hand_offset_before_coordinate_conversion() {
@@ -206,7 +218,8 @@ mod tests {
         );
         let basis = Quat::from_rotation_y(std::f32::consts::PI);
         let expected_position = (basis
-            * (right_hand.position + right_hand.orientation * hand_calibration.right.position_offset))
+            * (right_hand.position
+                + right_hand.orientation * hand_calibration.right.position_offset))
             * XR_TO_MODEL_SCALE;
 
         assert_vec3_eq(frame.right_palm.position, expected_position);
@@ -219,20 +232,114 @@ mod tests {
             shoulder_width_model: 4.0,
             shoulder_depth_model: 5.0,
             body_yaw_follow_gain: 0.6,
+            horizontal_translation_follow_gain: 0.9,
+            vertical_translation_follow_gain: 0.95,
             body_translation_clamp_model: 7.0,
             shoulder_follow_gain: 0.4,
         };
         let resolved = BodyTrackingCalibration::default().resolve_with_defaults(defaults);
 
-        assert_eq!(resolved.head_rest_anchor_model, defaults.head_rest_anchor_model);
+        assert_eq!(
+            resolved.head_rest_anchor_model,
+            defaults.head_rest_anchor_model
+        );
         assert_eq!(resolved.shoulder_width_model, defaults.shoulder_width_model);
         assert_eq!(resolved.shoulder_depth_model, defaults.shoulder_depth_model);
         assert_eq!(resolved.body_yaw_follow_gain, defaults.body_yaw_follow_gain);
+        assert_eq!(
+            resolved.horizontal_translation_follow_gain,
+            defaults.horizontal_translation_follow_gain
+        );
+        assert_eq!(
+            resolved.vertical_translation_follow_gain,
+            defaults.vertical_translation_follow_gain
+        );
         assert_eq!(
             resolved.body_translation_clamp_model,
             defaults.body_translation_clamp_model
         );
         assert_eq!(resolved.shoulder_follow_gain, defaults.shoulder_follow_gain);
+    }
+
+    #[test]
+    fn body_calibration_should_preserve_negative_clamp_override() {
+        let defaults = BodyTrackingCalibration {
+            body_translation_clamp_model: 7.0,
+            ..BodyTrackingCalibration::default()
+        };
+        let override_calibration = BodyTrackingCalibration {
+            body_translation_clamp_model: -1.0,
+            ..BodyTrackingCalibration::default()
+        };
+
+        let resolved = override_calibration.resolve_with_defaults(defaults);
+
+        assert_eq!(resolved.body_translation_clamp_model, -1.0);
+    }
+
+    #[test]
+    fn body_calibration_should_preserve_zero_clamp_override() {
+        let defaults = BodyTrackingCalibration {
+            body_translation_clamp_model: 7.0,
+            ..BodyTrackingCalibration::default()
+        };
+        let override_calibration = BodyTrackingCalibration {
+            body_translation_clamp_model: 0.0,
+            ..BodyTrackingCalibration::default()
+        };
+
+        let resolved = override_calibration.resolve_with_defaults(defaults);
+
+        assert_eq!(resolved.body_translation_clamp_model, 0.0);
+    }
+
+    #[test]
+    fn derive_default_body_calibration_should_prefer_eye_anchor_when_available() {
+        let mut model = MmdModel::new();
+        model.bone_manager = make_calibration_test_bones(true, true);
+
+        let calibration = derive_default_body_calibration(&mut model);
+
+        assert_eq!(
+            calibration.head_rest_anchor_model,
+            Vec3::new(0.0, 17.0, 0.2)
+        );
+    }
+
+    fn make_calibration_test_bones(has_left_eye: bool, has_right_eye: bool) -> BoneManager {
+        let mut bones = BoneManager::new();
+
+        let mut root = BoneLink::new("root".to_string());
+        root.initial_position = Vec3::ZERO;
+        root.parent_index = -1;
+        bones.add_bone(root);
+
+        let mut neck = BoneLink::new("Neck".to_string());
+        neck.initial_position = Vec3::new(0.0, 15.0, 0.0);
+        neck.parent_index = 0;
+        bones.add_bone(neck);
+
+        let mut head = BoneLink::new("Head".to_string());
+        head.initial_position = Vec3::new(0.0, 17.0, 0.0);
+        head.parent_index = 1;
+        bones.add_bone(head);
+
+        if has_left_eye {
+            let mut left_eye = BoneLink::new("LeftEye".to_string());
+            left_eye.initial_position = Vec3::new(-0.3, 17.0, 0.2);
+            left_eye.parent_index = 2;
+            bones.add_bone(left_eye);
+        }
+
+        if has_right_eye {
+            let mut right_eye = BoneLink::new("RightEye".to_string());
+            right_eye.initial_position = Vec3::new(0.3, 17.0, 0.2);
+            right_eye.parent_index = 2;
+            bones.add_bone(right_eye);
+        }
+
+        bones.build_hierarchy();
+        bones
     }
 
     fn assert_vec3_eq(actual: Vec3, expected: Vec3) {

@@ -1,10 +1,10 @@
 //! Morph 变形系统
 
-mod morph;
 mod manager;
+mod morph;
 
+pub use manager::{MaterialMorphResult, MorphManager};
 pub use morph::Morph;
-pub use manager::{MorphManager, MaterialMorphResult};
 
 use glam::{Vec3, Vec4};
 

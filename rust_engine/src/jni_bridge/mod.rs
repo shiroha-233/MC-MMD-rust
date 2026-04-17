@@ -1,20 +1,20 @@
 //! JNI 绑定层 - 与 Java 代码交互
 
-mod native_func;
-mod model_handle;
 mod animation_handle;
+mod model_handle;
+mod native_func;
 
-pub use native_func::*;
-pub use model_handle::ModelHandle;
 pub use animation_handle::AnimationHandle;
+pub use model_handle::ModelHandle;
+pub use native_func::*;
 
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
-use once_cell::sync::Lazy;
 
-use crate::model::MmdModel;
-use crate::animation::VmdAnimation;
 use crate::animation::fbx_loader::FbxCache;
+use crate::animation::VmdAnimation;
+use crate::model::MmdModel;
 use crate::texture::Texture;
 
 /// FBX 文件解析缓存（避免重复解析大文件）
@@ -22,15 +22,15 @@ pub static FBX_CACHE: Lazy<RwLock<HashMap<String, Arc<FbxCache>>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
 /// 全局模型存储
-pub static MODELS: Lazy<RwLock<HashMap<i64, Arc<Mutex<MmdModel>>>>> = 
+pub static MODELS: Lazy<RwLock<HashMap<i64, Arc<Mutex<MmdModel>>>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
 /// 全局动画存储
-pub static ANIMATIONS: Lazy<RwLock<HashMap<i64, Arc<VmdAnimation>>>> = 
+pub static ANIMATIONS: Lazy<RwLock<HashMap<i64, Arc<VmdAnimation>>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
 /// 全局纹理存储
-pub static TEXTURES: Lazy<RwLock<HashMap<i64, Arc<Texture>>>> = 
+pub static TEXTURES: Lazy<RwLock<HashMap<i64, Arc<Texture>>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
 /// 生成唯一句柄 ID

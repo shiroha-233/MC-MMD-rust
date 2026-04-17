@@ -3,11 +3,11 @@
 //! 移植自 babylon-mmd 的 MmdRigidBodyData。
 //! 使用 Bullet3 引擎，通过 inv_z 在骨骼（右手）与物理（左手）坐标系之间转换。
 
-use glam::{Mat4, Vec3, Quat};
+use glam::{Mat4, Quat, Vec3};
 
-use mmd::pmx::rigid_body::{RigidBody as PmxRigidBody, RigidBodyShape, RigidBodyMode};
+use mmd::pmx::rigid_body::{RigidBody as PmxRigidBody, RigidBodyMode, RigidBodyShape};
 
-use super::bullet_ffi::{BulletShape, BulletRigidBody, RigidBodyInfo};
+use super::bullet_ffi::{BulletRigidBody, BulletShape, RigidBodyInfo};
 
 /// 物理模式（对应 babylon-mmd 的 PhysicsMode）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,10 +64,7 @@ impl MmdRigidBodyData {
     /// 从 PMX 刚体数据创建
     ///
     /// 骨骼(右手)通过 inv_z 转为左手后计算 offset = B0_left⁻¹ * R0_left。
-    pub fn from_pmx(
-        pmx_rb: &PmxRigidBody,
-        bone_global_transform: Option<Mat4>,
-    ) -> Self {
+    pub fn from_pmx(pmx_rb: &PmxRigidBody, bone_global_transform: Option<Mat4>) -> Self {
         let physics_mode = PhysicsMode::from(pmx_rb.mode);
 
         // 欧拉角 → 四元数（Y-X-Z 顺序，与 babylon-mmd FromEulerAngles 一致）
@@ -78,11 +75,7 @@ impl MmdRigidBodyData {
             pmx_rb.rotation[2], // Z
         );
 
-        let position = Vec3::new(
-            pmx_rb.position[0],
-            pmx_rb.position[1],
-            pmx_rb.position[2],
-        );
+        let position = Vec3::new(pmx_rb.position[0], pmx_rb.position[1], pmx_rb.position[2]);
 
         // 刚体世界变换（直接使用 MMD 坐标，无 inv_z）
         let rb_world_matrix = Mat4::from_rotation_translation(rotation, position);
@@ -116,14 +109,10 @@ impl MmdRigidBodyData {
     pub fn create_shape(pmx_rb: &PmxRigidBody) -> Option<BulletShape> {
         match pmx_rb.shape {
             RigidBodyShape::Sphere => BulletShape::sphere(pmx_rb.size[0]),
-            RigidBodyShape::Box => BulletShape::r#box(
-                pmx_rb.size[0],
-                pmx_rb.size[1],
-                pmx_rb.size[2],
-            ),
-            RigidBodyShape::Capsule => {
-                BulletShape::capsule(pmx_rb.size[0], pmx_rb.size[1])
+            RigidBodyShape::Box => {
+                BulletShape::r#box(pmx_rb.size[0], pmx_rb.size[1], pmx_rb.size[2])
             }
+            RigidBodyShape::Capsule => BulletShape::capsule(pmx_rb.size[0], pmx_rb.size[1]),
         }
     }
 
@@ -138,7 +127,9 @@ impl MmdRigidBodyData {
         // 零体积检测
         let is_zero_volume = match pmx_rb.shape {
             RigidBodyShape::Sphere => pmx_rb.size[0] <= 0.0,
-            RigidBodyShape::Box => pmx_rb.size[0] <= 0.0 || pmx_rb.size[1] <= 0.0 || pmx_rb.size[2] <= 0.0,
+            RigidBodyShape::Box => {
+                pmx_rb.size[0] <= 0.0 || pmx_rb.size[1] <= 0.0 || pmx_rb.size[2] <= 0.0
+            }
             RigidBodyShape::Capsule => pmx_rb.size[0] <= 0.0 || pmx_rb.size[1] <= 0.0,
         };
 
@@ -169,11 +160,7 @@ impl MmdRigidBodyData {
     }
 
     /// 从刚体变换反推骨骼变换（仅旋转，保留原位置）
-    pub fn compute_bone_matrix_rotation_only(
-        &self,
-        rb_matrix: Mat4,
-        bone_position: Vec3,
-    ) -> Mat4 {
+    pub fn compute_bone_matrix_rotation_only(&self, rb_matrix: Mat4, bone_position: Vec3) -> Mat4 {
         let mut result = rb_matrix * self.body_offset_matrix_inverse;
         result.w_axis.x = bone_position.x;
         result.w_axis.y = bone_position.y;

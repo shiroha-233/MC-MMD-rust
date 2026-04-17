@@ -1,7 +1,7 @@
 //! 插值系统 - 复刻 mdanceio 实现
 
-use glam::Vec3;
 use crate::animation::bezier_curve::{BezierCurveFactory, Curve};
+use glam::Vec3;
 
 /// 计算插值系数
 #[inline]
@@ -49,16 +49,15 @@ impl KeyframeInterpolationPoint {
     }
 
     /// 检查是否为线性插值
-    /// 
+    ///
     /// 线性插值满足：c0.x == c0.y && c1.x == c1.y && c0.x + c1.x == c0.y + c1.y
     #[inline]
     pub fn is_linear_interpolation(interpolation: &[u8; 4]) -> bool {
-        interpolation[0] == interpolation[1]
-            && interpolation[2] == interpolation[3]
+        interpolation[0] == interpolation[1] && interpolation[2] == interpolation[3]
     }
 
     /// 从 VMD 插值参数创建
-    /// 
+    ///
     /// # 参数
     /// - `interpolation`: [c0.x, c0.y, c1.x, c1.y] 格式的插值参数
     pub fn new(interpolation: &[u8; 4]) -> Self {
@@ -89,7 +88,7 @@ impl KeyframeInterpolationPoint {
             let result = a as f32 * (1.0 - t) + b as f32 * t;
             result.clamp(0.0, 255.0) as u8
         };
-        
+
         Self {
             control_point1: [
                 lerp_u8(self.control_point1[0], other.control_point1[0], amount),
@@ -104,12 +103,12 @@ impl KeyframeInterpolationPoint {
     }
 
     /// 计算曲线插值值
-    /// 
+    ///
     /// # 参数
     /// - `interval`: 帧间隔
     /// - `amount`: 线性插值系数 [0, 1]
     /// - `bezier_factory`: 贝塞尔曲线工厂（用于缓存）
-    /// 
+    ///
     /// # 返回
     /// 经过贝塞尔曲线调整后的插值系数
     pub fn curve_value(
@@ -121,18 +120,15 @@ impl KeyframeInterpolationPoint {
         if self.is_linear {
             amount
         } else {
-            let curve = bezier_factory.get_or_new(
-                self.control_point1,
-                self.control_point2,
-                interval,
-            );
+            let curve =
+                bezier_factory.get_or_new(self.control_point1, self.control_point2, interval);
             curve.value(amount)
         }
     }
 }
 
 /// 骨骼关键帧插值
-/// 
+///
 /// 包含平移的 X/Y/Z 分量和旋转的独立插值参数
 #[derive(Debug, Clone, Copy)]
 pub struct BoneKeyframeInterpolation {
@@ -162,7 +158,7 @@ impl BoneKeyframeInterpolation {
     }
 
     /// 从 VMD 骨骼插值数据构建
-    /// 
+    ///
     /// # 参数
     /// - `translation_x`: X 平移插值参数
     /// - `translation_y`: Y 平移插值参数

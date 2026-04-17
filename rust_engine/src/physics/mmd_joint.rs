@@ -3,7 +3,7 @@
 //! 移植自 babylon-mmd 的关节构建逻辑。
 //! 使用 Bullet3 btGeneric6DofSpringConstraint。
 
-use glam::{Vec3, Quat, Mat4};
+use glam::{Mat4, Quat, Vec3};
 
 use mmd::pmx::joint::Joint as PmxJoint;
 
@@ -55,9 +55,7 @@ impl MmdJointData {
         let frame_b = rb_b_initial_transform.inverse() * joint_transform;
 
         // 创建 Bullet3 6DOF 弹簧约束
-        let constraint = BulletConstraint::new_6dof_spring(
-            rb_a, rb_b, frame_a, frame_b, true,
-        );
+        let constraint = BulletConstraint::new_6dof_spring(rb_a, rb_b, frame_a, frame_b, true);
 
         // 配置约束参数（仅在创建成功时）
         if let Some(ref c) = constraint {

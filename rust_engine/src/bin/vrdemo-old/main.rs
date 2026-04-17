@@ -1,5 +1,8 @@
 mod app;
+mod avatar_rig;
+mod room;
 mod scene;
+mod space;
 mod vulkan;
 mod xr;
 

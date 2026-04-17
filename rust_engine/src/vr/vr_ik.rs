@@ -304,7 +304,7 @@ impl VrIkSolver {
         self.cache.right_wrist = find_first_existing(bones, BONE_RIGHT_WRIST_NAMES);
 
         log::info!(
-            "VR IK bone cache: root={:?}/{:?}/{:?}/{:?} head={:?} neck={:?} upper_body={:?}/{:?}/{:?} shoulders={:?}/{:?} L_arm={:?} L_elbow={:?} L_wrist={:?} R_arm={:?} R_elbow={:?} R_wrist={:?}",
+            "VR IK bone cache: root={:?}/{:?}/{:?}/{:?} head={:?} neck={:?} upper_body={:?}/{:?}/{:?} shoulders={:?}/{:?} L_chain={:?}/{:?}/{:?} R_chain={:?}/{:?}/{:?}",
             self.cache.root,
             self.cache.center,
             self.cache.groove,
@@ -344,7 +344,6 @@ impl VrIkSolver {
 
         let body_state = self.apply_body_tracking(bones, frame, strength);
         self.apply_head_tracking(bones, &frame.head, strength);
-
         let right_result = self.solve_arm_ik(
             bones,
             self.cache.right_shoulder,
@@ -416,10 +415,7 @@ impl VrIkSolver {
         let calibration = frame.body_calibration;
         let body_idx = self.body_anchor_index();
         let Some(body_idx) = body_idx else {
-            return BodySolveState {
-                body_anchor_model: Vec3::ZERO,
-                head_residual_model: Vec3::ZERO,
-            };
+            return BodySolveState::default();
         };
 
         let current_transform = bones.get_global_transform(body_idx);
@@ -430,16 +426,14 @@ impl VrIkSolver {
         } else {
             Vec3::ZERO
         };
-        let horizontal_follow = 0.9;
-        let vertical_follow = 0.95;
         let body_translation = Vec3::new(
             clamp_scalar(
-                head_delta.x * horizontal_follow,
+                head_delta.x * calibration.horizontal_translation_follow_gain,
                 calibration.body_translation_clamp_model,
             ),
-            head_delta.y * vertical_follow,
+            head_delta.y * calibration.vertical_translation_follow_gain,
             clamp_scalar(
-                head_delta.z * horizontal_follow,
+                head_delta.z * calibration.horizontal_translation_follow_gain,
                 calibration.body_translation_clamp_model,
             ),
         );
@@ -568,7 +562,9 @@ impl VrIkSolver {
 
         ArmSolveResult {
             solved_wrist_model: wrist_new,
-            wrist_error_cm: (wrist_new - wrist_target.position).length() * MODEL_TO_WORLD_SCALE * 100.0,
+            wrist_error_cm: (wrist_new - wrist_target.position).length()
+                * MODEL_TO_WORLD_SCALE
+                * 100.0,
         }
     }
 
@@ -661,10 +657,9 @@ impl VrIkSolver {
                 0.0,
                 -calibration.shoulder_depth_model * 0.15,
             );
-            origin +=
-                (to_target.normalize_or_zero() + lateral_bias).normalize_or_zero()
-                    * (overflow * calibration.shoulder_follow_gain)
-                        .min(calibration.shoulder_depth_model);
+            origin += (to_target.normalize_or_zero() + lateral_bias).normalize_or_zero()
+                * (overflow * calibration.shoulder_follow_gain)
+                    .min(calibration.shoulder_depth_model);
         }
 
         if let Some(shoulder_idx) = shoulder_idx {
@@ -1036,8 +1031,8 @@ mod tests {
         let (mut moved_bones, _) = make_tracking_test_skeleton();
         let moved_debug = solver.solve_tracking_frame(&mut moved_bones, &moved_head, 1.0);
 
-        let left_drift = (moved_debug.left_wrist_solved_model - rest_debug.left_wrist_solved_model)
-            .length();
+        let left_drift =
+            (moved_debug.left_wrist_solved_model - rest_debug.left_wrist_solved_model).length();
         let right_drift =
             (moved_debug.right_wrist_solved_model - rest_debug.right_wrist_solved_model).length();
 
@@ -1079,6 +1074,46 @@ mod tests {
             delta,
             0.2,
         );
+    }
+
+    #[test]
+    fn apply_body_tracking_should_translate_one_to_one_when_follow_is_full_and_unclamped() {
+        let (mut rest_bones, calibration) = make_tracking_test_skeleton();
+        let (mut moved_bones, _) = make_tracking_test_skeleton();
+        let mut solver = VrIkSolver::new();
+
+        solver.ensure_cache(&rest_bones);
+        solver.ensure_cache(&moved_bones);
+
+        let strict_calibration = BodyTrackingCalibration {
+            horizontal_translation_follow_gain: 1.0,
+            vertical_translation_follow_gain: 1.0,
+            body_translation_clamp_model: -1.0,
+            ..calibration
+        };
+        let rest_frame = make_tracking_frame(
+            calibration.head_rest_anchor_model,
+            Vec3::new(-4.8, 11.7, 1.8),
+            Vec3::new(4.8, 11.7, 1.8),
+            strict_calibration,
+        );
+        let moved_head_delta = Vec3::new(1.1, 0.6, -0.9);
+        let moved_frame = make_tracking_frame(
+            calibration.head_rest_anchor_model + moved_head_delta,
+            Vec3::new(-4.8, 11.7, 1.8),
+            Vec3::new(4.8, 11.7, 1.8),
+            strict_calibration,
+        );
+
+        let rest_state = solver.apply_body_tracking(&mut rest_bones, &rest_frame, 1.0);
+        let moved_state = solver.apply_body_tracking(&mut moved_bones, &moved_frame, 1.0);
+
+        assert_vec3_near(
+            moved_state.body_anchor_model - rest_state.body_anchor_model,
+            moved_head_delta,
+            1e-5,
+        );
+        assert_vec3_near(moved_state.head_residual_model, Vec3::ZERO, 1e-5);
     }
 
     fn make_test_hand_bind_pose(
@@ -1174,6 +1209,8 @@ mod tests {
                 shoulder_width_model: 4.0,
                 shoulder_depth_model: 0.9,
                 body_yaw_follow_gain: 0.65,
+                horizontal_translation_follow_gain: 0.9,
+                vertical_translation_follow_gain: 0.95,
                 body_translation_clamp_model: 2.0,
                 shoulder_follow_gain: 0.45,
             },

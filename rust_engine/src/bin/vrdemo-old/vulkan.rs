@@ -14,6 +14,7 @@ use winit::dpi::PhysicalSize;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window::Window;
 
+use crate::room::RoomMesh;
 use crate::scene::{ModelRenderData, SceneAssets};
 use crate::xr::{BegunFrame, VulkanSessionInfo, XrBootstrap, XrRuntime};
 
@@ -85,6 +86,14 @@ struct FrameSync {
     command_buffer: vk::CommandBuffer,
 }
 
+struct StaticRoomMeshBuffers {
+    vertex_buffer: BufferResource,
+    index_buffer: BufferResource,
+    index_count: u32,
+    color: [f32; 4],
+    model_matrix: Mat4,
+}
+
 pub struct VulkanRenderer {
     instance: Instance,
     physical_device: vk::PhysicalDevice,
@@ -110,6 +119,7 @@ pub struct VulkanRenderer {
     index_buffer: BufferResource,
     hmd_vertex_buffer: BufferResource,
     mirror_vertex_buffer: BufferResource,
+    room_meshes: Vec<StaticRoomMeshBuffers>,
     scratch_hmd_vertices: Vec<GpuVertex>,
     scratch_mirror_vertices: Vec<GpuVertex>,
     xr_swapchain: Option<XrSwapchainBundle>,
@@ -119,7 +129,12 @@ pub struct VulkanRenderer {
 }
 
 impl VulkanRenderer {
-    pub fn new(window: &Window, bootstrap: &XrBootstrap, assets: &SceneAssets) -> Result<Self> {
+    pub fn new(
+        window: &Window,
+        bootstrap: &XrBootstrap,
+        assets: &SceneAssets,
+        room_meshes: &[RoomMesh],
+    ) -> Result<Self> {
         log::info!("Vulkan: 加载 Entry");
         let entry = unsafe { Entry::load().context("加载 Vulkan Entry 失败")? };
 
@@ -345,6 +360,37 @@ impl VulkanRenderer {
             vertex_buffer_size,
             vk::BufferUsageFlags::VERTEX_BUFFER,
         )?;
+        let room_meshes = room_meshes
+            .iter()
+            .map(|mesh| {
+                let vertices = Self::build_room_vertices(mesh)?;
+                let vertex_buffer = Self::create_host_visible_buffer(
+                    &instance,
+                    &device,
+                    &memory_properties,
+                    (vertices.len() * size_of::<GpuVertex>()) as u64,
+                    vk::BufferUsageFlags::VERTEX_BUFFER,
+                )?;
+                Self::write_buffer(&device, &vertex_buffer, bytemuck::cast_slice(&vertices))?;
+
+                let index_buffer = Self::create_host_visible_buffer(
+                    &instance,
+                    &device,
+                    &memory_properties,
+                    (mesh.indices.len() * size_of::<u32>()) as u64,
+                    vk::BufferUsageFlags::INDEX_BUFFER,
+                )?;
+                Self::write_buffer(&device, &index_buffer, bytemuck::cast_slice(&mesh.indices))?;
+
+                Ok(StaticRoomMeshBuffers {
+                    vertex_buffer,
+                    index_buffer,
+                    index_count: mesh.indices.len() as u32,
+                    color: mesh.color,
+                    model_matrix: mesh.model_matrix,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let mut renderer = Self {
             instance,
@@ -378,6 +424,7 @@ impl VulkanRenderer {
             index_buffer,
             hmd_vertex_buffer,
             mirror_vertex_buffer,
+            room_meshes,
             scratch_hmd_vertices: Vec::with_capacity(assets.vertex_count),
             scratch_mirror_vertices: Vec::with_capacity(assets.vertex_count),
             xr_swapchain: None,
@@ -609,6 +656,7 @@ impl VulkanRenderer {
         assets: &SceneAssets,
         mirror_data: &ModelRenderData<'_>,
         mirror_model_matrix: Mat4,
+        room_model_matrix: Mat4,
         mirror_view_proj: Mat4,
     ) -> Result<()> {
         self.render_internal(
@@ -618,7 +666,9 @@ impl VulkanRenderer {
             None,
             mirror_data,
             Mat4::IDENTITY,
+            Mat4::IDENTITY,
             mirror_model_matrix,
+            room_model_matrix,
             mirror_view_proj,
         )?;
         Ok(())
@@ -633,7 +683,9 @@ impl VulkanRenderer {
         hmd_data: &ModelRenderData<'_>,
         mirror_data: &ModelRenderData<'_>,
         xr_model_matrix: Mat4,
+        xr_room_matrix: Mat4,
         mirror_model_matrix: Mat4,
+        mirror_room_matrix: Mat4,
         mirror_view_proj: Mat4,
     ) -> Result<()> {
         if !frame.should_render {
@@ -642,6 +694,7 @@ impl VulkanRenderer {
                 assets,
                 mirror_data,
                 mirror_model_matrix,
+                mirror_room_matrix,
                 mirror_view_proj,
             )?;
             runtime.end_frame_empty(frame.predicted_display_time)?;
@@ -655,7 +708,9 @@ impl VulkanRenderer {
             Some(hmd_data),
             mirror_data,
             xr_model_matrix,
+            xr_room_matrix,
             mirror_model_matrix,
+            mirror_room_matrix,
             mirror_view_proj,
         )?;
         let projection_views = self.build_projection_views(&frame)?;
@@ -671,7 +726,9 @@ impl VulkanRenderer {
         hmd_data: Option<&ModelRenderData<'_>>,
         mirror_data: &ModelRenderData<'_>,
         xr_model_matrix: Mat4,
+        xr_room_matrix: Mat4,
         mirror_model_matrix: Mat4,
+        mirror_room_matrix: Mat4,
         mirror_view_proj: Mat4,
     ) -> Result<()> {
         let frame_index = self.frame_index;
@@ -701,6 +758,10 @@ impl VulkanRenderer {
             None
         };
 
+        let share_avatar_geometry = hmd_data
+            .map(|data| Self::shares_avatar_geometry(data, mirror_data))
+            .unwrap_or(false);
+
         if let Some(data) = hmd_data {
             Self::upload_dynamic_vertices(
                 &self.device,
@@ -709,12 +770,17 @@ impl VulkanRenderer {
                 data,
             )?;
         }
-        Self::upload_dynamic_vertices(
-            &self.device,
-            &mut self.scratch_mirror_vertices,
-            &self.mirror_vertex_buffer,
-            mirror_data,
-        )?;
+        let mirror_vertex_buffer = if share_avatar_geometry {
+            &self.hmd_vertex_buffer
+        } else {
+            Self::upload_dynamic_vertices(
+                &self.device,
+                &mut self.scratch_mirror_vertices,
+                &self.mirror_vertex_buffer,
+                mirror_data,
+            )?;
+            &self.mirror_vertex_buffer
+        };
 
         vk_result(
             unsafe {
@@ -752,9 +818,9 @@ impl VulkanRenderer {
             };
 
             for eye in 0..2usize {
-                let mvp = projection_from_fov(frame.views[eye].fov, XR_NEAR, XR_FAR)
-                    * view_from_pose(frame.views[eye].pose)
-                    * xr_model_matrix;
+                let xr_view_proj = projection_from_fov(frame.views[eye].fov, XR_NEAR, XR_FAR)
+                    * view_from_pose_in_space(xr_room_matrix, frame.views[eye].pose);
+                let mvp = xr_view_proj * xr_model_matrix;
                 self.record_scene_pass(
                     command_buffer,
                     xr_pipeline,
@@ -764,6 +830,7 @@ impl VulkanRenderer {
                     data,
                     &self.hmd_vertex_buffer,
                     mvp,
+                    xr_view_proj * xr_room_matrix,
                     false,
                 )?;
             }
@@ -779,8 +846,9 @@ impl VulkanRenderer {
                 self.mirror.extent,
                 assets,
                 mirror_data,
-                &self.mirror_vertex_buffer,
+                mirror_vertex_buffer,
                 mirror_view_proj * mirror_model_matrix,
+                mirror_view_proj * mirror_room_matrix,
                 false,
             )?;
         }
@@ -886,7 +954,8 @@ impl VulkanRenderer {
         assets: &SceneAssets,
         render_data: &ModelRenderData<'_>,
         vertex_buffer: &BufferResource,
-        mvp: Mat4,
+        avatar_mvp: Mat4,
+        room_view_proj: Mat4,
         flip_viewport_y: bool,
     ) -> Result<()> {
         let clear_values = [
@@ -958,6 +1027,17 @@ impl VulkanRenderer {
         }
 
         let light_dir = Vec3::new(0.45, 1.0, 0.25).normalize();
+        self.record_room_meshes(command_buffer, room_view_proj, light_dir)?;
+        unsafe {
+            self.device
+                .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer.buffer], &[0]);
+            self.device.cmd_bind_index_buffer(
+                command_buffer,
+                self.index_buffer.buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
+        }
         for submesh in &assets.submeshes {
             let material_index = submesh.material_id.max(0) as usize;
             if material_index >= assets.materials.len() {
@@ -976,7 +1056,7 @@ impl VulkanRenderer {
             let descriptor_set = self.texture_descriptor(material.texture_index);
             let cutoff = -1.0;
             let push = PushConstants {
-                mvp: mvp.to_cols_array_2d(),
+                mvp: avatar_mvp.to_cols_array_2d(),
                 diffuse: material.diffuse.to_array(),
                 params: [light_dir.x, light_dir.y, light_dir.z, cutoff],
             };
@@ -1013,6 +1093,56 @@ impl VulkanRenderer {
         Ok(())
     }
 
+    fn record_room_meshes(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        room_view_proj: Mat4,
+        light_dir: Vec3,
+    ) -> Result<()> {
+        let descriptor_set = self.default_texture.descriptor_set;
+        for mesh in &self.room_meshes {
+            unsafe {
+                self.device.cmd_bind_vertex_buffers(
+                    command_buffer,
+                    0,
+                    &[mesh.vertex_buffer.buffer],
+                    &[0],
+                );
+                self.device.cmd_bind_index_buffer(
+                    command_buffer,
+                    mesh.index_buffer.buffer,
+                    0,
+                    vk::IndexType::UINT32,
+                );
+                self.device.cmd_bind_descriptor_sets(
+                    command_buffer,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.pipeline_layout,
+                    0,
+                    &[descriptor_set],
+                    &[],
+                );
+            }
+            let push = PushConstants {
+                mvp: (room_view_proj * mesh.model_matrix).to_cols_array_2d(),
+                diffuse: mesh.color,
+                params: [light_dir.x, light_dir.y, light_dir.z, -1.0],
+            };
+            unsafe {
+                self.device.cmd_push_constants(
+                    command_buffer,
+                    self.pipeline_layout,
+                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    0,
+                    bytemuck::bytes_of(&push),
+                );
+                self.device
+                    .cmd_draw_indexed(command_buffer, mesh.index_count, 1, 0, 0, 0);
+            }
+        }
+        Ok(())
+    }
+
     fn texture_descriptor(&self, texture_index: i32) -> vk::DescriptorSet {
         if texture_index >= 0 {
             self.textures
@@ -1022,6 +1152,17 @@ impl VulkanRenderer {
         } else {
             self.default_texture.descriptor_set
         }
+    }
+
+    fn shares_avatar_geometry(left: &ModelRenderData<'_>, right: &ModelRenderData<'_>) -> bool {
+        Self::same_slice(left.positions, right.positions)
+            && Self::same_slice(left.normals, right.normals)
+            && Self::same_slice(left.uvs, right.uvs)
+    }
+
+    fn same_slice<T>(left: &[T], right: &[T]) -> bool {
+        left.len() == right.len()
+            && (left.is_empty() || std::ptr::eq(left.as_ptr(), right.as_ptr()))
     }
 
     fn load_textures(&self, texture_paths: &[String]) -> Result<Vec<TextureResource>> {
@@ -1853,6 +1994,38 @@ impl VulkanRenderer {
         Ok(())
     }
 
+    fn build_room_vertices(mesh: &RoomMesh) -> Result<Vec<GpuVertex>> {
+        let vertex_count = mesh.positions.len() / 3;
+        if mesh.normals.len() / 3 != vertex_count || mesh.uvs.len() / 2 != vertex_count {
+            return Err(anyhow!(
+                "房间网格顶点流长度不匹配 positions={} normals={} uvs={}",
+                mesh.positions.len(),
+                mesh.normals.len(),
+                mesh.uvs.len()
+            ));
+        }
+
+        let mut vertices = Vec::with_capacity(vertex_count);
+        for index in 0..vertex_count {
+            let pos = index * 3;
+            let uv = index * 2;
+            vertices.push(GpuVertex {
+                position: [
+                    mesh.positions[pos],
+                    mesh.positions[pos + 1],
+                    mesh.positions[pos + 2],
+                ],
+                normal: [
+                    mesh.normals[pos],
+                    mesh.normals[pos + 1],
+                    mesh.normals[pos + 2],
+                ],
+                uv: [mesh.uvs[uv], mesh.uvs[uv + 1]],
+            });
+        }
+        Ok(vertices)
+    }
+
     fn find_queue_family(
         instance: &Instance,
         surface_loader: &ash::khr::surface::Instance,
@@ -2002,6 +2175,12 @@ impl Drop for VulkanRenderer {
             self.device
                 .destroy_pipeline_layout(self.pipeline_layout, None);
 
+            let room_meshes = std::mem::take(&mut self.room_meshes);
+            for mesh in room_meshes {
+                self.destroy_buffer(&mesh.vertex_buffer);
+                self.destroy_buffer(&mesh.index_buffer);
+            }
+
             self.destroy_buffer(&self.index_buffer);
             self.destroy_buffer(&self.hmd_vertex_buffer);
             self.destroy_buffer(&self.mirror_vertex_buffer);
@@ -2062,7 +2241,7 @@ fn projection_from_fov(fov: xr::Fovf, near: f32, far: f32) -> Mat4 {
     )
 }
 
-fn view_from_pose(pose: xr::Posef) -> Mat4 {
+fn view_from_pose_in_space(space_transform: Mat4, pose: xr::Posef) -> Mat4 {
     let rotation = Quat::from_xyzw(
         pose.orientation.x,
         pose.orientation.y,
@@ -2071,7 +2250,88 @@ fn view_from_pose(pose: xr::Posef) -> Mat4 {
     )
     .normalize();
     let translation = Vec3::new(pose.position.x, pose.position.y, pose.position.z);
-    Mat4::from_rotation_translation(rotation, translation).inverse()
+    (space_transform * Mat4::from_rotation_translation(rotation, translation)).inverse()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn view_from_pose_in_space_should_apply_tracking_space_rotation() {
+        let space_transform = Mat4::from_quat(Quat::from_rotation_y(std::f32::consts::FRAC_PI_2));
+        let pose = xr::Posef {
+            orientation: xr::Quaternionf {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+                w: 1.0,
+            },
+            position: xr::Vector3f {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        };
+
+        let view = view_from_pose_in_space(space_transform, pose);
+        let world_forward = view.inverse().transform_vector3(Vec3::NEG_Z).normalize();
+
+        assert_vec3_near(world_forward, Vec3::new(-1.0, 0.0, 0.0), 1e-5);
+    }
+
+    #[test]
+    fn shares_avatar_geometry_should_detect_shared_vertex_streams() {
+        let positions = [0.0, 1.0, 2.0];
+        let normals = [0.0, 1.0, 0.0];
+        let uvs = [0.25, 0.75];
+        let hmd = ModelRenderData {
+            positions: &positions,
+            normals: &normals,
+            uvs: &uvs,
+            visible_materials: vec![true],
+        };
+        let mirror = ModelRenderData {
+            positions: &positions,
+            normals: &normals,
+            uvs: &uvs,
+            visible_materials: vec![false],
+        };
+
+        assert!(VulkanRenderer::shares_avatar_geometry(&hmd, &mirror));
+    }
+
+    #[test]
+    fn shares_avatar_geometry_should_reject_distinct_vertex_streams() {
+        let hmd_positions = [0.0, 1.0, 2.0];
+        let mirror_positions = [0.0, 1.0, 2.0];
+        let hmd_normals = [0.0, 1.0, 0.0];
+        let mirror_normals = [0.0, 1.0, 0.0];
+        let hmd_uvs = [0.25, 0.75];
+        let mirror_uvs = [0.25, 0.75];
+        let hmd = ModelRenderData {
+            positions: &hmd_positions,
+            normals: &hmd_normals,
+            uvs: &hmd_uvs,
+            visible_materials: vec![true],
+        };
+        let mirror = ModelRenderData {
+            positions: &mirror_positions,
+            normals: &mirror_normals,
+            uvs: &mirror_uvs,
+            visible_materials: vec![true],
+        };
+
+        assert!(!VulkanRenderer::shares_avatar_geometry(&hmd, &mirror));
+    }
+
+    fn assert_vec3_near(actual: Vec3, expected: Vec3, tolerance: f32) {
+        let delta = actual - expected;
+        assert!(
+            delta.length() <= tolerance,
+            "vec mismatch: actual={actual:?} expected={expected:?} tolerance={tolerance}",
+        );
+    }
 }
 
 fn transition_image_layout(

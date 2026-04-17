@@ -1,19 +1,19 @@
 //! 纹理加载
 
+use image::{DynamicImage, GenericImageView};
 use std::path::Path;
-use image::{GenericImageView, DynamicImage};
 
-use crate::{Result, MmdError};
 use super::Texture;
+use crate::{MmdError, Result};
 
 /// 从文件加载纹理
 pub fn load_texture<P: AsRef<Path>>(path: P) -> Result<Texture> {
     let img = image::open(path.as_ref())
         .map_err(|e| MmdError::Texture(format!("Failed to load texture: {}", e)))?;
-    
+
     let (width, height) = img.dimensions();
     let has_alpha = has_alpha_channel(&img);
-    
+
     // 与C++一致：垂直翻转图像，然后根据是否有alpha通道选择格式
     let data = if has_alpha {
         // RGBA格式（4字节/像素）
@@ -26,7 +26,7 @@ pub fn load_texture<P: AsRef<Path>>(path: P) -> Result<Texture> {
         let flipped = image::imageops::flip_vertical(&rgb);
         flipped.into_raw()
     };
-    
+
     Ok(Texture::new(width, height, data, has_alpha))
 }
 
@@ -34,11 +34,11 @@ pub fn load_texture<P: AsRef<Path>>(path: P) -> Result<Texture> {
 /// 与C++一致：comp == 4 时返回true
 fn has_alpha_channel(img: &DynamicImage) -> bool {
     match img {
-        DynamicImage::ImageRgba8(_) |
-        DynamicImage::ImageRgba16(_) |
-        DynamicImage::ImageRgba32F(_) |
-        DynamicImage::ImageLumaA8(_) |
-        DynamicImage::ImageLumaA16(_) => true,
+        DynamicImage::ImageRgba8(_)
+        | DynamicImage::ImageRgba16(_)
+        | DynamicImage::ImageRgba32F(_)
+        | DynamicImage::ImageLumaA8(_)
+        | DynamicImage::ImageLumaA16(_) => true,
         _ => false,
     }
 }
@@ -48,10 +48,10 @@ fn has_alpha_channel(img: &DynamicImage) -> bool {
 pub fn load_texture_from_memory(data: &[u8]) -> Result<Texture> {
     let img = image::load_from_memory(data)
         .map_err(|e| MmdError::Texture(format!("Failed to load texture from memory: {}", e)))?;
-    
+
     let (width, height) = img.dimensions();
     let has_alpha = has_alpha_channel(&img);
-    
+
     // 与C++一致：垂直翻转图像，然后根据是否有alpha通道选择格式
     let pixel_data = if has_alpha {
         let rgba = img.to_rgba8();
@@ -62,6 +62,6 @@ pub fn load_texture_from_memory(data: &[u8]) -> Result<Texture> {
         let flipped = image::imageops::flip_vertical(&rgb);
         flipped.into_raw()
     };
-    
+
     Ok(Texture::new(width, height, pixel_data, has_alpha))
 }

@@ -10,6 +10,10 @@ pub struct SubMesh {
 
 impl SubMesh {
     pub fn new(begin_index: u32, index_count: u32, material_id: i32) -> Self {
-        Self { begin_index, index_count, material_id }
+        Self {
+            begin_index,
+            index_count,
+            material_id,
+        }
     }
 }

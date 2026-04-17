@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
+use rfd::FileDialog;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
@@ -13,14 +14,103 @@ use crate::scene::{AvatarScene, TrackingFrame};
 use crate::vulkan::VulkanRenderer;
 use crate::xr::XrBootstrap;
 
-const DEFAULT_MODEL_PATH: &str = "D:/GITHUB/work/MC-MMD-rust/moxing/玛丽/vrm/伊落玛丽.vrm";
+const IDLE_REDRAW_INTERVAL: Duration = Duration::from_millis(200);
 
 pub fn run() -> Result<()> {
-    let event_loop = EventLoop::new().context("创建 winit EventLoop 失败")?;
-    let mut app = DemoApp::new(PathBuf::from(DEFAULT_MODEL_PATH));
+    let model_path = resolve_model_path()?;
+    let event_loop = EventLoop::new().context("failed to create winit event loop")?;
+    let mut app = DemoApp::new(model_path);
     event_loop
         .run_app(&mut app)
-        .context("运行 VR PMX Demo 失败")
+        .context("failed to run VR PMX Demo")
+}
+
+fn resolve_model_path() -> Result<PathBuf> {
+    let model_path = match parse_cli_model_path()? {
+        Some(path) => path,
+        None => pick_model_path_with_dialog()?,
+    };
+    validate_model_path(model_path)
+}
+
+fn parse_cli_model_path() -> Result<Option<PathBuf>> {
+    let mut args = std::env::args_os().skip(1);
+    let mut model_path = None;
+
+    while let Some(arg) = args.next() {
+        if let Some(flag) = arg.to_str() {
+            if flag == "-m" || flag == "--model" {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow!("`--model` requires a file path"))?;
+                set_model_path(&mut model_path, PathBuf::from(value))?;
+                continue;
+            }
+
+            if let Some(value) = flag.strip_prefix("--model=") {
+                set_model_path(&mut model_path, PathBuf::from(value))?;
+                continue;
+            }
+        }
+
+        set_model_path(&mut model_path, PathBuf::from(arg))?;
+    }
+
+    Ok(model_path)
+}
+
+fn set_model_path(slot: &mut Option<PathBuf>, path: PathBuf) -> Result<()> {
+    if let Some(existing) = slot {
+        return Err(anyhow!(
+            "multiple VRM model paths were provided: `{}` and `{}`",
+            existing.display(),
+            path.display()
+        ));
+    }
+
+    *slot = Some(path);
+    Ok(())
+}
+
+fn pick_model_path_with_dialog() -> Result<PathBuf> {
+    let mut dialog = FileDialog::new()
+        .set_title("Select a VRM model")
+        .add_filter("VRM avatar", &["vrm"]);
+    if let Ok(current_dir) = std::env::current_dir() {
+        dialog = dialog.set_directory(current_dir);
+    }
+
+    dialog.pick_file().ok_or_else(|| {
+        anyhow!("no VRM model selected; pass `--model <path>` or choose a `.vrm` file")
+    })
+}
+
+fn validate_model_path(path: PathBuf) -> Result<PathBuf> {
+    let path = if path.is_absolute() {
+        path
+    } else {
+        std::env::current_dir()
+            .context("failed to resolve the current directory for the VRM path")?
+            .join(path)
+    };
+    let path = path.canonicalize().unwrap_or(path);
+
+    if !path.is_file() {
+        return Err(anyhow!("VRM file does not exist: {}", path.display()));
+    }
+
+    let is_vrm = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("vrm"));
+    if !is_vrm {
+        return Err(anyhow!(
+            "selected file is not a `.vrm` model: {}",
+            path.display()
+        ));
+    }
+
+    Ok(path)
 }
 
 struct DemoApp {
@@ -35,19 +125,31 @@ impl DemoApp {
             demo: None,
         }
     }
+
+    fn update_control_flow(&mut self, event_loop: &ActiveEventLoop) {
+        let Some(demo) = self.demo.as_mut() else {
+            event_loop.set_control_flow(ControlFlow::Wait);
+            return;
+        };
+
+        demo.schedule_next_wakeup(event_loop);
+    }
 }
 
 impl ApplicationHandler for DemoApp {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        event_loop.set_control_flow(ControlFlow::Poll);
         if self.demo.is_some() {
+            self.update_control_flow(event_loop);
             return;
         }
 
         match VrDemo::new(event_loop, &self.model_path) {
-            Ok(demo) => self.demo = Some(demo),
+            Ok(demo) => {
+                self.demo = Some(demo);
+                self.update_control_flow(event_loop);
+            }
             Err(err) => {
-                log::error!("初始化 VR PMX Demo 失败: {err:#}");
+                log::error!("failed to initialize VR PMX Demo: {err:#}");
                 event_loop.exit();
             }
         }
@@ -70,19 +172,23 @@ impl ApplicationHandler for DemoApp {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(_) => {
                 if let Err(err) = demo.renderer.resize_mirror(&demo.window) {
-                    log::error!("重建桌面镜像失败: {err:#}");
+                    log::error!("failed to resize the mirror surface: {err:#}");
                     event_loop.exit();
+                    return;
                 }
+                demo.request_redraw_soon();
             }
             WindowEvent::RedrawRequested => match demo.render_frame() {
                 Ok(should_exit) => {
                     if should_exit {
                         event_loop.exit();
+                        return;
                     }
                 }
                 Err(err) => {
-                    log::error!("渲染失败: {err:#}");
+                    log::error!("frame rendering failed: {err:#}");
                     event_loop.exit();
+                    return;
                 }
             },
             WindowEvent::KeyboardInput { event, .. } => {
@@ -90,12 +196,12 @@ impl ApplicationHandler for DemoApp {
             }
             _ => {}
         }
+
+        self.update_control_flow(event_loop);
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if let Some(demo) = self.demo.as_ref() {
-            demo.window.request_redraw();
-        }
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        self.update_control_flow(event_loop);
     }
 }
 
@@ -106,16 +212,17 @@ struct VrDemo {
     scene: AvatarScene,
     last_frame_instant: Instant,
     last_title_update: Instant,
+    next_idle_redraw: Instant,
 }
 
 impl VrDemo {
     fn new(event_loop: &ActiveEventLoop, model_path: &PathBuf) -> Result<Self> {
-        log::info!("VR Demo: 创建桌面窗口");
+        log::info!("VR Demo: creating mirror window");
         let window = event_loop
             .create_window(window_attributes())
-            .context("创建桌面镜像窗口失败")?;
+            .context("failed to create the mirror window")?;
 
-        log::info!("VR Demo: 初始化 OpenXR");
+        log::info!("VR Demo: initializing OpenXR");
         let bootstrap = XrBootstrap::new()?;
         if !bootstrap
             .runtime_name()
@@ -123,28 +230,33 @@ impl VrDemo {
             .contains("steam")
         {
             log::warn!(
-                "当前 OpenXR runtime 不是 SteamVR: {}，但仍继续启动",
+                "current OpenXR runtime is not SteamVR: {}",
                 bootstrap.runtime_name()
             );
         }
 
-        log::info!("VR Demo: 加载场景 {}", model_path.display());
+        log::info!("VR Demo: loading scene from {}", model_path.display());
         let scene = AvatarScene::new(model_path)?;
-        log::info!("VR Demo: 初始化 Vulkan 渲染器");
-        let mut renderer = VulkanRenderer::new(&window, &bootstrap, scene.assets())?;
-        log::info!("VR Demo: 创建 OpenXR Session");
-        let xr = bootstrap.create_runtime(renderer.session_info())?;
-        log::info!("VR Demo: 初始化 OpenXR 渲染目标");
-        renderer.initialize_xr_targets(&xr)?;
-        log::info!("VR Demo: 初始化完成，进入主循环");
 
+        log::info!("VR Demo: initializing Vulkan renderer");
+        let mut renderer =
+            VulkanRenderer::new(&window, &bootstrap, scene.assets(), scene.room_meshes())?;
+
+        log::info!("VR Demo: creating OpenXR session");
+        let xr = bootstrap.create_runtime(renderer.session_info())?;
+
+        log::info!("VR Demo: initializing OpenXR render targets");
+        renderer.initialize_xr_targets(&xr)?;
+
+        let now = Instant::now();
         let mut demo = Self {
             window,
             renderer,
             xr,
             scene,
-            last_frame_instant: Instant::now(),
-            last_title_update: Instant::now(),
+            last_frame_instant: now,
+            last_title_update: now,
+            next_idle_redraw: now,
         };
         demo.refresh_title();
         log::info!("{}", demo.scene.summary_text(&demo.xr.runtime_label()));
@@ -162,10 +274,32 @@ impl VrDemo {
                 KeyCode::KeyR => {
                     self.scene.recenter();
                     self.refresh_title();
+                    self.request_redraw_soon();
                 }
                 _ => {}
             }
         }
+    }
+
+    fn request_redraw_soon(&mut self) {
+        self.next_idle_redraw = Instant::now();
+        self.window.request_redraw();
+    }
+
+    fn schedule_next_wakeup(&mut self, event_loop: &ActiveEventLoop) {
+        if self.xr.is_session_active() {
+            self.next_idle_redraw = Instant::now();
+            event_loop.set_control_flow(ControlFlow::Poll);
+            self.window.request_redraw();
+            return;
+        }
+
+        let now = Instant::now();
+        if now >= self.next_idle_redraw {
+            self.window.request_redraw();
+            self.next_idle_redraw = now + IDLE_REDRAW_INTERVAL;
+        }
+        event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_idle_redraw));
     }
 
     fn render_frame(&mut self) -> Result<bool> {
@@ -180,13 +314,20 @@ impl VrDemo {
         if let Some(frame) = self.xr.begin_frame()? {
             let tracking = TrackingFrame {
                 head: frame.head,
+                left_grip: frame.left_grip,
+                left_aim: frame.left_aim,
                 left_hand: frame.left_hand,
+                right_grip: frame.right_grip,
+                right_aim: frame.right_aim,
                 right_hand: frame.right_hand,
+                buttons: frame.buttons,
             };
             self.scene.update(&tracking, delta_time);
 
             let xr_model_matrix = self.scene.xr_model_matrix();
+            let xr_room_matrix = self.scene.xr_room_matrix();
             let mirror_model_matrix = self.scene.mirror_model_matrix();
+            let mirror_room_matrix = self.scene.mirror_room_matrix();
             let mirror_camera = self.scene.mirror_camera(self.renderer.mirror_aspect());
             let hmd_data = self.scene.hmd_render_data();
             let mirror_data = self.scene.mirror_render_data();
@@ -198,11 +339,14 @@ impl VrDemo {
                 &hmd_data,
                 &mirror_data,
                 xr_model_matrix,
+                xr_room_matrix,
                 mirror_model_matrix,
+                mirror_room_matrix,
                 mirror_camera.view_proj,
             )?;
         } else {
             let model_matrix = self.scene.mirror_model_matrix();
+            let room_matrix = self.scene.mirror_room_matrix();
             let mirror_camera = self.scene.mirror_camera(self.renderer.mirror_aspect());
             let mirror_data = self.scene.mirror_render_data();
             self.renderer.render_mirror_only(
@@ -210,6 +354,7 @@ impl VrDemo {
                 self.scene.assets(),
                 &mirror_data,
                 model_matrix,
+                room_matrix,
                 mirror_camera.view_proj,
             )?;
         }
@@ -223,10 +368,11 @@ impl VrDemo {
     }
 
     fn refresh_title(&mut self) {
+        let runtime_label = self.xr.runtime_label();
         let title = format!(
             "VR PMX Demo | {} | {}",
-            self.xr.runtime_label(),
-            self.scene.status_line(&self.xr.runtime_label())
+            runtime_label,
+            self.scene.status_line(&runtime_label)
         );
         self.window.set_title(&title);
     }

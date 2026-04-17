@@ -62,11 +62,9 @@ fn main() {
     // 排除依赖缺失头文件的源文件
     let exclude_files: &[&str] = &[
         "btCollisionWorldImporter",
-        "btSerializer64",        // 64位序列化，不需要
+        "btSerializer64", // 64位序列化，不需要
     ];
-    cpp_files.retain(|f| {
-        !exclude_files.iter().any(|ex| f.contains(ex))
-    });
+    cpp_files.retain(|f| !exclude_files.iter().any(|ex| f.contains(ex)));
 
     // C Wrapper
     cpp_files.push(format!("{}/bw_api.cpp", wrapper_dir));
@@ -83,7 +81,7 @@ fn main() {
     // 平台特定设置
     let target = std::env::var("TARGET").unwrap_or_default();
     if target.contains("msvc") {
-        build.flag("/EHsc");  // C++ 异常处理
+        build.flag("/EHsc"); // C++ 异常处理
         build.flag("/std:c++17");
     } else {
         build.flag("-std=c++17");

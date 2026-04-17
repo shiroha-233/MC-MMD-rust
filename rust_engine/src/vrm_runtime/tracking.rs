@@ -40,14 +40,31 @@ pub struct HandTrackingCalibration {
     pub right: HandGripOffset,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct BodyTrackingCalibration {
     pub head_rest_anchor_model: Vec3,
     pub shoulder_width_model: f32,
     pub shoulder_depth_model: f32,
     pub body_yaw_follow_gain: f32,
+    pub horizontal_translation_follow_gain: f32,
+    pub vertical_translation_follow_gain: f32,
     pub body_translation_clamp_model: f32,
     pub shoulder_follow_gain: f32,
+}
+
+impl Default for BodyTrackingCalibration {
+    fn default() -> Self {
+        Self {
+            head_rest_anchor_model: Vec3::ZERO,
+            shoulder_width_model: 0.0,
+            shoulder_depth_model: 0.0,
+            body_yaw_follow_gain: 0.0,
+            horizontal_translation_follow_gain: 0.0,
+            vertical_translation_follow_gain: 0.0,
+            body_translation_clamp_model: f32::NAN,
+            shoulder_follow_gain: 0.0,
+        }
+    }
 }
 
 impl BodyTrackingCalibration {
@@ -73,10 +90,22 @@ impl BodyTrackingCalibration {
             } else {
                 defaults.body_yaw_follow_gain
             },
-            body_translation_clamp_model: if self.body_translation_clamp_model > 1e-6 {
+            horizontal_translation_follow_gain: if self.horizontal_translation_follow_gain > 1e-6 {
+                self.horizontal_translation_follow_gain
+            } else {
+                defaults.horizontal_translation_follow_gain
+            },
+            vertical_translation_follow_gain: if self.vertical_translation_follow_gain > 1e-6 {
+                self.vertical_translation_follow_gain
+            } else {
+                defaults.vertical_translation_follow_gain
+            },
+            body_translation_clamp_model: if self.body_translation_clamp_model.is_nan() {
+                defaults.body_translation_clamp_model
+            } else if self.body_translation_clamp_model <= 0.0 {
                 self.body_translation_clamp_model
             } else {
-                defaults.body_translation_clamp_model
+                self.body_translation_clamp_model
             },
             shoulder_follow_gain: if self.shoulder_follow_gain > 1e-6 {
                 self.shoulder_follow_gain

@@ -24,9 +24,7 @@ pub(crate) fn convert_materials(
     let materials = document
         .materials()
         .enumerate()
-        .map(|(idx, mat)| {
-            convert_single_material(&mat, vrm_extensions, idx, &texture_to_image)
-        })
+        .map(|(idx, mat)| convert_single_material(&mat, vrm_extensions, idx, &texture_to_image))
         .collect();
 
     (materials, texture_paths)
@@ -93,10 +91,7 @@ fn resolve_texture_index(
 }
 
 /// MToon 材质：shadeFactor → ambient, outlineColor → edge_color
-fn convert_mtoon(
-    base_color: [f32; 4],
-    mtoon: &MtoonParams,
-) -> (Vec4, Vec3, f32, Vec3, Vec4, f32) {
+fn convert_mtoon(base_color: [f32; 4], mtoon: &MtoonParams) -> (Vec4, Vec3, f32, Vec3, Vec4, f32) {
     let diffuse = Vec4::from(base_color);
     let specular = Vec3::ZERO;
     let specular_strength = 0.0;
@@ -105,7 +100,14 @@ fn convert_mtoon(
     let edge_color = Vec4::new(oc[0], oc[1], oc[2], 1.0);
     let edge_scale = mtoon.outline_width_factor;
 
-    (diffuse, specular, specular_strength, ambient, edge_color, edge_scale)
+    (
+        diffuse,
+        specular,
+        specular_strength,
+        ambient,
+        edge_color,
+        edge_scale,
+    )
 }
 
 /// Unlit 材质：baseColorFactor → diffuse, specular = 0
@@ -121,7 +123,14 @@ fn convert_unlit(base_color: [f32; 4]) -> (Vec4, Vec3, f32, Vec3, Vec4, f32) {
     let edge_color = Vec4::new(0.0, 0.0, 0.0, 1.0);
     let edge_scale = 1.0;
 
-    (diffuse, specular, specular_strength, ambient, edge_color, edge_scale)
+    (
+        diffuse,
+        specular,
+        specular_strength,
+        ambient,
+        edge_color,
+        edge_scale,
+    )
 }
 
 /// PBR 材质：baseColorFactor → diffuse（忽略 metallic/roughness）
@@ -137,7 +146,14 @@ fn convert_pbr(base_color: [f32; 4]) -> (Vec4, Vec3, f32, Vec3, Vec4, f32) {
     let edge_color = Vec4::new(0.0, 0.0, 0.0, 1.0);
     let edge_scale = 1.0;
 
-    (diffuse, specular, specular_strength, ambient, edge_color, edge_scale)
+    (
+        diffuse,
+        specular,
+        specular_strength,
+        ambient,
+        edge_color,
+        edge_scale,
+    )
 }
 
 /// 构建 draw_flags：bit 0 = 双面渲染, bit 4 = 边缘（MToon outline）
@@ -160,7 +176,11 @@ fn compute_alpha(mat: &gltf::Material, base_alpha: f32) -> f32 {
         gltf::material::AlphaMode::Opaque => 1.0,
         gltf::material::AlphaMode::Mask => {
             let cutoff = mat.alpha_cutoff().unwrap_or(0.5);
-            if base_alpha >= cutoff { 1.0 } else { 0.0 }
+            if base_alpha >= cutoff {
+                1.0
+            } else {
+                0.0
+            }
         }
         gltf::material::AlphaMode::Blend => base_alpha,
     }
