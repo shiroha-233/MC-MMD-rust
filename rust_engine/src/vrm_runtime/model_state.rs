@@ -48,6 +48,7 @@ impl VrmModelRuntimeState {
             model,
             self.input.tracking,
             self.input.hand_calibration,
+            self.input.arm_ik_calibration,
             self.input.body_calibration,
         );
     }
@@ -108,6 +109,8 @@ impl VrmModelRuntimeState {
         self.output.body_anchor_model = vr_debug.body_anchor_model;
         self.output.left_palm_target_model = vr_debug.left_palm_target_model;
         self.output.right_palm_target_model = vr_debug.right_palm_target_model;
+        self.output.left_auto_wrist_offset_model = vr_debug.left_auto_wrist_offset_model;
+        self.output.right_auto_wrist_offset_model = vr_debug.right_auto_wrist_offset_model;
         self.output.left_wrist_solved_model = vr_debug.left_wrist_solved_model;
         self.output.right_wrist_solved_model = vr_debug.right_wrist_solved_model;
         self.output.left_wrist_error_cm = vr_debug.left_wrist_error_cm;

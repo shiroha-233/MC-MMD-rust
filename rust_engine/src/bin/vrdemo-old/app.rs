@@ -10,6 +10,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowAttributes, WindowId};
 
+use crate::control_window::ControlWindow;
 use crate::scene::{AvatarScene, TrackingFrame};
 use crate::vulkan::VulkanRenderer;
 use crate::xr::XrBootstrap;
@@ -164,37 +165,60 @@ impl ApplicationHandler for DemoApp {
         let Some(demo) = self.demo.as_mut() else {
             return;
         };
-        if window_id != demo.window.id() {
+        if window_id == demo.window.id() {
+            match event {
+                WindowEvent::CloseRequested => event_loop.exit(),
+                WindowEvent::Resized(_) => {
+                    if let Err(err) = demo.renderer.resize_mirror(&demo.window) {
+                        log::error!("failed to resize the mirror surface: {err:#}");
+                        event_loop.exit();
+                        return;
+                    }
+                    demo.request_redraw_soon();
+                }
+                WindowEvent::RedrawRequested => match demo.render_frame() {
+                    Ok(should_exit) => {
+                        if should_exit {
+                            event_loop.exit();
+                            return;
+                        }
+                    }
+                    Err(err) => {
+                        log::error!("frame rendering failed: {err:#}");
+                        event_loop.exit();
+                        return;
+                    }
+                },
+                WindowEvent::KeyboardInput { event, .. } => {
+                    demo.handle_keyboard(event_loop, &event);
+                }
+                _ => {}
+            }
+
+            self.update_control_flow(event_loop);
             return;
         }
 
-        match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(_) => {
-                if let Err(err) = demo.renderer.resize_mirror(&demo.window) {
-                    log::error!("failed to resize the mirror surface: {err:#}");
+        if window_id == demo.control.window_id() {
+            match event {
+                WindowEvent::CloseRequested => {
                     event_loop.exit();
                     return;
                 }
-                demo.request_redraw_soon();
-            }
-            WindowEvent::RedrawRequested => match demo.render_frame() {
-                Ok(should_exit) => {
-                    if should_exit {
+                WindowEvent::RedrawRequested => {
+                    if let Err(err) = demo.render_control_window() {
+                        log::error!("control window rendering failed: {err:#}");
                         event_loop.exit();
                         return;
                     }
                 }
-                Err(err) => {
-                    log::error!("frame rendering failed: {err:#}");
-                    event_loop.exit();
-                    return;
+                _ => {
+                    demo.control.handle_window_event(&event);
                 }
-            },
-            WindowEvent::KeyboardInput { event, .. } => {
-                demo.handle_keyboard(event_loop, &event);
             }
-            _ => {}
+
+            self.update_control_flow(event_loop);
+            return;
         }
 
         self.update_control_flow(event_loop);
@@ -207,6 +231,7 @@ impl ApplicationHandler for DemoApp {
 
 struct VrDemo {
     window: Window,
+    control: ControlWindow,
     renderer: VulkanRenderer,
     xr: crate::xr::XrRuntime,
     scene: AvatarScene,
@@ -237,6 +262,12 @@ impl VrDemo {
 
         log::info!("VR Demo: loading scene from {}", model_path.display());
         let scene = AvatarScene::new(model_path)?;
+        log::info!("VR Demo: creating arm IK control window");
+        let control = ControlWindow::new(
+            event_loop,
+            scene.hand_calibration(),
+            scene.arm_ik_calibration(),
+        )?;
 
         log::info!("VR Demo: initializing Vulkan renderer");
         let mut renderer =
@@ -251,6 +282,7 @@ impl VrDemo {
         let now = Instant::now();
         let mut demo = Self {
             window,
+            control,
             renderer,
             xr,
             scene,
@@ -284,6 +316,7 @@ impl VrDemo {
     fn request_redraw_soon(&mut self) {
         self.next_idle_redraw = Instant::now();
         self.window.request_redraw();
+        self.control.request_redraw();
     }
 
     fn schedule_next_wakeup(&mut self, event_loop: &ActiveEventLoop) {
@@ -291,12 +324,14 @@ impl VrDemo {
             self.next_idle_redraw = Instant::now();
             event_loop.set_control_flow(ControlFlow::Poll);
             self.window.request_redraw();
+            self.control.request_redraw();
             return;
         }
 
         let now = Instant::now();
         if now >= self.next_idle_redraw {
             self.window.request_redraw();
+            self.control.request_redraw();
             self.next_idle_redraw = now + IDLE_REDRAW_INTERVAL;
         }
         event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_idle_redraw));
@@ -365,6 +400,18 @@ impl VrDemo {
         }
 
         Ok(false)
+    }
+
+    fn render_control_window(&mut self) -> Result<()> {
+        let debug_snapshot = self.scene.arm_ik_debug_snapshot();
+        if let Some(calibration) = self.control.render(debug_snapshot)? {
+            self.scene
+                .set_hand_calibration(calibration.hand_calibration);
+            self.scene
+                .set_arm_ik_calibration(calibration.arm_ik_calibration);
+            self.request_redraw_soon();
+        }
+        Ok(())
     }
 
     fn refresh_title(&mut self) {

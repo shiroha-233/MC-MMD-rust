@@ -2,11 +2,12 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use glam::Vec3;
+use glam::{Quat, Vec3};
 use mmd_engine::model::{MmdMaterial, SubMesh};
 use mmd_engine::vrm_runtime::{
-    BodyTrackingCalibration, HandGripOffset, HandTrackingCalibration, LookAtInput, VrmRenderState,
-    VrmRuntime, VrmRuntimeInput, VrmTrackingInput, VrmView,
+    ArmIkCalibration, ArmIkHandCalibration, BodyTrackingCalibration, HandGripOffset,
+    HandTrackingCalibration, LookAtInput, VrmRenderState, VrmRuntime, VrmRuntimeInput,
+    VrmTrackingInput, VrmView,
 };
 
 pub const MODEL_TO_WORLD_SCALE: f32 = 1.0 / 12.5;
@@ -31,12 +32,22 @@ pub struct ModelRenderData<'a> {
     pub visible_materials: Vec<bool>,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ArmIkDebugSnapshot {
+    pub left_auto_wrist_offset_model: Vec3,
+    pub right_auto_wrist_offset_model: Vec3,
+    pub left_wrist_error_cm: f32,
+    pub right_wrist_error_cm: f32,
+}
+
 pub struct AvatarRig {
     model_path: PathBuf,
     assets: SceneAssets,
     runtime: VrmRuntime,
     current_view_anchor_model: Vec3,
     last_tracking: VrmTrackingInput,
+    hand_calibration: HandTrackingCalibration,
+    arm_ik_calibration: ArmIkCalibration,
 }
 
 impl AvatarRig {
@@ -74,6 +85,8 @@ impl AvatarRig {
             runtime,
             current_view_anchor_model,
             last_tracking: VrmTrackingInput::default(),
+            hand_calibration: demo_hand_calibration(),
+            arm_ik_calibration: demo_arm_ik_calibration(),
         })
     }
 
@@ -89,10 +102,37 @@ impl AvatarRig {
         self.last_tracking
     }
 
+    pub fn hand_calibration(&self) -> HandTrackingCalibration {
+        self.hand_calibration
+    }
+
+    pub fn set_hand_calibration(&mut self, calibration: HandTrackingCalibration) {
+        self.hand_calibration = calibration;
+    }
+
+    pub fn arm_ik_calibration(&self) -> ArmIkCalibration {
+        self.arm_ik_calibration
+    }
+
+    pub fn set_arm_ik_calibration(&mut self, calibration: ArmIkCalibration) {
+        self.arm_ik_calibration = calibration;
+    }
+
+    pub fn arm_ik_debug_snapshot(&self) -> ArmIkDebugSnapshot {
+        let output = self.runtime.output();
+        ArmIkDebugSnapshot {
+            left_auto_wrist_offset_model: output.left_auto_wrist_offset_model,
+            right_auto_wrist_offset_model: output.right_auto_wrist_offset_model,
+            left_wrist_error_cm: output.left_wrist_error_cm,
+            right_wrist_error_cm: output.right_wrist_error_cm,
+        }
+    }
+
     pub fn process(&mut self, runtime_tracking: VrmTrackingInput, delta_time: f32) {
         self.runtime.process(VrmRuntimeInput {
             tracking: Some(runtime_tracking),
-            hand_calibration: demo_hand_calibration(),
+            hand_calibration: self.hand_calibration,
+            arm_ik_calibration: self.arm_ik_calibration,
             body_calibration: demo_body_calibration(),
             look_at: LookAtInput::default(),
             expression_weights: HashMap::new(),
@@ -186,9 +226,11 @@ fn demo_hand_calibration() -> HandTrackingCalibration {
     HandTrackingCalibration {
         left: HandGripOffset {
             position_offset: LEFT_GRIP_TO_PALM_XR,
+            orientation_offset: Quat::IDENTITY,
         },
         right: HandGripOffset {
             position_offset: RIGHT_GRIP_TO_PALM_XR,
+            orientation_offset: Quat::IDENTITY,
         },
     }
 }
@@ -199,5 +241,13 @@ fn demo_body_calibration() -> BodyTrackingCalibration {
         vertical_translation_follow_gain: 1.0,
         body_translation_clamp_model: -1.0,
         ..BodyTrackingCalibration::default()
+    }
+}
+
+fn demo_arm_ik_calibration() -> ArmIkCalibration {
+    ArmIkCalibration {
+        left: ArmIkHandCalibration::default(),
+        right: ArmIkHandCalibration::default(),
+        forearm_twist_ratio: 0.4,
     }
 }

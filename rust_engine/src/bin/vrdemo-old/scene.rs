@@ -2,9 +2,10 @@ use std::path::Path;
 
 use anyhow::Result;
 use glam::Mat4;
+use mmd_engine::vrm_runtime::{ArmIkCalibration, HandTrackingCalibration};
 
 use crate::avatar_rig::AvatarRig;
-pub use crate::avatar_rig::{ModelRenderData, SceneAssets};
+pub use crate::avatar_rig::{ArmIkDebugSnapshot, ModelRenderData, SceneAssets};
 use crate::room::DemoRoom;
 pub use crate::room::RoomMesh;
 use crate::space::SpaceState;
@@ -51,7 +52,7 @@ impl AvatarScene {
 
     pub fn update(&mut self, tracking: &TrackingFrame, delta_time: f32) {
         self.space.observe_raw_tracking(*tracking);
-        self.space.update_locomotion(tracking);
+        self.space.update_locomotion(tracking, delta_time);
         self.space
             .sync_tracking_from_head(tracking.head, self.avatar.current_view_anchor_model());
         let runtime_tracking = self
@@ -98,5 +99,25 @@ impl AvatarScene {
 
     pub fn summary_text(&self, runtime_label: &str) -> String {
         self.avatar.summary_text(runtime_label)
+    }
+
+    pub fn arm_ik_calibration(&self) -> ArmIkCalibration {
+        self.avatar.arm_ik_calibration()
+    }
+
+    pub fn hand_calibration(&self) -> HandTrackingCalibration {
+        self.avatar.hand_calibration()
+    }
+
+    pub fn set_hand_calibration(&mut self, calibration: HandTrackingCalibration) {
+        self.avatar.set_hand_calibration(calibration);
+    }
+
+    pub fn set_arm_ik_calibration(&mut self, calibration: ArmIkCalibration) {
+        self.avatar.set_arm_ik_calibration(calibration);
+    }
+
+    pub fn arm_ik_debug_snapshot(&self) -> ArmIkDebugSnapshot {
+        self.avatar.arm_ik_debug_snapshot()
     }
 }

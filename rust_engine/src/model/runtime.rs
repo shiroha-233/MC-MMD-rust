@@ -5,7 +5,9 @@ use crate::morph::MorphManager;
 use crate::physics::MMDPhysics;
 use crate::skeleton::BoneManager;
 use crate::vr::{VrDebugState, VrIkSolver, VrTrackingFrame};
-use crate::vrm_runtime::{VrmModelRuntimeState, VrmRuntimeInput, VrmRuntimeOutput};
+use crate::vrm_runtime::{
+    ArmIkCalibration, VrmModelRuntimeState, VrmRuntimeInput, VrmRuntimeOutput,
+};
 use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -2384,13 +2386,18 @@ impl MmdModel {
     pub fn set_vr_tracking_data(&mut self, data: &[f32]) {
         if data.len() == 21 {
             self.vr_tracking_data.copy_from_slice(data);
-            let calibration = self
+            let arm_ik_calibration = self
+                .vr_tracking_frame
+                .map(|frame| frame.arm_ik_calibration)
+                .unwrap_or_else(ArmIkCalibration::default);
+            let body_calibration = self
                 .vr_tracking_frame
                 .map(|frame| frame.body_calibration)
                 .unwrap_or_default();
             self.vr_tracking_frame = Some(VrTrackingFrame::from_tracking_packet(
                 &self.vr_tracking_data,
-                calibration,
+                arm_ik_calibration,
+                body_calibration,
             ));
         }
     }
@@ -2685,6 +2692,70 @@ impl MmdModel {
 impl Default for MmdModel {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::vr::{VrTrackedPose, XR_TO_MODEL_SCALE};
+    use crate::vrm_runtime::{ArmIkHandCalibration, BodyTrackingCalibration};
+
+    #[test]
+    fn set_vr_tracking_data_should_preserve_arm_and_body_calibration() {
+        let mut model = MmdModel::new();
+        let arm_ik_calibration = ArmIkCalibration {
+            left: ArmIkHandCalibration {
+                wrist_offset_model: Vec3::new(1.0, 2.0, 3.0),
+            },
+            right: ArmIkHandCalibration {
+                wrist_offset_model: Vec3::new(-1.0, -2.0, -3.0),
+            },
+            forearm_twist_ratio: 0.75,
+        };
+        let body_calibration = BodyTrackingCalibration {
+            head_rest_anchor_model: Vec3::new(0.0, 17.0, 0.0),
+            shoulder_width_model: XR_TO_MODEL_SCALE * 0.3,
+            shoulder_depth_model: XR_TO_MODEL_SCALE * 0.08,
+            body_yaw_follow_gain: 0.65,
+            horizontal_translation_follow_gain: 0.9,
+            vertical_translation_follow_gain: 0.95,
+            body_translation_clamp_model: 2.0,
+            shoulder_follow_gain: 0.45,
+        };
+        model.set_vr_tracking_frame(Some(VrTrackingFrame {
+            head: VrTrackedPose::default(),
+            right_palm: VrTrackedPose::default(),
+            left_palm: VrTrackedPose::default(),
+            arm_ik_calibration,
+            body_calibration,
+        }));
+
+        model.set_vr_tracking_data(&[0.0; 21]);
+
+        let frame = model
+            .vr_tracking_frame
+            .expect("tracking frame should exist");
+        assert_eq!(
+            frame.arm_ik_calibration.left.wrist_offset_model,
+            arm_ik_calibration.left.wrist_offset_model
+        );
+        assert_eq!(
+            frame.arm_ik_calibration.right.wrist_offset_model,
+            arm_ik_calibration.right.wrist_offset_model
+        );
+        assert_eq!(
+            frame.arm_ik_calibration.forearm_twist_ratio,
+            arm_ik_calibration.forearm_twist_ratio
+        );
+        assert_eq!(
+            frame.body_calibration.head_rest_anchor_model,
+            body_calibration.head_rest_anchor_model
+        );
+        assert_eq!(
+            frame.body_calibration.shoulder_width_model,
+            body_calibration.shoulder_width_model
+        );
     }
 }
 

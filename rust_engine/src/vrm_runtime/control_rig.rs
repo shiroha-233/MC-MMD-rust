@@ -6,7 +6,8 @@ use crate::model::MmdModel;
 use crate::vr::{VrTrackedPose, VrTrackingFrame, XR_TO_MODEL_SCALE};
 
 use super::tracking::{
-    BodyTrackingCalibration, HandGripOffset, HandTrackingCalibration, TrackedPose, VrmTrackingInput,
+    ArmIkCalibration, BodyTrackingCalibration, HandGripOffset, HandTrackingCalibration,
+    TrackedPose, VrmTrackingInput,
 };
 
 const BONE_HEAD_NAMES: &[&str] = &["頭", "head", "Head"];
@@ -72,6 +73,7 @@ impl ControlRigRuntime {
         model: &mut MmdModel,
         tracking: Option<VrmTrackingInput>,
         hand_calibration: HandTrackingCalibration,
+        arm_ik_calibration: ArmIkCalibration,
         body_calibration: BodyTrackingCalibration,
     ) {
         let Some(tracking) = tracking else {
@@ -81,7 +83,12 @@ impl ControlRigRuntime {
         };
 
         let resolved_body = body_calibration.resolve_with_defaults(self.default_body_calibration);
-        let frame = build_tracking_frame(tracking, hand_calibration, resolved_body);
+        let frame = build_tracking_frame(
+            tracking,
+            hand_calibration,
+            arm_ik_calibration,
+            resolved_body,
+        );
 
         model.set_vr_enabled(true);
         model.set_vr_ik_strength(1.0);
@@ -92,6 +99,7 @@ impl ControlRigRuntime {
 fn build_tracking_frame(
     tracking: VrmTrackingInput,
     hand_calibration: HandTrackingCalibration,
+    arm_ik_calibration: ArmIkCalibration,
     body_calibration: BodyTrackingCalibration,
 ) -> VrTrackingFrame {
     VrTrackingFrame {
@@ -104,17 +112,19 @@ fn build_tracking_frame(
             tracking.left_hand,
             hand_calibration.left,
         )),
+        arm_ik_calibration,
         body_calibration,
     }
 }
 
 fn apply_hand_grip_offset(pose: TrackedPose, hand_offset: HandGripOffset) -> TrackedPose {
-    if !pose.valid || hand_offset.position_offset == Vec3::ZERO {
+    if !pose.valid {
         return pose;
     }
 
     TrackedPose {
         position: pose.position + pose.orientation * hand_offset.position_offset,
+        orientation: (pose.orientation * hand_offset.orientation_offset).normalize(),
         ..pose
     }
 }
@@ -207,6 +217,7 @@ mod tests {
         let hand_calibration = HandTrackingCalibration {
             right: HandGripOffset {
                 position_offset: Vec3::new(0.0, -0.05, -0.07),
+                ..HandGripOffset::default()
             },
             ..HandTrackingCalibration::default()
         };
@@ -214,6 +225,7 @@ mod tests {
         let frame = build_tracking_frame(
             tracking,
             hand_calibration,
+            ArmIkCalibration::default(),
             BodyTrackingCalibration::default(),
         );
         let basis = Quat::from_rotation_y(std::f32::consts::PI);
@@ -223,6 +235,39 @@ mod tests {
             * XR_TO_MODEL_SCALE;
 
         assert_vec3_eq(frame.right_palm.position, expected_position);
+    }
+
+    #[test]
+    fn build_tracking_frame_should_apply_hand_rotation_before_coordinate_conversion() {
+        let right_hand = TrackedPose {
+            position: Vec3::new(1.0, 2.0, 3.0),
+            orientation: Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+            valid: true,
+        };
+        let hand_calibration = HandTrackingCalibration {
+            right: HandGripOffset {
+                orientation_offset: Quat::from_rotation_x(std::f32::consts::FRAC_PI_4),
+                ..HandGripOffset::default()
+            },
+            ..HandTrackingCalibration::default()
+        };
+
+        let frame = build_tracking_frame(
+            VrmTrackingInput {
+                head: TrackedPose::identity(),
+                left_hand: TrackedPose::identity(),
+                right_hand,
+            },
+            hand_calibration,
+            ArmIkCalibration::default(),
+            BodyTrackingCalibration::default(),
+        );
+        let basis = Quat::from_rotation_y(std::f32::consts::PI);
+        let expected_rotation =
+            (basis * (right_hand.orientation * hand_calibration.right.orientation_offset) * basis)
+                .normalize();
+
+        assert_quat_eq(frame.right_palm.rotation, expected_rotation);
     }
 
     #[test]
@@ -259,6 +304,39 @@ mod tests {
             defaults.body_translation_clamp_model
         );
         assert_eq!(resolved.shoulder_follow_gain, defaults.shoulder_follow_gain);
+    }
+
+    #[test]
+    fn build_tracking_frame_should_pass_arm_ik_calibration_through_unchanged() {
+        let arm_ik_calibration = ArmIkCalibration {
+            left: super::super::tracking::ArmIkHandCalibration {
+                wrist_offset_model: Vec3::new(1.0, 2.0, 3.0),
+            },
+            right: super::super::tracking::ArmIkHandCalibration {
+                wrist_offset_model: Vec3::new(-1.0, -2.0, -3.0),
+            },
+            forearm_twist_ratio: 0.75,
+        };
+
+        let frame = build_tracking_frame(
+            VrmTrackingInput::default(),
+            HandTrackingCalibration::default(),
+            arm_ik_calibration,
+            BodyTrackingCalibration::default(),
+        );
+
+        assert_eq!(
+            frame.arm_ik_calibration.left.wrist_offset_model,
+            arm_ik_calibration.left.wrist_offset_model
+        );
+        assert_eq!(
+            frame.arm_ik_calibration.right.wrist_offset_model,
+            arm_ik_calibration.right.wrist_offset_model
+        );
+        assert_eq!(
+            frame.arm_ik_calibration.forearm_twist_ratio,
+            arm_ik_calibration.forearm_twist_ratio
+        );
     }
 
     #[test]
@@ -347,6 +425,14 @@ mod tests {
         assert!(
             delta.length() < 1e-5,
             "vec mismatch: actual={actual:?} expected={expected:?}",
+        );
+    }
+
+    fn assert_quat_eq(actual: Quat, expected: Quat) {
+        let similarity = actual.dot(expected).abs();
+        assert!(
+            similarity > 1.0 - 1e-5,
+            "quat mismatch: actual={actual:?} expected={expected:?}",
         );
     }
 }

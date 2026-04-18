@@ -38,6 +38,8 @@ pub struct VrmRuntimeOutput {
     pub body_anchor_model: Vec3,
     pub left_palm_target_model: Vec3,
     pub right_palm_target_model: Vec3,
+    pub left_auto_wrist_offset_model: Vec3,
+    pub right_auto_wrist_offset_model: Vec3,
     pub left_wrist_solved_model: Vec3,
     pub right_wrist_solved_model: Vec3,
     pub left_wrist_error_cm: f32,

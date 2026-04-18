@@ -29,15 +29,47 @@ pub struct VrmTrackingInput {
     pub right_hand: TrackedPose,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct HandGripOffset {
     pub position_offset: Vec3,
+    pub orientation_offset: Quat,
+}
+
+impl Default for HandGripOffset {
+    fn default() -> Self {
+        Self {
+            position_offset: Vec3::ZERO,
+            orientation_offset: Quat::IDENTITY,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HandTrackingCalibration {
     pub left: HandGripOffset,
     pub right: HandGripOffset,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ArmIkHandCalibration {
+    pub wrist_offset_model: Vec3,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ArmIkCalibration {
+    pub left: ArmIkHandCalibration,
+    pub right: ArmIkHandCalibration,
+    pub forearm_twist_ratio: f32,
+}
+
+impl Default for ArmIkCalibration {
+    fn default() -> Self {
+        Self {
+            left: ArmIkHandCalibration::default(),
+            right: ArmIkHandCalibration::default(),
+            forearm_twist_ratio: 0.4,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -120,6 +152,7 @@ impl BodyTrackingCalibration {
 pub struct VrmRuntimeInput {
     pub tracking: Option<VrmTrackingInput>,
     pub hand_calibration: HandTrackingCalibration,
+    pub arm_ik_calibration: ArmIkCalibration,
     pub body_calibration: BodyTrackingCalibration,
     pub look_at: LookAtInput,
     pub expression_weights: HashMap<ExpressionKey, f32>,
@@ -132,11 +165,56 @@ impl Default for VrmRuntimeInput {
         Self {
             tracking: None,
             hand_calibration: HandTrackingCalibration::default(),
+            arm_ik_calibration: ArmIkCalibration::default(),
             body_calibration: BodyTrackingCalibration::default(),
             look_at: LookAtInput::default(),
             expression_weights: HashMap::new(),
             first_person: true,
             delta_time: 0.0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn arm_ik_calibration_default_should_use_zero_offsets_and_twist_ratio() {
+        let calibration = ArmIkCalibration::default();
+
+        assert_eq!(calibration.left.wrist_offset_model, Vec3::ZERO);
+        assert_eq!(calibration.right.wrist_offset_model, Vec3::ZERO);
+        assert!((calibration.forearm_twist_ratio - 0.4).abs() < 1e-6);
+    }
+
+    #[test]
+    fn vrm_runtime_input_default_should_include_default_arm_ik_calibration() {
+        let input = VrmRuntimeInput::default();
+
+        assert_eq!(
+            input.hand_calibration.left.orientation_offset,
+            Quat::IDENTITY
+        );
+        assert_eq!(
+            input.hand_calibration.right.orientation_offset,
+            Quat::IDENTITY
+        );
+        assert_eq!(input.arm_ik_calibration.left.wrist_offset_model, Vec3::ZERO);
+        assert_eq!(
+            input.arm_ik_calibration.right.wrist_offset_model,
+            Vec3::ZERO
+        );
+        assert!((input.arm_ik_calibration.forearm_twist_ratio - 0.4).abs() < 1e-6);
+    }
+
+    #[test]
+    fn hand_tracking_calibration_default_should_use_identity_rotation_offsets() {
+        let calibration = HandTrackingCalibration::default();
+
+        assert_eq!(calibration.left.position_offset, Vec3::ZERO);
+        assert_eq!(calibration.right.position_offset, Vec3::ZERO);
+        assert_eq!(calibration.left.orientation_offset, Quat::IDENTITY);
+        assert_eq!(calibration.right.orientation_offset, Quat::IDENTITY);
     }
 }

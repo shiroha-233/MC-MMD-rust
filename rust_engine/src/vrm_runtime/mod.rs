@@ -22,6 +22,6 @@ pub use look_at::{EyeDirection, LookAtInput};
 pub use render_state::{VrmRenderState, VrmView};
 pub use runtime::{RuntimeAssets, VrmRuntime, VrmRuntimeOutput};
 pub use tracking::{
-    BodyTrackingCalibration, HandGripOffset, HandTrackingCalibration, TrackedPose, VrmRuntimeInput,
-    VrmTrackingInput,
+    ArmIkCalibration, ArmIkHandCalibration, BodyTrackingCalibration, HandGripOffset,
+    HandTrackingCalibration, TrackedPose, VrmRuntimeInput, VrmTrackingInput,
 };

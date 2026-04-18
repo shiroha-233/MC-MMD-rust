@@ -1,5 +1,6 @@
 mod app;
 mod avatar_rig;
+mod control_window;
 mod room;
 mod scene;
 mod space;

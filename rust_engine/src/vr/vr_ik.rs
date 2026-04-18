@@ -3,7 +3,7 @@
 use glam::{Mat3, Mat4, Quat, Vec3};
 
 use crate::skeleton::BoneManager;
-use crate::vrm_runtime::BodyTrackingCalibration;
+use crate::vrm_runtime::{ArmIkCalibration, BodyTrackingCalibration};
 
 pub(crate) const XR_TO_MODEL_SCALE: f32 = 12.5;
 const MODEL_TO_WORLD_SCALE: f32 = 1.0 / XR_TO_MODEL_SCALE;
@@ -133,12 +133,14 @@ pub(crate) struct VrTrackingFrame {
     pub(crate) head: VrTrackedPose,
     pub(crate) right_palm: VrTrackedPose,
     pub(crate) left_palm: VrTrackedPose,
+    pub(crate) arm_ik_calibration: ArmIkCalibration,
     pub(crate) body_calibration: BodyTrackingCalibration,
 }
 
 impl VrTrackingFrame {
     pub(crate) fn from_tracking_packet(
         tracking_data: &[f32; 21],
+        arm_ik_calibration: ArmIkCalibration,
         body_calibration: BodyTrackingCalibration,
     ) -> Self {
         Self {
@@ -149,6 +151,7 @@ impl VrTrackingFrame {
             left_palm: VrTrackedPose::from_slice(
                 &tracking_data[TRACK_POINT_SIZE * 2..TRACK_POINT_SIZE * 3],
             ),
+            arm_ik_calibration,
             body_calibration,
         }
     }
@@ -170,6 +173,8 @@ pub(crate) struct VrDebugState {
     pub(crate) body_anchor_model: Vec3,
     pub(crate) left_palm_target_model: Vec3,
     pub(crate) right_palm_target_model: Vec3,
+    pub(crate) left_auto_wrist_offset_model: Vec3,
+    pub(crate) right_auto_wrist_offset_model: Vec3,
     pub(crate) left_wrist_solved_model: Vec3,
     pub(crate) right_wrist_solved_model: Vec3,
     pub(crate) left_wrist_error_cm: f32,
@@ -203,12 +208,14 @@ impl HandSide {
 struct WristTarget {
     position: Vec3,
     rotation: Quat,
+    auto_wrist_offset_model: Vec3,
 }
 
 #[derive(Clone, Copy, Debug)]
 struct HandBindPose {
     rotation_offset: Quat,
     position_offset: Vec3,
+    wrist_from_palm_model: Vec3,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -219,8 +226,61 @@ struct BodySolveState {
 
 #[derive(Clone, Copy, Debug, Default)]
 struct ArmSolveResult {
+    auto_wrist_offset_model: Vec3,
+    wrist_target_model: Vec3,
     solved_wrist_model: Vec3,
     wrist_error_cm: f32,
+}
+
+#[derive(Clone, Debug)]
+struct LowerArmChain {
+    indices: Vec<usize>,
+    old_positions: Vec<Vec3>,
+    segment_lengths: Vec<f32>,
+    total_length: f32,
+}
+
+impl LowerArmChain {
+    fn from_bones(bones: &BoneManager, elbow_idx: usize, wrist_idx: usize) -> Self {
+        let indices = collect_parent_chain(bones, elbow_idx, wrist_idx)
+            .filter(|chain| chain.len() >= 2)
+            .unwrap_or_else(|| vec![elbow_idx, wrist_idx]);
+        let old_positions = indices
+            .iter()
+            .map(|&index| mat4_translation(bones.get_global_transform(index)))
+            .collect::<Vec<_>>();
+        let segment_lengths = old_positions
+            .windows(2)
+            .map(|pair| (pair[1] - pair[0]).length())
+            .collect::<Vec<_>>();
+        let total_length = segment_lengths.iter().copied().sum();
+        Self {
+            indices,
+            old_positions,
+            segment_lengths,
+            total_length,
+        }
+    }
+
+    fn target_positions(&self, elbow_target: Vec3, wrist_target: Vec3) -> Vec<Vec3> {
+        let direction = (wrist_target - elbow_target).normalize_or_zero();
+        let mut positions = Vec::with_capacity(self.indices.len());
+        positions.push(elbow_target);
+
+        let mut traveled = 0.0;
+        for length in &self.segment_lengths {
+            traveled += *length;
+            positions.push(elbow_target + direction * traveled);
+        }
+        if let Some(last) = positions.last_mut() {
+            *last = wrist_target;
+        }
+        positions
+    }
+
+    fn segment_count(&self) -> usize {
+        self.indices.len().saturating_sub(1)
+    }
 }
 
 struct BoneCache {
@@ -271,12 +331,16 @@ impl Default for BoneCache {
 
 pub struct VrIkSolver {
     cache: BoneCache,
+    left_zero_wrist_offset_warned: bool,
+    right_zero_wrist_offset_warned: bool,
 }
 
 impl VrIkSolver {
     pub fn new() -> Self {
         Self {
             cache: BoneCache::default(),
+            left_zero_wrist_offset_warned: false,
+            right_zero_wrist_offset_warned: false,
         }
     }
 
@@ -326,8 +390,13 @@ impl VrIkSolver {
     }
 
     pub fn solve(&mut self, bones: &mut BoneManager, tracking_data: &[f32; 21], strength: f32) {
+        let arm_ik_calibration = ArmIkCalibration::default();
         let body_calibration = BodyTrackingCalibration::default();
-        let frame = VrTrackingFrame::from_tracking_packet(tracking_data, body_calibration);
+        let frame = VrTrackingFrame::from_tracking_packet(
+            tracking_data,
+            arm_ik_calibration,
+            body_calibration,
+        );
         let _ = self.solve_tracking_frame(bones, &frame, strength);
     }
 
@@ -351,6 +420,7 @@ impl VrIkSolver {
             self.cache.right_elbow,
             self.cache.right_wrist,
             &frame.right_palm,
+            &frame.arm_ik_calibration,
             &frame.body_calibration,
             body_state.head_residual_model,
             strength,
@@ -363,21 +433,50 @@ impl VrIkSolver {
             self.cache.left_elbow,
             self.cache.left_wrist,
             &frame.left_palm,
+            &frame.arm_ik_calibration,
             &frame.body_calibration,
             body_state.head_residual_model,
             strength,
             true,
         );
 
+        // Re-run the standard before-physics transform pass so append/twist helper bones
+        // can react to the updated arm/head/body animation values we just wrote.
+        bones.update_transforms(false);
+
+        let left_wrist_solved_model = self
+            .cache
+            .left_wrist
+            .map(|index| mat4_translation(bones.get_global_transform(index)))
+            .unwrap_or(left_result.solved_wrist_model);
+        let right_wrist_solved_model = self
+            .cache
+            .right_wrist
+            .map(|index| mat4_translation(bones.get_global_transform(index)))
+            .unwrap_or(right_result.solved_wrist_model);
+
         VrDebugState {
             head_local_model: frame.head.position,
-            body_anchor_model: body_state.body_anchor_model,
+            body_anchor_model: self
+                .body_anchor_index()
+                .map(|index| mat4_translation(bones.get_global_transform(index)))
+                .unwrap_or(body_state.body_anchor_model),
             left_palm_target_model: frame.left_palm.position,
             right_palm_target_model: frame.right_palm.position,
-            left_wrist_solved_model: left_result.solved_wrist_model,
-            right_wrist_solved_model: right_result.solved_wrist_model,
-            left_wrist_error_cm: left_result.wrist_error_cm,
-            right_wrist_error_cm: right_result.wrist_error_cm,
+            left_auto_wrist_offset_model: left_result.auto_wrist_offset_model,
+            right_auto_wrist_offset_model: right_result.auto_wrist_offset_model,
+            left_wrist_solved_model,
+            right_wrist_solved_model,
+            left_wrist_error_cm: self
+                .cache
+                .left_wrist
+                .map(|_| wrist_error_cm(left_wrist_solved_model, left_result.wrist_target_model))
+                .unwrap_or(left_result.wrist_error_cm),
+            right_wrist_error_cm: self
+                .cache
+                .right_wrist
+                .map(|_| wrist_error_cm(right_wrist_solved_model, right_result.wrist_target_model))
+                .unwrap_or(right_result.wrist_error_cm),
         }
     }
 
@@ -467,13 +566,14 @@ impl VrIkSolver {
     }
 
     fn solve_arm_ik(
-        &self,
+        &mut self,
         bones: &mut BoneManager,
         shoulder_idx: Option<usize>,
         arm_idx: Option<usize>,
         elbow_idx: Option<usize>,
         wrist_idx: Option<usize>,
         target: &VrTrackedPose,
+        arm_ik_calibration: &ArmIkCalibration,
         calibration: &BodyTrackingCalibration,
         head_residual_model: Vec3,
         strength: f32,
@@ -488,17 +588,26 @@ impl VrIkSolver {
         };
 
         let arm_pos = mat4_translation(bones.get_global_transform(arm_idx));
-        let elbow_pos = mat4_translation(bones.get_global_transform(elbow_idx));
-        let wrist_pos = mat4_translation(bones.get_global_transform(wrist_idx));
-
+        let lower_chain = LowerArmChain::from_bones(bones, elbow_idx, wrist_idx);
+        let elbow_pos = lower_chain
+            .old_positions
+            .first()
+            .copied()
+            .unwrap_or_else(|| mat4_translation(bones.get_global_transform(elbow_idx)));
         let upper_len = (elbow_pos - arm_pos).length();
-        let lower_len = (wrist_pos - elbow_pos).length();
+        let lower_len = lower_chain.total_length;
         if upper_len < 1e-4 || lower_len < 1e-4 {
             return ArmSolveResult::default();
         }
 
         let side = HandSide::from_left(is_left);
-        let wrist_target = resolve_wrist_target(bones, wrist_idx, target, side);
+        let wrist_target = self.resolve_wrist_target(
+            bones,
+            wrist_idx,
+            target,
+            side,
+            manual_wrist_offset(arm_ik_calibration, side),
+        );
         let arm_origin = self.resolve_arm_origin(
             bones,
             shoulder_idx,
@@ -544,27 +653,25 @@ impl VrIkSolver {
             + hint_dir * (angle_a.sin() * upper_len);
         let elbow_to_target = (target_pos - elbow_new).normalize_or_zero();
         let wrist_new = elbow_new + elbow_to_target * lower_len;
+        let lower_chain_targets = lower_chain.target_positions(elbow_new, wrist_new);
 
-        self.apply_arm_result(
+        let solved_wrist_model = self.apply_arm_result(
             bones,
             arm_idx,
-            elbow_idx,
-            wrist_idx,
             arm_origin,
-            arm_pos,
-            elbow_pos,
-            wrist_pos,
             elbow_new,
-            wrist_new,
+            &lower_chain,
+            &lower_chain_targets,
             &wrist_target,
+            arm_ik_calibration.forearm_twist_ratio.clamp(0.0, 1.0),
             strength,
         );
 
         ArmSolveResult {
-            solved_wrist_model: wrist_new,
-            wrist_error_cm: (wrist_new - wrist_target.position).length()
-                * MODEL_TO_WORLD_SCALE
-                * 100.0,
+            auto_wrist_offset_model: wrist_target.auto_wrist_offset_model,
+            wrist_target_model: wrist_target.position,
+            solved_wrist_model,
+            wrist_error_cm: wrist_error_cm(solved_wrist_model, wrist_target.position),
         }
     }
 
@@ -572,56 +679,85 @@ impl VrIkSolver {
         &self,
         bones: &mut BoneManager,
         arm_idx: usize,
-        elbow_idx: usize,
-        wrist_idx: usize,
         arm_origin: Vec3,
-        old_arm: Vec3,
-        old_elbow: Vec3,
-        old_wrist: Vec3,
         new_elbow: Vec3,
-        new_wrist: Vec3,
+        lower_chain: &LowerArmChain,
+        lower_chain_targets: &[Vec3],
         wrist_target: &WristTarget,
+        forearm_twist_ratio: f32,
         strength: f32,
-    ) {
-        let arm_rot = mat4_rotation(bones.get_global_transform(arm_idx));
-        let new_arm_rot = rotate_bone_direction(arm_origin, old_elbow, new_elbow, arm_rot);
+    ) -> Vec3 {
+        let arm_transform = bones.get_global_transform(arm_idx);
+        let arm_rot = mat4_rotation(arm_transform);
+        let arm_position = mat4_translation(arm_transform);
+        let current_elbow = lower_chain
+            .indices
+            .first()
+            .map(|&index| mat4_translation(bones.get_global_transform(index)))
+            .unwrap_or(new_elbow);
+        let new_arm_rot = rotate_bone_direction(arm_position, current_elbow, new_elbow, arm_rot);
+        let lower_segment_count = lower_chain.segment_count().max(1) as f32;
 
-        let elbow_rot = mat4_rotation(bones.get_global_transform(elbow_idx));
-        let new_elbow_rot = rotate_bone_direction(old_elbow, old_wrist, new_wrist, elbow_rot);
+        bones.set_global_transform(
+            arm_idx,
+            Mat4::from_rotation_translation(
+                arm_rot.slerp(new_arm_rot, strength.min(1.0)),
+                if strength >= 1.0 {
+                    arm_origin
+                } else {
+                    arm_position.lerp(arm_origin, strength)
+                },
+            ),
+        );
 
-        if strength >= 1.0 {
-            bones.set_global_transform(
-                arm_idx,
-                Mat4::from_rotation_translation(new_arm_rot, arm_origin),
-            );
-            bones.set_global_transform(
-                elbow_idx,
-                Mat4::from_rotation_translation(new_elbow_rot, new_elbow),
-            );
-            bones.set_global_transform(
-                wrist_idx,
-                Mat4::from_rotation_translation(wrist_target.rotation, new_wrist),
-            );
-        } else {
-            let blend = |cur_rot: Quat, new_rot: Quat, cur_pos: Vec3, new_pos: Vec3| -> Mat4 {
-                Mat4::from_rotation_translation(
-                    cur_rot.slerp(new_rot, strength),
-                    cur_pos.lerp(new_pos, strength),
+        for (segment_index, &bone_idx) in lower_chain.indices.iter().enumerate() {
+            let current_transform = bones.get_global_transform(bone_idx);
+            let current_position = mat4_translation(current_transform);
+            let current_rotation = mat4_rotation(current_transform);
+            let target_rotation = if segment_index + 1 < lower_chain.indices.len() {
+                let child_idx = lower_chain.indices[segment_index + 1];
+                let current_child_position =
+                    mat4_translation(bones.get_global_transform(child_idx));
+                let target_direction = (lower_chain_targets[segment_index + 1]
+                    - lower_chain_targets[segment_index])
+                    .normalize_or_zero();
+                let current_segment_length = (current_child_position - current_position).length();
+                let desired_child_position =
+                    current_position + target_direction * current_segment_length;
+                let solved_rotation = rotate_bone_direction(
+                    current_position,
+                    current_child_position,
+                    desired_child_position,
+                    current_rotation,
+                );
+                let forearm_axis_world =
+                    (desired_child_position - current_position).normalize_or_zero();
+                let twist_share = forearm_twist_ratio
+                    * ((segment_index + 1) as f32 / lower_segment_count).clamp(0.0, 1.0);
+                distribute_forearm_twist(
+                    solved_rotation,
+                    wrist_target.rotation,
+                    forearm_axis_world,
+                    twist_share,
                 )
+            } else {
+                wrist_target.rotation
             };
 
-            bones.set_global_transform(arm_idx, blend(arm_rot, new_arm_rot, old_arm, arm_origin));
             bones.set_global_transform(
-                elbow_idx,
-                blend(elbow_rot, new_elbow_rot, old_elbow, new_elbow),
-            );
-
-            let cur_wrist_rot = mat4_rotation(bones.get_global_transform(wrist_idx));
-            bones.set_global_transform(
-                wrist_idx,
-                blend(cur_wrist_rot, wrist_target.rotation, old_wrist, new_wrist),
+                bone_idx,
+                Mat4::from_rotation_translation(
+                    current_rotation.slerp(target_rotation, strength.min(1.0)),
+                    current_position,
+                ),
             );
         }
+
+        lower_chain
+            .indices
+            .last()
+            .map(|&index| mat4_translation(bones.get_global_transform(index)))
+            .unwrap_or(new_elbow)
     }
 
     fn resolve_arm_origin(
@@ -691,6 +827,60 @@ impl VrIkSolver {
             .or(self.cache.chest)
             .or(self.cache.upper_chest)
     }
+
+    fn resolve_wrist_target(
+        &mut self,
+        bones: &BoneManager,
+        wrist_idx: usize,
+        target: &VrTrackedPose,
+        side: HandSide,
+        manual_wrist_offset_model: Vec3,
+    ) -> WristTarget {
+        let bind_pose = self.derive_hand_bind_pose(bones, wrist_idx, side);
+        let rotation_offset =
+            (bind_pose.rotation_offset * controller_mount_rotation(side)).normalize();
+        WristTarget {
+            position: target.position
+                + target.rotation * bind_pose.position_offset
+                + manual_wrist_offset_model,
+            rotation: (target.rotation * rotation_offset).normalize(),
+            auto_wrist_offset_model: bind_pose.wrist_from_palm_model,
+        }
+    }
+
+    fn derive_hand_bind_pose(
+        &mut self,
+        bones: &BoneManager,
+        wrist_idx: usize,
+        side: HandSide,
+    ) -> HandBindPose {
+        if let Some(bind_pose) = derive_hand_bind_pose_from_finger_axes(bones, wrist_idx, side) {
+            return bind_pose;
+        }
+
+        if let Some(bind_pose) = derive_hand_bind_pose_from_wrist_children(bones, wrist_idx, side) {
+            return bind_pose;
+        }
+
+        self.warn_zero_wrist_offset_once(side);
+        fallback_hand_bind_pose(side)
+    }
+
+    fn warn_zero_wrist_offset_once(&mut self, side: HandSide) {
+        let warned = match side {
+            HandSide::Left => &mut self.left_zero_wrist_offset_warned,
+            HandSide::Right => &mut self.right_zero_wrist_offset_warned,
+        };
+        if *warned {
+            return;
+        }
+
+        *warned = true;
+        log::warn!(
+            "VR IK could not derive a wrist offset for {:?} hand; falling back to zero palm-to-wrist offset",
+            side
+        );
+    }
 }
 
 #[inline]
@@ -722,6 +912,17 @@ fn clamp_scalar(value: f32, limit: f32) -> f32 {
     }
 }
 
+fn wrist_error_cm(actual_wrist_model: Vec3, wrist_target_model: Vec3) -> f32 {
+    (actual_wrist_model - wrist_target_model).length() * MODEL_TO_WORLD_SCALE * 100.0
+}
+
+fn manual_wrist_offset(calibration: &ArmIkCalibration, side: HandSide) -> Vec3 {
+    match side {
+        HandSide::Left => calibration.left.wrist_offset_model,
+        HandSide::Right => calibration.right.wrist_offset_model,
+    }
+}
+
 fn rotate_bone_direction(from: Vec3, old_to: Vec3, new_to: Vec3, current_rot: Quat) -> Quat {
     let old_dir = (old_to - from).normalize_or_zero();
     let new_dir = (new_to - from).normalize_or_zero();
@@ -732,22 +933,47 @@ fn rotate_bone_direction(from: Vec3, old_to: Vec3, new_to: Vec3, current_rot: Qu
     (delta * current_rot).normalize()
 }
 
-fn find_first_existing(bones: &BoneManager, names: &[&str]) -> Option<usize> {
-    names.iter().find_map(|name| bones.find_bone_by_name(name))
+fn distribute_forearm_twist(
+    lower_arm_rotation: Quat,
+    wrist_rotation: Quat,
+    forearm_axis_world: Vec3,
+    forearm_twist_ratio: f32,
+) -> Quat {
+    if forearm_twist_ratio <= 1e-6 || forearm_axis_world.length_squared() <= 1e-6 {
+        return lower_arm_rotation;
+    }
+
+    let relative_to_wrist = (lower_arm_rotation.inverse() * wrist_rotation).normalize();
+    let forearm_axis_local =
+        (lower_arm_rotation.inverse() * forearm_axis_world).normalize_or_zero();
+    if forearm_axis_local.length_squared() <= 1e-6 {
+        return lower_arm_rotation;
+    }
+
+    let twist_local = extract_twist(relative_to_wrist, forearm_axis_local);
+    let partial_twist_local =
+        Quat::IDENTITY.slerp(twist_local, forearm_twist_ratio.clamp(0.0, 1.0));
+    (lower_arm_rotation * partial_twist_local).normalize()
 }
 
-fn resolve_wrist_target(
-    bones: &BoneManager,
-    wrist_idx: usize,
-    target: &VrTrackedPose,
-    side: HandSide,
-) -> WristTarget {
-    let bind_pose = derive_hand_bind_pose(bones, wrist_idx, side);
-    let rotation_offset = (bind_pose.rotation_offset * controller_mount_rotation(side)).normalize();
-    WristTarget {
-        position: target.position + target.rotation * bind_pose.position_offset,
-        rotation: (target.rotation * rotation_offset).normalize(),
+fn extract_twist(rotation: Quat, axis_local: Vec3) -> Quat {
+    let axis_local = axis_local.normalize_or_zero();
+    if axis_local.length_squared() <= 1e-6 {
+        return Quat::IDENTITY;
     }
+
+    let imag = Vec3::new(rotation.x, rotation.y, rotation.z);
+    let projected = axis_local * imag.dot(axis_local);
+    let twist = Quat::from_xyzw(projected.x, projected.y, projected.z, rotation.w);
+    if twist.length_squared() <= 1e-6 {
+        Quat::IDENTITY
+    } else {
+        twist.normalize()
+    }
+}
+
+fn find_first_existing(bones: &BoneManager, names: &[&str]) -> Option<usize> {
+    names.iter().find_map(|name| bones.find_bone_by_name(name))
 }
 
 fn controller_mount_rotation(side: HandSide) -> Quat {
@@ -756,16 +982,23 @@ fn controller_mount_rotation(side: HandSide) -> Quat {
     }
 }
 
-fn derive_hand_bind_pose(bones: &BoneManager, wrist_idx: usize, side: HandSide) -> HandBindPose {
+fn derive_hand_bind_pose_from_finger_axes(
+    bones: &BoneManager,
+    wrist_idx: usize,
+    side: HandSide,
+) -> Option<HandBindPose> {
     let wrist_pos = bones
         .get_bone(wrist_idx)
         .map(|bone| bone.initial_position)
         .unwrap_or(Vec3::ZERO);
     let finger_roots = hand_finger_root_positions(bones, side);
+    if finger_roots.is_empty() {
+        return None;
+    }
     let thumb_pos = hand_thumb_root_position(bones, side);
     let little_pos = hand_little_root_position(bones, side);
 
-    let knuckle_center = average_points(&finger_roots).unwrap_or(wrist_pos + Vec3::Y);
+    let knuckle_center = average_points(&finger_roots)?;
     let finger_dir = normalize_with_fallback(knuckle_center - wrist_pos, Vec3::Y);
     let little_to_thumb =
         derive_little_to_thumb_axis(wrist_pos, thumb_pos, little_pos, finger_dir, side);
@@ -782,13 +1015,146 @@ fn derive_hand_bind_pose(bones: &BoneManager, wrist_idx: usize, side: HandSide) 
         let wrist_from_palm = wrist_pos - palm_anchor;
         let position_offset =
             controller_mount_rotation(side).inverse() * rotation_offset.inverse() * wrist_from_palm;
-        HandBindPose {
+        Some(HandBindPose {
             rotation_offset,
             position_offset,
-        }
+            wrist_from_palm_model: wrist_from_palm,
+        })
     } else {
-        fallback_hand_bind_pose(side)
+        None
     }
+}
+
+fn derive_hand_bind_pose_from_wrist_children(
+    bones: &BoneManager,
+    wrist_idx: usize,
+    side: HandSide,
+) -> Option<HandBindPose> {
+    let wrist_pos = bones
+        .get_bone(wrist_idx)
+        .map(|bone| bone.initial_position)
+        .unwrap_or(Vec3::ZERO);
+    let child_positions = filtered_wrist_child_positions(bones, wrist_idx);
+    let palm_anchor = average_points(&child_positions)?;
+    let wrist_from_palm = wrist_pos - palm_anchor;
+    let fallback = fallback_hand_bind_pose(side);
+    let position_offset = controller_mount_rotation(side).inverse()
+        * fallback.rotation_offset.inverse()
+        * wrist_from_palm;
+
+    Some(HandBindPose {
+        position_offset,
+        wrist_from_palm_model: wrist_from_palm,
+        ..fallback
+    })
+}
+
+fn filtered_wrist_child_positions(bones: &BoneManager, wrist_idx: usize) -> Vec<Vec3> {
+    let mut preferred = Vec::new();
+    let mut fallback = Vec::new();
+
+    for &child_idx in bones.children_of(wrist_idx) {
+        let Some(child) = bones.get_bone(child_idx) else {
+            continue;
+        };
+        if should_ignore_wrist_child(child) {
+            continue;
+        }
+        let offset = child.initial_position
+            - bones
+                .get_bone(wrist_idx)
+                .map(|bone| bone.initial_position)
+                .unwrap_or(Vec3::ZERO);
+        if offset.length_squared() <= 1e-6 {
+            continue;
+        }
+
+        fallback.push(child.initial_position);
+        if looks_like_palm_child_name(&child.name) {
+            preferred.push(child.initial_position);
+        }
+    }
+
+    if preferred.is_empty() {
+        fallback
+    } else {
+        preferred
+    }
+}
+
+fn should_ignore_wrist_child(bone: &crate::skeleton::BoneLink) -> bool {
+    if bone.append_config.is_some() || bone.is_append_rotate() || bone.is_append_translate() {
+        return true;
+    }
+
+    let lower_name = bone.name.to_lowercase();
+    [
+        "捩",
+        "捻",
+        "twist",
+        "helper",
+        "dummy",
+        "attachment",
+        "attach",
+        "slot",
+        "rigid",
+        "physics",
+        "cloth",
+        "skirt",
+        "hair",
+        "髪",
+        "袖",
+        "補助",
+        "アクセ",
+        "weapon",
+        "武器",
+    ]
+    .iter()
+    .any(|token| lower_name.contains(token))
+}
+
+fn looks_like_palm_child_name(name: &str) -> bool {
+    let lower_name = name.to_lowercase();
+    [
+        "palm",
+        "thumb",
+        "index",
+        "middle",
+        "ring",
+        "little",
+        "finger",
+        "metacarpal",
+        "proximal",
+        "親指",
+        "人指",
+        "中指",
+        "薬指",
+        "小指",
+        "指",
+        "掌",
+    ]
+    .iter()
+    .any(|token| lower_name.contains(token))
+}
+
+fn collect_parent_chain(
+    bones: &BoneManager,
+    ancestor_idx: usize,
+    descendant_idx: usize,
+) -> Option<Vec<usize>> {
+    let mut reversed = Vec::new();
+    let mut current = descendant_idx;
+
+    for _ in 0..bones.bone_count() {
+        reversed.push(current);
+        if current == ancestor_idx {
+            reversed.reverse();
+            return Some(reversed);
+        }
+        current = bones.get_bone(current)?.parent_id()?;
+    }
+
+    None
 }
 
 fn fallback_hand_bind_pose(side: HandSide) -> HandBindPose {
@@ -796,6 +1162,7 @@ fn fallback_hand_bind_pose(side: HandSide) -> HandBindPose {
     HandBindPose {
         rotation_offset: Quat::from_rotation_z(-side_sign * std::f32::consts::FRAC_PI_2),
         position_offset: Vec3::ZERO,
+        wrist_from_palm_model: Vec3::ZERO,
     }
 }
 
@@ -900,7 +1267,7 @@ fn derive_palm_anchor(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::skeleton::{BoneLink, BoneManager};
+    use crate::skeleton::{AppendConfig, BoneFlags, BoneLink, BoneManager};
 
     #[test]
     fn derive_hand_bind_pose_should_use_finger_axes_for_rotation() {
@@ -912,7 +1279,8 @@ mod tests {
             Vec3::new(-0.1, 1.0, 0.0),
             Vec3::new(-0.3, 1.0, 0.0),
         );
-        let bind_pose = derive_hand_bind_pose(&bones, wrist_idx, HandSide::Right);
+        let bind_pose =
+            derive_hand_bind_pose_from_finger_axes(&bones, wrist_idx, HandSide::Right).unwrap();
 
         let x_axis = bind_pose.rotation_offset * Vec3::X;
         let y_axis = bind_pose.rotation_offset * Vec3::Y;
@@ -938,8 +1306,11 @@ mod tests {
             valid: true,
         };
 
-        let bind_pose = derive_hand_bind_pose(&bones, wrist_idx, HandSide::Right);
-        let wrist_target = resolve_wrist_target(&bones, wrist_idx, &target, HandSide::Right);
+        let bind_pose =
+            derive_hand_bind_pose_from_finger_axes(&bones, wrist_idx, HandSide::Right).unwrap();
+        let mut solver = VrIkSolver::new();
+        let wrist_target =
+            solver.resolve_wrist_target(&bones, wrist_idx, &target, HandSide::Right, Vec3::ZERO);
         let expected_rotation = target.rotation
             * bind_pose.rotation_offset
             * controller_mount_rotation(HandSide::Right);
@@ -947,6 +1318,43 @@ mod tests {
 
         assert_vec3_eq(wrist_target.position, expected_position);
         assert_quat_eq(wrist_target.rotation, expected_rotation);
+        assert_vec3_eq(
+            wrist_target.auto_wrist_offset_model,
+            bind_pose.wrist_from_palm_model,
+        );
+    }
+
+    #[test]
+    fn resolve_wrist_target_should_add_manual_wrist_offset_after_geometry_offset() {
+        let (bones, wrist_idx) = make_test_hand_bind_pose(
+            HandSide::Right,
+            Vec3::new(0.55, 0.8, 0.0),
+            Vec3::new(0.3, 1.0, 0.0),
+            Vec3::new(0.1, 1.0, 0.0),
+            Vec3::new(-0.1, 1.0, 0.0),
+            Vec3::new(-0.3, 1.0, 0.0),
+        );
+        let mut solver = VrIkSolver::new();
+        let manual_offset = Vec3::new(0.25, -0.1, 0.05);
+        let target = VrTrackedPose {
+            position: Vec3::new(4.0, 5.0, 6.0),
+            rotation: Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+            valid: true,
+        };
+
+        let bind_pose =
+            derive_hand_bind_pose_from_finger_axes(&bones, wrist_idx, HandSide::Right).unwrap();
+        let wrist_target =
+            solver.resolve_wrist_target(&bones, wrist_idx, &target, HandSide::Right, manual_offset);
+
+        assert_vec3_eq(
+            wrist_target.position,
+            target.position + target.rotation * bind_pose.position_offset + manual_offset,
+        );
+        assert_vec3_eq(
+            wrist_target.auto_wrist_offset_model,
+            bind_pose.wrist_from_palm_model,
+        );
     }
 
     #[test]
@@ -972,6 +1380,52 @@ mod tests {
             Vec3::new(-1.0, 0.0, 0.0),
         );
         assert_vec3_eq(bind_pose.position_offset, Vec3::ZERO);
+    }
+
+    #[test]
+    fn derive_hand_bind_pose_should_fallback_to_wrist_children_when_finger_roots_are_missing() {
+        let (bones, wrist_idx, palm_a, palm_b) = make_test_wrist_children_pose(HandSide::Right);
+        let bind_pose =
+            derive_hand_bind_pose_from_wrist_children(&bones, wrist_idx, HandSide::Right).unwrap();
+        let expected_anchor = (palm_a + palm_b) * 0.5;
+
+        assert_vec3_eq(
+            bind_pose.wrist_from_palm_model,
+            Vec3::ZERO - expected_anchor,
+        );
+        assert!(
+            bind_pose.position_offset.length_squared() > 1e-6,
+            "expected non-zero fallback position offset"
+        );
+    }
+
+    #[test]
+    fn derive_hand_bind_pose_should_ignore_obvious_helper_wrist_children() {
+        let (bones, wrist_idx, palm_a, palm_b) =
+            make_test_wrist_children_pose_with_helper(HandSide::Right);
+        let bind_pose =
+            derive_hand_bind_pose_from_wrist_children(&bones, wrist_idx, HandSide::Right).unwrap();
+        let expected_anchor = (palm_a + palm_b) * 0.5;
+
+        assert_vec3_eq(
+            bind_pose.wrist_from_palm_model,
+            Vec3::ZERO - expected_anchor,
+        );
+    }
+
+    #[test]
+    fn distribute_forearm_twist_should_respect_ratio_bounds() {
+        let lower_arm_rotation = Quat::IDENTITY;
+        let wrist_rotation = Quat::from_rotation_y(0.8);
+        let axis_world = Vec3::Y;
+
+        let no_twist =
+            distribute_forearm_twist(lower_arm_rotation, wrist_rotation, axis_world, 0.0);
+        let full_twist =
+            distribute_forearm_twist(lower_arm_rotation, wrist_rotation, axis_world, 1.0);
+
+        assert_quat_eq(no_twist, lower_arm_rotation);
+        assert_quat_eq(full_twist, wrist_rotation);
     }
 
     #[test]
@@ -1116,6 +1570,125 @@ mod tests {
         assert_vec3_near(moved_state.head_residual_model, Vec3::ZERO, 1e-5);
     }
 
+    #[test]
+    fn solve_tracking_frame_should_refresh_append_twist_children_after_arm_ik() {
+        let (mut bones, calibration, elbow_idx, append_idx) =
+            make_tracking_test_skeleton_with_append_twist();
+        let mut solver = VrIkSolver::new();
+        let frame = make_tracking_frame(
+            calibration.head_rest_anchor_model,
+            Vec3::new(-4.8, 11.7, 1.8),
+            Vec3::new(6.2, 11.9, 0.5),
+            calibration,
+        );
+
+        solver.solve_tracking_frame(&mut bones, &frame, 1.0);
+
+        let elbow_rotation = mat4_rotation(bones.get_global_transform(elbow_idx));
+        let append_rotation = mat4_rotation(bones.get_global_transform(append_idx));
+        let relative = (elbow_rotation.inverse() * append_rotation).normalize();
+        let similarity = relative.dot(Quat::IDENTITY).abs();
+
+        assert!(
+            (1.0 - similarity) > 1e-3,
+            "expected append twist child to receive a non-identity relative rotation after VR IK"
+        );
+    }
+
+    #[test]
+    fn solve_tracking_frame_should_distribute_real_lower_arm_chain_helpers() {
+        let (mut bones, calibration, elbow_idx, helper_idx, wrist_idx, helper_ratio) =
+            make_tracking_test_skeleton_with_lower_arm_helper();
+        let mut solver = VrIkSolver::new();
+        let frame = make_tracking_frame(
+            calibration.head_rest_anchor_model,
+            Vec3::new(-4.8, 11.7, 1.8),
+            Vec3::new(6.6, 11.7, 0.5),
+            calibration,
+        );
+
+        solver.solve_tracking_frame(&mut bones, &frame, 1.0);
+
+        let elbow = mat4_translation(bones.get_global_transform(elbow_idx));
+        let helper = mat4_translation(bones.get_global_transform(helper_idx));
+        let wrist = mat4_translation(bones.get_global_transform(wrist_idx));
+        let expected_helper = elbow.lerp(wrist, helper_ratio);
+
+        assert_vec3_near(helper, expected_helper, 2e-4);
+        assert!(
+            (helper - elbow).length() > 1e-4,
+            "expected real helper bone to move away from elbow after IK"
+        );
+    }
+
+    #[test]
+    fn solve_tracking_frame_should_preserve_lower_arm_local_translations_when_helper_chain_exists()
+    {
+        let (mut bones, calibration, elbow_idx, helper_idx, wrist_idx, _) =
+            make_tracking_test_skeleton_with_lower_arm_helper();
+        let mut solver = VrIkSolver::new();
+        let frame = make_tracking_frame(
+            calibration.head_rest_anchor_model,
+            Vec3::new(-4.8, 11.7, 1.8),
+            Vec3::new(6.6, 11.7, 0.5),
+            calibration,
+        );
+        let initial_wrist = mat4_translation(bones.get_global_transform(wrist_idx));
+        let initial_local_translations = [elbow_idx, helper_idx, wrist_idx].map(|index| {
+            bones
+                .get_bone(index)
+                .map(|bone| bone.animation_translate)
+                .unwrap()
+        });
+
+        solver.solve_tracking_frame(&mut bones, &frame, 1.0);
+
+        for (bone_idx, expected_translation) in [elbow_idx, helper_idx, wrist_idx]
+            .into_iter()
+            .zip(initial_local_translations)
+        {
+            let actual_translation = bones
+                .get_bone(bone_idx)
+                .map(|bone| bone.animation_translate)
+                .unwrap();
+            assert_vec3_near(actual_translation, expected_translation, 1e-5);
+        }
+
+        let solved_wrist = mat4_translation(bones.get_global_transform(wrist_idx));
+        assert!(
+            (solved_wrist - initial_wrist).length() > 1e-2,
+            "expected wrist to move even though local translations stay unchanged"
+        );
+    }
+
+    #[test]
+    fn solve_tracking_frame_should_report_actual_wrist_error_after_rotation_only_update() {
+        let (mut bones, calibration, _, _, wrist_idx, _) =
+            make_tracking_test_skeleton_with_lower_arm_helper();
+        let mut solver = VrIkSolver::new();
+        let frame = make_tracking_frame(
+            calibration.head_rest_anchor_model,
+            Vec3::new(-4.8, 11.7, 1.8),
+            Vec3::new(6.6, 11.7, 0.5),
+            calibration,
+        );
+        let wrist_target = solver.resolve_wrist_target(
+            &bones,
+            wrist_idx,
+            &frame.right_palm,
+            HandSide::Right,
+            Vec3::ZERO,
+        );
+
+        let debug = solver.solve_tracking_frame(&mut bones, &frame, 1.0);
+        let expected_error = wrist_error_cm(debug.right_wrist_solved_model, wrist_target.position);
+
+        assert!(
+            (debug.right_wrist_error_cm - expected_error).abs() <= 1e-4,
+            "expected reported wrist error to match actual solved wrist position"
+        );
+    }
+
     fn make_test_hand_bind_pose(
         side: HandSide,
         thumb: Vec3,
@@ -1170,6 +1743,77 @@ mod tests {
         (bones, 1)
     }
 
+    fn make_test_wrist_children_pose(side: HandSide) -> (BoneManager, usize, Vec3, Vec3) {
+        let mut bones = BoneManager::new();
+
+        let mut root = BoneLink::new("root".to_string());
+        root.initial_position = Vec3::ZERO;
+        root.parent_index = -1;
+        bones.add_bone(root);
+
+        let wrist_name = match side {
+            HandSide::Left => "左手首",
+            HandSide::Right => "右手首",
+        };
+        let mut wrist = BoneLink::new(wrist_name.to_string());
+        wrist.initial_position = Vec3::ZERO;
+        wrist.parent_index = 0;
+        bones.add_bone(wrist);
+
+        let palm_a = Vec3::new(0.2, 0.9, 0.15);
+        let palm_b = Vec3::new(-0.2, 0.85, 0.2);
+        for (index, position) in [palm_a, palm_b].into_iter().enumerate() {
+            let mut child = BoneLink::new(format!("palm_child_{index}"));
+            child.initial_position = position;
+            child.parent_index = 1;
+            bones.add_bone(child);
+        }
+
+        bones.build_hierarchy();
+        (bones, 1, palm_a, palm_b)
+    }
+
+    fn make_test_wrist_children_pose_with_helper(
+        side: HandSide,
+    ) -> (BoneManager, usize, Vec3, Vec3) {
+        let mut bones = BoneManager::new();
+
+        let mut root = BoneLink::new("root".to_string());
+        root.initial_position = Vec3::ZERO;
+        root.parent_index = -1;
+        bones.add_bone(root);
+
+        let wrist_name = match side {
+            HandSide::Left => "左手首",
+            HandSide::Right => "右手首",
+        };
+        let mut wrist = BoneLink::new(wrist_name.to_string());
+        wrist.initial_position = Vec3::ZERO;
+        wrist.parent_index = 0;
+        bones.add_bone(wrist);
+
+        let helper = Vec3::new(0.0, 0.1, -0.7);
+        let palm_a = Vec3::new(0.2, 0.9, 0.15);
+        let palm_b = Vec3::new(-0.2, 0.85, 0.2);
+        let helper_name = match side {
+            HandSide::Left => "左手捩",
+            HandSide::Right => "右手捩",
+        };
+        for (name, position) in [
+            (helper_name.to_string(), helper),
+            ("palm_child_0".to_string(), palm_a),
+            ("rightIndexProximal".to_string(), palm_b),
+        ] {
+            let mut child = BoneLink::new(name);
+            child.initial_position = position;
+            child.parent_index = 1;
+            bones.add_bone(child);
+        }
+
+        bones.build_hierarchy();
+        (bones, 1, palm_a, palm_b)
+    }
+
     fn make_tracking_test_skeleton() -> (BoneManager, BodyTrackingCalibration) {
         let mut bones = BoneManager::new();
 
@@ -1214,6 +1858,103 @@ mod tests {
                 body_translation_clamp_model: 2.0,
                 shoulder_follow_gain: 0.45,
             },
+        )
+    }
+
+    fn make_tracking_test_skeleton_with_append_twist(
+    ) -> (BoneManager, BodyTrackingCalibration, usize, usize) {
+        let (mut bones, calibration) = make_tracking_test_skeleton();
+        let elbow_idx = bones.find_bone_by_name("右ひじ").expect("right elbow");
+
+        let mut append_bone = BoneLink::new("右手捩".to_string());
+        append_bone.initial_position = Vec3::new(4.35, 11.85, 1.25);
+        append_bone.parent_index = elbow_idx as i32;
+        append_bone.flags = BoneFlags::ROTATABLE | BoneFlags::APPEND_ROTATE;
+        append_bone.append_config = Some(AppendConfig {
+            parent: elbow_idx as i32,
+            rate: 0.5,
+        });
+        bones.add_bone(append_bone);
+        bones.build_hierarchy();
+
+        let append_idx = bones
+            .find_bone_by_name("右手捩")
+            .expect("append twist bone");
+        (bones, calibration, elbow_idx, append_idx)
+    }
+
+    fn make_tracking_test_skeleton_with_lower_arm_helper() -> (
+        BoneManager,
+        BodyTrackingCalibration,
+        usize,
+        usize,
+        usize,
+        f32,
+    ) {
+        let mut bones = BoneManager::new();
+
+        let mut root = BoneLink::new("root".to_string());
+        root.initial_position = Vec3::ZERO;
+        root.parent_index = -1;
+        bones.add_bone(root);
+
+        let mut upper_body = BoneLink::new("上半身".to_string());
+        upper_body.initial_position = Vec3::new(0.0, 10.0, 0.0);
+        upper_body.parent_index = 0;
+        bones.add_bone(upper_body);
+
+        let mut chest = BoneLink::new("上半身2".to_string());
+        chest.initial_position = Vec3::new(0.0, 12.0, 0.0);
+        chest.parent_index = 1;
+        bones.add_bone(chest);
+
+        let mut neck = BoneLink::new("首".to_string());
+        neck.initial_position = Vec3::new(0.0, 15.0, 0.0);
+        neck.parent_index = 2;
+        bones.add_bone(neck);
+
+        let mut head = BoneLink::new("頭".to_string());
+        head.initial_position = Vec3::new(0.0, 17.0, 0.0);
+        head.parent_index = 3;
+        bones.add_bone(head);
+
+        add_tracking_arm(&mut bones, HandSide::Left, 2, -1.0);
+        add_tracking_arm_with_lower_arm_helper(&mut bones, 2, 1.0);
+        bones.build_hierarchy();
+
+        let elbow_idx = bones.find_bone_by_name("右ひじ").expect("right elbow");
+        let helper_idx = bones.find_bone_by_name("右手捩").expect("right helper");
+        let wrist_idx = bones.find_bone_by_name("右手首").expect("right wrist");
+        let elbow_pos = bones
+            .get_bone(elbow_idx)
+            .map(|bone| bone.initial_position)
+            .unwrap();
+        let helper_pos = bones
+            .get_bone(helper_idx)
+            .map(|bone| bone.initial_position)
+            .unwrap();
+        let wrist_pos = bones
+            .get_bone(wrist_idx)
+            .map(|bone| bone.initial_position)
+            .unwrap();
+        let helper_ratio = (helper_pos - elbow_pos).length() / (wrist_pos - elbow_pos).length();
+
+        (
+            bones,
+            BodyTrackingCalibration {
+                head_rest_anchor_model: Vec3::new(0.0, 17.0, 0.0),
+                shoulder_width_model: 4.0,
+                shoulder_depth_model: 0.9,
+                body_yaw_follow_gain: 0.65,
+                horizontal_translation_follow_gain: 0.9,
+                vertical_translation_follow_gain: 0.95,
+                body_translation_clamp_model: 2.0,
+                shoulder_follow_gain: 0.45,
+            },
+            elbow_idx,
+            helper_idx,
+            wrist_idx,
+            helper_ratio,
         )
     }
 
@@ -1296,6 +2037,70 @@ mod tests {
         }
     }
 
+    fn add_tracking_arm_with_lower_arm_helper(
+        bones: &mut BoneManager,
+        parent_index: i32,
+        side_sign: f32,
+    ) {
+        let mut shoulder = BoneLink::new("右肩".to_string());
+        shoulder.initial_position = Vec3::new(1.6 * side_sign, 12.5, 0.0);
+        shoulder.parent_index = parent_index;
+        bones.add_bone(shoulder);
+        let shoulder_index = bones.bone_count() as i32 - 1;
+
+        let mut arm = BoneLink::new("右腕".to_string());
+        arm.initial_position = Vec3::new(2.7 * side_sign, 12.4, 0.1);
+        arm.parent_index = shoulder_index;
+        bones.add_bone(arm);
+        let arm_index = bones.bone_count() as i32 - 1;
+
+        let mut elbow = BoneLink::new("右ひじ".to_string());
+        elbow.initial_position = Vec3::new(3.9 * side_sign, 12.0, 0.7);
+        elbow.parent_index = arm_index;
+        bones.add_bone(elbow);
+        let elbow_index = bones.bone_count() as i32 - 1;
+
+        let mut helper = BoneLink::new("右手捩".to_string());
+        helper.initial_position = Vec3::new(4.35 * side_sign, 11.85, 1.15);
+        helper.parent_index = elbow_index;
+        bones.add_bone(helper);
+        let helper_index = bones.bone_count() as i32 - 1;
+
+        let mut wrist = BoneLink::new("右手首".to_string());
+        wrist.initial_position = Vec3::new(4.9 * side_sign, 11.7, 1.7);
+        wrist.parent_index = helper_index;
+        bones.add_bone(wrist);
+        let wrist_index = bones.bone_count() as i32 - 1;
+
+        for (name, position) in [
+            (
+                RIGHT_THUMB_ROOT_NAMES[0],
+                Vec3::new(4.5 * side_sign, 11.45, 1.95),
+            ),
+            (
+                RIGHT_INDEX_ROOT_NAMES[0],
+                Vec3::new(5.15 * side_sign, 11.95, 2.30),
+            ),
+            (
+                RIGHT_MIDDLE_ROOT_NAMES[0],
+                Vec3::new(4.95 * side_sign, 12.00, 2.40),
+            ),
+            (
+                RIGHT_RING_ROOT_NAMES[0],
+                Vec3::new(4.75 * side_sign, 11.95, 2.30),
+            ),
+            (
+                RIGHT_LITTLE_ROOT_NAMES[0],
+                Vec3::new(4.55 * side_sign, 11.88, 2.18),
+            ),
+        ] {
+            let mut finger = BoneLink::new(name.to_string());
+            finger.initial_position = position;
+            finger.parent_index = wrist_index;
+            bones.add_bone(finger);
+        }
+    }
+
     fn make_tracking_frame(
         head_position: Vec3,
         left_palm: Vec3,
@@ -1313,6 +2118,7 @@ mod tests {
                 rotation: Quat::IDENTITY,
                 valid: true,
             },
+            arm_ik_calibration: ArmIkCalibration::default(),
             right_palm: VrTrackedPose {
                 position: right_palm,
                 rotation: Quat::IDENTITY,

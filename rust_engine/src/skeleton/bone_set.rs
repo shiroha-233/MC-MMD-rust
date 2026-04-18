@@ -197,6 +197,15 @@ impl BoneSet {
         self.links.get(index)
     }
 
+    /// 获取直接子骨骼索引
+    #[inline]
+    pub fn children_of(&self, index: usize) -> &[usize] {
+        self.children_cache
+            .get(index)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
     /// 获取骨骼可变引用
     #[inline]
     pub fn get_bone_mut(&mut self, index: usize) -> Option<&mut BoneLink> {
