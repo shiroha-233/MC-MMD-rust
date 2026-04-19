@@ -7,6 +7,8 @@
   "mixins": [],
   "client": [
     "ForgePlayerRendererMixin",
+    "compat.VivecraftVRArmHelperMixin",
+    "compat.VivecraftVRPlayerRendererMixin",
     "CameraMixin",
     "GameRendererMixin",
     "LevelRendererMixin",

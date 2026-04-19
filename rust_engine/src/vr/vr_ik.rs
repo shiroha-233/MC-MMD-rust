@@ -520,6 +520,8 @@ impl VrIkSolver {
         let current_transform = bones.get_global_transform(body_idx);
         let current_position = mat4_translation(current_transform);
         let current_rotation = mat4_rotation(current_transform);
+        let bind_position = bone_bind_position(bones, body_idx).unwrap_or(current_position);
+        let bind_rotation = bone_bind_global_rotation(bones, body_idx);
         let head_delta = if frame.head.valid {
             frame.head.position - calibration.head_rest_anchor_model
         } else {
@@ -537,14 +539,14 @@ impl VrIkSolver {
             ),
         );
         let head_residual_model = head_delta - body_translation;
-        let body_target_position = current_position + body_translation;
+        let body_target_position = bind_position + body_translation;
         let body_yaw = if frame.head.valid {
             extract_yaw_rotation(frame.head.rotation)
         } else {
             Quat::IDENTITY
         };
         let yaw_follow = Quat::IDENTITY.slerp(body_yaw, calibration.body_yaw_follow_gain);
-        let body_target_rotation = (yaw_follow * current_rotation).normalize();
+        let body_target_rotation = (yaw_follow * bind_rotation).normalize();
 
         if strength >= 1.0 {
             bones.set_global_transform(
@@ -772,9 +774,10 @@ impl VrIkSolver {
         strength: f32,
         is_left: bool,
     ) -> Vec3 {
-        let fallback_origin = mat4_translation(bones.get_global_transform(arm_idx));
+        let fallback_origin = bone_bind_position(bones, arm_idx)
+            .unwrap_or_else(|| mat4_translation(bones.get_global_transform(arm_idx)));
         let mut origin = shoulder_idx
-            .map(|index| mat4_translation(bones.get_global_transform(index)))
+            .and_then(|index| bone_bind_position(bones, index))
             .unwrap_or(fallback_origin);
 
         let shoulder_follow = Vec3::new(
@@ -891,6 +894,17 @@ fn mat4_translation(m: Mat4) -> Vec3 {
 #[inline]
 fn mat4_rotation(m: Mat4) -> Quat {
     Quat::from_mat4(&m)
+}
+
+fn bone_bind_position(bones: &BoneManager, index: usize) -> Option<Vec3> {
+    bones.get_bone(index).map(|bone| bone.initial_position)
+}
+
+fn bone_bind_global_rotation(bones: &BoneManager, index: usize) -> Quat {
+    bones
+        .get_bone(index)
+        .map(|bone| (bone.parent_rest_rotation * bone.rest_rotation).normalize())
+        .unwrap_or(Quat::IDENTITY)
 }
 
 fn extract_yaw_rotation(rotation: Quat) -> Quat {
@@ -1687,6 +1701,64 @@ mod tests {
             (debug.right_wrist_error_cm - expected_error).abs() <= 1e-4,
             "expected reported wrist error to match actual solved wrist position"
         );
+    }
+
+    #[test]
+    fn solve_tracking_frame_should_not_accumulate_body_anchor_translation_for_identical_frames() {
+        let (mut bones, calibration) = make_tracking_test_skeleton();
+        let mut solver = VrIkSolver::new();
+        let frame = make_tracking_frame(
+            calibration.head_rest_anchor_model + Vec3::new(1.25, 0.8, -0.65),
+            Vec3::new(-4.8, 11.7, 1.8),
+            Vec3::new(6.6, 11.7, 0.5),
+            calibration,
+        );
+
+        solver.solve_tracking_frame(&mut bones, &frame, 1.0);
+        let body_idx = solver.body_anchor_index().expect("body anchor");
+        let first_position = mat4_translation(bones.get_global_transform(body_idx));
+
+        solver.solve_tracking_frame(&mut bones, &frame, 1.0);
+        let second_position = mat4_translation(bones.get_global_transform(body_idx));
+
+        assert_vec3_near(second_position, first_position, 1e-5);
+    }
+
+    #[test]
+    fn solve_tracking_frame_should_not_accumulate_body_yaw_for_identical_frames() {
+        let (mut bones, calibration) = make_tracking_test_skeleton();
+        let mut solver = VrIkSolver::new();
+        let frame = VrTrackingFrame {
+            head: VrTrackedPose {
+                position: calibration.head_rest_anchor_model,
+                rotation: Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+                valid: true,
+            },
+            left_palm: VrTrackedPose {
+                position: Vec3::new(-4.8, 11.7, 1.8),
+                rotation: Quat::IDENTITY,
+                valid: true,
+            },
+            right_palm: VrTrackedPose {
+                position: Vec3::new(6.6, 11.7, 0.5),
+                rotation: Quat::IDENTITY,
+                valid: true,
+            },
+            arm_ik_calibration: ArmIkCalibration::default(),
+            body_calibration: BodyTrackingCalibration {
+                body_yaw_follow_gain: 1.0,
+                ..calibration
+            },
+        };
+
+        solver.solve_tracking_frame(&mut bones, &frame, 1.0);
+        let body_idx = solver.body_anchor_index().expect("body anchor");
+        let first_rotation = mat4_rotation(bones.get_global_transform(body_idx));
+
+        solver.solve_tracking_frame(&mut bones, &frame, 1.0);
+        let second_rotation = mat4_rotation(bones.get_global_transform(body_idx));
+
+        assert_quat_eq(second_rotation, first_rotation);
     }
 
     fn make_test_hand_bind_pose(

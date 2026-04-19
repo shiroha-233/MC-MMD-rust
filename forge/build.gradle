@@ -162,9 +162,6 @@ dependencies {
     modCompileOnly("maven.modrinth:touhou-little-maid:1.5.0-forge+mc1.20.1")
     modLocalRuntime("maven.modrinth:touhou-little-maid:1.5.0-forge+mc1.20.1")
     
-    // mc-vr-api - Vivecraft VR API（软依赖，运行时可选）
-    modCompileOnly("maven.modrinth:mc-vr-api:${project.mc_vr_api_version}-forge,1.20.1")
-    
     // Cloth Config API - 配置界面
     modApi("me.shedaniel.cloth:cloth-config-forge:11.1.136")
 }

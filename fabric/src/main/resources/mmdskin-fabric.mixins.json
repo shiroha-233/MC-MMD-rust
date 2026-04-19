@@ -8,6 +8,8 @@
   "client": [
     "FabricPlayerRendererMixin",
     "MobReplacementLivingEntityRendererMixin",
+    "compat.VivecraftVRArmHelperMixin",
+    "compat.VivecraftVRPlayerRendererMixin",
     "CameraMixin",
     "GameRendererMixin",
     "KeyMappingAccessor",

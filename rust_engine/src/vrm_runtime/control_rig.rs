@@ -90,7 +90,6 @@ impl ControlRigRuntime {
         );
 
         model.set_vr_enabled(true);
-        model.set_vr_ik_strength(1.0);
         model.set_vr_tracking_frame(Some(frame));
     }
 }
@@ -113,19 +112,54 @@ pub(crate) fn resolve_tracking_frame_for_model(
     ))
 }
 
+pub(crate) fn resolve_java_tracking_frame_for_model(
+    model: &mut MmdModel,
+    tracking: Option<VrmTrackingInput>,
+    hand_calibration: HandTrackingCalibration,
+    arm_ik_calibration: ArmIkCalibration,
+    body_calibration: BodyTrackingCalibration,
+) -> Option<VrTrackingFrame> {
+    let tracking = tracking?;
+    let default_body_calibration = derive_default_body_calibration(model);
+    let resolved_body = body_calibration.resolve_with_defaults(default_body_calibration);
+    Some(build_tracking_frame_with_converter(
+        tracking,
+        hand_calibration,
+        arm_ik_calibration,
+        resolved_body,
+        convert_java_pose,
+    ))
+}
+
 fn build_tracking_frame(
     tracking: VrmTrackingInput,
     hand_calibration: HandTrackingCalibration,
     arm_ik_calibration: ArmIkCalibration,
     body_calibration: BodyTrackingCalibration,
 ) -> VrTrackingFrame {
+    build_tracking_frame_with_converter(
+        tracking,
+        hand_calibration,
+        arm_ik_calibration,
+        body_calibration,
+        convert_pose,
+    )
+}
+
+fn build_tracking_frame_with_converter(
+    tracking: VrmTrackingInput,
+    hand_calibration: HandTrackingCalibration,
+    arm_ik_calibration: ArmIkCalibration,
+    body_calibration: BodyTrackingCalibration,
+    convert: fn(TrackedPose) -> VrTrackedPose,
+) -> VrTrackingFrame {
     VrTrackingFrame {
-        head: convert_pose(tracking.head),
-        right_palm: convert_pose(apply_hand_grip_offset(
+        head: convert(tracking.head),
+        right_palm: convert(apply_hand_grip_offset(
             tracking.right_hand,
             hand_calibration.right,
         )),
-        left_palm: convert_pose(apply_hand_grip_offset(
+        left_palm: convert(apply_hand_grip_offset(
             tracking.left_hand,
             hand_calibration.left,
         )),
@@ -154,6 +188,19 @@ fn convert_pose(raw: TrackedPose) -> VrTrackedPose {
     let basis = Quat::from_rotation_y(std::f32::consts::PI);
     VrTrackedPose {
         position: (basis * raw.position) * XR_TO_MODEL_SCALE,
+        rotation: (basis * raw.orientation * basis).normalize(),
+        valid: true,
+    }
+}
+
+fn convert_java_pose(raw: TrackedPose) -> VrTrackedPose {
+    if !raw.valid {
+        return VrTrackedPose::default();
+    }
+
+    let basis = Quat::from_rotation_y(std::f32::consts::PI);
+    VrTrackedPose {
+        position: raw.position * XR_TO_MODEL_SCALE,
         rotation: (basis * raw.orientation * basis).normalize(),
         valid: true,
     }
@@ -285,6 +332,59 @@ mod tests {
                 .normalize();
 
         assert_quat_eq(frame.right_palm.rotation, expected_rotation);
+    }
+
+    #[test]
+    fn java_tracking_frame_should_flip_only_x_axis_for_position() {
+        let mut model = MmdModel::new();
+        model.bone_manager = make_calibration_test_bones(true, true);
+
+        let frame = resolve_java_tracking_frame_for_model(
+            &mut model,
+            Some(VrmTrackingInput {
+                head: TrackedPose {
+                    position: Vec3::new(1.0, 2.0, 3.0),
+                    orientation: Quat::IDENTITY,
+                    valid: true,
+                },
+                ..VrmTrackingInput::default()
+            }),
+            HandTrackingCalibration::default(),
+            ArmIkCalibration::default(),
+            BodyTrackingCalibration::default(),
+        )
+        .expect("java frame");
+
+        assert_vec3_eq(
+            frame.head.position,
+            Vec3::new(1.0, 2.0, 3.0) * XR_TO_MODEL_SCALE,
+        );
+    }
+
+    #[test]
+    fn java_tracking_frame_should_apply_demo_rotation_basis() {
+        let mut model = MmdModel::new();
+        model.bone_manager = make_calibration_test_bones(true, true);
+        let raw_rotation = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+
+        let frame = resolve_java_tracking_frame_for_model(
+            &mut model,
+            Some(VrmTrackingInput {
+                head: TrackedPose {
+                    position: Vec3::ZERO,
+                    orientation: raw_rotation,
+                    valid: true,
+                },
+                ..VrmTrackingInput::default()
+            }),
+            HandTrackingCalibration::default(),
+            ArmIkCalibration::default(),
+            BodyTrackingCalibration::default(),
+        )
+        .expect("java frame");
+
+        let basis = Quat::from_rotation_y(std::f32::consts::PI);
+        assert_quat_eq(frame.head.rotation, (basis * raw_rotation * basis).normalize());
     }
 
     #[test]

@@ -380,6 +380,29 @@ public class ModConfigScreen {
             .setSaveConsumer(value -> data.debugHudEnabled = value)
             .build());
 
+        ConfigCategory vrCategory = builder.getOrCreateCategory(
+            Component.translatable("gui.mmdskin.mod_settings.category.vr"));
+
+        vrCategory.addEntry(entryBuilder
+            .startBooleanToggle(
+                Component.translatable("gui.mmdskin.mod_settings.vr_enabled"),
+                data.vrEnabled)
+            .setDefaultValue(false)
+            .setTooltip(Component.translatable("gui.mmdskin.mod_settings.vr_enabled.tooltip"))
+            .setSaveConsumer(value -> data.vrEnabled = value)
+            .build());
+
+        vrCategory.addEntry(entryBuilder
+            .startIntSlider(
+                Component.translatable("gui.mmdskin.mod_settings.vr_arm_ik_strength"),
+                Math.round(data.vrArmIKStrength * 100.0F),
+                0, 100)
+            .setDefaultValue(100)
+            .setTooltip(Component.translatable("gui.mmdskin.mod_settings.vr_arm_ik_strength.tooltip"))
+            .setTextGetter(value -> Component.literal(value + "%"))
+            .setSaveConsumer(value -> data.vrArmIKStrength = value.intValue() / 100.0F)
+            .build());
+
         ConfigCategory mobReplacementCategory = builder.getOrCreateCategory(
             Component.translatable("gui.mmdskin.mod_settings.category.mob_replacement"));
 

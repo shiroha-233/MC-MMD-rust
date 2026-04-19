@@ -116,3 +116,4 @@ AGENT.md
 !rust_engine/src/vrm_runtime/
 !rust_engine/src/vrm_runtime/**
 rust_engine/VR_RUNTIME_HANDOFF.md
+/.tmp_vivecraft_scan

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use glam::{Quat, Vec3};
+use glam::{EulerRot, Quat, Vec3};
 
 use super::expression::ExpressionKey;
 use super::look_at::LookAtInput;
@@ -146,6 +146,69 @@ impl BodyTrackingCalibration {
             },
         }
     }
+}
+
+const CONTROLLER_TO_PALM_POSITION_OFFSET_METERS: Vec3 = Vec3::new(0.0, -0.012, -0.018);
+const VRM_DEFAULT_LEFT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [0.0, 0.0, 0.0];
+const VRM_DEFAULT_RIGHT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [0.0, 0.0, 0.0];
+const PMX_DEFAULT_LEFT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [90.0, 0.0, -90.0];
+const PMX_DEFAULT_RIGHT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [90.0, 0.0, 90.0];
+
+pub(crate) fn vrm_controller_hand_tracking_calibration() -> HandTrackingCalibration {
+    HandTrackingCalibration {
+        left: HandGripOffset {
+            position_offset: CONTROLLER_TO_PALM_POSITION_OFFSET_METERS,
+            orientation_offset: rotation_degrees_to_quat(
+                VRM_DEFAULT_LEFT_CONTROLLER_TO_PALM_ROTATION_DEGREES,
+            ),
+        },
+        right: HandGripOffset {
+            position_offset: CONTROLLER_TO_PALM_POSITION_OFFSET_METERS,
+            orientation_offset: rotation_degrees_to_quat(
+                VRM_DEFAULT_RIGHT_CONTROLLER_TO_PALM_ROTATION_DEGREES,
+            ),
+        },
+    }
+}
+
+pub(crate) fn pmx_controller_hand_tracking_calibration() -> HandTrackingCalibration {
+    HandTrackingCalibration {
+        left: HandGripOffset {
+            position_offset: CONTROLLER_TO_PALM_POSITION_OFFSET_METERS,
+            orientation_offset: rotation_degrees_to_quat(
+                PMX_DEFAULT_LEFT_CONTROLLER_TO_PALM_ROTATION_DEGREES,
+            ),
+        },
+        right: HandGripOffset {
+            position_offset: CONTROLLER_TO_PALM_POSITION_OFFSET_METERS,
+            orientation_offset: rotation_degrees_to_quat(
+                PMX_DEFAULT_RIGHT_CONTROLLER_TO_PALM_ROTATION_DEGREES,
+            ),
+        },
+    }
+}
+
+pub(crate) fn vivecraft_body_tracking_calibration() -> BodyTrackingCalibration {
+    BodyTrackingCalibration {
+        // Minecraft already owns the avatar's world-space root position and body yaw.
+        // Vivecraft tracking should only drive local upper-body pose, not move the whole model.
+        body_yaw_follow_gain: 0.0,
+        horizontal_translation_follow_gain: 0.0,
+        vertical_translation_follow_gain: 0.0,
+        body_translation_clamp_model: 0.0,
+        shoulder_follow_gain: 0.0,
+        ..BodyTrackingCalibration::default()
+    }
+}
+
+fn rotation_degrees_to_quat(value: [f32; 3]) -> Quat {
+    Quat::from_euler(
+        EulerRot::XYZ,
+        value[0].to_radians(),
+        value[1].to_radians(),
+        value[2].to_radians(),
+    )
+    .normalize()
 }
 
 #[derive(Clone, Debug)]

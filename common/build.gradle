@@ -20,9 +20,6 @@ dependencies {
     // JLayer - MP3 解码器（舞台模式音频播放）
     implementation("javazoom:jlayer:1.0.1")
     
-    // mc-vr-api - Vivecraft VR API（软依赖，运行时可选，modCompileOnly 触发 Loom 重映射）
-    modCompileOnly("maven.modrinth:mc-vr-api:${project.mc_vr_api_version}-fabric,1.20.1")
-
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
 }

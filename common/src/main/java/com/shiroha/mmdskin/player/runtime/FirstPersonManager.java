@@ -1,12 +1,15 @@
 package com.shiroha.mmdskin.player.runtime;
 
 import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.compat.vr.VRArmHider;
+import com.shiroha.mmdskin.compat.vr.VRDataProvider;
 import com.shiroha.mmdskin.config.ConfigManager;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -22,6 +25,7 @@ public final class FirstPersonManager {
     private static float cachedModelScale = 1.0f;
 
     private static boolean activeFirstPerson = false;
+    private static boolean activeVrEyeCamera = false;
 
     private static long trackedModelHandle = 0;
 
@@ -58,6 +62,7 @@ public final class FirstPersonManager {
         if (!isLocalPlayer) return;
 
         boolean shouldEnable = shouldRenderFirstPerson();
+        boolean shouldEnableVrEyeCamera = VRArmHider.isLocalPlayerInVR();
 
         if (modelHandle != trackedModelHandle) {
             if (trackedModelHandle != 0 && activeFirstPerson) {
@@ -65,6 +70,7 @@ public final class FirstPersonManager {
             }
             trackedModelHandle = modelHandle;
             activeFirstPerson = false;
+            activeVrEyeCamera = false;
         }
 
         if (shouldEnable != activeFirstPerson) {
@@ -72,7 +78,9 @@ public final class FirstPersonManager {
             activeFirstPerson = shouldEnable;
         }
 
-        if (shouldEnable) {
+        activeVrEyeCamera = shouldEnableVrEyeCamera;
+
+        if (shouldEnable || shouldEnableVrEyeCamera) {
             cachedModelScale = modelScale;
         }
     }
@@ -85,6 +93,16 @@ public final class FirstPersonManager {
     public static boolean isActive() {
         ensureActiveState();
         return activeFirstPerson;
+    }
+
+    public static boolean isEyeCameraActive() {
+        ensureActiveState();
+        return activeFirstPerson || activeVrEyeCamera;
+    }
+
+    public static boolean isVrEyeCameraActive() {
+        ensureActiveState();
+        return activeVrEyeCamera;
     }
 
     public static boolean isEyeBoneValid() {
@@ -105,7 +123,9 @@ public final class FirstPersonManager {
         double py = Mth.lerp(partialTick, entity.yo, entity.getY());
         double pz = Mth.lerp(partialTick, entity.zo, entity.getZ());
 
-        float bodyYaw = entity instanceof LivingEntity le
+        float bodyYaw = entity instanceof Player player
+                ? VRDataProvider.getBodyYawDegrees(player, partialTick)
+                : entity instanceof LivingEntity le
                 ? Mth.rotLerp(partialTick, le.yBodyRotO, le.yBodyRot)
                 : Mth.rotLerp(partialTick, entity.yRotO, entity.getYRot());
         float yawRad = (float) Math.toRadians(bodyYaw);
@@ -119,6 +139,7 @@ public final class FirstPersonManager {
     public static void reset() {
         disableTrackedModel();
         activeFirstPerson = false;
+        activeVrEyeCamera = false;
         trackedModelHandle = 0;
         cachedModelScale = 1.0f;
         eyeBonePos[0] = 0.0f;
@@ -129,16 +150,17 @@ public final class FirstPersonManager {
     }
 
     private static void ensureActiveState() {
-        if (!activeFirstPerson) {
+        if (!activeFirstPerson && !activeVrEyeCamera) {
             return;
         }
 
-        if (shouldRenderFirstPerson()) {
+        if (shouldRenderFirstPerson() || VRArmHider.isLocalPlayerInVR()) {
             return;
         }
 
         disableTrackedModel();
         activeFirstPerson = false;
+        activeVrEyeCamera = false;
         trackedModelHandle = 0;
         cachedModelScale = 1.0f;
         eyeBonePos[0] = 0.0f;

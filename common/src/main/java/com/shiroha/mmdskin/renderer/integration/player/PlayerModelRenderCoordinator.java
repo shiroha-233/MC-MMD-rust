@@ -4,6 +4,8 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.compat.vr.VRArmHider;
 import com.shiroha.mmdskin.compat.vr.VRBoneDriver;
+import com.shiroha.mmdskin.compat.vr.VivecraftReflectionBridge;
+import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.config.ModelConfigManager;
 import com.shiroha.mmdskin.player.animation.AnimationStateManager;
 import com.shiroha.mmdskin.player.animation.PendingAnimSignalCache;
@@ -39,16 +41,18 @@ final class PlayerModelRenderCoordinator {
 
         float[] size = ModelPropertyHelper.getModelSize(modelData.properties);
         boolean isVr = selection.isLocalPlayer() && VRArmHider.isLocalPlayerInVR();
-        syncVrState(model, player, tickDelta, isVr);
+        syncVrState(modelData, player, tickDelta, isVr);
 
         ModelRuntimeBridge runtimeBridge = ModelRuntimeBridgeHolder.get();
         float combinedScale = size[0] * ModelConfigManager.getConfig(selection.selectedModel()).modelScale;
-        if (!isVr) {
+        if (selection.isLocalPlayer()) {
             runtimeBridge.preRenderFirstPerson(model.getModelHandle(), combinedScale, selection.isLocalPlayer());
         }
         boolean isFirstPerson = !isVr && selection.isLocalPlayer() && FirstPersonManager.isActive();
 
-        AnimationStateManager.updateAnimationState(player, modelData);
+        if (!isVr) {
+            AnimationStateManager.updateAnimationState(player, modelData);
+        }
         consumePendingSignals(player, modelData, selection.isLocalPlayer());
 
         RenderParams params = PlayerRenderHelper.calculateRenderParams(player, modelData, tickDelta);
@@ -63,6 +67,10 @@ final class PlayerModelRenderCoordinator {
                 RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
                 RenderContext context = isFirstPerson ? RenderContext.FIRST_PERSON : RenderContext.WORLD;
                 model.render(player, params.bodyYaw, params.bodyPitch, params.translation, tickDelta, matrixStack, packedLight, context);
+            }
+
+            if (selection.isLocalPlayer()) {
+                runtimeBridge.postRenderFirstPerson(model.getModelHandle());
             }
 
             if (needsFirstPersonCleanup) {
@@ -83,23 +91,32 @@ final class PlayerModelRenderCoordinator {
         }
     }
 
-    private static void syncVrState(IMMDModel model, AbstractClientPlayer player, float tickDelta, boolean isVr) {
+    private static void syncVrState(MMDModelManager.Model modelData,
+                                    AbstractClientPlayer player,
+                                    float tickDelta,
+                                    boolean isVr) {
+        IMMDModel model = modelData.model;
         if (!(model instanceof AbstractMMDModel abstractModel)) {
             return;
         }
 
         if (isVr) {
+            VivecraftReflectionBridge.applyMmdRenderState(true);
             if (!abstractModel.isVrActive()) {
+                MmdSkinRendererPlayerHelper.suppressDefaultAnimationState(modelData);
                 VRBoneDriver.setVREnabled(model.getModelHandle(), true);
                 abstractModel.setVrActive(true);
             }
+            VRBoneDriver.setVRIKParams(model.getModelHandle(), ConfigManager.getVRArmIKStrength());
             VRBoneDriver.driveModel(model.getModelHandle(), player, tickDelta);
             return;
         }
 
+        VivecraftReflectionBridge.applyMmdRenderState(false);
         if (abstractModel.isVrActive()) {
             VRBoneDriver.setVREnabled(model.getModelHandle(), false);
             abstractModel.setVrActive(false);
+            MmdSkinRendererPlayerHelper.resetModelAnimationState(player, modelData);
         }
     }
 

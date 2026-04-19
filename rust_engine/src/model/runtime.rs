@@ -6,9 +6,11 @@ use crate::physics::MMDPhysics;
 use crate::skeleton::BoneManager;
 use crate::vr::{VrDebugState, VrIkSolver, VrTrackingFrame};
 use crate::vrm_runtime::{
-    resolve_tracking_frame_for_model, ArmIkCalibration, BodyTrackingCalibration,
-    HandTrackingCalibration, VrmModelRuntimeState, VrmRuntimeInput, VrmRuntimeOutput,
-    VrmTrackingInput,
+    pmx_controller_hand_tracking_calibration, resolve_java_tracking_frame_for_model,
+    resolve_tracking_frame_for_model,
+    vivecraft_body_tracking_calibration, vrm_controller_hand_tracking_calibration,
+    ArmIkCalibration, BodyTrackingCalibration, HandTrackingCalibration, TrackedPose,
+    VrmModelRuntimeState, VrmRuntimeInput, VrmRuntimeOutput, VrmTrackingInput,
 };
 use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 use rayon::prelude::*;
@@ -431,8 +433,52 @@ impl MmdModel {
         };
 
         self.set_vr_enabled(true);
-        self.set_vr_ik_strength(1.0);
         self.set_vr_tracking_frame(Some(frame));
+    }
+
+    pub fn apply_java_vr_tracking_input_packet(&mut self, tracking_packet: &[f32]) {
+        if tracking_packet.len() != 21 {
+            return;
+        }
+
+        let mut packet = [0.0f32; 21];
+        packet.copy_from_slice(tracking_packet);
+
+        let current_strength = self.vr_ik_strength;
+        let hand_calibration = if self.is_vrm {
+            vrm_controller_hand_tracking_calibration()
+        } else {
+            pmx_controller_hand_tracking_calibration()
+        };
+        let tracking = java_tracking_input_from_packet(&packet);
+        let Some(mut frame) = resolve_java_tracking_frame_for_model(
+            self,
+            Some(tracking),
+            hand_calibration,
+            ArmIkCalibration::default(),
+            BodyTrackingCalibration::default(),
+        ) else {
+            self.set_vr_enabled(false);
+            self.set_vr_tracking_frame(None);
+            return;
+        };
+
+        let defaults = frame.body_calibration;
+        let calibration = vivecraft_body_tracking_calibration();
+        frame.body_calibration = BodyTrackingCalibration {
+            head_rest_anchor_model: defaults.head_rest_anchor_model,
+            shoulder_width_model: defaults.shoulder_width_model,
+            shoulder_depth_model: defaults.shoulder_depth_model,
+            body_yaw_follow_gain: calibration.body_yaw_follow_gain,
+            horizontal_translation_follow_gain: calibration.horizontal_translation_follow_gain,
+            vertical_translation_follow_gain: calibration.vertical_translation_follow_gain,
+            body_translation_clamp_model: calibration.body_translation_clamp_model,
+            shoulder_follow_gain: calibration.shoulder_follow_gain,
+        };
+
+        self.set_vr_enabled(true);
+        self.set_vr_tracking_frame(Some(frame));
+        self.set_vr_ik_strength(current_strength);
     }
 
     // ========== 材质可见性控制 ==========
@@ -2758,6 +2804,29 @@ impl MmdModel {
             * (size_of::<usize>() + size_of::<(Vec3, Quat)>())) as u64;
 
         total
+    }
+}
+
+fn java_tracking_input_from_packet(packet: &[f32; 21]) -> VrmTrackingInput {
+    VrmTrackingInput {
+        head: java_tracked_pose_from_slice(&packet[0..7]),
+        right_hand: java_tracked_pose_from_slice(&packet[7..14]),
+        left_hand: java_tracked_pose_from_slice(&packet[14..21]),
+    }
+}
+
+fn java_tracked_pose_from_slice(values: &[f32]) -> TrackedPose {
+    let rotation = Quat::from_xyzw(values[3], values[4], values[5], values[6]);
+    let valid = rotation.length_squared() > 1e-6;
+
+    TrackedPose {
+        position: Vec3::new(values[0], values[1], values[2]),
+        orientation: if valid {
+            rotation.normalize()
+        } else {
+            Quat::IDENTITY
+        },
+        valid,
     }
 }
 

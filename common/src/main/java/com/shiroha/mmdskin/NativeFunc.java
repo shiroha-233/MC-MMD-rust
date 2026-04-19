@@ -310,6 +310,8 @@ public class NativeFunc {
 
     public native void SetVRTrackingData(long model, float[] trackingData);
 
+    public native void ApplyVRTrackingInput(long model, float[] trackingData);
+
     public native void SetVREnabled(long model, boolean enabled);
 
     public native void SetVRIKParams(long model, float armIKStrength);

@@ -3276,6 +3276,28 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetVRTrackingData(
 
 /// 启用/禁用 VR 模式
 #[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_ApplyVRTrackingInput(
+    env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    tracking_data: jni::objects::JFloatArray,
+) {
+    let mut buf = [0.0f32; 21];
+    if env
+        .get_float_array_region(&tracking_data, 0, &mut buf)
+        .is_err()
+    {
+        return;
+    }
+
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut m = model_arc.lock().unwrap();
+        m.apply_java_vr_tracking_input_packet(&buf);
+    }
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetVREnabled(
     _env: JNIEnv,
     _class: JClass,

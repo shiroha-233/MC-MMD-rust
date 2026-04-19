@@ -85,6 +85,18 @@ public final class MmdSkinRendererPlayerHelper {
         }
     }
 
+    public static void suppressDefaultAnimationState(MMDModelManager.Model modelData) {
+        if (modelData == null || modelData.model == null || modelData.entityData == null) return;
+
+        IMMDModel model = modelData.model;
+        modelData.entityData.playCustomAnim = false;
+        modelData.entityData.playStageAnim = false;
+        model.changeAnim(0, 0);
+        clearOverlayLayers(model);
+        model.resetPhysics();
+        modelData.entityData.invalidateStateLayers();
+    }
+
     private static void clearOverlayLayers(IMMDModel model) {
         model.setLayerLoop(1, true);
         model.changeAnim(0, 1);

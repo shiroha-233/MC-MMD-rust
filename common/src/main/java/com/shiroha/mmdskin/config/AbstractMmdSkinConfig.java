@@ -61,6 +61,6 @@ public abstract class AbstractMmdSkinConfig implements ConfigManager.IConfigProv
         return data.mobModelReplacements.getOrDefault(entityTypeId, "");
     }
 
-    @Override public boolean isVREnabled() { return false; }
+    @Override public boolean isVREnabled() { return data.vrEnabled; }
     @Override public float getVRArmIKStrength() { return data.vrArmIKStrength; }
 }

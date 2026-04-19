@@ -146,9 +146,6 @@ dependencies {
 	// Nashorn 脚本引擎 - Java 17 不再内置，Touhou Little Maid JS 动画需要
 	runtimeOnly "org.openjdk.nashorn:nashorn-core:15.4"
 	
-	// mc-vr-api - Vivecraft VR API（软依赖，运行时可选）
-	modCompileOnly("maven.modrinth:mc-vr-api:${project.mc_vr_api_version}-fabric,1.20.1")
-	
 	// TouhouLittleMaid Orihime (Fabric 移植版) - 可选依赖，用于联动
 	modCompileOnly "maven.modrinth:touhoulittlemaid-orihime:${rootProject.touhou_little_maid_fabric_version}"
 	modLocalRuntime "maven.modrinth:touhoulittlemaid-orihime:${rootProject.touhou_little_maid_fabric_version}"

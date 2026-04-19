@@ -28,6 +28,11 @@ public abstract class ItemInHandRendererMixin {
     private void onRenderHandsWithItems(float partialTick, PoseStack poseStack,
             MultiBufferSource.BufferSource bufferSource, LocalPlayer player, int packedLight,
             CallbackInfo ci) {
+        if (VRArmHider.shouldHideVRArms()) {
+            ci.cancel();
+            return;
+        }
+
         String playerName = player.getName().getString();
         String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, true);
 
