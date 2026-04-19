@@ -2848,11 +2848,14 @@ mod tests {
         let arm_ik_calibration = ArmIkCalibration {
             left: ArmIkHandCalibration {
                 wrist_offset_model: Vec3::new(1.0, 2.0, 3.0),
+                wrist_rotation_offset_model: Quat::from_rotation_z(0.1),
             },
             right: ArmIkHandCalibration {
                 wrist_offset_model: Vec3::new(-1.0, -2.0, -3.0),
+                wrist_rotation_offset_model: Quat::from_rotation_z(-0.2),
             },
             forearm_twist_ratio: 0.75,
+            hand_face_flip: false,
         };
         let body_calibration = BodyTrackingCalibration {
             head_rest_anchor_model: Vec3::new(0.0, 17.0, 0.0),
@@ -2885,6 +2888,20 @@ mod tests {
             frame.arm_ik_calibration.right.wrist_offset_model,
             arm_ik_calibration.right.wrist_offset_model
         );
+        let left_similarity = frame
+            .arm_ik_calibration
+            .left
+            .wrist_rotation_offset_model
+            .dot(arm_ik_calibration.left.wrist_rotation_offset_model)
+            .abs();
+        assert!(left_similarity > 1.0 - 1e-6);
+        let right_similarity = frame
+            .arm_ik_calibration
+            .right
+            .wrist_rotation_offset_model
+            .dot(arm_ik_calibration.right.wrist_rotation_offset_model)
+            .abs();
+        assert!(right_similarity > 1.0 - 1e-6);
         assert_eq!(
             frame.arm_ik_calibration.forearm_twist_ratio,
             arm_ik_calibration.forearm_twist_ratio

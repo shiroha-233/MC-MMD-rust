@@ -609,6 +609,8 @@ impl VrIkSolver {
             target,
             side,
             manual_wrist_offset(arm_ik_calibration, side),
+            arm_ik_calibration.hand_face_flip,
+            manual_wrist_rotation_offset(arm_ik_calibration, side),
         );
         let arm_origin = self.resolve_arm_origin(
             bones,
@@ -838,10 +840,17 @@ impl VrIkSolver {
         target: &VrTrackedPose,
         side: HandSide,
         manual_wrist_offset_model: Vec3,
+        hand_face_flip: bool,
+        manual_wrist_rotation_offset_model: Quat,
     ) -> WristTarget {
         let bind_pose = self.derive_hand_bind_pose(bones, wrist_idx, side);
-        let rotation_offset =
+        let mut rotation_offset =
             (bind_pose.rotation_offset * controller_mount_rotation(side)).normalize();
+        if hand_face_flip {
+            rotation_offset = (rotation_offset * Quat::from_rotation_y(std::f32::consts::PI))
+                .normalize();
+        }
+        rotation_offset = (rotation_offset * manual_wrist_rotation_offset_model).normalize();
         WristTarget {
             position: target.position
                 + target.rotation * bind_pose.position_offset
@@ -934,6 +943,13 @@ fn manual_wrist_offset(calibration: &ArmIkCalibration, side: HandSide) -> Vec3 {
     match side {
         HandSide::Left => calibration.left.wrist_offset_model,
         HandSide::Right => calibration.right.wrist_offset_model,
+    }
+}
+
+fn manual_wrist_rotation_offset(calibration: &ArmIkCalibration, side: HandSide) -> Quat {
+    match side {
+        HandSide::Left => calibration.left.wrist_rotation_offset_model,
+        HandSide::Right => calibration.right.wrist_rotation_offset_model,
     }
 }
 
@@ -1323,8 +1339,15 @@ mod tests {
         let bind_pose =
             derive_hand_bind_pose_from_finger_axes(&bones, wrist_idx, HandSide::Right).unwrap();
         let mut solver = VrIkSolver::new();
-        let wrist_target =
-            solver.resolve_wrist_target(&bones, wrist_idx, &target, HandSide::Right, Vec3::ZERO);
+        let wrist_target = solver.resolve_wrist_target(
+            &bones,
+            wrist_idx,
+            &target,
+            HandSide::Right,
+            Vec3::ZERO,
+            false,
+            Quat::IDENTITY,
+        );
         let expected_rotation = target.rotation
             * bind_pose.rotation_offset
             * controller_mount_rotation(HandSide::Right);
@@ -1358,8 +1381,15 @@ mod tests {
 
         let bind_pose =
             derive_hand_bind_pose_from_finger_axes(&bones, wrist_idx, HandSide::Right).unwrap();
-        let wrist_target =
-            solver.resolve_wrist_target(&bones, wrist_idx, &target, HandSide::Right, manual_offset);
+        let wrist_target = solver.resolve_wrist_target(
+            &bones,
+            wrist_idx,
+            &target,
+            HandSide::Right,
+            manual_offset,
+            false,
+            Quat::IDENTITY,
+        );
 
         assert_vec3_eq(
             wrist_target.position,
@@ -1384,6 +1414,89 @@ mod tests {
 
         assert_vec3_eq(corrected_finger, raw_finger);
         assert_vec3_eq(corrected_palm, -raw_palm);
+    }
+
+    #[test]
+    fn resolve_wrist_target_should_flip_palm_normal_after_bind_pose_when_requested() {
+        let (bones, wrist_idx) = make_test_hand_bind_pose(
+            HandSide::Right,
+            Vec3::new(0.55, 0.8, 0.0),
+            Vec3::new(0.3, 1.0, 0.0),
+            Vec3::new(0.1, 1.0, 0.0),
+            Vec3::new(-0.1, 1.0, 0.0),
+            Vec3::new(-0.3, 1.0, 0.0),
+        );
+        let target = VrTrackedPose {
+            position: Vec3::ZERO,
+            rotation: Quat::from_rotation_z(std::f32::consts::FRAC_PI_4),
+            valid: true,
+        };
+        let mut solver = VrIkSolver::new();
+        let normal = solver.resolve_wrist_target(
+            &bones,
+            wrist_idx,
+            &target,
+            HandSide::Right,
+            Vec3::ZERO,
+            false,
+            Quat::IDENTITY,
+        );
+        let flipped = solver.resolve_wrist_target(
+            &bones,
+            wrist_idx,
+            &target,
+            HandSide::Right,
+            Vec3::ZERO,
+            true,
+            Quat::IDENTITY,
+        );
+
+        let normal_finger = normal.rotation * Vec3::Y;
+        let flipped_finger = flipped.rotation * Vec3::Y;
+        let normal_palm = normal.rotation * Vec3::X;
+        let flipped_palm = flipped.rotation * Vec3::X;
+
+        assert_vec3_eq(flipped_finger, normal_finger);
+        assert_vec3_eq(flipped_palm, -normal_palm);
+    }
+
+    #[test]
+    fn resolve_wrist_target_should_apply_manual_rotation_offset_after_bind_pose() {
+        let (bones, wrist_idx) = make_test_hand_bind_pose(
+            HandSide::Right,
+            Vec3::new(0.55, 0.8, 0.0),
+            Vec3::new(0.3, 1.0, 0.0),
+            Vec3::new(0.1, 1.0, 0.0),
+            Vec3::new(-0.1, 1.0, 0.0),
+            Vec3::new(-0.3, 1.0, 0.0),
+        );
+        let target = VrTrackedPose {
+            position: Vec3::ZERO,
+            rotation: Quat::from_rotation_z(std::f32::consts::FRAC_PI_4),
+            valid: true,
+        };
+        let adjust = Quat::from_rotation_z(std::f32::consts::FRAC_PI_2);
+        let mut solver = VrIkSolver::new();
+        let base = solver.resolve_wrist_target(
+            &bones,
+            wrist_idx,
+            &target,
+            HandSide::Right,
+            Vec3::ZERO,
+            false,
+            Quat::IDENTITY,
+        );
+        let adjusted = solver.resolve_wrist_target(
+            &bones,
+            wrist_idx,
+            &target,
+            HandSide::Right,
+            Vec3::ZERO,
+            false,
+            adjust,
+        );
+
+        assert_quat_eq(adjusted.rotation, (base.rotation * adjust).normalize());
     }
 
     #[test]
@@ -1692,6 +1805,8 @@ mod tests {
             &frame.right_palm,
             HandSide::Right,
             Vec3::ZERO,
+            false,
+            Quat::IDENTITY,
         );
 
         let debug = solver.solve_tracking_frame(&mut bones, &frame, 1.0);

@@ -53,6 +53,7 @@ pub struct HandTrackingCalibration {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ArmIkHandCalibration {
     pub wrist_offset_model: Vec3,
+    pub wrist_rotation_offset_model: Quat,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -60,6 +61,7 @@ pub struct ArmIkCalibration {
     pub left: ArmIkHandCalibration,
     pub right: ArmIkHandCalibration,
     pub forearm_twist_ratio: f32,
+    pub hand_face_flip: bool,
 }
 
 impl Default for ArmIkCalibration {
@@ -68,6 +70,7 @@ impl Default for ArmIkCalibration {
             left: ArmIkHandCalibration::default(),
             right: ArmIkHandCalibration::default(),
             forearm_twist_ratio: 0.4,
+            hand_face_flip: false,
         }
     }
 }
@@ -151,8 +154,12 @@ impl BodyTrackingCalibration {
 const CONTROLLER_TO_PALM_POSITION_OFFSET_METERS: Vec3 = Vec3::new(0.0, -0.012, -0.018);
 const VRM_DEFAULT_LEFT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [0.0, 0.0, 0.0];
 const VRM_DEFAULT_RIGHT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [0.0, 0.0, 0.0];
-const PMX_DEFAULT_LEFT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [90.0, 0.0, 90.0];
-const PMX_DEFAULT_RIGHT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [90.0, 0.0, -90.0];
+// PMX hands still need a fixed quarter-turn so a neutral Vivecraft grip extends the fingers
+// along the arm instead of leaving them pointed sideways. The required correction is on X only,
+// and the sign must follow the current Java/Vivecraft basis; +90 folds the fingers back into the
+// forearm, while -90 aligns them with the arm.
+const PMX_DEFAULT_LEFT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [-90.0, 0.0, 0.0];
+const PMX_DEFAULT_RIGHT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [-90.0, 0.0, 0.0];
 
 pub(crate) fn vrm_controller_hand_tracking_calibration() -> HandTrackingCalibration {
     HandTrackingCalibration {
@@ -248,7 +255,16 @@ mod tests {
 
         assert_eq!(calibration.left.wrist_offset_model, Vec3::ZERO);
         assert_eq!(calibration.right.wrist_offset_model, Vec3::ZERO);
+        assert_eq!(
+            calibration.left.wrist_rotation_offset_model,
+            Quat::IDENTITY
+        );
+        assert_eq!(
+            calibration.right.wrist_rotation_offset_model,
+            Quat::IDENTITY
+        );
         assert!((calibration.forearm_twist_ratio - 0.4).abs() < 1e-6);
+        assert!(!calibration.hand_face_flip);
     }
 
     #[test]
@@ -268,7 +284,16 @@ mod tests {
             input.arm_ik_calibration.right.wrist_offset_model,
             Vec3::ZERO
         );
+        assert_eq!(
+            input.arm_ik_calibration.left.wrist_rotation_offset_model,
+            Quat::IDENTITY
+        );
+        assert_eq!(
+            input.arm_ik_calibration.right.wrist_rotation_offset_model,
+            Quat::IDENTITY
+        );
         assert!((input.arm_ik_calibration.forearm_twist_ratio - 0.4).abs() < 1e-6);
+        assert!(!input.arm_ik_calibration.hand_face_flip);
     }
 
     #[test]
@@ -279,5 +304,22 @@ mod tests {
         assert_eq!(calibration.right.position_offset, Vec3::ZERO);
         assert_eq!(calibration.left.orientation_offset, Quat::IDENTITY);
         assert_eq!(calibration.right.orientation_offset, Quat::IDENTITY);
+    }
+
+    #[test]
+    fn pmx_controller_hand_tracking_calibration_should_not_add_legacy_quarter_turn() {
+        let calibration = pmx_controller_hand_tracking_calibration();
+
+        let expected = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+        assert_quat_eq(calibration.left.orientation_offset, expected);
+        assert_quat_eq(calibration.right.orientation_offset, expected);
+    }
+
+    fn assert_quat_eq(actual: Quat, expected: Quat) {
+        let similarity = actual.dot(expected).abs();
+        assert!(
+            similarity > 1.0 - 1e-6,
+            "quat mismatch: actual={actual:?} expected={expected:?}",
+        );
     }
 }

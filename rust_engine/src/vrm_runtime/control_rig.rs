@@ -122,13 +122,21 @@ pub(crate) fn resolve_java_tracking_frame_for_model(
     let tracking = tracking?;
     let default_body_calibration = derive_default_body_calibration(model);
     let resolved_body = body_calibration.resolve_with_defaults(default_body_calibration);
-    Some(build_tracking_frame_with_converter(
+    let mut frame = build_tracking_frame_with_converter(
         tracking,
         hand_calibration,
         arm_ik_calibration,
         resolved_body,
         convert_java_pose,
-    ))
+    );
+    frame.arm_ik_calibration.hand_face_flip = false;
+    if !model.is_vrm() {
+        frame.arm_ik_calibration.left.wrist_rotation_offset_model =
+            Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2);
+        frame.arm_ik_calibration.right.wrist_rotation_offset_model =
+            Quat::from_rotation_z(std::f32::consts::FRAC_PI_2);
+    }
+    Some(frame)
 }
 
 fn build_tracking_frame(
@@ -198,10 +206,12 @@ fn convert_java_pose(raw: TrackedPose) -> VrTrackedPose {
         return VrTrackedPose::default();
     }
 
-    let basis = Quat::from_rotation_y(std::f32::consts::PI);
     VrTrackedPose {
         position: raw.position * XR_TO_MODEL_SCALE,
-        rotation: (basis * raw.orientation * basis).normalize(),
+        // Java/Vivecraft packets are already converted into player-local space on the Java side.
+        // Applying the old demo Y-180 basis here flips the handedness of X/Z-axis rotations,
+        // which makes controller roll/pitch drive the model in the opposite direction.
+        rotation: raw.orientation.normalize(),
         valid: true,
     }
 }
@@ -335,7 +345,7 @@ mod tests {
     }
 
     #[test]
-    fn java_tracking_frame_should_flip_only_x_axis_for_position() {
+    fn java_tracking_frame_should_preserve_player_local_position() {
         let mut model = MmdModel::new();
         model.bone_manager = make_calibration_test_bones(true, true);
 
@@ -362,10 +372,10 @@ mod tests {
     }
 
     #[test]
-    fn java_tracking_frame_should_apply_demo_rotation_basis() {
+    fn java_tracking_frame_should_preserve_rotation_direction() {
         let mut model = MmdModel::new();
         model.bone_manager = make_calibration_test_bones(true, true);
-        let raw_rotation = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+        let raw_rotation = Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
 
         let frame = resolve_java_tracking_frame_for_model(
             &mut model,
@@ -383,8 +393,41 @@ mod tests {
         )
         .expect("java frame");
 
-        let basis = Quat::from_rotation_y(std::f32::consts::PI);
-        assert_quat_eq(frame.head.rotation, (basis * raw_rotation * basis).normalize());
+        assert_quat_eq(frame.head.rotation, raw_rotation.normalize());
+    }
+
+    #[test]
+    fn java_tracking_frame_should_preserve_hand_rotation_direction() {
+        let mut model = MmdModel::new();
+        model.bone_manager = make_calibration_test_bones(true, true);
+        let raw_rotation = Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
+
+        let frame = resolve_java_tracking_frame_for_model(
+            &mut model,
+            Some(VrmTrackingInput {
+                right_hand: TrackedPose {
+                    position: Vec3::ZERO,
+                    orientation: raw_rotation,
+                    valid: true,
+                },
+                ..VrmTrackingInput::default()
+            }),
+            HandTrackingCalibration::default(),
+            ArmIkCalibration::default(),
+            BodyTrackingCalibration::default(),
+        )
+        .expect("java frame");
+
+        assert_quat_eq(frame.right_palm.rotation, raw_rotation.normalize());
+        assert!(!frame.arm_ik_calibration.hand_face_flip);
+        assert_quat_eq(
+            frame.arm_ik_calibration.left.wrist_rotation_offset_model,
+            Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2),
+        );
+        assert_quat_eq(
+            frame.arm_ik_calibration.right.wrist_rotation_offset_model,
+            Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+        );
     }
 
     #[test]
@@ -428,11 +471,14 @@ mod tests {
         let arm_ik_calibration = ArmIkCalibration {
             left: super::super::tracking::ArmIkHandCalibration {
                 wrist_offset_model: Vec3::new(1.0, 2.0, 3.0),
+                wrist_rotation_offset_model: Quat::from_rotation_z(0.1),
             },
             right: super::super::tracking::ArmIkHandCalibration {
                 wrist_offset_model: Vec3::new(-1.0, -2.0, -3.0),
+                wrist_rotation_offset_model: Quat::from_rotation_z(-0.2),
             },
             forearm_twist_ratio: 0.75,
+            hand_face_flip: false,
         };
 
         let frame = build_tracking_frame(
@@ -449,6 +495,14 @@ mod tests {
         assert_eq!(
             frame.arm_ik_calibration.right.wrist_offset_model,
             arm_ik_calibration.right.wrist_offset_model
+        );
+        assert_quat_eq(
+            frame.arm_ik_calibration.left.wrist_rotation_offset_model,
+            arm_ik_calibration.left.wrist_rotation_offset_model,
+        );
+        assert_quat_eq(
+            frame.arm_ik_calibration.right.wrist_rotation_offset_model,
+            arm_ik_calibration.right.wrist_rotation_offset_model,
         );
         assert_eq!(
             frame.arm_ik_calibration.forearm_twist_ratio,
