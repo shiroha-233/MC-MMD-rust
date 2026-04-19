@@ -43,19 +43,7 @@ public final class VRBoneDriver {
             float sinY = Mth.sin(yawRad);
 
             float[] localTracking = new float[21];
-            for (int i = 0; i < 3; i++) {
-                int off = i * 7;
-
-                float dx = worldData[off] - px;
-                float dy = worldData[off + 1] - py;
-                float dz = worldData[off + 2] - pz;
-
-                localTracking[off] = cosY * dx + sinY * dz;
-                localTracking[off + 1] = dy;
-                localTracking[off + 2] = -sinY * dx + cosY * dz;
-
-                transformRotation(worldData, off + 3, localTracking, off + 3, cosY, sinY);
-            }
+            transformWorldTrackingToPlayerLocal(worldData, px, py, pz, cosY, sinY, localTracking);
 
             NativeFunc.GetInst().ApplyVRTrackingInput(modelHandle, localTracking);
             return true;
@@ -65,10 +53,40 @@ public final class VRBoneDriver {
         }
     }
 
+    static void transformWorldTrackingToPlayerLocal(float[] worldData,
+                                                    float px,
+                                                    float py,
+                                                    float pz,
+                                                    float cosY,
+                                                    float sinY,
+                                                    float[] localTracking) {
+        for (int i = 0; i < 3; i++) {
+            int off = i * 7;
+
+            float dx = worldData[off] - px;
+            float dy = worldData[off + 1] - py;
+            float dz = worldData[off + 2] - pz;
+
+            localTracking[off] = cosY * dx + sinY * dz;
+            localTracking[off + 1] = dy;
+            localTracking[off + 2] = -sinY * dx + cosY * dz;
+
+            transformRotation(worldData, off + 3, localTracking, off + 3, cosY, sinY);
+        }
+    }
+
+    static void transformRotationToPlayerLocal(float[] src,
+                                               int si,
+                                               float[] dst,
+                                               int di,
+                                               float yawRad) {
+        transformRotation(src, si, dst, di, Mth.cos(yawRad), Mth.sin(yawRad));
+    }
+
     private static void transformRotation(float[] src, int si, float[] dst, int di, float cosY, float sinY) {
         float cosH = (float) Math.sqrt((1.0f + cosY) * 0.5f);
         float sinH = (float) Math.sqrt(Math.max(0.0f, (1.0f - cosY) * 0.5f));
-        if (sinY > 0.0f) {
+        if (sinY < 0.0f) {
             sinH = -sinH;
         }
 

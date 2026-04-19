@@ -151,8 +151,8 @@ impl BodyTrackingCalibration {
 const CONTROLLER_TO_PALM_POSITION_OFFSET_METERS: Vec3 = Vec3::new(0.0, -0.012, -0.018);
 const VRM_DEFAULT_LEFT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [0.0, 0.0, 0.0];
 const VRM_DEFAULT_RIGHT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [0.0, 0.0, 0.0];
-const PMX_DEFAULT_LEFT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [90.0, 0.0, -90.0];
-const PMX_DEFAULT_RIGHT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [90.0, 0.0, 90.0];
+const PMX_DEFAULT_LEFT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [90.0, 0.0, 90.0];
+const PMX_DEFAULT_RIGHT_CONTROLLER_TO_PALM_ROTATION_DEGREES: [f32; 3] = [90.0, 0.0, -90.0];
 
 pub(crate) fn vrm_controller_hand_tracking_calibration() -> HandTrackingCalibration {
     HandTrackingCalibration {
