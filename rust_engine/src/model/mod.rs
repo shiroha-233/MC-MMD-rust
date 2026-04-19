@@ -15,7 +15,7 @@ mod vrm_skeleton;
 
 pub use loader::load_pmx;
 pub use material::MmdMaterial;
-pub use runtime::MmdModel;
+pub use runtime::{MmdModel, ModelVrDebugSnapshot};
 pub use submesh::SubMesh;
 pub use vrm_extensions::{
     ColliderShape, ConstraintAxis, ExpressionOverride, FirstPersonConfig,

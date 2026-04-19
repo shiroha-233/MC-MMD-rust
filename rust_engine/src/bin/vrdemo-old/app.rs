@@ -23,7 +23,7 @@ pub fn run() -> Result<()> {
     let mut app = DemoApp::new(model_path);
     event_loop
         .run_app(&mut app)
-        .context("failed to run VR PMX Demo")
+        .context("failed to run VR avatar demo")
 }
 
 fn resolve_model_path() -> Result<PathBuf> {
@@ -63,7 +63,7 @@ fn parse_cli_model_path() -> Result<Option<PathBuf>> {
 fn set_model_path(slot: &mut Option<PathBuf>, path: PathBuf) -> Result<()> {
     if let Some(existing) = slot {
         return Err(anyhow!(
-            "multiple VRM model paths were provided: `{}` and `{}`",
+            "multiple avatar model paths were provided: `{}` and `{}`",
             existing.display(),
             path.display()
         ));
@@ -75,14 +75,14 @@ fn set_model_path(slot: &mut Option<PathBuf>, path: PathBuf) -> Result<()> {
 
 fn pick_model_path_with_dialog() -> Result<PathBuf> {
     let mut dialog = FileDialog::new()
-        .set_title("Select a VRM model")
-        .add_filter("VRM avatar", &["vrm"]);
+        .set_title("Select a VRM or PMX model")
+        .add_filter("Avatar model", &["vrm", "pmx"]);
     if let Ok(current_dir) = std::env::current_dir() {
         dialog = dialog.set_directory(current_dir);
     }
 
     dialog.pick_file().ok_or_else(|| {
-        anyhow!("no VRM model selected; pass `--model <path>` or choose a `.vrm` file")
+        anyhow!("no avatar model selected; pass `--model <path>` or choose a `.vrm`/`.pmx` file")
     })
 }
 
@@ -97,16 +97,18 @@ fn validate_model_path(path: PathBuf) -> Result<PathBuf> {
     let path = path.canonicalize().unwrap_or(path);
 
     if !path.is_file() {
-        return Err(anyhow!("VRM file does not exist: {}", path.display()));
+        return Err(anyhow!("avatar file does not exist: {}", path.display()));
     }
 
-    let is_vrm = path
+    let is_supported_model = path
         .extension()
         .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("vrm"));
-    if !is_vrm {
+        .is_some_and(|extension| {
+            extension.eq_ignore_ascii_case("vrm") || extension.eq_ignore_ascii_case("pmx")
+        });
+    if !is_supported_model {
         return Err(anyhow!(
-            "selected file is not a `.vrm` model: {}",
+            "selected file is not a supported avatar model (`.vrm` or `.pmx`): {}",
             path.display()
         ));
     }
@@ -150,7 +152,7 @@ impl ApplicationHandler for DemoApp {
                 self.update_control_flow(event_loop);
             }
             Err(err) => {
-                log::error!("failed to initialize VR PMX Demo: {err:#}");
+                log::error!("failed to initialize VR avatar demo: {err:#}");
                 event_loop.exit();
             }
         }
@@ -359,38 +361,75 @@ impl VrDemo {
             };
             self.scene.update(&tracking, delta_time);
 
+            let desktop_aspect = self.renderer.mirror_aspect();
             let xr_model_matrix = self.scene.xr_model_matrix();
             let xr_room_matrix = self.scene.xr_room_matrix();
             let mirror_model_matrix = self.scene.mirror_model_matrix();
             let mirror_room_matrix = self.scene.mirror_room_matrix();
-            let mirror_camera = self.scene.mirror_camera(self.renderer.mirror_aspect());
+            let room_mirror_camera = self
+                .scene
+                .room_mirror_camera(self.renderer.room_mirror_aspect());
             let hmd_data = self.scene.hmd_render_data();
             let mirror_data = self.scene.mirror_render_data();
+            let (desktop_data, desktop_model_matrix, desktop_room_matrix, desktop_view_proj) =
+                if let Some(camera) = self.scene.first_person_camera(desktop_aspect) {
+                    (&hmd_data, xr_model_matrix, xr_room_matrix, camera.view_proj)
+                } else {
+                    let mirror_camera = self.scene.mirror_camera(desktop_aspect);
+                    (
+                        &mirror_data,
+                        mirror_model_matrix,
+                        mirror_room_matrix,
+                        mirror_camera.view_proj,
+                    )
+                };
             self.renderer.render_xr_and_mirror(
                 &self.window,
                 &mut self.xr,
                 frame,
                 self.scene.assets(),
                 &hmd_data,
+                desktop_data,
                 &mirror_data,
                 xr_model_matrix,
                 xr_room_matrix,
-                mirror_model_matrix,
-                mirror_room_matrix,
-                mirror_camera.view_proj,
+                desktop_model_matrix,
+                desktop_room_matrix,
+                desktop_view_proj,
+                room_mirror_camera.view_proj,
             )?;
         } else {
-            let model_matrix = self.scene.mirror_model_matrix();
-            let room_matrix = self.scene.mirror_room_matrix();
-            let mirror_camera = self.scene.mirror_camera(self.renderer.mirror_aspect());
+            let desktop_aspect = self.renderer.mirror_aspect();
+            let xr_model_matrix = self.scene.xr_model_matrix();
+            let xr_room_matrix = self.scene.xr_room_matrix();
+            let mirror_model_matrix = self.scene.mirror_model_matrix();
+            let mirror_room_matrix = self.scene.mirror_room_matrix();
+            let room_mirror_camera = self
+                .scene
+                .room_mirror_camera(self.renderer.room_mirror_aspect());
+            let hmd_data = self.scene.hmd_render_data();
             let mirror_data = self.scene.mirror_render_data();
+            let (desktop_data, desktop_model_matrix, desktop_room_matrix, desktop_view_proj) =
+                if let Some(camera) = self.scene.first_person_camera(desktop_aspect) {
+                    (&hmd_data, xr_model_matrix, xr_room_matrix, camera.view_proj)
+                } else {
+                    let mirror_camera = self.scene.mirror_camera(desktop_aspect);
+                    (
+                        &mirror_data,
+                        mirror_model_matrix,
+                        mirror_room_matrix,
+                        mirror_camera.view_proj,
+                    )
+                };
             self.renderer.render_mirror_only(
                 &self.window,
                 self.scene.assets(),
+                desktop_data,
                 &mirror_data,
-                model_matrix,
-                room_matrix,
-                mirror_camera.view_proj,
+                desktop_model_matrix,
+                desktop_room_matrix,
+                desktop_view_proj,
+                room_mirror_camera.view_proj,
             )?;
         }
 
@@ -417,7 +456,7 @@ impl VrDemo {
     fn refresh_title(&mut self) {
         let runtime_label = self.xr.runtime_label();
         let title = format!(
-            "VR PMX Demo | {} | {}",
+            "VR Avatar Demo | {} | {}",
             runtime_label,
             self.scene.status_line(&runtime_label)
         );
@@ -427,7 +466,7 @@ impl VrDemo {
 
 fn window_attributes() -> WindowAttributes {
     Window::default_attributes()
-        .with_title("VR PMX Demo")
+        .with_title("VR Avatar Demo")
         .with_inner_size(LogicalSize::new(1280.0, 720.0))
         .with_resizable(true)
 }

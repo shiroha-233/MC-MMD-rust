@@ -6,7 +6,9 @@ use crate::physics::MMDPhysics;
 use crate::skeleton::BoneManager;
 use crate::vr::{VrDebugState, VrIkSolver, VrTrackingFrame};
 use crate::vrm_runtime::{
-    ArmIkCalibration, VrmModelRuntimeState, VrmRuntimeInput, VrmRuntimeOutput,
+    resolve_tracking_frame_for_model, ArmIkCalibration, BodyTrackingCalibration,
+    HandTrackingCalibration, VrmModelRuntimeState, VrmRuntimeInput, VrmRuntimeOutput,
+    VrmTrackingInput,
 };
 use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 use rayon::prelude::*;
@@ -20,6 +22,20 @@ use super::{MmdMaterial, RuntimeVertex, SubMesh, VertexWeight};
 thread_local! {
     /// 线程局部 PRNG 状态（xorshift32），避免多线程竞态
     static PRNG_STATE: std::cell::Cell<u32> = std::cell::Cell::new(0);
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ModelVrDebugSnapshot {
+    pub head_local_model: Vec3,
+    pub body_anchor_model: Vec3,
+    pub left_palm_target_model: Vec3,
+    pub right_palm_target_model: Vec3,
+    pub left_auto_wrist_offset_model: Vec3,
+    pub right_auto_wrist_offset_model: Vec3,
+    pub left_wrist_solved_model: Vec3,
+    pub right_wrist_solved_model: Vec3,
+    pub left_wrist_error_cm: f32,
+    pub right_wrist_error_cm: f32,
 }
 
 /// 线程安全的伪随机数生成（0.0 - 1.0），使用 xorshift32
@@ -395,6 +411,30 @@ impl MmdModel {
         Some(result)
     }
 
+    pub fn apply_vr_tracking_input(
+        &mut self,
+        tracking: Option<VrmTrackingInput>,
+        hand_calibration: HandTrackingCalibration,
+        arm_ik_calibration: ArmIkCalibration,
+        body_calibration: BodyTrackingCalibration,
+    ) {
+        let Some(frame) = resolve_tracking_frame_for_model(
+            self,
+            tracking,
+            hand_calibration,
+            arm_ik_calibration,
+            body_calibration,
+        ) else {
+            self.set_vr_enabled(false);
+            self.set_vr_tracking_frame(None);
+            return;
+        };
+
+        self.set_vr_enabled(true);
+        self.set_vr_ik_strength(1.0);
+        self.set_vr_tracking_frame(Some(frame));
+    }
+
     // ========== 材质可见性控制 ==========
 
     /// 初始化材质可见性（默认全部可见）
@@ -742,6 +782,23 @@ impl MmdModel {
         }
 
         Vec3::ZERO
+    }
+
+    pub fn current_head_rotation(&mut self) -> Quat {
+        if !self.head_detection_initialized {
+            self.init_head_detection();
+        }
+
+        self.head_bone_index
+            .map(|index| Quat::from_mat4(&self.bone_manager.get_global_transform(index)))
+            .map(|rotation| {
+                if rotation.length_squared() > 1e-6 {
+                    rotation.normalize()
+                } else {
+                    Quat::IDENTITY
+                }
+            })
+            .unwrap_or(Quat::IDENTITY)
     }
 
     /// 初始化动画状态
@@ -2412,6 +2469,21 @@ impl MmdModel {
 
     pub fn vr_ik_strength(&self) -> f32 {
         self.vr_ik_strength
+    }
+
+    pub fn vr_debug_snapshot(&self) -> ModelVrDebugSnapshot {
+        ModelVrDebugSnapshot {
+            head_local_model: self.vr_debug_state.head_local_model,
+            body_anchor_model: self.vr_debug_state.body_anchor_model,
+            left_palm_target_model: self.vr_debug_state.left_palm_target_model,
+            right_palm_target_model: self.vr_debug_state.right_palm_target_model,
+            left_auto_wrist_offset_model: self.vr_debug_state.left_auto_wrist_offset_model,
+            right_auto_wrist_offset_model: self.vr_debug_state.right_auto_wrist_offset_model,
+            left_wrist_solved_model: self.vr_debug_state.left_wrist_solved_model,
+            right_wrist_solved_model: self.vr_debug_state.right_wrist_solved_model,
+            left_wrist_error_cm: self.vr_debug_state.left_wrist_error_cm,
+            right_wrist_error_cm: self.vr_debug_state.right_wrist_error_cm,
+        }
     }
 
     pub(crate) fn vr_debug_state(&self) -> VrDebugState {

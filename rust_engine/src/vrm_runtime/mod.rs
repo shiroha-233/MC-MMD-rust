@@ -10,7 +10,7 @@ pub(crate) mod spring_bone;
 pub(crate) mod tracking;
 
 pub(crate) use constraint::ConstraintRuntime;
-pub(crate) use control_rig::ControlRigRuntime;
+pub(crate) use control_rig::{resolve_tracking_frame_for_model, ControlRigRuntime};
 pub(crate) use expression::ExpressionRuntime;
 pub(crate) use first_person::{FirstPersonRuntime, FirstPersonSnapshot};
 pub(crate) use look_at::LookAtRuntime;

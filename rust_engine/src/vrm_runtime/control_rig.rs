@@ -81,7 +81,6 @@ impl ControlRigRuntime {
             model.set_vr_tracking_frame(None);
             return;
         };
-
         let resolved_body = body_calibration.resolve_with_defaults(self.default_body_calibration);
         let frame = build_tracking_frame(
             tracking,
@@ -94,6 +93,24 @@ impl ControlRigRuntime {
         model.set_vr_ik_strength(1.0);
         model.set_vr_tracking_frame(Some(frame));
     }
+}
+
+pub(crate) fn resolve_tracking_frame_for_model(
+    model: &mut MmdModel,
+    tracking: Option<VrmTrackingInput>,
+    hand_calibration: HandTrackingCalibration,
+    arm_ik_calibration: ArmIkCalibration,
+    body_calibration: BodyTrackingCalibration,
+) -> Option<VrTrackingFrame> {
+    let tracking = tracking?;
+    let default_body_calibration = derive_default_body_calibration(model);
+    let resolved_body = body_calibration.resolve_with_defaults(default_body_calibration);
+    Some(build_tracking_frame(
+        tracking,
+        hand_calibration,
+        arm_ik_calibration,
+        resolved_body,
+    ))
 }
 
 fn build_tracking_frame(

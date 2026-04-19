@@ -55,9 +55,11 @@ impl AvatarScene {
         self.space.update_locomotion(tracking, delta_time);
         self.space
             .sync_tracking_from_head(tracking.head, self.avatar.current_view_anchor_model());
-        let runtime_tracking = self
-            .space
-            .runtime_tracking(tracking, self.avatar.last_tracking());
+        let runtime_tracking = self.space.runtime_tracking_with_mode(
+            tracking,
+            self.avatar.last_tracking(),
+            self.avatar.hand_tracking_mode(),
+        );
         self.avatar.process(runtime_tracking, delta_time);
         self.space
             .sync_render_from_head(tracking.head, self.avatar.current_view_anchor_model());
@@ -78,6 +80,15 @@ impl AvatarScene {
     pub fn mirror_camera(&self, aspect: f32) -> MirrorCamera {
         self.space
             .mirror_camera(aspect, self.avatar.current_view_anchor_model())
+    }
+
+    pub fn first_person_camera(&self, aspect: f32) -> Option<MirrorCamera> {
+        self.space.first_person_camera(aspect)
+    }
+
+    pub fn room_mirror_camera(&self, aspect: f32) -> MirrorCamera {
+        self.space
+            .room_mirror_camera(aspect, self.avatar.current_view_anchor_model())
     }
 
     pub fn status_line(&self, runtime_label: &str) -> String {

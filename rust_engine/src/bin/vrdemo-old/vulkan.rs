@@ -14,7 +14,7 @@ use winit::dpi::PhysicalSize;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window::Window;
 
-use crate::room::RoomMesh;
+use crate::room::{RoomMesh, RoomTextureKind, ROOM_MIRROR_ASPECT};
 use crate::scene::{ModelRenderData, SceneAssets};
 use crate::xr::{BegunFrame, VulkanSessionInfo, XrBootstrap, XrRuntime};
 
@@ -22,6 +22,9 @@ const XR_NEAR: f32 = 0.05;
 const XR_FAR: f32 = 50.0;
 const DEPTH_FORMAT: vk::Format = vk::Format::D32_SFLOAT;
 const FRAMES_IN_FLIGHT: usize = 2;
+const ROOM_MIRROR_TARGET_WIDTH: u32 = 960;
+const ROOM_MIRROR_TARGET_HEIGHT: u32 = 1280;
+const ROOM_MIRROR_TARGET_FORMAT: vk::Format = vk::Format::R8G8B8A8_SRGB;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -56,9 +59,53 @@ struct TextureResource {
     descriptor_set: vk::DescriptorSet,
 }
 
+impl ImageResource {
+    fn null() -> Self {
+        Self {
+            image: vk::Image::null(),
+            memory: vk::DeviceMemory::null(),
+            view: vk::ImageView::null(),
+        }
+    }
+}
+
+impl TextureResource {
+    fn null() -> Self {
+        Self {
+            image: ImageResource::null(),
+            descriptor_set: vk::DescriptorSet::null(),
+        }
+    }
+}
+
 struct PipelineBundle {
     render_pass: vk::RenderPass,
     pipeline: vk::Pipeline,
+}
+
+struct RoomMirrorTarget {
+    texture: TextureResource,
+    depth: ImageResource,
+    framebuffer: vk::Framebuffer,
+    extent: vk::Extent2D,
+}
+
+impl RoomMirrorTarget {
+    fn null() -> Self {
+        Self {
+            texture: TextureResource::null(),
+            depth: ImageResource::null(),
+            framebuffer: vk::Framebuffer::null(),
+            extent: vk::Extent2D {
+                width: ROOM_MIRROR_TARGET_WIDTH,
+                height: ROOM_MIRROR_TARGET_HEIGHT,
+            },
+        }
+    }
+
+    fn descriptor_set(&self) -> vk::DescriptorSet {
+        self.texture.descriptor_set
+    }
 }
 
 struct MirrorSwapchain {
@@ -92,6 +139,7 @@ struct StaticRoomMeshBuffers {
     index_count: u32,
     color: [f32; 4],
     model_matrix: Mat4,
+    texture_kind: RoomTextureKind,
 }
 
 pub struct VulkanRenderer {
@@ -106,6 +154,7 @@ pub struct VulkanRenderer {
     swapchain_loader: ash::khr::swapchain::Device,
     mirror: MirrorSwapchain,
     mirror_pipeline: PipelineBundle,
+    room_mirror_pipeline: PipelineBundle,
     xr_pipeline: Option<PipelineBundle>,
     command_pool: vk::CommandPool,
     frames: Vec<FrameSync>,
@@ -116,12 +165,15 @@ pub struct VulkanRenderer {
     sampler: vk::Sampler,
     default_texture: TextureResource,
     textures: Vec<TextureResource>,
+    room_mirror_target: RoomMirrorTarget,
     index_buffer: BufferResource,
     hmd_vertex_buffer: BufferResource,
     mirror_vertex_buffer: BufferResource,
+    room_mirror_vertex_buffer: BufferResource,
     room_meshes: Vec<StaticRoomMeshBuffers>,
     scratch_hmd_vertices: Vec<GpuVertex>,
     scratch_mirror_vertices: Vec<GpuVertex>,
+    scratch_room_mirror_vertices: Vec<GpuVertex>,
     xr_swapchain: Option<XrSwapchainBundle>,
     xr_swapchain_format: Option<vk::Format>,
     vert_spv: Vec<u32>,
@@ -248,7 +300,7 @@ impl VulkanRenderer {
 
         let descriptor_set_layout = Self::create_descriptor_set_layout(&device)?;
         let descriptor_pool =
-            Self::create_descriptor_pool(&device, assets.texture_paths.len() + 1)?;
+            Self::create_descriptor_pool(&device, assets.texture_paths.len() + 2)?;
         let pipeline_layout = Self::create_pipeline_layout(&device, descriptor_set_layout)?;
         let sampler = Self::create_sampler(&device)?;
 
@@ -278,7 +330,17 @@ impl VulkanRenderer {
             &device,
             pipeline_layout,
             mirror.format,
+            vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::PRESENT_SRC_KHR,
+            &vert_spv,
+            &frag_spv,
+        )?;
+        let room_mirror_pipeline = Self::create_pipeline_bundle(
+            &device,
+            pipeline_layout,
+            ROOM_MIRROR_TARGET_FORMAT,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             &vert_spv,
             &frag_spv,
         )?;
@@ -360,6 +422,13 @@ impl VulkanRenderer {
             vertex_buffer_size,
             vk::BufferUsageFlags::VERTEX_BUFFER,
         )?;
+        let room_mirror_vertex_buffer = Self::create_host_visible_buffer(
+            &instance,
+            &device,
+            &memory_properties,
+            vertex_buffer_size,
+            vk::BufferUsageFlags::VERTEX_BUFFER,
+        )?;
         let room_meshes = room_meshes
             .iter()
             .map(|mesh| {
@@ -388,6 +457,7 @@ impl VulkanRenderer {
                     index_count: mesh.indices.len() as u32,
                     color: mesh.color,
                     model_matrix: mesh.model_matrix,
+                    texture_kind: mesh.texture_kind,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -404,6 +474,7 @@ impl VulkanRenderer {
             swapchain_loader,
             mirror,
             mirror_pipeline,
+            room_mirror_pipeline,
             xr_pipeline: None,
             command_pool,
             frames,
@@ -412,21 +483,17 @@ impl VulkanRenderer {
             descriptor_set_layout,
             pipeline_layout,
             sampler,
-            default_texture: TextureResource {
-                image: ImageResource {
-                    image: vk::Image::null(),
-                    memory: vk::DeviceMemory::null(),
-                    view: vk::ImageView::null(),
-                },
-                descriptor_set: vk::DescriptorSet::null(),
-            },
+            default_texture: TextureResource::null(),
             textures: Vec::new(),
+            room_mirror_target: RoomMirrorTarget::null(),
             index_buffer,
             hmd_vertex_buffer,
             mirror_vertex_buffer,
+            room_mirror_vertex_buffer,
             room_meshes,
             scratch_hmd_vertices: Vec::with_capacity(assets.vertex_count),
             scratch_mirror_vertices: Vec::with_capacity(assets.vertex_count),
+            scratch_room_mirror_vertices: Vec::with_capacity(assets.vertex_count),
             xr_swapchain: None,
             xr_swapchain_format: None,
             vert_spv,
@@ -438,6 +505,8 @@ impl VulkanRenderer {
             renderer.create_texture_from_rgba8(1, 1, &[255, 255, 255, 255])?;
         log::info!("Vulkan: 上传 {} 张模型纹理", assets.texture_paths.len());
         renderer.textures = renderer.load_textures(&assets.texture_paths)?;
+        log::info!("Vulkan: 创建房间镜面离屏目标");
+        renderer.room_mirror_target = renderer.create_room_mirror_target()?;
         log::info!("Vulkan: 重建桌面 Framebuffer");
         renderer.rebuild_mirror_framebuffers()?;
         log::info!("Vulkan: 初始化完成");
@@ -515,6 +584,7 @@ impl VulkanRenderer {
             &self.device,
             self.pipeline_layout,
             xr_format,
+            vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             &self.vert_spv,
             &self.frag_spv,
@@ -618,6 +688,15 @@ impl VulkanRenderer {
         }
     }
 
+    pub fn room_mirror_aspect(&self) -> f32 {
+        if self.room_mirror_target.extent.height == 0 {
+            ROOM_MIRROR_ASPECT
+        } else {
+            self.room_mirror_target.extent.width as f32
+                / self.room_mirror_target.extent.height as f32
+        }
+    }
+
     pub fn resize_mirror(&mut self, window: &Window) -> Result<()> {
         let size = window.inner_size();
         if size.width == 0 || size.height == 0 {
@@ -642,6 +721,7 @@ impl VulkanRenderer {
             &self.device,
             self.pipeline_layout,
             self.mirror.format,
+            vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::PRESENT_SRC_KHR,
             &self.vert_spv,
             &self.frag_spv,
@@ -654,22 +734,26 @@ impl VulkanRenderer {
         &mut self,
         window: &Window,
         assets: &SceneAssets,
-        mirror_data: &ModelRenderData<'_>,
-        mirror_model_matrix: Mat4,
-        room_model_matrix: Mat4,
-        mirror_view_proj: Mat4,
+        desktop_data: &ModelRenderData<'_>,
+        room_mirror_data: &ModelRenderData<'_>,
+        desktop_model_matrix: Mat4,
+        desktop_room_matrix: Mat4,
+        desktop_view_proj: Mat4,
+        room_mirror_view_proj: Mat4,
     ) -> Result<()> {
         self.render_internal(
             window,
             assets,
             None,
             None,
-            mirror_data,
+            desktop_data,
             Mat4::IDENTITY,
             Mat4::IDENTITY,
-            mirror_model_matrix,
-            room_model_matrix,
-            mirror_view_proj,
+            room_mirror_data,
+            desktop_model_matrix,
+            desktop_room_matrix,
+            desktop_view_proj,
+            room_mirror_view_proj,
         )?;
         Ok(())
     }
@@ -681,21 +765,25 @@ impl VulkanRenderer {
         frame: BegunFrame,
         assets: &SceneAssets,
         hmd_data: &ModelRenderData<'_>,
-        mirror_data: &ModelRenderData<'_>,
+        desktop_data: &ModelRenderData<'_>,
+        room_mirror_data: &ModelRenderData<'_>,
         xr_model_matrix: Mat4,
         xr_room_matrix: Mat4,
-        mirror_model_matrix: Mat4,
-        mirror_room_matrix: Mat4,
-        mirror_view_proj: Mat4,
+        desktop_model_matrix: Mat4,
+        desktop_room_matrix: Mat4,
+        desktop_view_proj: Mat4,
+        room_mirror_view_proj: Mat4,
     ) -> Result<()> {
         if !frame.should_render {
             self.render_mirror_only(
                 window,
                 assets,
-                mirror_data,
-                mirror_model_matrix,
-                mirror_room_matrix,
-                mirror_view_proj,
+                desktop_data,
+                room_mirror_data,
+                desktop_model_matrix,
+                desktop_room_matrix,
+                desktop_view_proj,
+                room_mirror_view_proj,
             )?;
             runtime.end_frame_empty(frame.predicted_display_time)?;
             return Ok(());
@@ -706,12 +794,14 @@ impl VulkanRenderer {
             assets,
             Some(&frame),
             Some(hmd_data),
-            mirror_data,
+            desktop_data,
             xr_model_matrix,
             xr_room_matrix,
-            mirror_model_matrix,
-            mirror_room_matrix,
-            mirror_view_proj,
+            room_mirror_data,
+            desktop_model_matrix,
+            desktop_room_matrix,
+            desktop_view_proj,
+            room_mirror_view_proj,
         )?;
         let projection_views = self.build_projection_views(&frame)?;
         runtime.end_frame_projection(frame.predicted_display_time, &projection_views)?;
@@ -724,12 +814,14 @@ impl VulkanRenderer {
         assets: &SceneAssets,
         xr_frame: Option<&BegunFrame>,
         hmd_data: Option<&ModelRenderData<'_>>,
-        mirror_data: &ModelRenderData<'_>,
+        desktop_data: &ModelRenderData<'_>,
         xr_model_matrix: Mat4,
         xr_room_matrix: Mat4,
-        mirror_model_matrix: Mat4,
-        mirror_room_matrix: Mat4,
-        mirror_view_proj: Mat4,
+        room_mirror_data: &ModelRenderData<'_>,
+        desktop_model_matrix: Mat4,
+        desktop_room_matrix: Mat4,
+        desktop_view_proj: Mat4,
+        room_mirror_view_proj: Mat4,
     ) -> Result<()> {
         let frame_index = self.frame_index;
         let fence = self.frames[frame_index].fence;
@@ -758,8 +850,8 @@ impl VulkanRenderer {
             None
         };
 
-        let share_avatar_geometry = hmd_data
-            .map(|data| Self::shares_avatar_geometry(data, mirror_data))
+        let share_desktop_geometry = hmd_data
+            .map(|data| Self::shares_avatar_geometry(data, desktop_data))
             .unwrap_or(false);
 
         if let Some(data) = hmd_data {
@@ -770,16 +862,34 @@ impl VulkanRenderer {
                 data,
             )?;
         }
-        let mirror_vertex_buffer = if share_avatar_geometry {
+        let desktop_vertex_buffer = if share_desktop_geometry {
             &self.hmd_vertex_buffer
         } else {
             Self::upload_dynamic_vertices(
                 &self.device,
                 &mut self.scratch_mirror_vertices,
                 &self.mirror_vertex_buffer,
-                mirror_data,
+                desktop_data,
             )?;
             &self.mirror_vertex_buffer
+        };
+        let share_room_mirror_with_desktop =
+            Self::shares_avatar_geometry(room_mirror_data, desktop_data);
+        let share_room_mirror_with_hmd = hmd_data
+            .map(|data| Self::shares_avatar_geometry(data, room_mirror_data))
+            .unwrap_or(false);
+        let room_mirror_vertex_buffer = if share_room_mirror_with_desktop {
+            desktop_vertex_buffer
+        } else if share_room_mirror_with_hmd {
+            &self.hmd_vertex_buffer
+        } else {
+            Self::upload_dynamic_vertices(
+                &self.device,
+                &mut self.scratch_room_mirror_vertices,
+                &self.room_mirror_vertex_buffer,
+                room_mirror_data,
+            )?;
+            &self.room_mirror_vertex_buffer
         };
 
         vk_result(
@@ -792,6 +902,32 @@ impl VulkanRenderer {
             },
             "开始录制 CommandBuffer 失败",
         )?;
+
+        if hmd_data.is_some() || mirror_image.is_some() {
+            let room_mirror_model_matrix = if xr_frame.is_some() {
+                xr_model_matrix
+            } else {
+                desktop_model_matrix
+            };
+            let room_mirror_room_matrix = if xr_frame.is_some() {
+                xr_room_matrix
+            } else {
+                desktop_room_matrix
+            };
+            self.record_scene_pass(
+                command_buffer,
+                &self.room_mirror_pipeline,
+                self.room_mirror_target.framebuffer,
+                self.room_mirror_target.extent,
+                assets,
+                room_mirror_data,
+                room_mirror_vertex_buffer,
+                room_mirror_view_proj * room_mirror_model_matrix,
+                room_mirror_view_proj * room_mirror_room_matrix,
+                false,
+                false,
+            )?;
+        }
 
         let mut xr_image_to_release = false;
         if let (Some(frame), Some(data), Some(xr_pipeline)) =
@@ -832,6 +968,7 @@ impl VulkanRenderer {
                     mvp,
                     xr_view_proj * xr_room_matrix,
                     false,
+                    true,
                 )?;
             }
             let _ = xr_image_index;
@@ -845,11 +982,12 @@ impl VulkanRenderer {
                 self.mirror.framebuffers[image_index as usize],
                 self.mirror.extent,
                 assets,
-                mirror_data,
-                mirror_vertex_buffer,
-                mirror_view_proj * mirror_model_matrix,
-                mirror_view_proj * mirror_room_matrix,
+                desktop_data,
+                desktop_vertex_buffer,
+                desktop_view_proj * desktop_model_matrix,
+                desktop_view_proj * desktop_room_matrix,
                 false,
+                true,
             )?;
         }
 
@@ -957,6 +1095,7 @@ impl VulkanRenderer {
         avatar_mvp: Mat4,
         room_view_proj: Mat4,
         flip_viewport_y: bool,
+        draw_room_mirror_surface: bool,
     ) -> Result<()> {
         let clear_values = [
             vk::ClearValue {
@@ -1027,7 +1166,12 @@ impl VulkanRenderer {
         }
 
         let light_dir = Vec3::new(0.45, 1.0, 0.25).normalize();
-        self.record_room_meshes(command_buffer, room_view_proj, light_dir)?;
+        self.record_room_meshes(
+            command_buffer,
+            room_view_proj,
+            light_dir,
+            draw_room_mirror_surface,
+        )?;
         unsafe {
             self.device
                 .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer.buffer], &[0]);
@@ -1098,9 +1242,24 @@ impl VulkanRenderer {
         command_buffer: vk::CommandBuffer,
         room_view_proj: Mat4,
         light_dir: Vec3,
+        draw_room_mirror_surface: bool,
     ) -> Result<()> {
-        let descriptor_set = self.default_texture.descriptor_set;
+        if !draw_room_mirror_surface {
+            return Ok(());
+        }
+
         for mesh in &self.room_meshes {
+            let descriptor_set = match mesh.texture_kind {
+                RoomTextureKind::Flat => self.default_texture.descriptor_set,
+                RoomTextureKind::Mirror => {
+                    let descriptor_set = self.room_mirror_target.descriptor_set();
+                    if descriptor_set == vk::DescriptorSet::null() {
+                        self.default_texture.descriptor_set
+                    } else {
+                        descriptor_set
+                    }
+                }
+            };
             unsafe {
                 self.device.cmd_bind_vertex_buffers(
                     command_buffer,
@@ -1289,10 +1448,80 @@ impl VulkanRenderer {
         })?;
         self.destroy_buffer(&staging);
 
+        let descriptor_set = self.create_sampled_image_descriptor_set(image.view)?;
+
+        Ok(TextureResource {
+            image,
+            descriptor_set,
+        })
+    }
+
+    fn create_room_mirror_target(&self) -> Result<RoomMirrorTarget> {
+        let extent = vk::Extent2D {
+            width: ROOM_MIRROR_TARGET_WIDTH,
+            height: ROOM_MIRROR_TARGET_HEIGHT,
+        };
+        let image = Self::create_image(
+            &self.instance,
+            &self.device,
+            &self.memory_properties,
+            extent,
+            ROOM_MIRROR_TARGET_FORMAT,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+            vk::ImageAspectFlags::COLOR,
+        )?;
+        self.execute_one_time_commands(|device, command_buffer| {
+            transition_image_layout(
+                device,
+                command_buffer,
+                image.image,
+                vk::ImageLayout::UNDEFINED,
+                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                vk::ImageAspectFlags::COLOR,
+            );
+        })?;
+        let descriptor_set = self.create_sampled_image_descriptor_set(image.view)?;
+        let depth = Self::create_depth_image(
+            &self.instance,
+            &self.device,
+            &self.memory_properties,
+            extent,
+        )?;
+        let attachments = [image.view, depth.view];
+        let framebuffer = vk_result(
+            unsafe {
+                self.device.create_framebuffer(
+                    &vk::FramebufferCreateInfo::default()
+                        .render_pass(self.room_mirror_pipeline.render_pass)
+                        .attachments(&attachments)
+                        .width(extent.width)
+                        .height(extent.height)
+                        .layers(1),
+                    None,
+                )
+            },
+            "创建房间镜面 Framebuffer 失败",
+        )?;
+
+        Ok(RoomMirrorTarget {
+            texture: TextureResource {
+                image,
+                descriptor_set,
+            },
+            depth,
+            framebuffer,
+            extent,
+        })
+    }
+
+    fn create_sampled_image_descriptor_set(
+        &self,
+        image_view: vk::ImageView,
+    ) -> Result<vk::DescriptorSet> {
         let descriptor_set = self.allocate_descriptor_set()?;
         let sampler_info = [vk::DescriptorImageInfo::default().sampler(self.sampler)];
         let image_info = [vk::DescriptorImageInfo::default()
-            .image_view(image.view)
+            .image_view(image_view)
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
         let write = [
             vk::WriteDescriptorSet::default()
@@ -1309,11 +1538,7 @@ impl VulkanRenderer {
         unsafe {
             self.device.update_descriptor_sets(&write, &[]);
         }
-
-        Ok(TextureResource {
-            image,
-            descriptor_set,
-        })
+        Ok(descriptor_set)
     }
 
     fn allocate_descriptor_set(&self) -> Result<vk::DescriptorSet> {
@@ -1504,11 +1729,17 @@ impl VulkanRenderer {
         device: &Device,
         pipeline_layout: vk::PipelineLayout,
         color_format: vk::Format,
+        color_initial_layout: vk::ImageLayout,
         color_final_layout: vk::ImageLayout,
         vert_spv: &[u32],
         frag_spv: &[u32],
     ) -> Result<PipelineBundle> {
-        let render_pass = Self::create_render_pass(device, color_format, color_final_layout)?;
+        let render_pass = Self::create_render_pass(
+            device,
+            color_format,
+            color_initial_layout,
+            color_final_layout,
+        )?;
         let vert_module = vk_result(
             unsafe {
                 device.create_shader_module(
@@ -1642,6 +1873,7 @@ impl VulkanRenderer {
     fn create_render_pass(
         device: &Device,
         color_format: vk::Format,
+        color_initial_layout: vk::ImageLayout,
         color_final_layout: vk::ImageLayout,
     ) -> Result<vk::RenderPass> {
         let attachments = [
@@ -1650,7 +1882,7 @@ impl VulkanRenderer {
                 .samples(vk::SampleCountFlags::TYPE_1)
                 .load_op(vk::AttachmentLoadOp::CLEAR)
                 .store_op(vk::AttachmentStoreOp::STORE)
-                .initial_layout(vk::ImageLayout::UNDEFINED)
+                .initial_layout(color_initial_layout)
                 .final_layout(color_final_layout),
             vk::AttachmentDescription::default()
                 .format(DEPTH_FORMAT)
@@ -1670,6 +1902,42 @@ impl VulkanRenderer {
             attachment: 1,
             layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         };
+        let (enter_src_stage, enter_src_access) =
+            if color_initial_layout == vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL {
+                (
+                    vk::PipelineStageFlags::FRAGMENT_SHADER,
+                    vk::AccessFlags::SHADER_READ,
+                )
+            } else {
+                (
+                    vk::PipelineStageFlags::TOP_OF_PIPE,
+                    vk::AccessFlags::empty(),
+                )
+            };
+        let mut dependencies = vec![vk::SubpassDependency::default()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(enter_src_stage)
+            .src_access_mask(enter_src_access)
+            .dst_stage_mask(
+                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                    | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+            )
+            .dst_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            )];
+        if color_final_layout == vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL {
+            dependencies.push(
+                vk::SubpassDependency::default()
+                    .src_subpass(0)
+                    .dst_subpass(vk::SUBPASS_EXTERNAL)
+                    .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+                    .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+                    .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
+                    .dst_access_mask(vk::AccessFlags::SHADER_READ),
+            );
+        }
         vk_result(
             unsafe {
                 device.create_render_pass(
@@ -1679,15 +1947,7 @@ impl VulkanRenderer {
                             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
                             .color_attachments(&color_ref)
                             .depth_stencil_attachment(&depth_ref)])
-                        .dependencies(&[vk::SubpassDependency::default()
-                            .src_subpass(vk::SUBPASS_EXTERNAL)
-                            .dst_subpass(0)
-                            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-                            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-                            .dst_access_mask(
-                                vk::AccessFlags::COLOR_ATTACHMENT_WRITE
-                                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                            )]),
+                        .dependencies(&dependencies),
                     None,
                 )
             },
@@ -2088,6 +2348,32 @@ impl VulkanRenderer {
         }
     }
 
+    fn destroy_room_mirror_target(&mut self) {
+        unsafe {
+            if self.room_mirror_target.framebuffer != vk::Framebuffer::null() {
+                self.device
+                    .destroy_framebuffer(self.room_mirror_target.framebuffer, None);
+            }
+            if self.room_mirror_target.depth.view != vk::ImageView::null() {
+                self.device
+                    .destroy_image_view(self.room_mirror_target.depth.view, None);
+                self.device
+                    .destroy_image(self.room_mirror_target.depth.image, None);
+                self.device
+                    .free_memory(self.room_mirror_target.depth.memory, None);
+            }
+            if self.room_mirror_target.texture.image.view != vk::ImageView::null() {
+                self.device
+                    .destroy_image_view(self.room_mirror_target.texture.image.view, None);
+                self.device
+                    .destroy_image(self.room_mirror_target.texture.image.image, None);
+                self.device
+                    .free_memory(self.room_mirror_target.texture.image.memory, None);
+            }
+        }
+        self.room_mirror_target = RoomMirrorTarget::null();
+    }
+
     fn rebuild_mirror_framebuffers(&mut self) -> Result<()> {
         let depth_view = self
             .mirror
@@ -2153,8 +2439,13 @@ impl Drop for VulkanRenderer {
         }
 
         self.destroy_mirror_targets();
+        self.destroy_room_mirror_target();
 
         unsafe {
+            self.device
+                .destroy_pipeline(self.room_mirror_pipeline.pipeline, None);
+            self.device
+                .destroy_render_pass(self.room_mirror_pipeline.render_pass, None);
             for texture in self.textures.drain(..) {
                 self.device.destroy_image_view(texture.image.view, None);
                 self.device.destroy_image(texture.image.image, None);
@@ -2184,6 +2475,7 @@ impl Drop for VulkanRenderer {
             self.destroy_buffer(&self.index_buffer);
             self.destroy_buffer(&self.hmd_vertex_buffer);
             self.destroy_buffer(&self.mirror_vertex_buffer);
+            self.destroy_buffer(&self.room_mirror_vertex_buffer);
 
             for frame in self.frames.drain(..) {
                 self.device.destroy_fence(frame.fence, None);

@@ -13,7 +13,7 @@ fn main() {
         .init();
 
     if let Err(err) = app::run() {
-        eprintln!("VR PMX Demo 启动失败: {err:#}");
+        eprintln!("VR Avatar Demo 启动失败: {err:#}");
         std::process::exit(1);
     }
 }

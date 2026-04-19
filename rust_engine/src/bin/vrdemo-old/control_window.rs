@@ -15,7 +15,13 @@ use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowAttributes, WindowId};
 
-use crate::avatar_rig::{ArmIkDebugSnapshot, MODEL_TO_WORLD_SCALE};
+use crate::avatar_rig::{
+    ArmIkDebugSnapshot, MODEL_TO_WORLD_SCALE,
+    PMX_DEFAULT_LEFT_CONTROLLER_TO_PALM_ROTATION_DEGREES_XR,
+    PMX_DEFAULT_RIGHT_CONTROLLER_TO_PALM_ROTATION_DEGREES_XR,
+    VRM_DEFAULT_LEFT_CONTROLLER_TO_PALM_ROTATION_DEGREES_XR,
+    VRM_DEFAULT_RIGHT_CONTROLLER_TO_PALM_ROTATION_DEGREES_XR,
+};
 
 const OFFSET_RANGE_METERS: std::ops::RangeInclusive<f32> = -0.15..=0.15;
 const ROTATION_RANGE_DEGREES: std::ops::RangeInclusive<f32> = -180.0..=180.0;
@@ -119,6 +125,88 @@ impl ControlWindow {
                 ui.label(
                     "Tune grip alignment, wrist seam alignment, and forearm twist distribution.",
                 );
+                ui.separator();
+                ui.label("Grip rotation presets");
+                ui.horizontal_wrapped(|ui| {
+                    calibration_changed |= preset_button(
+                        ui,
+                        "PMX default",
+                        &mut self.calibration_ui,
+                        PMX_DEFAULT_LEFT_CONTROLLER_TO_PALM_ROTATION_DEGREES_XR,
+                        PMX_DEFAULT_RIGHT_CONTROLLER_TO_PALM_ROTATION_DEGREES_XR,
+                    );
+                    calibration_changed |= preset_button(
+                        ui,
+                        "VRM legacy",
+                        &mut self.calibration_ui,
+                        VRM_DEFAULT_LEFT_CONTROLLER_TO_PALM_ROTATION_DEGREES_XR,
+                        VRM_DEFAULT_RIGHT_CONTROLLER_TO_PALM_ROTATION_DEGREES_XR,
+                    );
+                    calibration_changed |= preset_button(
+                        ui,
+                        "Both Y -90",
+                        &mut self.calibration_ui,
+                        [0.0, -90.0, 0.0],
+                        [0.0, -90.0, 0.0],
+                    );
+                    calibration_changed |= preset_button(
+                        ui,
+                        "Both Y +90",
+                        &mut self.calibration_ui,
+                        [0.0, 90.0, 0.0],
+                        [0.0, 90.0, 0.0],
+                    );
+                    calibration_changed |= preset_button(
+                        ui,
+                        "Split L-90 R+90",
+                        &mut self.calibration_ui,
+                        [0.0, -90.0, 0.0],
+                        [0.0, 90.0, 0.0],
+                    );
+                    calibration_changed |= preset_button(
+                        ui,
+                        "Split L+90 R-90",
+                        &mut self.calibration_ui,
+                        [0.0, 90.0, 0.0],
+                        [0.0, -90.0, 0.0],
+                    );
+                    calibration_changed |= preset_button(
+                        ui,
+                        "Identity",
+                        &mut self.calibration_ui,
+                        [0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0],
+                    );
+                    calibration_changed |= preset_button(
+                        ui,
+                        "Both X -90",
+                        &mut self.calibration_ui,
+                        [-90.0, 0.0, 0.0],
+                        [-90.0, 0.0, 0.0],
+                    );
+                    calibration_changed |= preset_button(
+                        ui,
+                        "Both X +90",
+                        &mut self.calibration_ui,
+                        [90.0, 0.0, 0.0],
+                        [90.0, 0.0, 0.0],
+                    );
+                    calibration_changed |= preset_button(
+                        ui,
+                        "Both Z -90",
+                        &mut self.calibration_ui,
+                        [0.0, 0.0, -90.0],
+                        [0.0, 0.0, -90.0],
+                    );
+                    calibration_changed |= preset_button(
+                        ui,
+                        "Both Z +90",
+                        &mut self.calibration_ui,
+                        [0.0, 0.0, 90.0],
+                        [0.0, 0.0, 90.0],
+                    );
+                });
+
                 ui.separator();
 
                 ui.label("Left grip -> palm rotation (deg)");
@@ -284,6 +372,22 @@ fn rotation_sliders(ui: &mut egui::Ui, id_prefix: &str, values: &mut [f32; 3]) -
             .inner;
     }
     changed
+}
+
+fn preset_button(
+    ui: &mut egui::Ui,
+    label: &str,
+    calibration_ui: &mut ArmIkCalibrationUiState,
+    left_rotation: [f32; 3],
+    right_rotation: [f32; 3],
+) -> bool {
+    if ui.button(label).clicked() {
+        calibration_ui.left_rotation = left_rotation;
+        calibration_ui.right_rotation = right_rotation;
+        true
+    } else {
+        false
+    }
 }
 
 fn vec3_to_meters(value: glam::Vec3) -> [f32; 3] {

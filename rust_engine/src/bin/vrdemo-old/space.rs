@@ -1,11 +1,12 @@
 use glam::{Mat4, Quat, Vec2, Vec3};
 use mmd_engine::vrm_runtime::{TrackedPose as RuntimePose, VrmTrackingInput};
 
-use crate::avatar_rig::MODEL_TO_WORLD_SCALE;
-use crate::room::{ROOM_FLOOR_Y, ROOM_HALF_EXTENT};
+use crate::avatar_rig::{DemoHandTrackingMode, MODEL_TO_WORLD_SCALE};
+use crate::room::{ROOM_FLOOR_Y, ROOM_HALF_EXTENT, ROOM_MIRROR_SURFACE_Z};
 use crate::xr::{ActionButtons, TrackedPose};
 
 const MIRROR_CAMERA_FOV_Y: f32 = 36.0_f32.to_radians();
+const DESKTOP_FIRST_PERSON_FOV_Y: f32 = 72.0_f32.to_radians();
 const MIRROR_CAMERA_NEAR: f32 = 0.05;
 const MIRROR_CAMERA_FAR: f32 = 50.0;
 const MODEL_FORWARD_CORRECTION: f32 = std::f32::consts::PI;
@@ -14,13 +15,6 @@ const MIRROR_CAMERA_EYE_OFFSET_AVATAR: Vec3 = Vec3::new(-0.35, 0.18, -2.65);
 const MOVE_SPEED_METERS_PER_SECOND: f32 = 1.8;
 const ROOM_HEAD_MARGIN: f32 = 0.12;
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "Expanded XR frame payload is staged for locomotion and interaction wiring"
-    )
-)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TrackingFrame {
     pub head: TrackedPose,
@@ -243,6 +237,46 @@ impl SpaceState {
         }
     }
 
+    pub fn first_person_camera(&self, aspect: f32) -> Option<MirrorCamera> {
+        if !self.calibration.calibrated {
+            return None;
+        }
+
+        let head_world = self.pose_in_world(self.last_raw_tracking.head);
+        if !head_world.valid {
+            return None;
+        }
+
+        let view =
+            Mat4::from_rotation_translation(head_world.orientation, head_world.position).inverse();
+        let projection = Mat4::perspective_rh(
+            DESKTOP_FIRST_PERSON_FOV_Y,
+            aspect.max(0.1),
+            MIRROR_CAMERA_NEAR,
+            MIRROR_CAMERA_FAR,
+        );
+        Some(MirrorCamera {
+            view_proj: projection * view,
+        })
+    }
+
+    pub fn room_mirror_camera(&self, aspect: f32, current_view_anchor_model: Vec3) -> MirrorCamera {
+        if let Some((eye, forward, up)) = self.room_mirror_view_pose() {
+            let view = Mat4::look_at_rh(eye, eye + forward, up);
+            let projection = Mat4::perspective_rh(
+                MIRROR_CAMERA_FOV_Y,
+                aspect.max(0.1),
+                MIRROR_CAMERA_NEAR,
+                MIRROR_CAMERA_FAR,
+            );
+            MirrorCamera {
+                view_proj: projection * view,
+            }
+        } else {
+            self.mirror_camera(aspect, current_view_anchor_model)
+        }
+    }
+
     fn mirror_head_target_world(&self, current_view_anchor_model: Vec3) -> Vec3 {
         self.mirror_model_matrix()
             .transform_point3(current_view_anchor_model)
@@ -255,14 +289,67 @@ impl SpaceState {
         root_rotation * MIRROR_CAMERA_EYE_OFFSET_AVATAR
     }
 
-    pub fn runtime_tracking(
+    fn room_mirror_view_pose(&self) -> Option<(Vec3, Vec3, Vec3)> {
+        if !self.calibration.calibrated || !self.last_raw_tracking.head.valid {
+            return None;
+        }
+
+        let head_world = self.pose_in_world(self.last_raw_tracking.head);
+        if !head_world.valid {
+            return None;
+        }
+
+        let (plane_point, plane_normal) = self.room_mirror_plane_world();
+        let reflected_eye =
+            reflect_point_across_plane(head_world.position, plane_point, plane_normal);
+        let reflected_forward =
+            reflect_direction_across_plane(head_world.orientation * Vec3::NEG_Z, plane_normal);
+        let reflected_up =
+            reflect_direction_across_plane(head_world.orientation * Vec3::Y, plane_normal);
+        let forward = reflected_forward.normalize_or_zero();
+        let up = reflected_up.normalize_or_zero();
+        let resolved_forward = if forward.length_squared() > 1e-6 {
+            forward
+        } else {
+            plane_normal
+        };
+        let resolved_up = if up.length_squared() > 1e-6 {
+            up
+        } else {
+            Vec3::Y
+        };
+
+        Some((reflected_eye, resolved_forward, resolved_up))
+    }
+
+    fn room_mirror_plane_world(&self) -> (Vec3, Vec3) {
+        let room_world = self.room_world_matrix();
+        let plane_point = room_world.transform_point3(Vec3::new(0.0, 0.0, ROOM_MIRROR_SURFACE_Z));
+        let plane_normal = room_world.transform_vector3(Vec3::Z).normalize_or_zero();
+        let resolved_normal = if plane_normal.length_squared() > 1e-6 {
+            plane_normal
+        } else {
+            Vec3::Z
+        };
+        (plane_point, resolved_normal)
+    }
+
+    pub fn runtime_tracking_with_mode(
         &self,
         tracking: &TrackingFrame,
         last_tracking: VrmTrackingInput,
+        hand_tracking_mode: DemoHandTrackingMode,
     ) -> VrmTrackingInput {
         let head = self.resolve_head_pose(self.anchor_pose(tracking.head), last_tracking.head);
-        let right = self.resolve_hand_pose(self.anchor_pose(tracking.right_hand), head, 1.0);
-        let left = self.resolve_hand_pose(self.anchor_pose(tracking.left_hand), head, -1.0);
+        let (left_hand_pose, right_hand_pose) = match hand_tracking_mode {
+            DemoHandTrackingMode::VrmLegacyGripAim => (
+                preferred_hand_pose(tracking.left_grip, tracking.left_aim),
+                preferred_hand_pose(tracking.right_grip, tracking.right_aim),
+            ),
+            DemoHandTrackingMode::PmxControllerPose => (tracking.left_hand, tracking.right_hand),
+        };
+        let right = self.resolve_hand_pose(self.anchor_pose(right_hand_pose), head, 1.0);
+        let left = self.resolve_hand_pose(self.anchor_pose(left_hand_pose), head, -1.0);
         VrmTrackingInput {
             head,
             left_hand: left,
@@ -456,6 +543,32 @@ fn resolve_avatar_root_origin_world(
     head_world - root_rotation * (view_anchor_model * MODEL_TO_WORLD_SCALE)
 }
 
+fn reflect_point_across_plane(point: Vec3, plane_point: Vec3, plane_normal: Vec3) -> Vec3 {
+    let normal = plane_normal.normalize_or_zero();
+    if normal.length_squared() <= 1e-6 {
+        return point;
+    }
+    point - 2.0 * (point - plane_point).dot(normal) * normal
+}
+
+fn reflect_direction_across_plane(direction: Vec3, plane_normal: Vec3) -> Vec3 {
+    let normal = plane_normal.normalize_or_zero();
+    if normal.length_squared() <= 1e-6 {
+        return direction;
+    }
+    direction - 2.0 * direction.dot(normal) * normal
+}
+
+fn preferred_hand_pose(primary: TrackedPose, fallback: TrackedPose) -> TrackedPose {
+    if primary.valid {
+        primary
+    } else if fallback.valid {
+        fallback
+    } else {
+        TrackedPose::identity()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -512,7 +625,11 @@ mod tests {
         let state = SpaceState::default();
         let tracking = sample_tracking_frame();
 
-        let runtime_tracking = state.runtime_tracking(&tracking, VrmTrackingInput::default());
+        let runtime_tracking = state.runtime_tracking_with_mode(
+            &tracking,
+            VrmTrackingInput::default(),
+            DemoHandTrackingMode::PmxControllerPose,
+        );
 
         assert_vec3_near(
             runtime_tracking.left_hand.position,
@@ -540,7 +657,11 @@ mod tests {
             ..sample_tracking_frame()
         };
 
-        let runtime_tracking = state.runtime_tracking(&tracking, VrmTrackingInput::default());
+        let runtime_tracking = state.runtime_tracking_with_mode(
+            &tracking,
+            VrmTrackingInput::default(),
+            DemoHandTrackingMode::PmxControllerPose,
+        );
         let expected_offset = head.orientation * Vec3::new(0.23, -0.28, -0.34);
 
         assert!(runtime_tracking.right_hand.valid);
@@ -557,6 +678,65 @@ mod tests {
     }
 
     #[test]
+    fn runtime_tracking_should_support_vrm_legacy_grip_pose_source() {
+        let state = SpaceState::default();
+        let tracking = TrackingFrame {
+            left_grip: tracked_pose_with_orientation(
+                Vec3::new(-0.4, 1.1, -0.2),
+                Quat::from_rotation_y(0.35),
+            ),
+            left_aim: tracked_pose_with_orientation(
+                Vec3::new(-0.1, 1.3, 0.5),
+                Quat::from_rotation_x(-0.8),
+            ),
+            right_grip: tracked_pose_with_orientation(
+                Vec3::new(0.4, 1.1, -0.2),
+                Quat::from_rotation_y(-0.45),
+            ),
+            right_aim: tracked_pose_with_orientation(
+                Vec3::new(0.2, 1.4, 0.6),
+                Quat::from_rotation_z(0.7),
+            ),
+            left_hand: tracked_pose_with_orientation(
+                Vec3::new(-9.0, -9.0, -9.0),
+                Quat::from_rotation_x(1.0),
+            ),
+            right_hand: tracked_pose_with_orientation(
+                Vec3::new(9.0, 9.0, 9.0),
+                Quat::from_rotation_z(-1.0),
+            ),
+            ..sample_tracking_frame()
+        };
+
+        let runtime_tracking = state.runtime_tracking_with_mode(
+            &tracking,
+            VrmTrackingInput::default(),
+            DemoHandTrackingMode::VrmLegacyGripAim,
+        );
+
+        assert_vec3_near(
+            runtime_tracking.left_hand.position,
+            tracking.left_grip.position,
+            1e-5,
+        );
+        assert_quat_near(
+            runtime_tracking.left_hand.orientation,
+            tracking.left_grip.orientation,
+            1e-5,
+        );
+        assert_vec3_near(
+            runtime_tracking.right_hand.position,
+            tracking.right_grip.position,
+            1e-5,
+        );
+        assert_quat_near(
+            runtime_tracking.right_hand.orientation,
+            tracking.right_grip.orientation,
+            1e-5,
+        );
+    }
+
+    #[test]
     fn teleport_confirm_should_move_head_projection_to_target() {
         let mut state = SpaceState::default();
         let mut tracking = sample_tracking_frame();
@@ -566,13 +746,13 @@ mod tests {
         tracking.buttons.teleport_aim_active = true;
         tracking.buttons.teleport_confirm = false;
 
-        state.update_locomotion(&tracking);
+        state.update_locomotion(&tracking, 0.016);
         let target = state.teleport_target();
         assert!(target.valid);
 
         tracking.buttons.teleport_aim_active = false;
         tracking.buttons.teleport_confirm = true;
-        state.update_locomotion(&tracking);
+        state.update_locomotion(&tracking, 0.016);
 
         let head_world = state.pose_in_world(tracking.head).position;
         assert_vec3_near(
@@ -602,10 +782,18 @@ mod tests {
 
         state.sync_tracking_from_head(tracking.head, anchor);
 
-        let before = state.runtime_tracking(&tracking, VrmTrackingInput::default());
+        let before = state.runtime_tracking_with_mode(
+            &tracking,
+            VrmTrackingInput::default(),
+            DemoHandTrackingMode::PmxControllerPose,
+        );
         state.apply_snap_turn(tracking.head, SNAP_TURN_ANGLE_RAD);
         state.sync_tracking_from_head(tracking.head, anchor);
-        let after = state.runtime_tracking(&tracking, VrmTrackingInput::default());
+        let after = state.runtime_tracking_with_mode(
+            &tracking,
+            VrmTrackingInput::default(),
+            DemoHandTrackingMode::PmxControllerPose,
+        );
 
         assert_vec3_near(before.head.position, after.head.position, 1e-5);
         assert_vec3_near(before.left_hand.position, after.left_hand.position, 1e-5);
@@ -778,6 +966,73 @@ mod tests {
     }
 
     #[test]
+    fn room_mirror_view_pose_should_reflect_head_position_and_forward_across_front_wall() {
+        let mut state = SpaceState::default();
+        state.calibration.calibrated = true;
+        state.last_raw_tracking.head =
+            tracked_pose_with_orientation(Vec3::new(0.2, 1.6, 0.4), Quat::IDENTITY);
+
+        let (eye, forward, up) = state
+            .room_mirror_view_pose()
+            .expect("room mirror pose should exist");
+        let plane_z = ROOM_MIRROR_SURFACE_Z;
+
+        assert_vec3_near(eye, Vec3::new(0.2, 1.6, 2.0 * plane_z - 0.4), 1e-5);
+        assert_vec3_near(forward, Vec3::Z, 1e-5);
+        assert_vec3_near(up, Vec3::Y, 1e-5);
+    }
+
+    #[test]
+    fn room_mirror_view_pose_should_follow_tracking_space_yaw() {
+        let mut state = SpaceState::default();
+        state.calibration.calibrated = true;
+        state.calibration.tracking_space_yaw_world =
+            Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+        state.last_raw_tracking.head =
+            tracked_pose_with_orientation(Vec3::new(0.2, 1.6, 0.0), Quat::IDENTITY);
+
+        let (_, forward, _) = state
+            .room_mirror_view_pose()
+            .expect("room mirror pose should exist");
+
+        assert_vec3_near(forward, Vec3::X, 1e-5);
+    }
+
+    #[test]
+    fn first_person_camera_should_match_head_world_pose() {
+        let mut state = SpaceState::default();
+        state.calibration.calibrated = true;
+        state.calibration.tracking_space_origin_world = Vec3::new(0.4, 0.2, -0.6);
+        state.calibration.tracking_space_yaw_world = Quat::from_rotation_y(0.35);
+        state.last_raw_tracking.head = tracked_pose_with_orientation(
+            Vec3::new(0.25, 1.55, -0.15),
+            Quat::from_rotation_y(-0.2),
+        );
+
+        let head_world = state.pose_in_world(state.last_raw_tracking.head);
+        let camera = state
+            .first_person_camera(16.0_f32 / 9.0_f32)
+            .expect("first-person camera should exist");
+        let projection = Mat4::perspective_rh(
+            DESKTOP_FIRST_PERSON_FOV_Y,
+            (16.0_f32 / 9.0_f32).max(0.1),
+            MIRROR_CAMERA_NEAR,
+            MIRROR_CAMERA_FAR,
+        );
+        let view = projection.inverse() * camera.view_proj;
+        let camera_world = view.inverse();
+        let eye = camera_world.transform_point3(Vec3::ZERO);
+        let forward = camera_world.transform_vector3(Vec3::NEG_Z).normalize();
+
+        assert_vec3_near(eye, head_world.position, 1e-5);
+        assert_vec3_near(
+            forward,
+            (head_world.orientation * Vec3::NEG_Z).normalize(),
+            1e-5,
+        );
+    }
+
+    #[test]
     fn sync_render_from_head_should_rotate_avatar_root_with_current_head_yaw() {
         let mut state = SpaceState::default();
         let anchor = Vec3::new(0.0, 18.0, 0.0);
@@ -808,7 +1063,11 @@ mod tests {
 
         state.observe_raw_tracking(tracking);
         state.sync_tracking_from_head(tracking.head, Vec3::new(0.0, 18.0, 0.0));
-        let runtime_tracking = state.runtime_tracking(&tracking, VrmTrackingInput::default());
+        let runtime_tracking = state.runtime_tracking_with_mode(
+            &tracking,
+            VrmTrackingInput::default(),
+            DemoHandTrackingMode::PmxControllerPose,
+        );
         let head_forward = runtime_tracking.head.orientation * Vec3::NEG_Z;
 
         assert_vec3_near(head_forward, Vec3::NEG_Z, 1e-5);
@@ -822,10 +1081,18 @@ mod tests {
         let changed_render_anchor = Vec3::new(0.4, 18.1, -0.2);
 
         state.sync_tracking_from_head(tracking.head, initial_anchor);
-        let before = state.runtime_tracking(&tracking, VrmTrackingInput::default());
+        let before = state.runtime_tracking_with_mode(
+            &tracking,
+            VrmTrackingInput::default(),
+            DemoHandTrackingMode::PmxControllerPose,
+        );
 
         state.sync_render_from_head(tracking.head, changed_render_anchor);
-        let after = state.runtime_tracking(&tracking, VrmTrackingInput::default());
+        let after = state.runtime_tracking_with_mode(
+            &tracking,
+            VrmTrackingInput::default(),
+            DemoHandTrackingMode::PmxControllerPose,
+        );
 
         assert_vec3_near(before.head.position, after.head.position, 1e-5);
         assert_quat_near(before.head.orientation, after.head.orientation, 1e-5);
@@ -856,6 +1123,7 @@ mod tests {
                 teleport_confirm: true,
                 snap_turn_left: true,
                 snap_turn_right: false,
+                move_axis: Vec2::ZERO,
             },
         }
     }

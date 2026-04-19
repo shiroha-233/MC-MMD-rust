@@ -99,7 +99,7 @@ impl XrBootstrap {
         let instance = entry
             .create_instance(
                 &xr::ApplicationInfo {
-                    application_name: "VR PMX Demo",
+                    application_name: "VR Avatar Demo",
                     application_version: 1,
                     engine_name: "mmd_engine",
                     engine_version: 1,
@@ -643,10 +643,10 @@ impl XrRuntime {
             head: tracked_pose_from_space(head),
             left_grip,
             left_aim,
-            left_hand: preferred_hand_pose(left_grip, left_aim),
+            left_hand: controller_hand_pose(left_grip, left_aim),
             right_grip,
             right_aim,
-            right_hand: preferred_hand_pose(right_grip, right_aim),
+            right_hand: controller_hand_pose(right_grip, right_aim),
             buttons: ActionButtons {
                 teleport_aim_active,
                 teleport_confirm,
@@ -681,11 +681,17 @@ impl XrRuntime {
     }
 }
 
-fn preferred_hand_pose(primary: TrackedPose, fallback: TrackedPose) -> TrackedPose {
-    if primary.valid {
-        primary
-    } else if fallback.valid {
-        fallback
+fn controller_hand_pose(grip_pose: TrackedPose, aim_pose: TrackedPose) -> TrackedPose {
+    if grip_pose.valid && aim_pose.valid {
+        TrackedPose {
+            position: grip_pose.position,
+            orientation: aim_pose.orientation,
+            valid: true,
+        }
+    } else if grip_pose.valid {
+        grip_pose
+    } else if aim_pose.valid {
+        aim_pose
     } else {
         TrackedPose::identity()
     }
@@ -716,5 +722,58 @@ fn tracked_pose_from_space(space: xr::SpaceLocation) -> TrackedPose {
         )
         .normalize(),
         valid: true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn controller_hand_pose_should_use_grip_position_and_aim_orientation_when_both_are_valid() {
+        let grip_pose = TrackedPose {
+            position: Vec3::new(1.0, 2.0, 3.0),
+            orientation: Quat::from_rotation_y(0.5),
+            valid: true,
+        };
+        let aim_pose = TrackedPose {
+            position: Vec3::new(9.0, 8.0, 7.0),
+            orientation: Quat::from_rotation_x(-0.25),
+            valid: true,
+        };
+
+        let hand_pose = controller_hand_pose(grip_pose, aim_pose);
+
+        assert_eq!(hand_pose.position, grip_pose.position);
+        assert_eq!(hand_pose.orientation, aim_pose.orientation);
+        assert!(hand_pose.valid);
+    }
+
+    #[test]
+    fn controller_hand_pose_should_fallback_to_grip_pose_when_aim_is_invalid() {
+        let grip_pose = TrackedPose {
+            position: Vec3::new(1.0, 2.0, 3.0),
+            orientation: Quat::from_rotation_z(0.75),
+            valid: true,
+        };
+        let hand_pose = controller_hand_pose(grip_pose, TrackedPose::identity());
+
+        assert_eq!(hand_pose.position, grip_pose.position);
+        assert_eq!(hand_pose.orientation, grip_pose.orientation);
+        assert!(hand_pose.valid);
+    }
+
+    #[test]
+    fn controller_hand_pose_should_fallback_to_aim_pose_when_grip_is_invalid() {
+        let aim_pose = TrackedPose {
+            position: Vec3::new(4.0, 5.0, 6.0),
+            orientation: Quat::from_rotation_y(-0.4),
+            valid: true,
+        };
+        let hand_pose = controller_hand_pose(TrackedPose::identity(), aim_pose);
+
+        assert_eq!(hand_pose.position, aim_pose.position);
+        assert_eq!(hand_pose.orientation, aim_pose.orientation);
+        assert!(hand_pose.valid);
     }
 }
