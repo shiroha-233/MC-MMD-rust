@@ -2,6 +2,7 @@ package com.shiroha.mmdskin.compat.vr;
 
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Vivecraft 数据适配层。
@@ -29,5 +30,18 @@ public final class VRDataProvider {
 
     public static float getBodyYawDegrees(Player player, float tickDelta) {
         return getBodyYawRad(player, tickDelta) * (180F / (float) Math.PI);
+    }
+
+    public static Vec3 getRenderOrigin(Player player, float tickDelta) {
+        Vec3 renderOrigin = VivecraftReflectionBridge.getLocalPlayerRenderOrigin(tickDelta);
+        if (renderOrigin != null && VivecraftReflectionBridge.isVRPlayer(player)) {
+            return renderOrigin;
+        }
+
+        return new Vec3(
+                Mth.lerp(tickDelta, player.xo, player.getX()),
+                Mth.lerp(tickDelta, player.yo, player.getY()),
+                Mth.lerp(tickDelta, player.zo, player.getZ())
+        );
     }
 }

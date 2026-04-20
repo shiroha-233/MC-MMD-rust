@@ -2,6 +2,7 @@ package com.shiroha.mmdskin.renderer.runtime.bridge;
 
 import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
+import net.minecraft.world.entity.player.Player;
 
 import java.nio.ByteBuffer;
 
@@ -46,8 +47,8 @@ final class NativeModelRuntimeBridge implements ModelRuntimeBridge {
     }
 
     @Override
-    public void postRenderFirstPerson(long modelHandle) {
-        FirstPersonManager.postRender(nativeFunc(), modelHandle);
+    public void postRenderFirstPerson(long modelHandle, Player player, float tickDelta) {
+        FirstPersonManager.postRender(nativeFunc(), modelHandle, player, tickDelta);
     }
 
     @Override

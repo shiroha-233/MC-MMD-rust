@@ -2,6 +2,8 @@ package com.shiroha.mmdskin.renderer.runtime.bridge;
 
 import java.nio.ByteBuffer;
 
+import net.minecraft.world.entity.player.Player;
+
 /**
  * 渲染层使用的模型运行时桥接接口。
  */
@@ -19,7 +21,7 @@ public interface ModelRuntimeBridge {
 
     void preRenderFirstPerson(long modelHandle, float combinedScale, boolean isLocalPlayer);
 
-    void postRenderFirstPerson(long modelHandle);
+    void postRenderFirstPerson(long modelHandle, Player player, float tickDelta);
 
     boolean isAndroid();
 

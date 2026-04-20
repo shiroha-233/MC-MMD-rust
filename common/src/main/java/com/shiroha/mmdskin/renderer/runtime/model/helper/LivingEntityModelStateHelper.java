@@ -2,10 +2,12 @@ package com.shiroha.mmdskin.renderer.runtime.model.helper;
 
 import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.compat.vr.VRDataProvider;
+import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import com.shiroha.mmdskin.renderer.api.RenderContext;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * LivingEntity 模型状态同步辅助类。
@@ -33,9 +35,19 @@ public final class LivingEntityModelStateHelper {
             EyeTrackingHelper.updateEyeTracking(nativeFunc, modelHandle, entity, entityYaw, tickDelta, modelName);
         }
 
-        float posX = (float) (Mth.lerp(tickDelta, entity.xo, entity.getX()) * MODEL_SCALE);
-        float posY = (float) (Mth.lerp(tickDelta, entity.yo, entity.getY()) * MODEL_SCALE);
-        float posZ = (float) (Mth.lerp(tickDelta, entity.zo, entity.getZ()) * MODEL_SCALE);
+        Vec3 renderOrigin = entity instanceof Player player
+                ? VRDataProvider.getRenderOrigin(player, tickDelta)
+                : new Vec3(
+                        Mth.lerp(tickDelta, entity.xo, entity.getX()),
+                        Mth.lerp(tickDelta, entity.yo, entity.getY()),
+                        Mth.lerp(tickDelta, entity.zo, entity.getZ())
+                );
+        if (entity instanceof Player player) {
+            renderOrigin = renderOrigin.add(FirstPersonManager.getLocalVrModelRootOffset(player));
+        }
+        float posX = (float) (renderOrigin.x * MODEL_SCALE);
+        float posY = (float) (renderOrigin.y * MODEL_SCALE);
+        float posZ = (float) (renderOrigin.z * MODEL_SCALE);
         float bodyYaw = entity instanceof Player player
                 ? VRDataProvider.getBodyYawRad(player, tickDelta)
                 : Mth.rotLerp(tickDelta, entity.yBodyRotO, entity.yBodyRot) * ((float) Math.PI / 180F);

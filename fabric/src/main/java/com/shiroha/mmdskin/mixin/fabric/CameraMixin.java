@@ -40,8 +40,10 @@ public abstract class CameraMixin {
                 }
             }
         } else {
-
-            if (FirstPersonManager.isEyeCameraActive() && FirstPersonManager.isEyeBoneValid() && !detached) {
+            boolean vrEyeCameraActive = FirstPersonManager.isVrEyeCameraActive();
+            boolean eyeCameraActive = FirstPersonManager.isEyeCameraActive();
+            boolean eyeAnchorReady = vrEyeCameraActive || FirstPersonManager.isEyeBoneValid();
+            if (eyeCameraActive && eyeAnchorReady && !detached) {
 
                 if (entity instanceof LivingEntity living) {
                     boolean ysmActive = YsmCompat.isYsmModelActive(living);
@@ -51,13 +53,14 @@ public abstract class CameraMixin {
                     }
                 }
 
-                Vec3 boneEyePos = FirstPersonManager.getRotatedEyePosition(entity, partialTick);
-                if (FirstPersonManager.isVrEyeCameraActive()) {
-                    FirstPersonManager.setLastCameraPos(boneEyePos);
-                    this.setPosition(boneEyePos.x, boneEyePos.y, boneEyePos.z);
+                if (vrEyeCameraActive) {
+                    Vec3 vrCameraPos = FirstPersonManager.getVrCameraPosition(entity, partialTick);
+                    FirstPersonManager.setLastCameraPos(vrCameraPos);
+                    this.setPosition(vrCameraPos.x, vrCameraPos.y, vrCameraPos.z);
                     return;
                 }
 
+                Vec3 boneEyePos = FirstPersonManager.getRotatedEyePosition(entity, partialTick);
                 float originalYaw = entity.getViewYRot(partialTick);
                 float originalPitch = entity.getViewXRot(partialTick);
                 float lookPitchRad = originalPitch * ((float) Math.PI / 180F);

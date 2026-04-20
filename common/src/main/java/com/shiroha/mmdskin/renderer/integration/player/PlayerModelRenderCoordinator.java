@@ -56,7 +56,7 @@ final class PlayerModelRenderCoordinator {
         consumePendingSignals(player, modelData, selection.isLocalPlayer());
 
         RenderParams params = PlayerRenderHelper.calculateRenderParams(player, modelData, tickDelta);
-        boolean needsFirstPersonCleanup = isFirstPerson;
+        boolean needsPostRenderSync = selection.isLocalPlayer();
 
         matrixStack.pushPose();
         try {
@@ -69,21 +69,17 @@ final class PlayerModelRenderCoordinator {
                 model.render(player, params.bodyYaw, params.bodyPitch, params.translation, tickDelta, matrixStack, packedLight, context);
             }
 
-            if (selection.isLocalPlayer()) {
-                runtimeBridge.postRenderFirstPerson(model.getModelHandle());
-            }
-
-            if (needsFirstPersonCleanup) {
-                runtimeBridge.postRenderFirstPerson(model.getModelHandle());
-                needsFirstPersonCleanup = false;
+            if (needsPostRenderSync) {
+                runtimeBridge.postRenderFirstPerson(model.getModelHandle(), player, tickDelta);
+                needsPostRenderSync = false;
             }
 
             ItemRenderHelper.renderItems(player, modelData, matrixStack, vertexConsumers, packedLight);
             return PlayerRenderAction.CANCEL;
         } finally {
             try {
-                if (needsFirstPersonCleanup) {
-                    runtimeBridge.postRenderFirstPerson(model.getModelHandle());
+                if (needsPostRenderSync) {
+                    runtimeBridge.postRenderFirstPerson(model.getModelHandle(), player, tickDelta);
                 }
             } finally {
                 matrixStack.popPose();

@@ -43,6 +43,21 @@ public final class VivecraftReflectionBridge {
         return activeSupport != null ? activeSupport.getBodyYawRadians(player) : Float.NaN;
     }
 
+    public static boolean isLocalPlayerEyePass() {
+        Support activeSupport = getSupport();
+        return activeSupport != null && activeSupport.isLocalPlayerEyePass();
+    }
+
+    public static Vec3 getWorldRenderHeadPosition(Player player) {
+        Support activeSupport = getSupport();
+        return activeSupport != null ? activeSupport.getWorldRenderHeadPosition(player) : null;
+    }
+
+    public static Vec3 getLocalPlayerRenderOrigin(float partialTick) {
+        Support activeSupport = getSupport();
+        return activeSupport != null ? activeSupport.getLocalPlayerRenderOrigin(partialTick) : null;
+    }
+
     public static void applyMmdRenderState(boolean active) {
         Support activeSupport = getSupport();
         if (activeSupport != null) {
@@ -80,6 +95,15 @@ public final class VivecraftReflectionBridge {
         private final Method vrClientGetWorldRenderPoseMethod;
         private final Method vrClientGetPostTickWorldPoseMethod;
 
+        private final Method vrRenderingApiInstanceMethod;
+        private final Method vrRenderingIsVanillaRenderPassMethod;
+        private final Method vrRenderingGetCurrentRenderPassMethod;
+        private final Method vrRenderingGetWorldRenderPoseMethod;
+        private final Object renderPassLeft;
+        private final Object renderPassRight;
+
+        private final Method gameRendererGetRvePosMethod;
+
         private final Method vrPoseGetHeadMethod;
         private final Method vrPoseGetMainHandMethod;
         private final Method vrPoseGetOffHandMethod;
@@ -116,6 +140,13 @@ public final class VivecraftReflectionBridge {
                         Method vrClientGetPreTickWorldPoseMethod,
                         Method vrClientGetWorldRenderPoseMethod,
                         Method vrClientGetPostTickWorldPoseMethod,
+                        Method vrRenderingApiInstanceMethod,
+                        Method vrRenderingIsVanillaRenderPassMethod,
+                        Method vrRenderingGetCurrentRenderPassMethod,
+                        Method vrRenderingGetWorldRenderPoseMethod,
+                        Object renderPassLeft,
+                        Object renderPassRight,
+                        Method gameRendererGetRvePosMethod,
                         Method vrPoseGetHeadMethod,
                         Method vrPoseGetMainHandMethod,
                         Method vrPoseGetOffHandMethod,
@@ -139,6 +170,13 @@ public final class VivecraftReflectionBridge {
             this.vrClientGetPreTickWorldPoseMethod = vrClientGetPreTickWorldPoseMethod;
             this.vrClientGetWorldRenderPoseMethod = vrClientGetWorldRenderPoseMethod;
             this.vrClientGetPostTickWorldPoseMethod = vrClientGetPostTickWorldPoseMethod;
+            this.vrRenderingApiInstanceMethod = vrRenderingApiInstanceMethod;
+            this.vrRenderingIsVanillaRenderPassMethod = vrRenderingIsVanillaRenderPassMethod;
+            this.vrRenderingGetCurrentRenderPassMethod = vrRenderingGetCurrentRenderPassMethod;
+            this.vrRenderingGetWorldRenderPoseMethod = vrRenderingGetWorldRenderPoseMethod;
+            this.renderPassLeft = renderPassLeft;
+            this.renderPassRight = renderPassRight;
+            this.gameRendererGetRvePosMethod = gameRendererGetRvePosMethod;
             this.vrPoseGetHeadMethod = vrPoseGetHeadMethod;
             this.vrPoseGetMainHandMethod = vrPoseGetMainHandMethod;
             this.vrPoseGetOffHandMethod = vrPoseGetOffHandMethod;
@@ -179,6 +217,28 @@ public final class VivecraftReflectionBridge {
                 Method vrClientGetWorldRenderPoseMethod = vrClientApiClass.getMethod("getWorldRenderPose");
                 Method vrClientGetPostTickWorldPoseMethod = vrClientApiClass.getMethod("getPostTickWorldPose");
 
+                Method vrRenderingApiInstanceMethod = null;
+                Method vrRenderingIsVanillaRenderPassMethod = null;
+                Method vrRenderingGetCurrentRenderPassMethod = null;
+                Method vrRenderingGetWorldRenderPoseMethod = null;
+                Object renderPassLeft = null;
+                Object renderPassRight = null;
+                Method gameRendererGetRvePosMethod = null;
+                try {
+                    Class<?> vrRenderingApiClass = Class.forName("org.vivecraft.api.client.VRRenderingAPI");
+                    Class<?> renderPassClass = Class.forName("org.vivecraft.api.client.data.RenderPass");
+                    vrRenderingApiInstanceMethod = vrRenderingApiClass.getMethod("instance");
+                    vrRenderingIsVanillaRenderPassMethod = vrRenderingApiClass.getMethod("isVanillaRenderPass");
+                    vrRenderingGetCurrentRenderPassMethod = vrRenderingApiClass.getMethod("getCurrentRenderPass");
+                    vrRenderingGetWorldRenderPoseMethod = vrRenderingApiClass.getMethod("getWorldRenderPose", Player.class);
+                    renderPassLeft = enumConstant(renderPassClass, "LEFT");
+                    renderPassRight = enumConstant(renderPassClass, "RIGHT");
+                    gameRendererGetRvePosMethod = Minecraft.getInstance().gameRenderer.getClass()
+                            .getMethod("vivecraft$getRvePos", float.class);
+                } catch (Throwable t) {
+                    LOGGER.debug("Vivecraft render-pass API unavailable", t);
+                }
+
                 Method vrPoseGetHeadMethod = vrPoseClass.getMethod("getHead");
                 Method vrPoseGetMainHandMethod = vrPoseClass.getMethod("getMainHand");
                 Method vrPoseGetOffHandMethod = vrPoseClass.getMethod("getOffHand");
@@ -208,6 +268,13 @@ public final class VivecraftReflectionBridge {
                         vrClientGetPreTickWorldPoseMethod,
                         vrClientGetWorldRenderPoseMethod,
                         vrClientGetPostTickWorldPoseMethod,
+                        vrRenderingApiInstanceMethod,
+                        vrRenderingIsVanillaRenderPassMethod,
+                        vrRenderingGetCurrentRenderPassMethod,
+                        vrRenderingGetWorldRenderPoseMethod,
+                        renderPassLeft,
+                        renderPassRight,
+                        gameRendererGetRvePosMethod,
                         vrPoseGetHeadMethod,
                         vrPoseGetMainHandMethod,
                         vrPoseGetOffHandMethod,
@@ -278,6 +345,83 @@ public final class VivecraftReflectionBridge {
             } catch (Throwable t) {
                 LOGGER.debug("Failed to query Vivecraft body yaw", t);
                 return Float.NaN;
+            }
+        }
+
+        boolean isLocalPlayerEyePass() {
+            try {
+                if (!isLocalVrActive() || vrRenderingApiInstanceMethod == null
+                        || vrRenderingIsVanillaRenderPassMethod == null
+                        || vrRenderingGetCurrentRenderPassMethod == null
+                        || renderPassLeft == null
+                        || renderPassRight == null) {
+                    return false;
+                }
+
+                Object renderingApi = vrRenderingApiInstanceMethod.invoke(null);
+                if (renderingApi == null) {
+                    return false;
+                }
+
+                boolean vanillaRenderPass = (boolean) vrRenderingIsVanillaRenderPassMethod.invoke(renderingApi);
+                if (vanillaRenderPass) {
+                    return false;
+                }
+
+                Object currentPass = vrRenderingGetCurrentRenderPassMethod.invoke(renderingApi);
+                return currentPass == renderPassLeft || currentPass == renderPassRight;
+            } catch (Throwable t) {
+                LOGGER.debug("Failed to query Vivecraft render pass", t);
+                return false;
+            }
+        }
+
+        Vec3 getWorldRenderHeadPosition(Player player) {
+            if (player == null) {
+                return null;
+            }
+
+            try {
+                Object pose = null;
+                if (vrRenderingApiInstanceMethod != null && vrRenderingGetWorldRenderPoseMethod != null) {
+                    Object renderingApi = vrRenderingApiInstanceMethod.invoke(null);
+                    if (renderingApi != null) {
+                        pose = vrRenderingGetWorldRenderPoseMethod.invoke(renderingApi, player);
+                    }
+                }
+
+                if (pose == null && isLocalPlayer(player)) {
+                    Object clientApi = vrClientApiInstanceMethod.invoke(null);
+                    if (clientApi != null) {
+                        pose = vrClientGetWorldRenderPoseMethod.invoke(clientApi);
+                    }
+                }
+
+                if (pose == null) {
+                    Object vrApi = vrApiInstanceMethod.invoke(null);
+                    if (vrApi != null) {
+                        pose = vrApiGetVrPoseMethod.invoke(vrApi, player);
+                    }
+                }
+
+                return extractHeadPosition(pose);
+            } catch (Throwable t) {
+                LOGGER.debug("Failed to read Vivecraft world-render head pose", t);
+                return null;
+            }
+        }
+
+        Vec3 getLocalPlayerRenderOrigin(float partialTick) {
+            try {
+                if (!isLocalVrActive() || gameRendererGetRvePosMethod == null || isVanillaRenderPass()) {
+                    return null;
+                }
+
+                Object renderOrigin = gameRendererGetRvePosMethod.invoke(Minecraft.getInstance().gameRenderer, partialTick);
+                return renderOrigin instanceof Vec3 vec3 ? vec3 : null;
+            } catch (Throwable t) {
+                LOGGER.debug("Failed to read Vivecraft render-view entity origin", t);
+                return null;
             }
         }
 
@@ -391,9 +535,31 @@ public final class VivecraftReflectionBridge {
             return clientApi != null && (boolean) vrClientIsVrActiveMethod.invoke(clientApi);
         }
 
+        private boolean isVanillaRenderPass() throws Exception {
+            if (vrRenderingApiInstanceMethod == null || vrRenderingIsVanillaRenderPassMethod == null) {
+                return true;
+            }
+
+            Object renderingApi = vrRenderingApiInstanceMethod.invoke(null);
+            return renderingApi == null || (boolean) vrRenderingIsVanillaRenderPassMethod.invoke(renderingApi);
+        }
+
         private boolean isLocalPlayer(Player player) {
             Minecraft minecraft = Minecraft.getInstance();
             return minecraft.player != null && minecraft.player.getUUID().equals(player.getUUID());
+        }
+
+        private Vec3 extractHeadPosition(Object pose) throws Exception {
+            if (pose == null) {
+                return null;
+            }
+
+            Object head = vrPoseGetHeadMethod.invoke(pose);
+            if (head == null) {
+                return null;
+            }
+
+            return (Vec3) vrBodyPartDataGetPosMethod.invoke(head);
         }
 
         private float[] poseToTrackingPacket(Object pose) throws Exception {
@@ -462,6 +628,11 @@ public final class VivecraftReflectionBridge {
                 LOGGER.warn("Vivecraft VR is active but no usable tracking pose was available ({})", reason);
                 loggedMissingTracking = true;
             }
+        }
+
+        @SuppressWarnings("unchecked")
+        private static Object enumConstant(Class<?> enumClass, String name) {
+            return Enum.valueOf((Class<? extends Enum>) enumClass.asSubclass(Enum.class), name);
         }
     }
 

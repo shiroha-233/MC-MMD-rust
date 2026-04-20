@@ -1,8 +1,10 @@
 package com.shiroha.mmdskin.compat.vr;
 
 import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -34,9 +36,11 @@ public final class VRBoneDriver {
                 return false;
             }
 
-            float px = (float) Mth.lerp(tickDelta, player.xo, player.getX());
-            float py = (float) Mth.lerp(tickDelta, player.yo, player.getY());
-            float pz = (float) Mth.lerp(tickDelta, player.zo, player.getZ());
+            Vec3 renderOrigin = VRDataProvider.getRenderOrigin(player, tickDelta)
+                    .add(FirstPersonManager.getLocalVrModelRootOffset(player));
+            float px = (float) renderOrigin.x;
+            float py = (float) renderOrigin.y;
+            float pz = (float) renderOrigin.z;
 
             float yawRad = VRDataProvider.getBodyYawRad(player, tickDelta);
             float cosY = Mth.cos(yawRad);
