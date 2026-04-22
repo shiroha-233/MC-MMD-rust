@@ -1,25 +1,27 @@
 package com.shiroha.mmdskin.ui.selector.adapter;
 
-import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
 import com.shiroha.mmdskin.config.ModelConfigData;
 import com.shiroha.mmdskin.config.ModelConfigManager;
-import com.shiroha.mmdskin.player.model.PlayerModelResolver;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
+import com.shiroha.mmdskin.maid.MaidMMDModelManager;
+import com.shiroha.mmdskin.model.runtime.ManagedModel;
+import com.shiroha.mmdskin.model.runtime.ModelRequestKey;
+import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import com.shiroha.mmdskin.ui.selector.application.MaterialVisibilityApplicationService.MaterialEntryState;
 import com.shiroha.mmdskin.ui.selector.application.MaterialVisibilityApplicationService.MaterialScreenContext;
 import com.shiroha.mmdskin.ui.selector.port.MaterialVisibilityGateway;
-import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.Component;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
+/** 文件职责：为材质可见性界面提供模型上下文与材质读写能力。 */
 public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGateway {
     private static final Logger LOGGER = LogManager.getLogger();
 
@@ -31,44 +33,48 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
         }
 
         String modelName = ModelSelectorConfig.getInstance().getSelectedModel();
-        String playerCacheKey = PlayerModelResolver.getCacheKey(minecraft.player);
         if (modelName == null || modelName.isEmpty()) {
-            LOGGER.warn("玩家未选择模型");
+            LOGGER.warn("Player has no selected model");
             return Optional.empty();
         }
 
-        MMDModelManager.Model model = MMDModelManager.GetModel(modelName, playerCacheKey);
+        ManagedModel model = ClientRenderRuntime.get().modelRepository()
+                .acquire(ModelRequestKey.player(minecraft.player, modelName));
         if (model == null) {
-            LOGGER.warn("无法获取玩家模型: {}_{}", modelName, playerCacheKey);
+            LOGGER.warn("Cannot resolve player model {}", modelName);
             return Optional.empty();
         }
 
-        return Optional.of(new MaterialScreenContext(model.model.getModelHandle(), modelName, modelName));
+        return Optional.of(new MaterialScreenContext(model.modelInstance().getModelHandle(), modelName, modelName));
     }
 
     @Override
     public Optional<MaterialScreenContext> createMaidContext(UUID maidUuid, String maidName) {
-        MMDModelManager.Model model = com.shiroha.mmdskin.maid.MaidMMDModelManager.getModel(maidUuid);
+        ManagedModel model = MaidMMDModelManager.getModel(maidUuid);
         if (model == null) {
-            LOGGER.warn("无法获取女仆模型: {}", maidUuid);
+            LOGGER.warn("Cannot resolve maid model {}", maidUuid);
             return Optional.empty();
         }
 
         String displayName = maidName != null
                 ? maidName
                 : Component.translatable("gui.mmdskin.maid.default_name").getString();
-        return Optional.of(new MaterialScreenContext(model.model.getModelHandle(), displayName, model.getModelName()));
+        return Optional.of(new MaterialScreenContext(
+                model.modelInstance().getModelHandle(),
+                displayName,
+                model.modelInstance().getModelName()));
     }
 
     @Override
     public List<MaterialEntryState> loadMaterials(long modelHandle) {
         List<MaterialEntryState> materials = new ArrayList<>();
-        NativeFunc nativeFunc = NativeFunc.GetInst();
-        long materialCount = nativeFunc.GetMaterialCount(modelHandle);
+        var nativeBridge = NativeRuntimeBridgeHolder.get();
+        int materialCount = nativeBridge.getMaterialCount(modelHandle);
         for (int i = 0; i < materialCount; i++) {
-            String name = nativeFunc.GetMaterialName(modelHandle, i);
-            boolean visible = nativeFunc.IsMaterialVisible(modelHandle, i);
-            materials.add(new MaterialEntryState(i, name, visible));
+            materials.add(new MaterialEntryState(
+                    i,
+                    nativeBridge.getMaterialName(modelHandle, i),
+                    nativeBridge.isMaterialVisible(modelHandle, i)));
         }
         return materials;
     }
@@ -76,18 +82,18 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
     @Override
     public void setAllVisible(long modelHandle, boolean visible) {
         try {
-            NativeFunc.GetInst().SetAllMaterialsVisible(modelHandle, visible);
+            NativeRuntimeBridgeHolder.get().setAllMaterialsVisible(modelHandle, visible);
         } catch (Exception e) {
-            LOGGER.warn("材质操作失败，模型可能已被释放", e);
+            LOGGER.warn("Failed to update material visibility", e);
         }
     }
 
     @Override
     public void setMaterialVisible(long modelHandle, int materialIndex, boolean visible) {
         try {
-            NativeFunc.GetInst().SetMaterialVisible(modelHandle, materialIndex, visible);
+            NativeRuntimeBridgeHolder.get().setMaterialVisible(modelHandle, materialIndex, visible);
         } catch (Exception e) {
-            LOGGER.warn("材质操作失败，模型可能已被释放", e);
+            LOGGER.warn("Failed to update material visibility", e);
         }
     }
 
@@ -97,9 +103,8 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
             ModelConfigData config = ModelConfigManager.getConfig(configModelName);
             config.hiddenMaterials = hiddenMaterials;
             ModelConfigManager.saveConfig(configModelName, config);
-            LOGGER.debug("材质可见性已保存: {} (隐藏 {})", configModelName, hiddenMaterials.size());
         } catch (Exception e) {
-            LOGGER.warn("保存材质可见性失败: {}", configModelName, e);
+            LOGGER.warn("Failed to save hidden materials for {}", configModelName, e);
         }
     }
 }

@@ -9,8 +9,8 @@ import com.shiroha.mmdskin.fabric.maid.MaidCompatMixinPlugin;
 import com.shiroha.mmdskin.fabric.network.MmdSkinNetworkPack;
 import com.shiroha.mmdskin.maid.MaidActionNetworkHandler;
 import com.shiroha.mmdskin.maid.MaidModelNetworkHandler;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
-import com.shiroha.mmdskin.renderer.integration.entity.MmdSkinRenderFactory;
+import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
+import com.shiroha.mmdskin.render.entity.EntityRenderFactory;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.stage.application.StageSessionService;
 import com.shiroha.mmdskin.ui.network.ActionWheelNetworkHandler;
@@ -157,7 +157,7 @@ public class MmdSkinRegisterClient {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (MCinstance.player == null) return;
 
-            MMDModelManager.tick();
+            ClientRenderRuntime.get().modelRepository().tick();
             VoicePlaybackManager.getInstance().tick();
             PlayerVoiceSceneObserver.getInstance().tick(MCinstance);
 
@@ -211,7 +211,7 @@ public class MmdSkinRegisterClient {
                 if (!i.getName().startsWith("EntityPlayer") && !i.getName().equals("DefaultAnim") && !i.getName().equals("Shader")) {
                     String mcEntityName = i.getName().replace('.', ':');
                     if (EntityType.byString(mcEntityName).isPresent())
-                        EntityRendererRegistry.register(EntityType.byString(mcEntityName).get(), new MmdSkinRenderFactory<>(mcEntityName));
+                        EntityRendererRegistry.register(EntityType.byString(mcEntityName).get(), new EntityRenderFactory<>(mcEntityName));
                     else
                         logger.warn(mcEntityName + " 实体不存在，跳过渲染注册");
                 }

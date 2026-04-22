@@ -1,26 +1,26 @@
 package com.shiroha.mmdskin.ui.wheel.service;
 
-import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.asset.catalog.MorphInfo;
 import com.shiroha.mmdskin.config.UIConstants;
 import com.shiroha.mmdskin.expression.ExpressionApplicationService;
 import com.shiroha.mmdskin.expression.ExpressionSelection;
 import com.shiroha.mmdskin.expression.ExpressionSelectionCodec;
-import com.shiroha.mmdskin.player.model.PlayerModelResolver;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
+import com.shiroha.mmdskin.model.runtime.ManagedModel;
+import com.shiroha.mmdskin.model.runtime.ModelRequestKey;
+import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import com.shiroha.mmdskin.ui.config.MorphWheelConfig;
 import com.shiroha.mmdskin.ui.network.MorphWheelNetworkHandler;
-import net.minecraft.client.Minecraft;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import net.minecraft.client.Minecraft;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
+/** 文件职责：加载 Morph 轮盘配置并把选择应用到当前玩家模型。 */
 public class DefaultMorphWheelService implements MorphWheelService {
     private static final Logger logger = LogManager.getLogger();
 
@@ -30,14 +30,17 @@ public class DefaultMorphWheelService implements MorphWheelService {
     private final MorphSyncPort syncPort;
 
     public DefaultMorphWheelService() {
-        this(() -> MorphWheelConfig.getInstance().getDisplayedMorphs(), DefaultMorphWheelService::resolveMorphFilePath,
-                new MinecraftMorphRuntimePort(), MorphWheelNetworkHandler.getInstance());
+        this(() -> MorphWheelConfig.getInstance().getDisplayedMorphs(),
+                DefaultMorphWheelService::resolveMorphFilePath,
+                new MinecraftMorphRuntimePort(),
+                MorphWheelNetworkHandler.getInstance());
     }
 
-    DefaultMorphWheelService(Supplier<List<MorphWheelConfig.MorphEntry>> morphEntriesSupplier,
-                             Function<MorphWheelConfig.MorphEntry, String> fileResolver,
-                             MorphRuntimePort runtimePort,
-                             MorphSyncPort syncPort) {
+    DefaultMorphWheelService(
+            Supplier<List<MorphWheelConfig.MorphEntry>> morphEntriesSupplier,
+            Function<MorphWheelConfig.MorphEntry, String> fileResolver,
+            MorphRuntimePort runtimePort,
+            MorphSyncPort syncPort) {
         this.morphEntriesSupplier = Objects.requireNonNull(morphEntriesSupplier, "morphEntriesSupplier");
         this.fileResolver = Objects.requireNonNull(fileResolver, "fileResolver");
         this.runtimePort = Objects.requireNonNull(runtimePort, "runtimePort");
@@ -54,8 +57,12 @@ public class DefaultMorphWheelService implements MorphWheelService {
                     : ExpressionSelectionCodec.encode(ExpressionSelection.file(entry.morphName));
             options.add(new MorphOption(entry.displayName, entry.morphName, filePath, syncToken, false));
         }
-        options.add(new MorphOption(net.minecraft.network.chat.Component.translatable("gui.mmdskin.reset_morph").getString(),
-                ExpressionSelectionCodec.RESET_TOKEN, null, ExpressionSelectionCodec.RESET_TOKEN, true));
+        options.add(new MorphOption(
+                net.minecraft.network.chat.Component.translatable("gui.mmdskin.reset_morph").getString(),
+                ExpressionSelectionCodec.RESET_TOKEN,
+                null,
+                ExpressionSelectionCodec.RESET_TOKEN,
+                true));
         return List.copyOf(options);
     }
 
@@ -65,10 +72,8 @@ public class DefaultMorphWheelService implements MorphWheelService {
             return;
         }
 
-        boolean applied;
         ExpressionSelection selection = ExpressionSelectionCodec.decode(option.syncToken());
-        applied = runtimePort.applyCurrentPlayerMorph(selection, option.filePath());
-
+        boolean applied = runtimePort.applyCurrentPlayerMorph(selection, option.filePath());
         if (applied) {
             syncPort.syncMorph(option.syncToken());
         }
@@ -111,24 +116,25 @@ public class DefaultMorphWheelService implements MorphWheelService {
         }
 
         private Long resolveModelHandle() {
-            Minecraft mc = Minecraft.getInstance();
-            if (mc.player == null) {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.player == null) {
                 return null;
             }
 
-            String playerName = mc.player.getName().getString();
+            String playerName = minecraft.player.getName().getString();
             String selectedModel = ModelSelectorConfig.getInstance().getPlayerModel(playerName);
             if (selectedModel == null || selectedModel.isEmpty() || UIConstants.DEFAULT_MODEL_NAME.equals(selectedModel)) {
-                logger.warn("当前使用默认渲染，无法应用表情");
+                logger.warn("Cannot apply morph while using default renderer");
                 return null;
             }
 
-            MMDModelManager.Model model = MMDModelManager.GetModel(selectedModel, PlayerModelResolver.getCacheKey(mc.player));
-            if (model == null || model.model == null) {
-                logger.warn("未找到玩家模型: {}", selectedModel);
+            ManagedModel model = ClientRenderRuntime.get().modelRepository()
+                    .acquire(ModelRequestKey.player(minecraft.player, selectedModel));
+            if (model == null || model.modelInstance() == null) {
+                logger.warn("Cannot resolve current player model {}", selectedModel);
                 return null;
             }
-            return model.model.getModelHandle();
+            return model.modelInstance().getModelHandle();
         }
     }
 }

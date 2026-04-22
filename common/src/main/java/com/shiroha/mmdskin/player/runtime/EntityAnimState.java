@@ -1,9 +1,9 @@
 package com.shiroha.mmdskin.player.runtime;
 
-import com.shiroha.mmdskin.NativeFunc;
-
+import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
 import java.nio.ByteBuffer;
 
+/** 文件职责：保存单个模型实例的动画层与手部矩阵状态。 */
 public class EntityAnimState {
 
     public enum State {
@@ -37,11 +37,10 @@ public class EntityAnimState {
     public boolean layer1BoneMaskSet;
 
     public EntityAnimState(int layerCount) {
-        NativeFunc nf = NativeFunc.GetInst();
         this.stateLayers = new State[layerCount];
         this.playCustomAnim = false;
-        this.rightHandMat = nf.CreateMat();
-        this.leftHandMat = nf.CreateMat();
+        this.rightHandMat = NativeRuntimeBridgeHolder.get().createMatrix();
+        this.leftHandMat = NativeRuntimeBridgeHolder.get().createMatrix();
         this.matBuffer = ByteBuffer.allocateDirect(64);
         this.layerPhases = new AnimPhase[layerCount];
         this.layerAnimationKeys = new String[layerCount];
@@ -65,13 +64,12 @@ public class EntityAnimState {
     }
 
     public void dispose() {
-        NativeFunc nf = NativeFunc.GetInst();
         if (rightHandMat != 0) {
-            nf.DeleteMat(rightHandMat);
+            NativeRuntimeBridgeHolder.get().deleteMatrix(rightHandMat);
             rightHandMat = 0;
         }
         if (leftHandMat != 0) {
-            nf.DeleteMat(leftHandMat);
+            NativeRuntimeBridgeHolder.get().deleteMatrix(leftHandMat);
             leftHandMat = 0;
         }
     }

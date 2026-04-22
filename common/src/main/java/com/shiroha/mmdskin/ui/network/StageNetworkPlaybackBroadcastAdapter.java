@@ -34,7 +34,7 @@ public final class StageNetworkPlaybackBroadcastAdapter implements StagePlayback
     }
 
     @Override
-    public void sendLeave(UUID hostUUID) {
-        StageNetworkHandler.sendLeave(hostUUID);
+    public void sendLeave(UUID hostUUID, UUID sessionId) {
+        StageNetworkHandler.sendLeave(hostUUID, sessionId);
     }
 }

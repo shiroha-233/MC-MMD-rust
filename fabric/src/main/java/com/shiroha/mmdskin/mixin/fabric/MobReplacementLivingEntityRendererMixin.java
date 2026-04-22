@@ -1,7 +1,7 @@
 package com.shiroha.mmdskin.mixin.fabric;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.shiroha.mmdskin.renderer.integration.entity.MobReplacementRenderer;
+import com.shiroha.mmdskin.render.entity.MobReplacementRenderer;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;

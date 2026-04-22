@@ -5,8 +5,8 @@ import com.shiroha.mmdskin.forge.config.ModConfigScreen;
 import com.shiroha.mmdskin.forge.network.MmdSkinNetworkPack;
 import com.shiroha.mmdskin.maid.MaidActionNetworkHandler;
 import com.shiroha.mmdskin.maid.MaidModelNetworkHandler;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
-import com.shiroha.mmdskin.renderer.integration.entity.MmdSkinRenderFactory;
+import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
+import com.shiroha.mmdskin.render.entity.EntityRenderFactory;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.stage.application.StageSessionService;
 import com.shiroha.mmdskin.ui.network.ActionWheelNetworkHandler;
@@ -190,7 +190,7 @@ public class MmdSkinRegisterClient {
                     if (EntityType.byString(mcEntityName).isPresent()) {
                         event.registerEntityRenderer(
                             EntityType.byString(mcEntityName).get(),
-                            new MmdSkinRenderFactory<>(mcEntityName));
+                            new EntityRenderFactory<>(mcEntityName));
                     } else {
                         logger.warn("{} 实体不存在，跳过渲染注册", mcEntityName);
                     }
@@ -209,7 +209,7 @@ public class MmdSkinRegisterClient {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player == null) return;
 
-            MMDModelManager.tick();
+            ClientRenderRuntime.get().modelRepository().tick();
             VoicePlaybackManager.getInstance().tick();
             PlayerVoiceSceneObserver.getInstance().tick(mc);
 

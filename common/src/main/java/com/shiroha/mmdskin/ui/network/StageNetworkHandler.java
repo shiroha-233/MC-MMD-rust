@@ -1,6 +1,5 @@
 package com.shiroha.mmdskin.ui.network;
 
-import com.shiroha.mmdskin.stage.application.StageSessionService;
 import com.shiroha.mmdskin.stage.domain.model.StageCameraMode;
 import com.shiroha.mmdskin.stage.domain.model.StageDescriptor;
 import com.shiroha.mmdskin.stage.domain.model.StageInviteDecision;
@@ -108,10 +107,6 @@ public final class StageNetworkHandler {
         }
         packet.frame = currentFrame;
         sendStagePacket(packet);
-    }
-
-    public static void sendLeave(UUID hostUUID) {
-        sendLeave(hostUUID, StageSessionService.getInstance().getSessionId());
     }
 
     private static StagePacket directedPacket(StagePacketType type, UUID targetUUID, UUID sessionId) {

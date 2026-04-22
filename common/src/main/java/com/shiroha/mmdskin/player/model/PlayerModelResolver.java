@@ -1,7 +1,9 @@
 package com.shiroha.mmdskin.player.model;
 
 import com.shiroha.mmdskin.config.UIConstants;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
+import com.shiroha.mmdskin.model.runtime.ManagedModel;
+import com.shiroha.mmdskin.model.runtime.ModelRequestKey;
+import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
@@ -14,7 +16,7 @@ public final class PlayerModelResolver {
     private PlayerModelResolver() {
     }
 
-    public record Result(MMDModelManager.Model model, String playerName) {}
+    public record Result(ManagedModel model, String playerName) {}
 
     public static String getCacheKey(Player player) {
         if (player == null) return "unknown";
@@ -40,7 +42,8 @@ public final class PlayerModelResolver {
             return null;
         }
 
-        MMDModelManager.Model m = MMDModelManager.GetModel(selectedModel, getCacheKey(player));
+        ManagedModel m = ClientRenderRuntime.get().modelRepository()
+                .acquire(ModelRequestKey.player(player, selectedModel));
         if (m == null) {
             return null;
         }

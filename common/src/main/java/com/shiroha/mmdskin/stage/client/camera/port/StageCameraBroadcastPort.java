@@ -7,5 +7,5 @@ public interface StageCameraBroadcastPort {
 
     void sendFrameSync(UUID sessionId, float frame);
 
-    void sendLeave(UUID hostUUID);
+    void sendLeave(UUID hostUUID, UUID sessionId);
 }

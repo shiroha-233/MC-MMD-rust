@@ -4,8 +4,8 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.compat.vr.VRArmHider;
 import com.shiroha.mmdskin.forge.YsmCompat;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
-import com.shiroha.mmdskin.renderer.integration.player.PlayerMixinDelegate;
-import com.shiroha.mmdskin.renderer.integration.player.PlayerRenderAction;
+import com.shiroha.mmdskin.player.render.PlayerRenderEntrypoint;
+import com.shiroha.mmdskin.player.render.PlayerRenderAction;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -40,11 +40,11 @@ public abstract class VivecraftVRPlayerRendererMixin {
             FirstPersonManager.reset();
         }
 
-        PlayerRenderAction action = PlayerMixinDelegate.handleRender(
+        PlayerRenderAction action = PlayerRenderEntrypoint.handleRender(
                 player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight,
                 YsmCompat.isYsmActive(player));
 
-        PlayerMixinDelegate.renderSceneModel(player, tickDelta, matrixStack, packedLight);
+        PlayerRenderEntrypoint.renderSceneOverlay(player, tickDelta, matrixStack, packedLight);
 
         if (action == PlayerRenderAction.CANCEL) {
             ci.cancel();

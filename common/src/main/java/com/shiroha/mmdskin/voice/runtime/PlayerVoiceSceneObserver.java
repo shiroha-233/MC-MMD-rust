@@ -79,7 +79,6 @@ public final class PlayerVoiceSceneObserver {
         tickCounter++;
 
         VoicePlaybackManager playbackManager = VoicePlaybackManager.getInstance();
-        playbackManager.refreshVoicePacks();
 
         String speakerKey = buildSpeakerKey(player);
         String modelName = resolveModelName(player);

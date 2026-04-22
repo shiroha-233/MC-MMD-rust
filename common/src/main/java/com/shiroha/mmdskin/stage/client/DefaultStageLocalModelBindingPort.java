@@ -1,12 +1,14 @@
 package com.shiroha.mmdskin.stage.client;
 
-import com.shiroha.mmdskin.player.model.PlayerModelResolver;
+import com.shiroha.mmdskin.model.runtime.ManagedModel;
+import com.shiroha.mmdskin.model.runtime.ModelRequestKey;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
+import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
 import com.shiroha.mmdskin.stage.client.playback.port.StageLocalModelBindingPort;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import net.minecraft.client.Minecraft;
 
+/** 文件职责：把本地玩家当前选择的模型绑定到舞台播放会话。 */
 public final class DefaultStageLocalModelBindingPort implements StageLocalModelBindingPort {
     public static final DefaultStageLocalModelBindingPort INSTANCE = new DefaultStageLocalModelBindingPort();
 
@@ -25,15 +27,13 @@ public final class DefaultStageLocalModelBindingPort implements StageLocalModelB
             return StageLocalModelBinding.empty();
         }
 
-        MMDModelManager.Model modelData = MMDModelManager.GetModel(
-                modelName,
-                PlayerModelResolver.getCacheKey(mc.player)
-        );
+        ManagedModel modelData = ClientRenderRuntime.get().modelRepository()
+                .acquire(ModelRequestKey.player(mc.player, modelName));
         if (modelData == null) {
             return StageLocalModelBinding.empty();
         }
 
-        long modelHandle = modelData.model.getModelHandle();
+        long modelHandle = modelData.modelInstance().getModelHandle();
         MmdSkinRendererPlayerHelper.startStageAnimation(modelData, mergedAnim);
         return new StageLocalModelBinding(modelHandle, modelName);
     }

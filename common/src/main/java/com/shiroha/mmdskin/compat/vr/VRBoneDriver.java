@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.compat.vr;
 
-import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
@@ -8,14 +8,13 @@ import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/**
- * VR 骨骼驱动层。
- */
+/** 文件职责：将 VR 跟踪数据转换并驱动模型骨骼。 */
 public final class VRBoneDriver {
 
     private static final Logger LOGGER = LogManager.getLogger();
 
-    private VRBoneDriver() {}
+    private VRBoneDriver() {
+    }
 
     public static boolean isVRPlayer(Player player) {
         try {
@@ -49,7 +48,7 @@ public final class VRBoneDriver {
             float[] localTracking = new float[21];
             transformWorldTrackingToPlayerLocal(worldData, px, py, pz, cosY, sinY, localTracking);
 
-            NativeFunc.GetInst().ApplyVRTrackingInput(modelHandle, localTracking);
+            NativeRuntimeBridgeHolder.get().applyVrTrackingInput(modelHandle, localTracking);
             return true;
         } catch (Exception e) {
             LOGGER.debug("VR bone driving failed", e);
@@ -120,7 +119,7 @@ public final class VRBoneDriver {
             return;
         }
         try {
-            NativeFunc.GetInst().SetVREnabled(modelHandle, enabled);
+            NativeRuntimeBridgeHolder.get().setVrEnabled(modelHandle, enabled);
         } catch (Exception e) {
             LOGGER.debug("Failed to set VR mode", e);
         }
@@ -131,7 +130,7 @@ public final class VRBoneDriver {
             return;
         }
         try {
-            NativeFunc.GetInst().SetVRIKParams(modelHandle, armIKStrength);
+            NativeRuntimeBridgeHolder.get().setVrIkParams(modelHandle, armIKStrength);
         } catch (Exception e) {
             LOGGER.debug("Failed to set VR IK params", e);
         }

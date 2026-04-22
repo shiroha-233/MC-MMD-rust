@@ -1,34 +1,29 @@
 package com.shiroha.mmdskin.maid;
 
 import com.shiroha.mmdskin.config.UIConstants;
-import com.shiroha.mmdskin.renderer.runtime.animation.MMDAnimManager;
-import com.shiroha.mmdskin.renderer.api.IMMDModel;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
+import com.shiroha.mmdskin.model.runtime.ManagedModel;
+import com.shiroha.mmdskin.model.runtime.ModelInstance;
+import com.shiroha.mmdskin.model.runtime.ModelRequestKey;
+import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
 import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-/**
- * 女仆 MMD 模型管理器
- */
-
+/** 文件职责：管理女仆实体与 MMD 模型绑定关系及已加载模型引用。 */
 public class MaidMMDModelManager {
     private static final Logger logger = LogManager.getLogger();
 
     private static final Map<UUID, String> maidModelBindings = new ConcurrentHashMap<>();
-
-    private static final Map<UUID, MMDModelManager.Model> loadedModels = new ConcurrentHashMap<>();
+    private static final Map<UUID, ManagedModel> loadedModels = new ConcurrentHashMap<>();
 
     public static void init() {
     }
 
     public static void bindModel(UUID maidUUID, String modelName) {
         if (modelName == null || modelName.isEmpty() || UIConstants.DEFAULT_MODEL_NAME.equals(modelName)) {
-
             unbindModel(maidUUID);
             return;
         }
@@ -38,10 +33,7 @@ public class MaidMMDModelManager {
             return;
         }
 
-        if (loadedModels.containsKey(maidUUID)) {
-            loadedModels.remove(maidUUID);
-        }
-
+        loadedModels.remove(maidUUID);
         maidModelBindings.put(maidUUID, modelName);
     }
 
@@ -58,56 +50,53 @@ public class MaidMMDModelManager {
         return maidModelBindings.containsKey(maidUUID);
     }
 
-    public static MMDModelManager.Model getModel(UUID maidUUID) {
+    public static ManagedModel getModel(UUID maidUUID) {
         String modelName = maidModelBindings.get(maidUUID);
         if (modelName == null) {
             return null;
         }
 
-        MMDModelManager.Model model = loadedModels.get(maidUUID);
+        ManagedModel model = loadedModels.get(maidUUID);
         if (model != null) {
-            if (model.model != null && model.model.getModelHandle() != 0) {
+            if (model.modelInstance() != null && model.modelInstance().getModelHandle() != 0) {
                 return model;
             }
-
             loadedModels.remove(maidUUID);
-            logger.warn("女仆 {} 模型句柄已失效，将重新加载", maidUUID);
+            logger.warn("Maid model handle became invalid: {}", maidUUID);
         }
 
-        String cacheKey = "maid_" + maidUUID.toString();
-        model = MMDModelManager.GetModel(modelName, cacheKey);
+        model = ClientRenderRuntime.get().modelRepository().acquire(ModelRequestKey.maid(maidUUID, modelName));
         if (model != null) {
             loadedModels.put(maidUUID, model);
         }
-
         return model;
     }
 
     public static void playAnimation(UUID maidUUID, String animId) {
-        MMDModelManager.Model model = getModel(maidUUID);
+        ManagedModel model = getModel(maidUUID);
         if (model == null) {
-            logger.warn("女仆 {} 没有绑定模型，无法播放动画", maidUUID);
+            logger.warn("Cannot play maid animation, no model bound: {}", maidUUID);
             return;
         }
 
-        IMMDModel mmdModel = model.model;
-        long anim = MMDAnimManager.GetAnimModel(mmdModel, animId);
-        if (anim != 0) {
-            mmdModel.transitionAnim(anim, 0, 0.25f);
+        ModelInstance modelInstance = model.modelInstance();
+        long animation = model.animationLibrary().animation(animId);
+        if (animation != 0L) {
+            modelInstance.transitionAnim(animation, 0, 0.25f);
         } else {
-            logger.warn("女仆 {} 动画未找到: {}", maidUUID, animId);
+            logger.warn("Maid animation not found: {} {}", maidUUID, animId);
         }
     }
 
-    public static void onModelDisposed(MMDModelManager.Model disposedModel) {
-        if (disposedModel == null) return;
+    public static void onModelDisposed(ManagedModel disposedModel) {
+        if (disposedModel == null) {
+            return;
+        }
         loadedModels.entrySet().removeIf(entry -> entry.getValue() == disposedModel);
     }
 
     public static void invalidateLoadedModels() {
-        if (!loadedModels.isEmpty()) {
-            loadedModels.clear();
-        }
+        loadedModels.clear();
     }
 
     public static void clearAll() {
@@ -119,7 +108,7 @@ public class MaidMMDModelManager {
         return maidModelBindings.size();
     }
 
-    public static Collection<MMDModelManager.Model> getLoadedMaidModels() {
+    public static Collection<ManagedModel> getLoadedMaidModels() {
         return loadedModels.values();
     }
 }

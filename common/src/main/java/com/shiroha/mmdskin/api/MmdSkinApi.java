@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.api;
 
-import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
 import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
@@ -26,18 +26,18 @@ public final class MmdSkinApi {
         if (handle == 0) return null;
 
         try {
-            NativeFunc nf = NativeFunc.GetInst();
-            int boneCount = nf.GetBoneCount(handle);
-            int vertexCount = (int) nf.GetVertexCount(handle);
-            int materialCount = (int) nf.GetMaterialCount(handle);
+            var nativeBridge = NativeRuntimeBridgeHolder.get();
+            int boneCount = nativeBridge.getBoneCount(handle);
+            int vertexCount = (int) nativeBridge.getVertexCount(handle);
+            int materialCount = nativeBridge.getMaterialCount(handle);
 
-            List<String> boneNames = parseBoneNames(nf.GetBoneNames(handle));
+            List<String> boneNames = parseBoneNames(nativeBridge.getBoneNames(handle));
 
             float[] bonePositions = null;
             if (boneCount > 0) {
                 ByteBuffer buf = ByteBuffer.allocateDirect(boneCount * 12);
                 buf.order(ByteOrder.LITTLE_ENDIAN);
-                int copied = nf.CopyBonePositionsToBuffer(handle, buf);
+                int copied = nativeBridge.copyBonePositionsToBuffer(handle, buf);
                 if (copied > 0) {
                     bonePositions = new float[copied * 3];
                     buf.rewind();
@@ -58,13 +58,13 @@ public final class MmdSkinApi {
         if (handle == 0) return null;
 
         try {
-            NativeFunc nf = NativeFunc.GetInst();
-            int vertexCount = (int) nf.GetVertexCount(handle);
+            var nativeBridge = NativeRuntimeBridgeHolder.get();
+            int vertexCount = (int) nativeBridge.getVertexCount(handle);
             if (vertexCount <= 0) return null;
 
             ByteBuffer buf = ByteBuffer.allocateDirect(vertexCount * 8);
             buf.order(ByteOrder.LITTLE_ENDIAN);
-            int copied = nf.CopyRealtimeUVsToBuffer(handle, buf);
+            int copied = nativeBridge.copyRealtimeUvsToBuffer(handle, buf);
             if (copied <= 0) return null;
 
             float[] uvs = new float[copied * 2];
@@ -81,10 +81,10 @@ public final class MmdSkinApi {
         if (player == null) return 0;
         try {
             PlayerModelResolver.Result result = PlayerModelResolver.resolve(player);
-            if (result == null || result.model() == null || result.model().model == null) {
+            if (result == null || result.model() == null || result.model().modelInstance() == null) {
                 return 0;
             }
-            return result.model().model.getModelHandle();
+            return result.model().modelInstance().getModelHandle();
         } catch (Exception e) {
             return 0;
         }

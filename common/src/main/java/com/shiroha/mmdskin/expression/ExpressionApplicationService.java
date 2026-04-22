@@ -1,16 +1,16 @@
 package com.shiroha.mmdskin.expression;
 
-import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
-import net.minecraft.world.entity.player.Player;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import java.io.File;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.world.entity.player.Player;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
+/** 文件职责：把预设表情或 VPD 表情应用到模型实例上。 */
 public final class ExpressionApplicationService {
     private static final Logger logger = LogManager.getLogger();
     private static final ConcurrentHashMap<Long, Set<Integer>> PRESET_STATE = new ConcurrentHashMap<>();
@@ -24,71 +24,73 @@ public final class ExpressionApplicationService {
         }
 
         PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
-        if (resolved == null || resolved.model() == null || resolved.model().model == null) {
+        if (resolved == null || resolved.model() == null || resolved.model().modelInstance() == null) {
             return false;
         }
-        return apply(resolved.model().model.getModelHandle(), selection, resolved.playerName());
+        return apply(resolved.model().modelInstance().getModelHandle(), selection, resolved.playerName());
     }
 
     public static boolean apply(long modelHandle, ExpressionSelection selection, String playerName) {
-        NativeFunc nativeFunc = NativeFunc.GetInst();
+        var nativeBridge = NativeRuntimeBridgeHolder.get();
         return switch (selection.type()) {
             case RESET -> {
-                nativeFunc.ResetAllMorphs(modelHandle);
+                nativeBridge.resetAllMorphs(modelHandle);
                 PRESET_STATE.remove(modelHandle);
                 yield true;
             }
-            case PRESET -> applyPreset(nativeFunc, modelHandle, selection.value(), playerName);
-            case FILE -> applyVpd(nativeFunc, modelHandle, selection.value(), playerName);
+            case PRESET -> applyPreset(modelHandle, selection.value(), playerName);
+            case FILE -> applyVpd(modelHandle, selection.value(), playerName);
         };
     }
 
-    private static boolean applyPreset(NativeFunc nativeFunc, long modelHandle, String presetId, String playerName) {
+    private static boolean applyPreset(long modelHandle, String presetId, String playerName) {
         BuiltinExpressionPreset preset = BuiltinExpressionRegistry.find(presetId);
         if (preset == null) {
-            logger.warn("[内置表情] 未知预设: {}", presetId);
+            logger.warn("[BuiltinExpression] Unknown preset: {}", presetId);
             return false;
         }
 
         ModelMorphCatalog catalog = ModelMorphCatalog.getOrCreate(modelHandle);
         BuiltinExpressionPreset.ResolvedPreset resolvedPreset = preset.resolve(catalog);
-        clearPresetMorphs(nativeFunc, modelHandle);
+        clearPresetMorphs(modelHandle);
         if (!resolvedPreset.available()) {
-            logger.warn("[内置表情] 玩家 {} 的模型缺少预设 {} 所需的核心 morph", playerName, presetId);
+            logger.warn("[BuiltinExpression] Model for {} is missing required morphs for preset {}", playerName, presetId);
             return false;
         }
 
+        var nativeBridge = NativeRuntimeBridgeHolder.get();
         for (var entry : resolvedPreset.weights().entrySet()) {
-            nativeFunc.SetMorphWeight(modelHandle, entry.getKey(), entry.getValue());
+            nativeBridge.setMorphWeight(modelHandle, entry.getKey(), entry.getValue());
         }
-        nativeFunc.SyncGpuMorphWeights(modelHandle);
+        nativeBridge.syncGpuMorphWeights(modelHandle);
         PRESET_STATE.put(modelHandle, ConcurrentHashMap.newKeySet(resolvedPreset.weights().size()));
         PRESET_STATE.get(modelHandle).addAll(resolvedPreset.weights().keySet());
         return true;
     }
 
-    private static boolean applyVpd(NativeFunc nativeFunc, long modelHandle, String filePath, String playerName) {
-        clearPresetMorphs(nativeFunc, modelHandle);
+    private static boolean applyVpd(long modelHandle, String filePath, String playerName) {
+        clearPresetMorphs(modelHandle);
         if (filePath == null || filePath.isEmpty() || !new File(filePath).exists()) {
-            logger.warn("[表情] 玩家 {} 的 VPD 文件不存在: {}", playerName, filePath);
+            logger.warn("[Expression] VPD file does not exist for {}: {}", playerName, filePath);
             return false;
         }
 
-        int result = nativeFunc.ApplyVpdMorph(modelHandle, filePath);
+        int result = NativeRuntimeBridgeHolder.get().applyVpdMorph(modelHandle, filePath);
         if (result < 0) {
-            logger.warn("[表情] 玩家 {} 的 VPD 应用失败: {} ({})", playerName, filePath, result);
+            logger.warn("[Expression] Failed to apply VPD for {}: {} ({})", playerName, filePath, result);
             return false;
         }
         return true;
     }
 
-    private static void clearPresetMorphs(NativeFunc nativeFunc, long modelHandle) {
+    private static void clearPresetMorphs(long modelHandle) {
+        var nativeBridge = NativeRuntimeBridgeHolder.get();
         Set<Integer> indices = PRESET_STATE.getOrDefault(modelHandle, Collections.emptySet());
         for (Integer index : indices) {
-            nativeFunc.SetMorphWeight(modelHandle, index, 0.0f);
+            nativeBridge.setMorphWeight(modelHandle, index, 0.0f);
         }
         if (!indices.isEmpty()) {
-            nativeFunc.SyncGpuMorphWeights(modelHandle);
+            nativeBridge.syncGpuMorphWeights(modelHandle);
         }
         PRESET_STATE.remove(modelHandle);
     }

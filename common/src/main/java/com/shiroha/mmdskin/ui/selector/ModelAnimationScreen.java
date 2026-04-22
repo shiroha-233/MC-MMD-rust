@@ -2,10 +2,11 @@ package com.shiroha.mmdskin.ui.selector;
 
 import com.shiroha.mmdskin.config.ModelAnimConfig;
 import com.shiroha.mmdskin.config.PathConstants;
-import com.shiroha.mmdskin.renderer.runtime.animation.MMDAnimManager;
+import com.shiroha.mmdskin.model.runtime.ManagedModel;
+import com.shiroha.mmdskin.model.runtime.ModelRequestKey;
 import com.shiroha.mmdskin.player.runtime.EntityAnimState;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
+import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -174,14 +175,11 @@ public class ModelAnimationScreen extends Screen {
         if (mc.player != null) {
             String selectedModel = ModelSelectorConfig.getInstance().getSelectedModel();
             if (modelName.equals(selectedModel)) {
-                MMDModelManager.Model model = MMDModelManager.GetModel(
-                        selectedModel,
-                        PlayerModelResolver.getCacheKey(mc.player)
-                );
+                ManagedModel model = ClientRenderRuntime.get().modelRepository()
+                        .acquire(ModelRequestKey.player(mc.player, selectedModel));
                 if (model != null) {
-                    MMDAnimManager.invalidateAnimCache(model.model);
-
-                    model.model.changeAnim(MMDAnimManager.GetAnimModel(model.model, "idle"), 0);
+                    model.animationLibrary().invalidate();
+                    model.modelInstance().changeAnim(model.animationLibrary().animation("idle"), 0);
                 }
             }
         }

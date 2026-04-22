@@ -1,13 +1,15 @@
 package com.shiroha.mmdskin.ui.selector.adapter;
 
-import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
 import com.shiroha.mmdskin.config.ModelConfigData;
-import com.shiroha.mmdskin.player.model.PlayerModelResolver;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
+import com.shiroha.mmdskin.model.runtime.ManagedModel;
+import com.shiroha.mmdskin.model.runtime.ModelRequestKey;
+import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import com.shiroha.mmdskin.ui.selector.port.ModelSettingsRuntimeGateway;
 import net.minecraft.client.Minecraft;
 
+/** 文件职责：把模型设置应用到当前已加载的本地玩家模型实例。 */
 public class DefaultModelSettingsRuntimeGateway implements ModelSettingsRuntimeGateway {
     @Override
     public void applyConfigIfSelected(String modelName, ModelConfigData config) {
@@ -21,17 +23,15 @@ public class DefaultModelSettingsRuntimeGateway implements ModelSettingsRuntimeG
             return;
         }
 
-        MMDModelManager.Model model = MMDModelManager.GetModel(
-                selectedModel,
-                PlayerModelResolver.getCacheKey(minecraft.player)
-        );
+        ManagedModel model = ClientRenderRuntime.get().modelRepository()
+                .acquire(ModelRequestKey.player(minecraft.player, selectedModel));
         if (model == null) {
             return;
         }
 
-        long handle = model.model.getModelHandle();
-        NativeFunc nativeFunc = NativeFunc.GetInst();
-        nativeFunc.SetEyeTrackingEnabled(handle, config.eyeTrackingEnabled);
-        nativeFunc.SetEyeMaxAngle(handle, config.eyeMaxAngle);
+        long handle = model.modelInstance().getModelHandle();
+        var nativeBridge = NativeRuntimeBridgeHolder.get();
+        nativeBridge.setEyeTrackingEnabled(handle, config.eyeTrackingEnabled);
+        nativeBridge.setEyeMaxAngle(handle, config.eyeMaxAngle);
     }
 }

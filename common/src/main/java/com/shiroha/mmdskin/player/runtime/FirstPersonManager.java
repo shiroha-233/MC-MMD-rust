@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.player.runtime;
 
-import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
 import com.shiroha.mmdskin.compat.vr.VRArmHider;
 import com.shiroha.mmdskin.compat.vr.VRDataProvider;
 import com.shiroha.mmdskin.compat.vr.VivecraftReflectionBridge;
@@ -15,9 +15,7 @@ import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/**
- * Tracks local first-person camera state for both desktop and VR rendering.
- */
+/** 文件职责：维护本地第一人称与 VR 视角相关的模型状态。 */
 public final class FirstPersonManager {
     private static final Logger logger = LogManager.getLogger();
 
@@ -39,7 +37,8 @@ public final class FirstPersonManager {
 
     private static Vec3 lastCameraPos = Vec3.ZERO;
 
-    private FirstPersonManager() {}
+    private FirstPersonManager() {
+    }
 
     public static void setLastCameraPos(Vec3 pos) {
         lastCameraPos = pos;
@@ -65,7 +64,7 @@ public final class FirstPersonManager {
         return mc.player != null && MmdSkinRendererPlayerHelper.isUsingMmdModel(mc.player);
     }
 
-    public static void preRender(NativeFunc nf, long modelHandle, float modelScale, boolean isLocalPlayer) {
+    public static void preRender(long modelHandle, float modelScale, boolean isLocalPlayer) {
         if (!isLocalPlayer) {
             return;
         }
@@ -82,7 +81,7 @@ public final class FirstPersonManager {
         }
 
         if (nativeFirstPerson != nativeFirstPersonModeActive) {
-            nf.SetFirstPersonMode(modelHandle, nativeFirstPerson);
+            NativeRuntimeBridgeHolder.get().setFirstPersonMode(modelHandle, nativeFirstPerson);
             nativeFirstPersonModeActive = nativeFirstPerson;
         }
 
@@ -94,8 +93,8 @@ public final class FirstPersonManager {
         }
     }
 
-    public static void postRender(NativeFunc nf, long modelHandle, Player player, float tickDelta) {
-        nf.GetEyeBonePosition(modelHandle, eyeBonePos);
+    public static void postRender(long modelHandle, Player player, float tickDelta) {
+        NativeRuntimeBridgeHolder.get().getEyeBonePosition(modelHandle, eyeBonePos);
         eyeBoneValid = (eyeBonePos[0] != 0.0f || eyeBonePos[1] != 0.0f || eyeBonePos[2] != 0.0f);
         updateVrModelRootOffset(player, tickDelta);
     }
@@ -266,7 +265,7 @@ public final class FirstPersonManager {
         }
 
         try {
-            NativeFunc.GetInst().SetFirstPersonMode(trackedModelHandle, false);
+            NativeRuntimeBridgeHolder.get().setFirstPersonMode(trackedModelHandle, false);
         } catch (Exception e) {
             logger.warn("Failed to disable first-person mode for model {}", trackedModelHandle, e);
         } finally {

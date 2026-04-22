@@ -3,7 +3,8 @@ package com.shiroha.mmdskin.fabric.config;
 import com.shiroha.mmdskin.asset.catalog.ModelInfo;
 import com.shiroha.mmdskin.config.ConfigData;
 import com.shiroha.mmdskin.config.UIConstants;
-import com.shiroha.mmdskin.renderer.integration.entity.MobReplacementTargets;
+import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
+import com.shiroha.mmdskin.render.entity.MobReplacementTargets;
 import com.shiroha.mmdskin.voice.config.VoicePackBindingsConfig;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
 import me.shedaniel.clothconfig2.api.ConfigCategory;
@@ -447,8 +448,9 @@ public class ModConfigScreen {
         cleanupInvalidMobReplacements(data);
         MmdSkinConfig.save();
 
-        com.shiroha.mmdskin.renderer.runtime.mode.RenderModeManager.setUseGpuSkinning(data.gpuSkinningEnabled);
-        com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager.forceReloadAllModels();
+        ClientRenderRuntime.get().renderBackendSettings().setGpuSkinningEnabled(data.gpuSkinningEnabled);
+        ClientRenderRuntime.get().renderBackendSettings().setShaderEnabled(data.mmdShaderEnabled);
+        ClientRenderRuntime.get().modelRepository().reloadAll();
 
         try {
             com.shiroha.mmdskin.NativeFunc.GetInst().SetPhysicsConfig(

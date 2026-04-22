@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.stage.client.camera;
 
-import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.bridge.runtime.NativeAnimationBridgeHolder;
 import org.joml.Vector3f;
 
 import java.nio.ByteBuffer;
@@ -28,8 +28,8 @@ public class MMDCameraData {
 
     public void update(float frame) {
         if (animHandle == 0) return;
-        
-        NativeFunc.GetInst().GetCameraTransform(animHandle, frame, buffer);
+
+        NativeAnimationBridgeHolder.get().getCameraTransform(animHandle, frame, buffer);
         
         buffer.rewind();
         float px = buffer.getFloat();

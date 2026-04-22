@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.stage.client.playback;
 
-import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.bridge.runtime.NativeAnimationBridgeHolder;
 import com.shiroha.mmdskin.config.PathConstants;
 import com.shiroha.mmdskin.config.StageConfig;
 import com.shiroha.mmdskin.config.StagePack;
@@ -108,7 +108,7 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
             return HostStartResult.failed();
         }
 
-        NativeFunc nativeFunc = NativeFunc.GetInst();
+        var animationBridge = NativeAnimationBridgeHolder.get();
         StageConfig config = StageConfig.getInstance();
         config.lastStagePack = pack.getName();
         config.cinematicMode = cinematicMode;
@@ -137,7 +137,7 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
             return HostStartResult.failed();
         }
 
-        long mergedAnim = nativeFunc.LoadAnimation(0, motionFiles.get(0).path);
+        long mergedAnim = animationBridge.loadAnimation(0, motionFiles.get(0).path);
         if (mergedAnim == 0) {
             LOGGER.error("[舞台模式] 动作 VMD 加载失败: {}", motionFiles.get(0).path);
             return HostStartResult.failed();
@@ -145,24 +145,24 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
 
         List<Long> tempHandles = new ArrayList<>();
         for (int i = 1; i < motionFiles.size(); i++) {
-            long tempAnim = nativeFunc.LoadAnimation(0, motionFiles.get(i).path);
+            long tempAnim = animationBridge.loadAnimation(0, motionFiles.get(i).path);
             if (tempAnim != 0) {
-                nativeFunc.MergeAnimation(mergedAnim, tempAnim);
+                animationBridge.mergeAnimation(mergedAnim, tempAnim);
                 tempHandles.add(tempAnim);
             }
         }
         for (long handle : tempHandles) {
-            nativeFunc.DeleteAnimation(handle);
+            animationBridge.deleteAnimation(handle);
         }
 
         long cameraAnim = 0;
         if (cameraFile != null) {
-            cameraAnim = nativeFunc.LoadAnimation(0, cameraFile.path);
+            cameraAnim = animationBridge.loadAnimation(0, cameraFile.path);
         }
 
         StageDescriptor sessionDescriptor = buildSessionDescriptor(pack, motionFiles, cameraFile);
         if (sessionDescriptor == null || !sessionDescriptor.isValid()) {
-            cleanupHandles(nativeFunc, mergedAnim, cameraAnim);
+            cleanupHandles(mergedAnim, cameraAnim);
             LOGGER.warn("[舞台模式] 默认舞台描述构建失败");
             return HostStartResult.failed();
         }
@@ -178,7 +178,7 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
                 cameraHeightOffset
         );
         if (!started) {
-            cleanupHandles(nativeFunc, mergedAnim, cameraAnim);
+            cleanupHandles(mergedAnim, cameraAnim);
             LOGGER.warn("[舞台模式] 相机控制器启动失败，已释放动画句柄");
             return HostStartResult.failed();
         }
@@ -207,33 +207,33 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
             return GuestStartResult.failed();
         }
 
-        NativeFunc nativeFunc = NativeFunc.GetInst();
+        var animationBridge = NativeAnimationBridgeHolder.get();
         long mergedAnim = 0;
         long cameraAnim = 0;
 
         try {
             for (String motionFile : effectiveDescriptor.getMotionFiles()) {
                 String filePath = new File(motionStageDir, motionFile).getAbsolutePath();
-                long tempAnim = nativeFunc.LoadAnimation(0, filePath);
+                long tempAnim = animationBridge.loadAnimation(0, filePath);
                 if (tempAnim == 0) {
                     continue;
                 }
 
-                boolean hasMotion = nativeFunc.HasBoneData(tempAnim) || nativeFunc.HasMorphData(tempAnim);
+                boolean hasMotion = animationBridge.hasBoneData(tempAnim) || animationBridge.hasMorphData(tempAnim);
                 if (hasMotion) {
                     if (mergedAnim == 0) {
                         mergedAnim = tempAnim;
                     } else {
-                        nativeFunc.MergeAnimation(mergedAnim, tempAnim);
-                        nativeFunc.DeleteAnimation(tempAnim);
+                        animationBridge.mergeAnimation(mergedAnim, tempAnim);
+                        animationBridge.deleteAnimation(tempAnim);
                     }
                 } else {
-                    nativeFunc.DeleteAnimation(tempAnim);
+                    animationBridge.deleteAnimation(tempAnim);
                 }
             }
 
             if (effectiveDescriptor.getCameraFile() != null && !effectiveDescriptor.getCameraFile().isEmpty()) {
-                cameraAnim = nativeFunc.LoadAnimation(
+                cameraAnim = animationBridge.loadAnimation(
                         0,
                         new File(hostStageDir, effectiveDescriptor.getCameraFile()).getAbsolutePath()
                 );
@@ -260,7 +260,7 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
             if (useHostCamera) {
                 controller.enterWatchMode(hostUUID);
                 if (!controller.isWatching()) {
-                    cleanupHandles(nativeFunc, mergedAnim, cameraAnim);
+                    cleanupHandles(mergedAnim, cameraAnim);
                     LOGGER.warn("[多人舞台] 进入观演模式失败");
                     return GuestStartResult.failed();
                 }
@@ -288,7 +288,7 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
                     effectiveHeight
             );
             if (!started) {
-                cleanupHandles(nativeFunc, mergedAnim, cameraAnim);
+                cleanupHandles(mergedAnim, cameraAnim);
                 LOGGER.warn("[多人舞台] 启动播放失败");
                 return GuestStartResult.failed();
             }
@@ -300,7 +300,7 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
             );
         } catch (Exception e) {
             LOGGER.error("[多人舞台] 启动来宾播放失败", e);
-            cleanupHandles(nativeFunc, mergedAnim, cameraAnim);
+            cleanupHandles(mergedAnim, cameraAnim);
             return GuestStartResult.failed();
         }
     }
@@ -361,12 +361,13 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
         return remoteDescriptor.isValid() ? remoteDescriptor : null;
     }
 
-    private void cleanupHandles(NativeFunc nativeFunc, long mergedAnim, long cameraAnim) {
+    private void cleanupHandles(long mergedAnim, long cameraAnim) {
+        var animationBridge = NativeAnimationBridgeHolder.get();
         if (mergedAnim != 0) {
-            nativeFunc.DeleteAnimation(mergedAnim);
+            animationBridge.deleteAnimation(mergedAnim);
         }
         if (cameraAnim != 0 && cameraAnim != mergedAnim) {
-            nativeFunc.DeleteAnimation(cameraAnim);
+            animationBridge.deleteAnimation(cameraAnim);
         }
     }
 

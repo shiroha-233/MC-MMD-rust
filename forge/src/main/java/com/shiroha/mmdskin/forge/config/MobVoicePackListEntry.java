@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.forge.config;
 
-import com.shiroha.mmdskin.renderer.integration.entity.MobReplacementTargets;
+import com.shiroha.mmdskin.render.entity.MobReplacementTargets;
 import me.shedaniel.clothconfig2.api.AbstractConfigListEntry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;

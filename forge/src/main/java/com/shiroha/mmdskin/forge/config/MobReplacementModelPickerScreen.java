@@ -1,7 +1,7 @@
 package com.shiroha.mmdskin.forge.config;
 
 import com.shiroha.mmdskin.config.UIConstants;
-import com.shiroha.mmdskin.renderer.integration.entity.MobReplacementTargets;
+import com.shiroha.mmdskin.render.entity.MobReplacementTargets;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;

@@ -1,12 +1,11 @@
 package com.shiroha.mmdskin.player.runtime;
 
 import com.shiroha.mmdskin.config.UIConstants;
-import com.shiroha.mmdskin.renderer.runtime.animation.MMDAnimManager;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
 import com.shiroha.mmdskin.player.animation.AnimationStateManager;
 import com.shiroha.mmdskin.player.animation.PendingAnimSignalCache;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
-import com.shiroha.mmdskin.renderer.api.IMMDModel;
+import com.shiroha.mmdskin.model.runtime.ManagedModel;
+import com.shiroha.mmdskin.model.runtime.ModelInstance;
 import com.shiroha.mmdskin.stage.client.sync.StageAnimSyncHelper;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import net.minecraft.client.Minecraft;
@@ -42,62 +41,62 @@ public final class MmdSkinRendererPlayerHelper {
         PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
         if (resolved == null) return;
 
-        MMDModelManager.Model mwed = resolved.model();
-        IMMDModel model = mwed.model;
-        mwed.entityData.playCustomAnim = true;
+        ManagedModel managedModel = resolved.model();
+        ModelInstance model = managedModel.modelInstance();
+        managedModel.entityState().playCustomAnim = true;
 
-        mwed.entityData.invalidateStateLayers();
-        model.changeAnim(MMDAnimManager.GetAnimModel(model, id), 0);
+        managedModel.entityState().invalidateStateLayers();
+        model.changeAnim(managedModel.animationLibrary().animation(id), 0);
         model.setLayerLoop(1, true);
         model.changeAnim(0, 1);
         model.changeAnim(0, 2);
     }
 
-    public static void startStageAnimation(MMDModelManager.Model modelData, long animHandle) {
-        if (modelData == null || modelData.model == null || modelData.entityData == null || animHandle == 0) return;
+    public static void startStageAnimation(ManagedModel modelData, long animHandle) {
+        if (modelData == null || modelData.modelInstance() == null || modelData.entityState() == null || animHandle == 0) return;
 
-        IMMDModel model = modelData.model;
+        ModelInstance model = modelData.modelInstance();
         clearOverlayLayers(model);
         model.resetPhysics();
-        modelData.entityData.invalidateStateLayers();
+        modelData.entityState().invalidateStateLayers();
         model.transitionAnim(animHandle, 0, STAGE_TRANSITION_TIME);
-        modelData.entityData.playCustomAnim = true;
-        modelData.entityData.playStageAnim = true;
+        modelData.entityState().playCustomAnim = true;
+        modelData.entityState().playStageAnim = true;
     }
 
-    public static void resetModelAnimationState(MMDModelManager.Model modelData) {
+    public static void resetModelAnimationState(ManagedModel modelData) {
         resetModelAnimationState(null, modelData);
     }
 
-    public static void resetModelAnimationState(Player player, MMDModelManager.Model modelData) {
-        if (modelData == null || modelData.model == null || modelData.entityData == null) return;
+    public static void resetModelAnimationState(Player player, ManagedModel modelData) {
+        if (modelData == null || modelData.modelInstance() == null || modelData.entityState() == null) return;
 
-        IMMDModel model = modelData.model;
-        modelData.entityData.playCustomAnim = false;
-        modelData.entityData.playStageAnim = false;
-        model.changeAnim(MMDAnimManager.GetAnimModel(model, "idle"), 0);
+        ModelInstance model = modelData.modelInstance();
+        modelData.entityState().playCustomAnim = false;
+        modelData.entityState().playStageAnim = false;
+        model.changeAnim(modelData.animationLibrary().animation("idle"), 0);
         clearOverlayLayers(model);
         model.resetPhysics();
-        modelData.entityData.invalidateStateLayers();
+        modelData.entityState().invalidateStateLayers();
 
         if (player instanceof AbstractClientPlayer clientPlayer) {
             AnimationStateManager.updateAnimationState(clientPlayer, modelData);
         }
     }
 
-    public static void suppressDefaultAnimationState(MMDModelManager.Model modelData) {
-        if (modelData == null || modelData.model == null || modelData.entityData == null) return;
+    public static void suppressDefaultAnimationState(ManagedModel modelData) {
+        if (modelData == null || modelData.modelInstance() == null || modelData.entityState() == null) return;
 
-        IMMDModel model = modelData.model;
-        modelData.entityData.playCustomAnim = false;
-        modelData.entityData.playStageAnim = false;
+        ModelInstance model = modelData.modelInstance();
+        modelData.entityState().playCustomAnim = false;
+        modelData.entityState().playStageAnim = false;
         model.changeAnim(0, 0);
         clearOverlayLayers(model);
         model.resetPhysics();
-        modelData.entityData.invalidateStateLayers();
+        modelData.entityState().invalidateStateLayers();
     }
 
-    private static void clearOverlayLayers(IMMDModel model) {
+    private static void clearOverlayLayers(ModelInstance model) {
         model.setLayerLoop(1, true);
         model.changeAnim(0, 1);
         model.changeAnim(0, 2);

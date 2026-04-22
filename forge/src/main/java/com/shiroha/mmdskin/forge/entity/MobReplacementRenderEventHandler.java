@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.forge.entity;
 
-import com.shiroha.mmdskin.renderer.integration.entity.MobReplacementRenderer;
+import com.shiroha.mmdskin.render.entity.MobReplacementRenderer;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraftforge.api.distmarker.Dist;

@@ -6,7 +6,7 @@ import com.shiroha.mmdskin.forge.config.MmdSkinConfig;
 import com.shiroha.mmdskin.forge.entity.MobReplacementRenderEventHandler;
 import com.shiroha.mmdskin.forge.maid.MaidRenderEventHandler;
 import com.shiroha.mmdskin.forge.register.MmdSkinRegisterClient;
-import com.shiroha.mmdskin.renderer.runtime.model.opengl.MMDModelOpenGL;
+import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
 
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
@@ -35,7 +35,7 @@ public class MmdSkinForgeClient {
         MmdSkinConfig.init();
         MmdSkinClient.initClient();
         MmdSkinRegisterClient.Register();
-        MMDModelOpenGL.isMMDShaderEnabled = com.shiroha.mmdskin.config.ConfigManager.isMMDShaderEnabled();
+        ClientRenderRuntime.get().renderBackendSettings().setShaderEnabled(com.shiroha.mmdskin.config.ConfigManager.isMMDShaderEnabled());
         MinecraftForge.EVENT_BUS.register(new MobReplacementRenderEventHandler());
         MinecraftForge.EVENT_BUS.register(new MaidRenderEventHandler());
     }

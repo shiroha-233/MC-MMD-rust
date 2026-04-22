@@ -1,16 +1,12 @@
 package com.shiroha.mmdskin.stage.client.sync;
 
-import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.bridge.runtime.NativeAnimationBridgeHolder;
 import com.shiroha.mmdskin.config.PathConstants;
-import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
-import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
+import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
+import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
+import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
 import com.shiroha.mmdskin.stage.domain.model.StageDescriptor;
-import net.minecraft.world.entity.player.Player;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,9 +14,12 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import net.minecraft.world.entity.player.Player;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
+/** 文件职责：同步远端舞台动画到本地玩家模型并管理临时动画句柄。 */
 public final class StageAnimSyncHelper {
-
     private static final Logger logger = LogManager.getLogger();
 
     private static final Map<UUID, List<Long>> remoteStageAnims = new ConcurrentHashMap<>();
@@ -45,7 +44,7 @@ public final class StageAnimSyncHelper {
         PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
         if (resolved == null) {
             pendingAnims.put(player.getUUID(), new PendingStageAnim(player.getUUID(), descriptor.copy(), 0));
-            logger.info("[舞台同步] 远程玩家 {} 模型加载中，已加入待处理队列", player.getName().getString());
+            logger.info("[StageSync] Player model still loading for {}", player.getName().getString());
             return;
         }
 
@@ -78,33 +77,32 @@ public final class StageAnimSyncHelper {
             return;
         }
 
-        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc.level == null) {
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        if (minecraft.level == null) {
             return;
         }
 
-        var it = pendingAnims.entrySet().iterator();
-        while (it.hasNext()) {
-            var entry = it.next();
+        var iterator = pendingAnims.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
             PendingStageAnim pending = entry.getValue();
             PendingStageAnim next = pending.nextTick();
             if (next.ticksWaited() > MAX_RETRY_TICKS) {
-                logger.warn("[舞台同步] 玩家 {} 模型加载超时，放弃重试", pending.playerUUID());
-                it.remove();
+                logger.warn("[StageSync] Timed out waiting for player model {}", pending.playerUUID());
+                iterator.remove();
                 continue;
             }
 
-            Player player = mc.level.getPlayerByUUID(pending.playerUUID());
+            Player player = minecraft.level.getPlayerByUUID(pending.playerUUID());
             if (player == null) {
-                it.remove();
+                iterator.remove();
                 continue;
             }
 
             PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
             if (resolved != null) {
-                it.remove();
+                iterator.remove();
                 applyStageAnim(pending.playerUUID(), resolved, pending.descriptor());
-                logger.info("[舞台同步] 玩家 {} 模型加载完成，已应用舞台动画", player.getName().getString());
             } else {
                 pendingAnims.put(pending.playerUUID(), next);
             }
@@ -115,26 +113,26 @@ public final class StageAnimSyncHelper {
         if (remoteStageModels.isEmpty()) {
             return;
         }
-        NativeFunc nf = NativeFunc.GetInst();
+        var animationBridge = NativeAnimationBridgeHolder.get();
         for (Long modelHandle : remoteStageModels.values()) {
-            if (modelHandle != 0) {
-                nf.SeekLayer(modelHandle, 0, frame);
+            if (modelHandle != null && modelHandle != 0L) {
+                animationBridge.seekLayer(modelHandle, 0, frame);
             }
         }
     }
 
     public static void syncLocalStageFrame(float frame) {
-        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc.player == null) {
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        if (minecraft.player == null) {
             return;
         }
-        PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(mc.player);
-        if (resolved == null || !resolved.model().entityData.playStageAnim) {
+        PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(minecraft.player);
+        if (resolved == null || !resolved.model().entityState().playStageAnim) {
             return;
         }
-        long modelHandle = resolved.model().model.getModelHandle();
-        if (modelHandle != 0) {
-            NativeFunc.GetInst().SeekLayer(modelHandle, 0, frame);
+        long modelHandle = resolved.model().modelInstance().getModelHandle();
+        if (modelHandle != 0L) {
+            NativeAnimationBridgeHolder.get().seekLayer(modelHandle, 0, frame);
         }
     }
 
@@ -144,11 +142,11 @@ public final class StageAnimSyncHelper {
         if (remoteStageAnims.isEmpty()) {
             return;
         }
-        NativeFunc nf = NativeFunc.GetInst();
+        var animationBridge = NativeAnimationBridgeHolder.get();
         for (List<Long> handles : remoteStageAnims.values()) {
             for (long handle : handles) {
-                if (handle != 0) {
-                    nf.DeleteAnimation(handle);
+                if (handle != 0L) {
+                    animationBridge.deleteAnimation(handle);
                 }
             }
         }
@@ -160,18 +158,17 @@ public final class StageAnimSyncHelper {
 
         File stageDir = new File(PathConstants.getStageAnimDir(), descriptor.getPackName());
         if (!stageDir.exists() || !stageDir.isDirectory()) {
-            logger.warn("[舞台同步] 本地没有舞台包: {}", descriptor.getPackName());
+            logger.warn("[StageSync] Missing local stage pack {}", descriptor.getPackName());
             return;
         }
 
         long mergedAnim = loadAndMergeAnimations(stageDir, descriptor.getMotionFiles());
-        if (mergedAnim == 0) {
+        if (mergedAnim == 0L) {
             return;
         }
 
-        MMDModelManager.Model modelData = resolved.model();
-        NativeFunc nf = NativeFunc.GetInst();
-        long modelHandle = modelData.model.getModelHandle();
+        ManagedModel modelData = resolved.model();
+        long modelHandle = modelData.modelInstance().getModelHandle();
         MmdSkinRendererPlayerHelper.startStageAnimation(modelData, mergedAnim);
 
         List<Long> tracked = new CopyOnWriteArrayList<>();
@@ -181,51 +178,53 @@ public final class StageAnimSyncHelper {
 
         MMDCameraController controller = MMDCameraController.getInstance();
         if (controller.isActive()) {
-            nf.SeekLayer(modelHandle, 0, controller.getCurrentFrame());
+            NativeAnimationBridgeHolder.get().seekLayer(modelHandle, 0, controller.getCurrentFrame());
         }
     }
 
     private static long loadAndMergeAnimations(File stageDir, List<String> motionFiles) {
         if (motionFiles == null || motionFiles.isEmpty()) {
-            return 0;
+            return 0L;
         }
 
-        NativeFunc nf = NativeFunc.GetInst();
-        List<Long> loadedAnims = new ArrayList<>();
+        var animationBridge = NativeAnimationBridgeHolder.get();
+        List<Long> loadedAnimations = new ArrayList<>();
 
         String firstFile = new File(stageDir, motionFiles.get(0)).getAbsolutePath();
-        long mergedAnim = nf.LoadAnimation(0, firstFile);
-        if (mergedAnim == 0) {
-            logger.warn("[舞台同步] VMD 加载失败: {}", firstFile);
-            return 0;
+        long mergedAnimation = animationBridge.loadAnimation(0, firstFile);
+        if (mergedAnimation == 0L) {
+            logger.warn("[StageSync] Failed to load motion {}", firstFile);
+            return 0L;
         }
-        loadedAnims.add(mergedAnim);
+        loadedAnimations.add(mergedAnimation);
 
         for (int i = 1; i < motionFiles.size(); i++) {
             String filePath = new File(stageDir, motionFiles.get(i)).getAbsolutePath();
-            long tempAnim = nf.LoadAnimation(0, filePath);
-            if (tempAnim != 0) {
-                nf.MergeAnimation(mergedAnim, tempAnim);
-                loadedAnims.add(tempAnim);
+            long tempAnimation = animationBridge.loadAnimation(0, filePath);
+            if (tempAnimation != 0L) {
+                animationBridge.mergeAnimation(mergedAnimation, tempAnimation);
+                loadedAnimations.add(tempAnimation);
             }
         }
 
-        for (int i = 1; i < loadedAnims.size(); i++) {
-            nf.DeleteAnimation(loadedAnims.get(i));
+        for (int i = 1; i < loadedAnimations.size(); i++) {
+            animationBridge.deleteAnimation(loadedAnimations.get(i));
         }
 
-        return mergedAnim;
+        return mergedAnimation;
     }
 
     private static void cleanupRemoteStageAnim(UUID playerUUID) {
         remoteStageModels.remove(playerUUID);
-        List<Long> anims = remoteStageAnims.remove(playerUUID);
-        if (anims != null) {
-            NativeFunc nf = NativeFunc.GetInst();
-            for (long handle : anims) {
-                if (handle != 0) {
-                    nf.DeleteAnimation(handle);
-                }
+        List<Long> animations = remoteStageAnims.remove(playerUUID);
+        if (animations == null) {
+            return;
+        }
+
+        var animationBridge = NativeAnimationBridgeHolder.get();
+        for (long handle : animations) {
+            if (handle != 0L) {
+                animationBridge.deleteAnimation(handle);
             }
         }
     }

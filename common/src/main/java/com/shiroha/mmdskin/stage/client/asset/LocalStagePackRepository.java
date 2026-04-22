@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.stage.client.asset;
 
-import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.bridge.runtime.NativeAnimationBridgeHolder;
 import com.shiroha.mmdskin.config.PathConstants;
 import com.shiroha.mmdskin.config.StagePack;
 
@@ -19,17 +19,17 @@ public final class LocalStagePackRepository {
     public List<StagePack> loadStagePacks() {
         PathConstants.ensureStageAnimDir();
         return StagePack.scan(PathConstants.getStageAnimDir(), path -> {
-            NativeFunc nativeFunc = NativeFunc.GetInst();
-            long tempAnim = nativeFunc.LoadAnimation(0, path);
+            var animationBridge = NativeAnimationBridgeHolder.get();
+            long tempAnim = animationBridge.loadAnimation(0, path);
             if (tempAnim == 0) {
                 return null;
             }
             boolean[] result = {
-                    nativeFunc.HasCameraData(tempAnim),
-                    nativeFunc.HasBoneData(tempAnim),
-                    nativeFunc.HasMorphData(tempAnim)
+                    animationBridge.hasCameraData(tempAnim),
+                    animationBridge.hasBoneData(tempAnim),
+                    animationBridge.hasMorphData(tempAnim)
             };
-            nativeFunc.DeleteAnimation(tempAnim);
+            animationBridge.deleteAnimation(tempAnim);
             return result;
         });
     }

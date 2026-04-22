@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.expression;
 
-import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,17 +42,17 @@ public final class ModelMorphCatalog {
     }
 
     private static ModelMorphCatalog load(long modelHandle) {
-        NativeFunc nativeFunc = NativeFunc.GetInst();
-        int morphCount = (int) nativeFunc.GetMorphCount(modelHandle);
+        var nativeBridge = NativeRuntimeBridgeHolder.get();
+        int morphCount = nativeBridge.getMorphCount(modelHandle);
         List<MorphEntry> entries = new ArrayList<>(Math.max(morphCount, 0));
         for (int i = 0; i < morphCount; i++) {
-            String originalName = nativeFunc.GetMorphName(modelHandle, i);
+            String originalName = nativeBridge.getMorphName(modelHandle, i);
             if (originalName == null || originalName.isEmpty()) {
                 continue;
             }
             entries.add(new MorphEntry(i, originalName, normalizeName(originalName), tokenize(originalName)));
         }
-        return new ModelMorphCatalog(modelHandle, nativeFunc.IsVrmModel(modelHandle), entries);
+        return new ModelMorphCatalog(modelHandle, nativeBridge.isVrmModel(modelHandle), entries);
     }
 
     public long modelHandle() {
