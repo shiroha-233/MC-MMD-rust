@@ -2,6 +2,7 @@ package com.shiroha.mmdskin.stage.client.viewmodel;
 
 import com.shiroha.mmdskin.stage.application.StageSessionService;
 import com.shiroha.mmdskin.stage.client.StageClientContext;
+import com.shiroha.mmdskin.stage.client.StageClientRuntime;
 import com.shiroha.mmdskin.stage.client.playback.StageLocalPlaybackPreferences;
 import com.shiroha.mmdskin.stage.domain.model.StageMember;
 import com.shiroha.mmdskin.stage.domain.model.StageMemberState;
@@ -9,12 +10,14 @@ import com.shiroha.mmdskin.stage.domain.model.StageMemberState;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
+/** 文件职责：为舞台界面提供会话与本地播放偏好视图。 */
 public final class StageLobbyViewModel {
     private static final double NEARBY_RANGE = 15.0;
-    private static final StageLobbyViewModel INSTANCE = new StageLobbyViewModel();
 
     public record MemberView(UUID uuid, String name, StageMemberState state,
                              boolean local, boolean host, boolean useHostCamera) {
@@ -24,14 +27,17 @@ public final class StageLobbyViewModel {
                             boolean nearby, boolean useHostCamera) {
     }
 
-    private final StageSessionService sessionService = StageSessionService.getInstance();
-    private final StageLocalPlaybackPreferences localPlaybackPreferences = StageLocalPlaybackPreferences.getInstance();
+    private final StageSessionService sessionService;
+    private final StageLocalPlaybackPreferences localPlaybackPreferences;
 
-    private StageLobbyViewModel() {
+    public StageLobbyViewModel(StageSessionService sessionService,
+                               StageLocalPlaybackPreferences localPlaybackPreferences) {
+        this.sessionService = Objects.requireNonNull(sessionService, "sessionService");
+        this.localPlaybackPreferences = Objects.requireNonNull(localPlaybackPreferences, "localPlaybackPreferences");
     }
 
     public static StageLobbyViewModel getInstance() {
-        return INSTANCE;
+        return StageClientRuntime.get().lobbyViewModel();
     }
 
     public boolean isSessionMember() {
@@ -97,7 +103,7 @@ public final class StageLobbyViewModel {
         List<StageClientContext.NearbyPlayer> nearbyPlayers = StageClientContext.getNearbyPlayers(NEARBY_RANGE);
         LinkedHashMap<UUID, HostEntry> result = new LinkedHashMap<>();
         Set<UUID> nearbyIds = nearbyPlayers.stream().map(StageClientContext.NearbyPlayer::uuid)
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
 
         for (StageMember member : sessionService.getMembers()) {
             if (member.local()) {

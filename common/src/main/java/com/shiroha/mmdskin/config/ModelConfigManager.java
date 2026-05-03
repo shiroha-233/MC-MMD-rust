@@ -27,12 +27,13 @@ public class ModelConfigManager {
             return new ModelConfigData();
         }
 
-        return cache.computeIfAbsent(modelName, name -> {
+        ModelConfigData cachedConfig = cache.computeIfAbsent(modelName, name -> {
             File configFile = getConfigFile(name);
-            ModelConfigData config = ModelConfigData.load(configFile);
+            ModelConfigData config = ModelConfigData.load(configFile).normalizedCopy();
             logger.debug("加载模型配置: {} (眼球角度: {})", name, config.eyeMaxAngle);
             return config;
         });
+        return cachedConfig.copy();
     }
 
     public static void saveConfig(String modelName, ModelConfigData config) {
@@ -41,7 +42,7 @@ public class ModelConfigManager {
             return;
         }
 
-        ModelConfigData safeCopy = config.copy();
+        ModelConfigData safeCopy = config == null ? new ModelConfigData() : config.normalizedCopy();
         cache.put(modelName, safeCopy);
         File configFile = getConfigFile(modelName);
         safeCopy.save(configFile);

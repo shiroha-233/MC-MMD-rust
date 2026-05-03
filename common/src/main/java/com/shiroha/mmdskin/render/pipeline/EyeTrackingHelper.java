@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.render.pipeline;
 
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
+import com.shiroha.mmdskin.bridge.runtime.NativeScenePort;
 import com.shiroha.mmdskin.config.ModelConfigData;
 import com.shiroha.mmdskin.config.ModelConfigManager;
 import net.minecraft.client.Minecraft;
@@ -17,28 +17,31 @@ public final class EyeTrackingHelper {
     private EyeTrackingHelper() {
     }
 
-    public static void updateEyeTracking(long modelHandle,
+    public static void updateEyeTracking(NativeScenePort scenePort,
+                                         long modelHandle,
                                          LivingEntity entity,
                                          float entityYaw,
                                          float tickDelta,
                                          String modelName) {
         ModelConfigData modelConfig = ModelConfigManager.getConfig(modelName);
         if (!modelConfig.eyeTrackingEnabled) {
-            NativeRuntimeBridgeHolder.get().setEyeTrackingEnabled(modelHandle, false);
+            scenePort.setEyeTrackingEnabled(modelHandle, false);
             return;
         }
 
-        updateEyeTrackingInternal(modelHandle, entity, entityYaw, tickDelta, modelConfig.eyeMaxAngle);
+        updateEyeTrackingInternal(scenePort, modelHandle, entity, entityYaw, tickDelta, modelConfig.eyeMaxAngle);
     }
 
-    public static void updateEyeTracking(long modelHandle,
+    public static void updateEyeTracking(NativeScenePort scenePort,
+                                         long modelHandle,
                                          LivingEntity entity,
                                          float entityYaw,
                                          float tickDelta) {
-        updateEyeTrackingInternal(modelHandle, entity, entityYaw, tickDelta, MAX_EYE_ANGLE);
+        updateEyeTrackingInternal(scenePort, modelHandle, entity, entityYaw, tickDelta, MAX_EYE_ANGLE);
     }
 
-    private static void updateEyeTrackingInternal(long modelHandle,
+    private static void updateEyeTrackingInternal(NativeScenePort scenePort,
+                                                  long modelHandle,
                                                   LivingEntity entity,
                                                   float entityYaw,
                                                   float tickDelta,
@@ -79,12 +82,12 @@ public final class EyeTrackingHelper {
         eyeAngleX = Mth.clamp(eyeAngleX, -maxAngle, maxAngle);
         eyeAngleY = Mth.clamp(eyeAngleY, -maxAngle, maxAngle);
 
-        NativeRuntimeBridgeHolder.get().setEyeTrackingEnabled(modelHandle, true);
-        NativeRuntimeBridgeHolder.get().setEyeMaxAngle(modelHandle, maxAngle);
-        NativeRuntimeBridgeHolder.get().setEyeAngle(modelHandle, eyeAngleX, eyeAngleY);
+        scenePort.setEyeTrackingEnabled(modelHandle, true);
+        scenePort.setEyeMaxAngle(modelHandle, maxAngle);
+        scenePort.setEyeAngle(modelHandle, eyeAngleX, eyeAngleY);
     }
 
-    public static void disableEyeTracking(long modelHandle) {
-        NativeRuntimeBridgeHolder.get().setEyeTrackingEnabled(modelHandle, false);
+    public static void disableEyeTracking(NativeScenePort scenePort, long modelHandle) {
+        scenePort.setEyeTrackingEnabled(modelHandle, false);
     }
 }

@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.expression;
 
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
+import com.shiroha.mmdskin.bridge.runtime.NativeModelQueryPort;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -10,9 +10,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/** 文件职责：缓存模型表情索引并提供预设匹配查询。 */
 public final class ModelMorphCatalog {
     private static final Map<Long, ModelMorphCatalog> CACHE = new ConcurrentHashMap<>();
     private static final List<String> PREFIXES = List.of("morph_", "face_", "expression_");
+    private static volatile NativeModelQueryPort modelQueryPort = NativeModelQueryPort.noop();
 
     private final long modelHandle;
     private final boolean vrmModel;
@@ -37,12 +39,16 @@ public final class ModelMorphCatalog {
         CACHE.remove(modelHandle);
     }
 
+    public static void configureRuntimeCollaborators(NativeModelQueryPort modelQueryPort) {
+        ModelMorphCatalog.modelQueryPort = modelQueryPort != null ? modelQueryPort : NativeModelQueryPort.noop();
+    }
+
     static ModelMorphCatalog forTesting(List<MorphEntry> entries) {
         return new ModelMorphCatalog(-1L, false, List.copyOf(entries));
     }
 
     private static ModelMorphCatalog load(long modelHandle) {
-        var nativeBridge = NativeRuntimeBridgeHolder.get();
+        NativeModelQueryPort nativeBridge = modelQueryPort;
         int morphCount = nativeBridge.getMorphCount(modelHandle);
         List<MorphEntry> entries = new ArrayList<>(Math.max(morphCount, 0));
         for (int i = 0; i < morphCount; i++) {

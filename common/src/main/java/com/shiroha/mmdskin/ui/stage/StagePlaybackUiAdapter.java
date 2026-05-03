@@ -7,11 +7,9 @@ import net.minecraft.client.gui.screens.Screen;
 
 import java.util.UUID;
 
-public final class StagePlaybackUiAdapter implements StagePlaybackUiPort, StageCameraUiPort {
-    public static final StagePlaybackUiAdapter INSTANCE = new StagePlaybackUiAdapter();
-
-    private StagePlaybackUiAdapter() {
-    }
+/** 文件职责：适配舞台播放与相机 UI 调用到具体界面。 */
+public enum StagePlaybackUiAdapter implements StagePlaybackUiPort, StageCameraUiPort {
+    INSTANCE;
 
     @Override
     public void showInvite(UUID hostUUID) {
@@ -20,47 +18,47 @@ public final class StagePlaybackUiAdapter implements StagePlaybackUiPort, StageC
 
     @Override
     public void markStageSelectionStartedAndClose() {
-        Minecraft mc = Minecraft.getInstance();
+        Minecraft minecraft = Minecraft.getInstance();
         Runnable action = () -> {
-            if (mc.screen instanceof StageWorkbenchScreen screen) {
+            if (minecraft.screen instanceof StageWorkbenchScreen screen) {
                 screen.markStartedByHost();
-                mc.setScreen(null);
+                minecraft.setScreen(null);
             }
         };
-        if (mc.isSameThread()) {
+        if (minecraft.isSameThread()) {
             action.run();
         } else {
-            mc.execute(action);
+            minecraft.execute(action);
         }
     }
 
     @Override
     public void openStageSelection() {
-        Minecraft mc = Minecraft.getInstance();
+        Minecraft minecraft = Minecraft.getInstance();
         Runnable action = () -> {
-            Screen screen = StageWorkbenchScreen.createPrimary();
-            mc.setScreen(screen);
+            Screen screen = new StageWorkbenchScreen(StageWorkbenchFacade.getInstance());
+            minecraft.setScreen(screen);
         };
-        if (mc.isSameThread()) {
+        if (minecraft.isSameThread()) {
             action.run();
         } else {
-            mc.execute(action);
+            minecraft.execute(action);
         }
     }
 
     @Override
     public void closeStageSelectionIfOpen() {
-        Minecraft mc = Minecraft.getInstance();
+        Minecraft minecraft = Minecraft.getInstance();
         Runnable action = () -> {
-            if (mc.screen instanceof StageWorkbenchScreen screen) {
+            if (minecraft.screen instanceof StageWorkbenchScreen screen) {
                 screen.prepareForExternalClose();
-                mc.setScreen(null);
+                minecraft.setScreen(null);
             }
         };
-        if (mc.isSameThread()) {
+        if (minecraft.isSameThread()) {
             action.run();
         } else {
-            mc.execute(action);
+            minecraft.execute(action);
         }
     }
 }

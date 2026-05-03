@@ -3,11 +3,11 @@ package com.shiroha.mmdskin.stage.application;
 import com.shiroha.mmdskin.stage.application.port.StageLocalPlayerContextPort;
 import com.shiroha.mmdskin.stage.application.port.StagePlaybackPreferencesPort;
 import com.shiroha.mmdskin.stage.application.port.StageSessionOutboundPort;
+import com.shiroha.mmdskin.stage.application.port.StageSessionReadyCommand;
 import com.shiroha.mmdskin.stage.domain.model.StageInviteDecision;
 import com.shiroha.mmdskin.stage.domain.model.StageMember;
 import com.shiroha.mmdskin.stage.domain.model.StageMemberState;
 import com.shiroha.mmdskin.stage.domain.model.StageRole;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -23,14 +23,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StageSessionServiceTest {
-    private final StageSessionService service = StageSessionService.getInstance();
-
-    @AfterEach
-    void tearDown() {
-        service.onDisconnect();
-        service.resetCollaborators();
-    }
-
     @Test
     void shouldStartHostedSessionWithoutMinecraftDependency() {
         UUID selfId = UUID.randomUUID();
@@ -40,7 +32,7 @@ class StageSessionServiceTest {
                 .withName(memberId, "Member");
         FakePlaybackPreferences playbackPreferences = new FakePlaybackPreferences();
         FakeOutbound outbound = new FakeOutbound();
-        service.setCollaboratorsForTesting(localPlayerContext, playbackPreferences, outbound);
+        StageSessionService service = new StageSessionService(localPlayerContext, playbackPreferences, outbound);
 
         service.sendInvite(memberId);
 
@@ -67,7 +59,7 @@ class StageSessionServiceTest {
                 .withPackName("demo_pack")
                 .withMotionFiles(List.of("a.vmd", "b.vmd"));
         FakeOutbound outbound = new FakeOutbound();
-        service.setCollaboratorsForTesting(localPlayerContext, playbackPreferences, outbound);
+        StageSessionService service = new StageSessionService(localPlayerContext, playbackPreferences, outbound);
 
         assertTrue(service.onInviteReceived(hostId, sessionId));
         service.acceptInvite();
@@ -171,10 +163,15 @@ class StageSessionServiceTest {
         private final List<ReadyCall> readyCalls = new ArrayList<>();
 
         @Override
-        public void sendReady(UUID hostUUID, UUID sessionId, boolean ready, boolean useHostCamera,
-                              String motionPackName, List<String> motionFiles) {
-            readyCalls.add(new ReadyCall(hostUUID, sessionId, ready, useHostCamera, motionPackName,
-                    motionFiles != null ? List.copyOf(motionFiles) : List.of()));
+        public void sendReady(StageSessionReadyCommand command) {
+            readyCalls.add(new ReadyCall(
+                    command.hostUUID(),
+                    command.sessionId(),
+                    command.ready(),
+                    command.useHostCamera(),
+                    command.motionPackName(),
+                    command.motionFiles()
+            ));
         }
 
         @Override

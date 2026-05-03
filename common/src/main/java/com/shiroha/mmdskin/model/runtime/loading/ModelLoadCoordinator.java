@@ -1,14 +1,16 @@
 package com.shiroha.mmdskin.model.runtime.loading;
 
 import com.shiroha.mmdskin.asset.catalog.ModelInfo;
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
+import com.shiroha.mmdskin.model.port.ModelRuntimeAccessPort;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
-import com.shiroha.mmdskin.texture.runtime.TextureRepository;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -22,6 +24,8 @@ public final class ModelLoadCoordinator {
 
     private static final long FAILED_RETRY_INTERVAL_MS = 10_000L;
 
+    private final ModelRuntimeAccessPort runtimeAccessPort;
+
     public static final class AsyncLoadResult {
         public final long modelHandle;
         public final ModelInfo modelInfo;
@@ -34,44 +38,64 @@ public final class ModelLoadCoordinator {
         }
     }
 
+    private static final class PendingLoad {
+        private final AtomicBoolean cancelled = new AtomicBoolean();
+        private final AtomicBoolean completionClaimed = new AtomicBoolean();
+        private FutureTask<AsyncLoadResult> future;
+
+        Future<AsyncLoadResult> future() {
+            return future;
+        }
+
+        void attach(FutureTask<AsyncLoadResult> future) {
+            this.future = future;
+        }
+
+        boolean claimCompletion() {
+            return completionClaimed.compareAndSet(false, true);
+        }
+
+        boolean isCancelled() {
+            return cancelled.get();
+        }
+
+        void cancel() {
+            cancelled.set(true);
+            FutureTask<AsyncLoadResult> currentFuture = future;
+            if (currentFuture != null) {
+                currentFuture.cancel(true);
+            }
+        }
+    }
+
     private final ExecutorService loadingExecutor = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "MMD-ModelLoader");
         thread.setDaemon(true);
         return thread;
     });
 
-    private final ConcurrentHashMap<String, Future<AsyncLoadResult>> pendingLoads = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, PendingLoad> pendingLoads = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> failedLoads = new ConcurrentHashMap<>();
     private final Set<String> missingModels = ConcurrentHashMap.newKeySet();
+
+    public ModelLoadCoordinator(ModelRuntimeAccessPort runtimeAccessPort) {
+        if (runtimeAccessPort == null) {
+            throw new IllegalArgumentException("runtimeAccessPort cannot be null");
+        }
+        this.runtimeAccessPort = runtimeAccessPort;
+    }
 
     public ManagedModel resolveOrQueue(String fullCacheKey,
                                        String modelName,
                                        Function<AsyncLoadResult, ManagedModel> finalizer) {
-        Future<AsyncLoadResult> future = pendingLoads.get(fullCacheKey);
-        if (future != null) {
+        PendingLoad pendingLoad = pendingLoads.get(fullCacheKey);
+        if (pendingLoad != null) {
+            Future<AsyncLoadResult> future = pendingLoad.future();
             if (!future.isDone()) {
                 return null;
             }
 
-            pendingLoads.remove(fullCacheKey);
-            try {
-                AsyncLoadResult result = future.get();
-                if (result == null || result.modelHandle == 0) {
-                    logger.error("后台模型加载返回空句柄: {}", fullCacheKey);
-                    markFailed(fullCacheKey);
-                    return null;
-                }
-
-                ManagedModel model = finalizer.apply(result);
-                if (model == null) {
-                    markFailed(fullCacheKey);
-                }
-                return model;
-            } catch (Exception e) {
-                logger.error("获取后台加载结果失败: {}", fullCacheKey, e);
-                markFailed(fullCacheKey);
-                return null;
-            }
+            return finalizeCompletedLoad(fullCacheKey, pendingLoad, finalizer);
         }
 
         Long failedTime = failedLoads.get(fullCacheKey);
@@ -105,12 +129,10 @@ public final class ModelLoadCoordinator {
     }
 
     public void removeMatching(Predicate<String> keyMatcher, Consumer<AsyncLoadResult> resultCleaner) {
-        pendingLoads.entrySet().removeIf(entry -> {
-            if (!keyMatcher.test(entry.getKey())) {
-                return false;
+        pendingLoads.forEach((key, pendingLoad) -> {
+            if (keyMatcher.test(key) && pendingLoads.remove(key, pendingLoad)) {
+                cleanupPendingLoad(pendingLoad, resultCleaner);
             }
-            cleanupFutureResult(entry.getValue(), resultCleaner);
-            return true;
         });
         failedLoads.entrySet().removeIf(entry -> keyMatcher.test(entry.getKey()));
     }
@@ -121,31 +143,40 @@ public final class ModelLoadCoordinator {
             return;
         }
 
-        for (Future<AsyncLoadResult> future : pendingLoads.values()) {
-            cleanupFutureResult(future, resultCleaner);
-        }
-        pendingLoads.clear();
+        pendingLoads.forEach((key, pendingLoad) -> {
+            if (pendingLoads.remove(key, pendingLoad)) {
+                cleanupPendingLoad(pendingLoad, resultCleaner);
+            }
+        });
         failedLoads.clear();
     }
 
     private void startBackgroundLoad(String fullCacheKey, ModelInfo modelInfo, String modelName) {
-        if (pendingLoads.containsKey(fullCacheKey)) {
+        long startTime = System.currentTimeMillis();
+
+        PendingLoad pendingLoad = new PendingLoad();
+        FutureTask<AsyncLoadResult> future = new FutureTask<>(
+                () -> loadModelHandle(fullCacheKey, modelInfo, modelName, startTime, pendingLoad));
+        pendingLoad.attach(future);
+        if (pendingLoads.putIfAbsent(fullCacheKey, pendingLoad) != null) {
             return;
         }
 
         logger.info("[异步加载] 开始后台加载模型 {} ({})", modelName, modelInfo.getModelFileName());
-        long startTime = System.currentTimeMillis();
-
-        Future<AsyncLoadResult> future = loadingExecutor.submit(() -> loadModelHandle(fullCacheKey, modelInfo, modelName, startTime));
-        if (pendingLoads.putIfAbsent(fullCacheKey, future) != null) {
-            future.cancel(false);
+        try {
+            loadingExecutor.execute(future);
+        } catch (RuntimeException e) {
+            pendingLoads.remove(fullCacheKey, pendingLoad);
+            markFailed(fullCacheKey);
+            logger.error("[异步加载] 提交后台任务失败: {}", modelName, e);
         }
     }
 
     private AsyncLoadResult loadModelHandle(String fullCacheKey,
                                             ModelInfo modelInfo,
                                             String modelName,
-                                            long startTime) {
+                                            long startTime,
+                                            PendingLoad pendingLoad) {
         long handle = 0;
         try {
             handle = loadNativeModel(modelInfo);
@@ -156,18 +187,18 @@ public final class ModelLoadCoordinator {
                 return null;
             }
 
-            if (!pendingLoads.containsKey(fullCacheKey) || Thread.interrupted()) {
+            if (shouldDiscardLoadedHandle(fullCacheKey, pendingLoad)) {
                 logger.info("[异步加载] 后台任务已被取消，释放句柄: {}", modelName);
-                NativeRuntimeBridgeHolder.get().deleteModel(handle);
+                runtimeAccessPort.deleteModel(handle);
                 return null;
             }
 
             logger.info("[异步加载] 模型解析完成 ({}ms)，开始预解码纹理: {}", elapsed, modelName);
             preloadModelTextures(handle, modelInfo.getFolderPath());
 
-            if (!pendingLoads.containsKey(fullCacheKey) || Thread.interrupted()) {
+            if (shouldDiscardLoadedHandle(fullCacheKey, pendingLoad)) {
                 logger.info("[异步加载] 后台任务已被取消（纹理预解码后），释放句柄: {}", modelName);
-                NativeRuntimeBridgeHolder.get().deleteModel(handle);
+                runtimeAccessPort.deleteModel(handle);
                 return null;
             }
 
@@ -179,8 +210,9 @@ public final class ModelLoadCoordinator {
             logger.error("[异步加载] 后台加载异常 ({}ms): {}", elapsed, modelName, e);
             if (handle != 0) {
                 try {
-                    NativeRuntimeBridgeHolder.get().deleteModel(handle);
-                } catch (Exception ignored) {
+                    runtimeAccessPort.deleteModel(handle);
+                } catch (Exception cleanupError) {
+                    logger.warn("[异步加载] 清理失败的模型句柄时发生异常: {} ({})", modelName, handle, cleanupError);
                 }
             }
             return null;
@@ -189,45 +221,123 @@ public final class ModelLoadCoordinator {
 
     private long loadNativeModel(ModelInfo modelInfo) {
         if (modelInfo.isVRM()) {
-            return NativeRuntimeBridgeHolder.get().loadVrmModel(modelInfo.getModelFilePath(), modelInfo.getFolderPath(), 3);
+            return runtimeAccessPort.loadVrmModel(modelInfo.getModelFilePath(), modelInfo.getFolderPath(), 3);
         }
         if (modelInfo.isPMD()) {
-            return NativeRuntimeBridgeHolder.get().loadPmdModel(modelInfo.getModelFilePath(), modelInfo.getFolderPath(), 3);
+            return runtimeAccessPort.loadPmdModel(modelInfo.getModelFilePath(), modelInfo.getFolderPath(), 3);
         }
-        return NativeRuntimeBridgeHolder.get().loadPmxModel(modelInfo.getModelFilePath(), modelInfo.getFolderPath(), 3);
+        return runtimeAccessPort.loadPmxModel(modelInfo.getModelFilePath(), modelInfo.getFolderPath(), 3);
     }
 
     private void preloadModelTextures(long modelHandle, String modelDir) {
         try {
-            int materialCount = NativeRuntimeBridgeHolder.get().getMaterialCount(modelHandle);
+            int materialCount = runtimeAccessPort.getMaterialCount(modelHandle);
             for (int i = 0; i < materialCount; i++) {
-                String texturePath = NativeRuntimeBridgeHolder.get().getMaterialTexturePath(modelHandle, i);
+                String texturePath = runtimeAccessPort.getMaterialTexturePath(modelHandle, i);
                 if (texturePath == null || texturePath.isEmpty()) {
                     continue;
                 }
-                TextureRepository.preloadTexture(texturePath);
+                runtimeAccessPort.preloadTexture(texturePath);
             }
-            TextureRepository.preloadTexture(modelDir + "/lightMap.png");
+            runtimeAccessPort.preloadTexture(modelDir + "/lightMap.png");
         } catch (Exception e) {
             logger.warn("[异步加载] 纹理预解码部分失败（不影响后续加载）", e);
         }
     }
 
-    private void cleanupFutureResult(Future<AsyncLoadResult> future, Consumer<AsyncLoadResult> resultCleaner) {
-        if (future.isDone()) {
-            if (!future.isCancelled()) {
-                try {
-                    AsyncLoadResult result = future.get();
-                    if (result != null) {
-                        resultCleaner.accept(result);
-                    }
-                } catch (Exception ignored) {
+    private ManagedModel finalizeCompletedLoad(String fullCacheKey,
+                                               PendingLoad pendingLoad,
+                                               Function<AsyncLoadResult, ManagedModel> finalizer) {
+        Future<AsyncLoadResult> future = pendingLoad.future();
+        if (!pendingLoad.claimCompletion()) {
+            return null;
+        }
+
+        try {
+            AsyncLoadResult result = future.get();
+            if (result == null || result.modelHandle == 0L) {
+                if (!pendingLoad.isCancelled()) {
+                    logger.error("后台模型加载返回空句柄: {}", fullCacheKey);
+                    markFailed(fullCacheKey);
                 }
+                return null;
             }
+            if (pendingLoad.isCancelled()) {
+                cleanupLoadedResult(result);
+                return null;
+            }
+
+            ManagedModel model = finalizer.apply(result);
+            if (model == null) {
+                if (!pendingLoad.isCancelled()) {
+                    markFailed(fullCacheKey);
+                }
+                return null;
+            }
+            if (pendingLoad.isCancelled()) {
+                disposeManagedModel(model);
+                return null;
+            }
+            return model;
+        } catch (CancellationException ignored) {
+            return null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            if (!pendingLoad.isCancelled()) {
+                logger.warn("获取后台加载结果时线程被中断: {}", fullCacheKey, e);
+                markFailed(fullCacheKey);
+            }
+            return null;
+        } catch (Exception e) {
+            logger.error("获取后台加载结果失败: {}", fullCacheKey, e);
+            if (!pendingLoad.isCancelled()) {
+                markFailed(fullCacheKey);
+            }
+            return null;
+        } finally {
+            pendingLoads.remove(fullCacheKey, pendingLoad);
+        }
+    }
+
+    private void cleanupPendingLoad(PendingLoad pendingLoad, Consumer<AsyncLoadResult> resultCleaner) {
+        pendingLoad.cancel();
+        Future<AsyncLoadResult> future = pendingLoad.future();
+        if (!future.isDone() || !pendingLoad.claimCompletion()) {
             return;
         }
 
-        future.cancel(true);
+        try {
+            AsyncLoadResult result = future.get();
+            if (result != null) {
+                resultCleaner.accept(result);
+            }
+        } catch (CancellationException ignored) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.warn("[异步加载] 清理已完成任务结果时线程被中断", e);
+        } catch (Exception e) {
+            logger.warn("[异步加载] 清理已完成任务结果失败", e);
+        }
+    }
+
+    private boolean shouldDiscardLoadedHandle(String fullCacheKey, PendingLoad pendingLoad) {
+        return pendingLoad.isCancelled()
+                || pendingLoads.get(fullCacheKey) != pendingLoad
+                || Thread.currentThread().isInterrupted();
+    }
+
+    private void cleanupLoadedResult(AsyncLoadResult result) {
+        if (result != null && result.modelHandle != 0L) {
+            runtimeAccessPort.deleteModel(result.modelHandle);
+        }
+    }
+
+    private void disposeManagedModel(ManagedModel model) {
+        try {
+            model.dispose();
+        } catch (Exception e) {
+            logger.warn("[异步加载] 取消后的模型实例清理失败: {}", model.modelName(), e);
+        }
     }
 
     private void markFailed(String fullCacheKey) {

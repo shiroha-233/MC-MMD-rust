@@ -1,6 +1,5 @@
 package com.shiroha.mmdskin.render.backend.opengl;
 
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
 import org.lwjgl.opengl.GL46C;
 import org.lwjgl.system.MemoryUtil;
 
@@ -74,7 +73,7 @@ final class OpenGlModelLifecycle {
 
     static long getVramUsage(OpenGlModelInstance target) {
         long total = 0;
-        int indexCount = (int) NativeRuntimeBridgeHolder.get().getIndexCount(target.nativeModelHandle());
+        int indexCount = (int) target.nativeBackendPort().getIndexCount(target.nativeModelHandle());
         total += (long) indexCount * target.indexElementSize;
         total += (long) target.vertexCount * 12 * 2;
         total += (long) target.vertexCount * 16;
@@ -87,7 +86,7 @@ final class OpenGlModelLifecycle {
             return 0;
         }
 
-        long rustRam = NativeRuntimeBridgeHolder.get().getModelMemoryUsage(target.nativeModelHandle());
+        long rustRam = target.nativeBackendPort().getModelMemoryUsage(target.nativeModelHandle());
         long javaRam = (long) target.vertexCount * 64;
         javaRam += 152;
         if (target.materialMorphResultCountValue() > 0) {

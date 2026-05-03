@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.debug.client;
 
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
+import com.shiroha.mmdskin.bridge.runtime.NativeModelQueryPort;
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import com.shiroha.mmdskin.model.runtime.ModelInstance;
@@ -33,6 +33,7 @@ public class PerformanceHud {
     private static final int GL_GPU_MEM_AVAIL_NVX = 0x9049;
     private static final int GL_VBO_FREE_ATI = 0x87FB;
 
+
     private enum GpuVendor { NVIDIA, AMD, UNKNOWN }
 
     private static GpuVendor gpuVendor;
@@ -40,8 +41,13 @@ public class PerformanceHud {
 
     private static final List<HudLine> cachedLines = new ArrayList<>();
     private static int cachedMaxWidth;
+    private static volatile NativeModelQueryPort modelQueryPort = NativeModelQueryPort.noop();
 
     private PerformanceHud() {
+    }
+
+    public static void configureRuntimeCollaborators(NativeModelQueryPort modelQueryPort) {
+        PerformanceHud.modelQueryPort = modelQueryPort != null ? modelQueryPort : NativeModelQueryPort.noop();
     }
 
     public static void render(GuiGraphics graphics) {
@@ -130,7 +136,7 @@ public class PerformanceHud {
         addLine(String.format("  VRAM   %s (models %s + textures %s)", fmtB(totalVram + textureVram), fmtB(totalVram), fmtB(textureVram)), VALUE_COLOR);
 
         if (!models.isEmpty()) {
-            var nativeBridge = NativeRuntimeBridgeHolder.get();
+            NativeModelQueryPort nativeBridge = modelQueryPort;
             addLine("", VALUE_COLOR);
             addLine("Model Details", TITLE_COLOR);
             for (ManagedModel managedModel : models) {

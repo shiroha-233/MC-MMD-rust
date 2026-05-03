@@ -3,7 +3,7 @@ package com.shiroha.mmdskin.scene.client;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.asset.catalog.ModelInfo;
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
+import com.shiroha.mmdskin.bridge.runtime.NativeScenePort;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import com.shiroha.mmdskin.model.runtime.ModelInstance;
 import com.shiroha.mmdskin.model.runtime.ModelRequestKey;
@@ -20,9 +20,37 @@ public final class SceneModelManager {
     private static final Logger logger = LogManager.getLogger();
     private static final SceneModelManager INSTANCE = new SceneModelManager();
     private static final float MODEL_SCALE = 0.09f;
+    private static final float DEGREES_TO_RADIANS = (float) Math.PI / 180.0F;
+    private static final Vector3f ZERO_TRANSLATION = new Vector3f();
+    private static final NativeScenePort NOOP_SCENE_PORT = new NativeScenePort() {
+        @Override
+        public void setHeadAngle(long modelHandle, float x, float y, float z, boolean worldSpace) {
+        }
+
+        @Override
+        public void setModelPositionAndYaw(long modelHandle, float x, float y, float z, float yawRadians) {
+        }
+
+        @Override
+        public void setAutoBlinkEnabled(long modelHandle, boolean enabled) {
+        }
+
+        @Override
+        public void setEyeTrackingEnabled(long modelHandle, boolean enabled) {
+        }
+
+        @Override
+        public void setEyeMaxAngle(long modelHandle, float maxAngle) {
+        }
+
+        @Override
+        public void setEyeAngle(long modelHandle, float eyeX, float eyeY) {
+        }
+    };
 
     private final SceneModelCatalog catalog;
 
+    private volatile NativeScenePort scenePort = NOOP_SCENE_PORT;
     private volatile ManagedModel sceneModel;
     private volatile String sceneModelName;
     private volatile ModelRequestKey sceneRequestKey;
@@ -31,6 +59,7 @@ public final class SceneModelManager {
     private double placeY;
     private double placeZ;
     private float placeYaw;
+    private float placeYawRadians;
     private boolean active;
 
     private SceneModelManager() {
@@ -39,6 +68,10 @@ public final class SceneModelManager {
 
     public static SceneModelManager getInstance() {
         return INSTANCE;
+    }
+
+    public synchronized void configureRuntimeCollaborators(NativeScenePort scenePort) {
+        this.scenePort = scenePort != null ? scenePort : NOOP_SCENE_PORT;
     }
 
     public boolean isActive() {
@@ -75,6 +108,7 @@ public final class SceneModelManager {
         placeY = minecraft.player.getY();
         placeZ = minecraft.player.getZ();
         placeYaw = minecraft.player.getYRot();
+        placeYawRadians = placeYaw * DEGREES_TO_RADIANS;
         sceneModelName = folderName;
         sceneRequestKey = ModelRequestKey.scene(folderName, folderName);
         active = true;
@@ -86,6 +120,7 @@ public final class SceneModelManager {
         sceneModel = null;
         sceneModelName = null;
         sceneRequestKey = null;
+        placeYawRadians = 0.0f;
         active = false;
     }
 
@@ -119,8 +154,7 @@ public final class SceneModelManager {
         float posX = (float) (placeX * MODEL_SCALE);
         float posY = (float) (placeY * MODEL_SCALE);
         float posZ = (float) (placeZ * MODEL_SCALE);
-        float yawRadians = placeYaw * ((float) Math.PI / 180F);
-        NativeRuntimeBridgeHolder.get().setModelPositionAndYaw(modelHandle, posX, posY, posZ, yawRadians);
+        scenePort.setModelPositionAndYaw(modelHandle, posX, posY, posZ, placeYawRadians);
 
         float offsetX = (float) (placeX - entityRenderX);
         float offsetY = (float) (placeY - entityRenderY);
@@ -134,7 +168,7 @@ public final class SceneModelManager {
                 minecraft.player,
                 placeYaw,
                 0.0f,
-                new Vector3f(0.0f, 0.0f, 0.0f),
+                ZERO_TRANSLATION,
                 tickDelta,
                 poseStack,
                 packedLight,
@@ -142,7 +176,7 @@ public final class SceneModelManager {
         );
 
         poseStack.popPose();
-        NativeRuntimeBridgeHolder.get().setModelPositionAndYaw(modelHandle, posX, posY, posZ, yawRadians);
+        scenePort.setModelPositionAndYaw(modelHandle, posX, posY, posZ, placeYawRadians);
     }
 
     private ManagedModel resolveSceneModel() {

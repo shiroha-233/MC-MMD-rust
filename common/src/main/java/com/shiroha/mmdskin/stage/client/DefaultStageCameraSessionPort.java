@@ -1,18 +1,19 @@
 package com.shiroha.mmdskin.stage.client;
 
-import com.shiroha.mmdskin.stage.client.camera.port.StageCameraSessionPort;
 import com.shiroha.mmdskin.stage.application.StageSessionService;
+import com.shiroha.mmdskin.stage.client.camera.port.StageCameraSessionPort;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackSessionPort;
 import com.shiroha.mmdskin.stage.domain.model.StageDescriptor;
 
+import java.util.Objects;
 import java.util.UUID;
 
+/** 文件职责：把舞台会话服务适配为相机与播放层可用的 session port。 */
 public final class DefaultStageCameraSessionPort implements StageCameraSessionPort, StagePlaybackSessionPort {
-    public static final DefaultStageCameraSessionPort INSTANCE = new DefaultStageCameraSessionPort();
+    private final StageSessionService delegate;
 
-    private final StageSessionService delegate = StageSessionService.getInstance();
-
-    private DefaultStageCameraSessionPort() {
+    public DefaultStageCameraSessionPort(StageSessionService delegate) {
+        this.delegate = Objects.requireNonNull(delegate, "delegate");
     }
 
     @Override

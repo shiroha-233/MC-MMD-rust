@@ -1,6 +1,5 @@
 package com.shiroha.mmdskin.animation.runtime;
 
-import com.shiroha.mmdskin.bridge.runtime.NativeAnimationBridge;
 import com.shiroha.mmdskin.bridge.runtime.NativeAnimationPort;
 import com.shiroha.mmdskin.config.ModelAnimConfig;
 import com.shiroha.mmdskin.config.PathConstants;
@@ -24,11 +23,7 @@ public final class AnimationLibrary {
     private final ModelInstance modelInstance;
     private final Map<String, Long> handlesByName = new ConcurrentHashMap<>();
 
-    public AnimationLibrary(ModelInstance modelInstance) {
-        this(modelInstance, new NativeAnimationBridge());
-    }
-
-    AnimationLibrary(ModelInstance modelInstance, NativeAnimationPort nativeAnimationPort) {
+    public AnimationLibrary(ModelInstance modelInstance, NativeAnimationPort nativeAnimationPort) {
         this.modelInstance = modelInstance;
         this.nativeAnimationPort = nativeAnimationPort;
         initializeDirectories();

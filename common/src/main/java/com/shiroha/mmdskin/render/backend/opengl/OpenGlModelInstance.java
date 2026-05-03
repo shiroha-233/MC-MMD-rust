@@ -105,11 +105,25 @@ public class OpenGlModelInstance extends BaseModelInstance {
     }
 
     public static OpenGlModelInstance create(String modelFilename, String modelDir, boolean isPMD, long layerCount) {
-        return OpenGlModelFactory.create(modelFilename, modelDir, isPMD, layerCount);
+        throw new UnsupportedOperationException("Native render backend port is required");
     }
 
     public static OpenGlModelInstance createFromHandle(long model, String modelDir) {
-        return OpenGlModelFactory.createFromHandle(model, modelDir);
+        throw new UnsupportedOperationException("Native render backend port is required");
+    }
+
+    public static OpenGlModelInstance create(NativeRenderBackendPort nativeBackendPort,
+                                             String modelFilename,
+                                             String modelDir,
+                                             boolean isPMD,
+                                             long layerCount) {
+        return OpenGlModelFactory.create(nativeBackendPort, modelFilename, modelDir, isPMD, layerCount);
+    }
+
+    public static OpenGlModelInstance createFromHandle(NativeRenderBackendPort nativeBackendPort,
+                                                        long model,
+                                                        String modelDir) {
+        return OpenGlModelFactory.createFromHandle(nativeBackendPort, model, modelDir);
     }
 
     @Override
@@ -184,7 +198,7 @@ public class OpenGlModelInstance extends BaseModelInstance {
     }
 
     NativeRenderBackendPort nativeBackendPort() {
-        return BaseModelInstance.backendPort();
+        return backendPort();
     }
 
     long nativeModelHandle() {
@@ -217,7 +231,11 @@ public class OpenGlModelInstance extends BaseModelInstance {
         return materialMorphResultCount;
     }
 
-    void applyBaseState(long modelHandle, String modelDirectory, List<String> loadedTextureKeys) {
+    void applyBaseState(NativeRenderBackendPort nativeBackendPort,
+                        long modelHandle,
+                        String modelDirectory,
+                        List<String> loadedTextureKeys) {
+        this.nativeRenderBackendPort = nativeBackendPort;
         this.model = modelHandle;
         this.modelDir = modelDirectory;
         this.textureKeys = loadedTextureKeys;

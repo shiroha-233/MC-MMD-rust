@@ -1,8 +1,7 @@
 package com.shiroha.mmdskin.player.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimePort;
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
+import com.shiroha.mmdskin.bridge.runtime.NativeMatrixPort;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
@@ -16,24 +15,47 @@ import org.joml.Quaternionf;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-/**
- * 物品渲染辅助类。
- */
+/** 文件职责：根据手部矩阵驱动双手物品的渲染姿态。 */
 public class ItemRenderHelper {
 
     private static final float DEG_TO_RAD = (float) Math.PI / 180F;
+    private static final NativeMatrixPort NOOP_MATRIX_PORT = new NativeMatrixPort() {
+        @Override
+        public long createMatrix() {
+            return 0L;
+        }
+
+        @Override
+        public void deleteMatrix(long matrixHandle) {
+        }
+
+        @Override
+        public void populateHandMatrix(long modelHandle, long handMatrixHandle, boolean mainHand) {
+        }
+
+        @Override
+        public boolean copyMatrixToBuffer(long matrixHandle, ByteBuffer targetBuffer) {
+            return false;
+        }
+    };
+
+    private static volatile NativeMatrixPort matrixPort = NOOP_MATRIX_PORT;
+
+    public static void configureRuntimeCollaborators(NativeMatrixPort matrixPort) {
+        ItemRenderHelper.matrixPort = matrixPort != null ? matrixPort : NOOP_MATRIX_PORT;
+    }
 
     public static void renderItems(AbstractClientPlayer player, ManagedModel model,
-                                   PoseStack matrixStack, MultiBufferSource vertexConsumers, int packedLight) {
+                                    PoseStack matrixStack, MultiBufferSource vertexConsumers, int packedLight) {
         renderHandItem(player, model, matrixStack, vertexConsumers, packedLight, InteractionHand.MAIN_HAND);
         renderHandItem(player, model, matrixStack, vertexConsumers, packedLight, InteractionHand.OFF_HAND);
     }
 
     private static void renderHandItem(AbstractClientPlayer player, ManagedModel model,
-                                         PoseStack matrixStack, MultiBufferSource vertexConsumers,
-                                         int packedLight, InteractionHand hand) {
+                                          PoseStack matrixStack, MultiBufferSource vertexConsumers,
+                                          int packedLight, InteractionHand hand) {
         boolean isMainHand = (hand == InteractionHand.MAIN_HAND);
-        NativeRuntimePort runtimeBridge = NativeRuntimeBridgeHolder.get();
+        NativeMatrixPort runtimeBridge = matrixPort;
         long modelHandle = model.modelInstance().getModelHandle();
         long handMat = isMainHand ? model.entityState().rightHandMat : model.entityState().leftHandMat;
 
@@ -120,7 +142,7 @@ public class ItemRenderHelper {
         return descriptionId.substring(descriptionId.indexOf(".") + 1);
     }
 
-    private static Matrix4f convertToMatrix4f(NativeRuntimePort runtimeBridge, long matId, ByteBuffer buf) {
+    private static Matrix4f convertToMatrix4f(NativeMatrixPort runtimeBridge, long matId, ByteBuffer buf) {
         buf.clear();
         buf.order(ByteOrder.LITTLE_ENDIAN);
         if (!runtimeBridge.copyMatrixToBuffer(matId, buf)) {

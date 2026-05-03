@@ -2,6 +2,7 @@ package com.shiroha.mmdskin.fabric.config;
 
 import com.shiroha.mmdskin.asset.catalog.ModelInfo;
 import com.shiroha.mmdskin.config.ConfigData;
+import com.shiroha.mmdskin.config.PhysicsConfigSnapshot;
 import com.shiroha.mmdskin.config.UIConstants;
 import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
 import com.shiroha.mmdskin.render.entity.MobReplacementTargets;
@@ -451,23 +452,7 @@ public class ModConfigScreen {
         ClientRenderRuntime.get().renderBackendSettings().setGpuSkinningEnabled(data.gpuSkinningEnabled);
         ClientRenderRuntime.get().renderBackendSettings().setShaderEnabled(data.mmdShaderEnabled);
         ClientRenderRuntime.get().modelRepository().reloadAll();
-
-        try {
-            com.shiroha.mmdskin.NativeFunc.GetInst().SetPhysicsConfig(
-                data.physicsEnabled,
-                data.physicsGravityY,
-                data.physicsFps,
-                data.physicsMaxSubstepCount,
-                data.physicsInertiaStrength,
-                data.physicsMaxLinearVelocity,
-                data.physicsMaxAngularVelocity,
-                data.physicsJointsEnabled,
-                data.physicsKinematicFilter,
-                data.physicsDebugLog
-            );
-        } catch (UnsatisfiedLinkError e) {
-            org.apache.logging.log4j.LogManager.getLogger().warn("物理配置 JNI 方法未找到，请重新编译 Rust 库");
-        }
+        ClientRenderRuntime.get().applyPhysicsConfig(PhysicsConfigSnapshot.from(data));
     }
 
     static String getMobReplacementValue(ConfigData data, String entityTypeId) {

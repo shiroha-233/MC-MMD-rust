@@ -4,7 +4,6 @@ import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.bridge.runtime.NativeRenderBackendPort;
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
 import com.shiroha.mmdskin.render.backend.BaseModelInstance;
 import com.shiroha.mmdskin.render.material.ModelMaterial;
 import com.shiroha.mmdskin.render.shader.ShaderConstants;
@@ -118,8 +117,11 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
     private GpuSkinningModelInstance() {
     }
 
-    public static GpuSkinningModelInstance create(String modelFilename, String modelDir, boolean isPMD, long layerCount) {
-        var nativeBackend = NativeRuntimeBridgeHolder.get();
+    public static GpuSkinningModelInstance create(NativeRenderBackendPort nativeBackend,
+                                                  String modelFilename,
+                                                  String modelDir,
+                                                  boolean isPMD,
+                                                  long layerCount) {
         if (!ensureComputeShaderInitialized()) {
             return null;
         }
@@ -132,15 +134,16 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
             return null;
         }
 
-        GpuSkinningModelInstance result = createFromHandle(model, modelDir);
+        GpuSkinningModelInstance result = createFromHandle(nativeBackend, model, modelDir);
         if (result == null) {
             nativeBackend.deleteModel(model);
         }
         return result;
     }
 
-    public static GpuSkinningModelInstance createFromHandle(long model, String modelDir) {
-        var nativeBackend = NativeRuntimeBridgeHolder.get();
+    public static GpuSkinningModelInstance createFromHandle(NativeRenderBackendPort nativeBackend,
+                                                            long model,
+                                                            String modelDir) {
         if (!ensureComputeShaderInitialized()) {
             return null;
         }
@@ -364,6 +367,7 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
             }
 
             GpuSkinningModelInstance result = new GpuSkinningModelInstance();
+            result.nativeRenderBackendPort = nativeBackend;
             result.model = model;
             result.modelDir = modelDir;
             result.vertexCount = vertexCount;
@@ -527,7 +531,7 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
     }
 
     NativeRenderBackendPort nativeBackendPort() {
-        return BaseModelInstance.backendPort();
+        return backendPort();
     }
 
     long nativeModelHandle() {

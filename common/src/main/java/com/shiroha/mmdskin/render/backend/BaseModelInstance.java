@@ -1,10 +1,9 @@
 package com.shiroha.mmdskin.render.backend;
 
 import com.shiroha.mmdskin.bridge.runtime.NativeRenderBackendPort;
-import com.shiroha.mmdskin.config.ConfigManager;
+import com.shiroha.mmdskin.config.RuntimeConfigPortHolder;
 import com.shiroha.mmdskin.model.runtime.ModelInstance;
 import com.shiroha.mmdskin.render.scene.RenderScene;
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
 import com.shiroha.mmdskin.render.pipeline.LivingEntityModelStateHelper;
 import com.shiroha.mmdskin.render.pipeline.RenderPerformanceProfiler;
 import com.shiroha.mmdskin.render.policy.WorldRenderPolicy;
@@ -34,6 +33,7 @@ public abstract class BaseModelInstance implements ModelInstance {
 
     protected static final float MAX_DELTA_TIME = 0.25f;
     protected static final float MODEL_SCALE = 0.09f;
+    protected NativeRenderBackendPort nativeRenderBackendPort;
     protected long model;
     protected String modelDir;
     private String cachedModelName;
@@ -59,8 +59,11 @@ public abstract class BaseModelInstance implements ModelInstance {
 
     public boolean isVrActive() { return vrActive; }
 
-    protected static NativeRenderBackendPort backendPort() {
-        return NativeRuntimeBridgeHolder.get();
+    protected final NativeRenderBackendPort backendPort() {
+        if (nativeRenderBackendPort == null) {
+            throw new IllegalStateException("nativeRenderBackendPort has not been initialized");
+        }
+        return nativeRenderBackendPort;
     }
 
     @Override
@@ -76,7 +79,7 @@ public abstract class BaseModelInstance implements ModelInstance {
                 return;
             }
         } else {
-            applyPhysicsState(ConfigManager.isPhysicsEnabled());
+            applyPhysicsState(RuntimeConfigPortHolder.get().isPhysicsEnabled());
         }
 
         if (entityIn instanceof LivingEntity living) {
@@ -120,12 +123,12 @@ public abstract class BaseModelInstance implements ModelInstance {
 
     @Override
     public boolean setLayerBoneMask(int layer, String rootBoneName) {
-        return NativeRuntimeBridgeHolder.get().setLayerBoneMask(model, layer, rootBoneName);
+        return backendPort().setLayerBoneMask(model, layer, rootBoneName);
     }
 
     @Override
     public boolean setLayerBoneExclude(int layer, String rootBoneName) {
-        return NativeRuntimeBridgeHolder.get().setLayerBoneExclude(model, layer, rootBoneName);
+        return backendPort().setLayerBoneExclude(model, layer, rootBoneName);
     }
 
     @Override
@@ -151,7 +154,7 @@ public abstract class BaseModelInstance implements ModelInstance {
     @Override
     public long getRamUsage() {
         try {
-            return NativeRuntimeBridgeHolder.get().getModelMemoryUsage(model);
+            return backendPort().getModelMemoryUsage(model);
         } catch (Exception e) {
             return 0;
         }
@@ -229,7 +232,7 @@ public abstract class BaseModelInstance implements ModelInstance {
 
     protected void disposeModelHandle() {
         if (model != 0) {
-            NativeRuntimeBridgeHolder.get().deleteModel(model);
+            backendPort().deleteModel(model);
             model = 0;
         }
     }
@@ -310,6 +313,6 @@ public abstract class BaseModelInstance implements ModelInstance {
     }
 
     private WorldRenderPolicy.Decision nonWorldDecision() {
-        return new WorldRenderPolicy.Decision(true, true, ConfigManager.isPhysicsEnabled());
+        return new WorldRenderPolicy.Decision(true, true, RuntimeConfigPortHolder.get().isPhysicsEnabled());
     }
 }

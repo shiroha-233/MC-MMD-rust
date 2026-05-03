@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.render.pipeline;
 
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
+import com.shiroha.mmdskin.bridge.runtime.NativeScenePort;
 import com.shiroha.mmdskin.render.scene.RenderScene;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
@@ -15,7 +15,8 @@ public final class HeadAngleHelper {
     private HeadAngleHelper() {
     }
 
-    public static void updateHeadAngle(long modelHandle,
+    public static void updateHeadAngle(NativeScenePort scenePort,
+                                       long modelHandle,
                                        LivingEntity entity,
                                        float entityYaw,
                                        float tickDelta,
@@ -38,6 +39,6 @@ public final class HeadAngleHelper {
             yawRad = -yawRad;
         }
 
-        NativeRuntimeBridgeHolder.get().setHeadAngle(modelHandle, pitchRad, yawRad, 0.0f, context.isWorldScene());
+        scenePort.setHeadAngle(modelHandle, pitchRad, yawRad, 0.0f, context.isWorldScene());
     }
 }

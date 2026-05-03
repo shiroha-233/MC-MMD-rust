@@ -2,14 +2,12 @@ package com.shiroha.mmdskin.player.render;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.shiroha.mmdskin.compat.vr.VRArmHider;
-import com.shiroha.mmdskin.compat.vr.VRBoneDriver;
-import com.shiroha.mmdskin.compat.vr.VivecraftReflectionBridge;
-import com.shiroha.mmdskin.config.ConfigManager;
+import com.shiroha.mmdskin.config.RuntimeConfigPortHolder;
 import com.shiroha.mmdskin.config.ModelConfigManager;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import com.shiroha.mmdskin.player.animation.AnimationStateManager;
 import com.shiroha.mmdskin.player.animation.PendingAnimSignalCache;
+import com.shiroha.mmdskin.player.port.VrRuntimePort;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.model.runtime.ModelInstance;
@@ -20,6 +18,7 @@ import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 
+/** 文件职责：协调玩家模型在普通视角、第一人称与 VR 场景中的渲染切换。 */
 final class PlayerModelRenderCoordinator {
 
     private PlayerModelRenderCoordinator() {
@@ -34,10 +33,11 @@ final class PlayerModelRenderCoordinator {
                                                    int packedLight,
                                                    ManagedModel modelData) {
         ModelInstance model = modelData.modelInstance();
+        VrRuntimePort vrRuntime = FirstPersonManager.vrRuntime();
 
         float[] size = PlayerRenderHelper.getModelSize(modelData);
-        boolean isVr = selection.isLocalPlayer() && VRArmHider.isLocalPlayerInVR();
-        syncVrState(modelData, player, tickDelta, isVr);
+        boolean isVr = selection.isLocalPlayer() && vrRuntime.isLocalPlayerInVr();
+        syncVrState(modelData, player, tickDelta, isVr, vrRuntime);
 
         float combinedScale = size[0] * ModelConfigManager.getConfig(selection.selectedModel()).modelScale;
         if (selection.isLocalPlayer()) {
@@ -85,27 +85,27 @@ final class PlayerModelRenderCoordinator {
     private static void syncVrState(ManagedModel modelData,
                                     AbstractClientPlayer player,
                                     float tickDelta,
-                                    boolean isVr) {
+                                    boolean isVr,
+                                    VrRuntimePort vrRuntime) {
         ModelInstance model = modelData.modelInstance();
         if (!(model instanceof BaseModelInstance abstractModel)) {
             return;
         }
 
         if (isVr) {
-            VivecraftReflectionBridge.applyMmdRenderState(true);
+            vrRuntime.applyMmdRenderState(true);
             if (!abstractModel.isVrActive()) {
                 MmdSkinRendererPlayerHelper.suppressDefaultAnimationState(modelData);
-                VRBoneDriver.setVREnabled(model.getModelHandle(), true);
+                vrRuntime.setModelVrEnabled(model.getModelHandle(), true);
                 abstractModel.setVrActive(true);
             }
-            VRBoneDriver.setVRIKParams(model.getModelHandle(), ConfigManager.getVRArmIKStrength());
-            VRBoneDriver.driveModel(model.getModelHandle(), player, tickDelta);
+            vrRuntime.updateModelVr(model.getModelHandle(), player, tickDelta, RuntimeConfigPortHolder.get().getVrArmIkStrength());
             return;
         }
 
-        VivecraftReflectionBridge.applyMmdRenderState(false);
+        vrRuntime.applyMmdRenderState(false);
         if (abstractModel.isVrActive()) {
-            VRBoneDriver.setVREnabled(model.getModelHandle(), false);
+            vrRuntime.setModelVrEnabled(model.getModelHandle(), false);
             abstractModel.setVrActive(false);
             MmdSkinRendererPlayerHelper.resetModelAnimationState(player, modelData);
         }

@@ -1,6 +1,7 @@
 package com.shiroha.mmdskin.mixin.forge;
 
-import com.shiroha.mmdskin.config.ConfigManager;
+import com.shiroha.mmdskin.config.RuntimeConfigPort;
+import com.shiroha.mmdskin.config.RuntimeConfigPortHolder;
 import com.shiroha.mmdskin.forge.YsmCompat;
 import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
@@ -69,9 +70,10 @@ public abstract class CameraMixin {
                 float sinLookPitch = Mth.sin(lookPitchRad);
                 float cosLookYaw = Mth.cos(lookYawRad);
                 float sinLookYaw = Mth.sin(lookYawRad);
+                RuntimeConfigPort runtimeConfig = RuntimeConfigPortHolder.get();
 
-                double forwardOffset = ConfigManager.getFirstPersonCameraForwardOffset();
-                double verticalOffset = ConfigManager.getFirstPersonCameraVerticalOffset();
+                double forwardOffset = runtimeConfig.getFirstPersonCameraForwardOffset();
+                double verticalOffset = runtimeConfig.getFirstPersonCameraVerticalOffset();
 
                 double rotatedY = verticalOffset * cosLookPitch - forwardOffset * sinLookPitch;
                 double horizontalDist = verticalOffset * sinLookPitch + forwardOffset * cosLookPitch;

@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.compat.vr;
 
-import com.shiroha.mmdskin.config.ConfigManager;
+import com.shiroha.mmdskin.config.RuntimeConfigPortHolder;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -13,7 +13,7 @@ public final class VRArmHider {
     private VRArmHider() {}
 
     public static boolean isLocalPlayerInVR() {
-        if (!ConfigManager.isVREnabled() || !VRDetector.isAvailable()) {
+        if (!RuntimeConfigPortHolder.get().isVrEnabled() || !VRDetector.isAvailable()) {
             return false;
         }
 

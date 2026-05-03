@@ -1,6 +1,5 @@
 package com.shiroha.mmdskin.ui.stage;
 
-import com.shiroha.mmdskin.stage.client.viewmodel.StageLobbyViewModel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -8,11 +7,9 @@ import net.minecraft.network.chat.Component;
 
 import java.util.UUID;
 
-/**
- * 舞台邀请弹窗（轻量Screen，不暂停游戏）
- */
+/** 舞台邀请弹窗，负责确认加入舞台会话。 */
 public class StageInvitePopup extends Screen {
-    private final StageLobbyViewModel lobbyViewModel = StageLobbyViewModel.getInstance();
+    private final StageWorkbenchFacade facade = StageWorkbenchFacade.getInstance();
 
     private static final int POPUP_W = 236;
     private static final int POPUP_H = 72;
@@ -67,7 +64,7 @@ public class StageInvitePopup extends Screen {
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
 
-        if (!lobbyViewModel.hasPendingInvite()) {
+        if (!facade.hasPendingInvite()) {
             this.onClose();
             return;
         }
@@ -111,12 +108,12 @@ public class StageInvitePopup extends Screen {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0) {
             if (hoverAccept) {
-                lobbyViewModel.acceptInvite();
+                facade.acceptInvite();
                 StagePlaybackUiAdapter.INSTANCE.openStageSelection();
                 return true;
             }
             if (hoverDecline) {
-                lobbyViewModel.declineInvite();
+                facade.declineInvite();
                 this.onClose();
                 return true;
             }
@@ -127,7 +124,7 @@ public class StageInvitePopup extends Screen {
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (keyCode == 256) {
-            lobbyViewModel.declineInvite();
+            facade.declineInvite();
             this.onClose();
             return true;
         }

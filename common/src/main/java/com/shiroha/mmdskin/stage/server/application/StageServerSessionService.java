@@ -259,13 +259,18 @@ public final class StageServerSessionService {
     }
 
     private void handleRemoteStageStart(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
-        if (packet.descriptor == null || !packet.descriptor.isValid()) {
+        StageServerSession session = requireActiveSessionParticipant(sender.getUuid(), parseUUID(packet.sessionId));
+        if (session == null || packet.descriptor == null || !packet.descriptor.isValid()) {
             return;
         }
         broadcastRemotePacket(platform, sender.getUuid(), packet);
     }
 
     private void handleRemoteStageStop(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
+        StageServerSession session = requireActiveSessionParticipant(sender.getUuid(), parseUUID(packet.sessionId));
+        if (session == null) {
+            return;
+        }
         broadcastRemotePacket(platform, sender.getUuid(), packet);
     }
 
@@ -332,6 +337,21 @@ public final class StageServerSessionService {
             return null;
         }
         return sessions.get(sessionId);
+    }
+
+    private StageServerSession requireActiveSessionParticipant(UUID senderUUID, UUID sessionId) {
+        StageServerSession session = requireMemberSession(senderUUID, sessionId);
+        if (session == null) {
+            return null;
+        }
+        StageServerSessionMember member = session.getMembers().get(senderUUID);
+        if (member == null) {
+            return null;
+        }
+        if (senderUUID.equals(session.getHostId())) {
+            return session;
+        }
+        return member.getState().isAcceptedState() ? session : null;
     }
 
     private void broadcastSessionState(StageServerPlatformPort platform, StageServerSession session) {

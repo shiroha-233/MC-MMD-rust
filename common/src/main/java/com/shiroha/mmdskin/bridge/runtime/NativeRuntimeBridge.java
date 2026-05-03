@@ -1,7 +1,10 @@
 package com.shiroha.mmdskin.bridge.runtime;
 
 import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.config.PhysicsConfigSnapshot;
 import java.nio.ByteBuffer;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /** 文件职责：集中封装渲染运行时需要的 native 调用。 */
 public final class NativeRuntimeBridge implements
@@ -14,9 +17,32 @@ public final class NativeRuntimeBridge implements
         NativeMorphPort,
         NativeScenePort,
         PlatformCapabilityPort {
+    private static final Logger logger = LogManager.getLogger();
 
     private NativeFunc nativeFunc() {
         return NativeFunc.GetInst();
+    }
+
+    @Override
+    public void applyPhysicsConfig(PhysicsConfigSnapshot physicsConfig) {
+        if (physicsConfig == null) {
+            throw new IllegalArgumentException("physicsConfig cannot be null");
+        }
+        try {
+            nativeFunc().SetPhysicsConfig(
+                    physicsConfig.enabled(),
+                    physicsConfig.gravityY(),
+                    physicsConfig.physicsFps(),
+                    physicsConfig.maxSubstepCount(),
+                    physicsConfig.inertiaStrength(),
+                    physicsConfig.maxLinearVelocity(),
+                    physicsConfig.maxAngularVelocity(),
+                    physicsConfig.jointsEnabled(),
+                    physicsConfig.kinematicFilter(),
+                    physicsConfig.debugLog());
+        } catch (UnsatisfiedLinkError e) {
+            logger.warn("物理配置 JNI 方法未找到，请重新编译 Rust 库");
+        }
     }
 
     @Override

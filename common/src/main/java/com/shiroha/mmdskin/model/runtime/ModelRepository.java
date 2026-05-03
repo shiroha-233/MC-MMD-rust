@@ -1,17 +1,14 @@
 package com.shiroha.mmdskin.model.runtime;
 
-import com.shiroha.mmdskin.compat.iris.IrisCompat;
 import com.shiroha.mmdskin.config.ModelConfigData;
 import com.shiroha.mmdskin.config.ModelConfigManager;
 import com.shiroha.mmdskin.model.port.ModelDiagnosticsPort;
 import com.shiroha.mmdskin.model.port.ModelRepositoryExtensionPort;
 import com.shiroha.mmdskin.model.port.ModelRepositoryPort;
+import com.shiroha.mmdskin.model.port.ModelRuntimeAccessPort;
 import com.shiroha.mmdskin.model.runtime.cache.ModelCache;
 import com.shiroha.mmdskin.model.runtime.loading.ModelLoadCoordinator;
 import com.shiroha.mmdskin.model.runtime.loading.ModelPropertiesLoader;
-import com.shiroha.mmdskin.render.backend.RenderBackendRegistry;
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
-import com.shiroha.mmdskin.texture.runtime.TextureRepository;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -25,22 +22,26 @@ import org.apache.logging.log4j.Logger;
 public final class ModelRepository implements ModelRepositoryPort, ModelDiagnosticsPort {
     private static final Logger logger = LogManager.getLogger();
 
-    private final RenderBackendRegistry renderBackendRegistry;
+    private final ModelRuntimeAccessPort runtimeAccessPort;
     private final ModelRepositoryExtensionPort extensionPort;
     private final ModelCache<ManagedModel> modelCache = new ModelCache<>("MMDModel");
-    private final ModelLoadCoordinator loadCoordinator = new ModelLoadCoordinator();
+    private final ModelLoadCoordinator loadCoordinator;
     private final AtomicInteger totalModelsLoaded = new AtomicInteger();
 
-    public ModelRepository(RenderBackendRegistry renderBackendRegistry) {
-        this(renderBackendRegistry, new ModelRepositoryExtensionPort() {
+    public ModelRepository(ModelRuntimeAccessPort runtimeAccessPort) {
+        this(runtimeAccessPort, new ModelRepositoryExtensionPort() {
         });
     }
 
-    public ModelRepository(RenderBackendRegistry renderBackendRegistry,
+    public ModelRepository(ModelRuntimeAccessPort runtimeAccessPort,
                            ModelRepositoryExtensionPort extensionPort) {
-        this.renderBackendRegistry = renderBackendRegistry;
+        if (runtimeAccessPort == null) {
+            throw new IllegalArgumentException("runtimeAccessPort cannot be null");
+        }
+        this.runtimeAccessPort = runtimeAccessPort;
         this.extensionPort = extensionPort != null ? extensionPort : new ModelRepositoryExtensionPort() {
         };
+        this.loadCoordinator = new ModelLoadCoordinator(runtimeAccessPort);
     }
 
     @Override
@@ -54,12 +55,19 @@ public final class ModelRepository implements ModelRepositoryPort, ModelDiagnost
             return cached.value;
         }
 
-        if (IrisCompat.isRenderingShadows()) {
+        if (runtimeAccessPort.isRenderingShadows()) {
             return null;
         }
 
-        return loadCoordinator.resolveOrQueue(requestKey.cacheKey(), requestKey.modelName(),
+        ManagedModel loadedModel = loadCoordinator.resolveOrQueue(
+                requestKey.cacheKey(),
+                requestKey.modelName(),
                 result -> finalizeLoadedModel(requestKey, result));
+        if (loadedModel != null) {
+            modelCache.put(requestKey.cacheKey(), loadedModel);
+            totalModelsLoaded.incrementAndGet();
+        }
+        return loadedModel;
     }
 
     @Override
@@ -72,8 +80,8 @@ public final class ModelRepository implements ModelRepositoryPort, ModelDiagnost
         if (modelName == null || modelName.isBlank()) {
             return;
         }
-        loadCoordinator.removeMatching(key -> key.endsWith(":" + modelName), ModelRepository::cleanupLoadedResult);
-        TextureRepository.clearPreloaded();
+        loadCoordinator.removeMatching(key -> key.endsWith(":" + modelName), this::cleanupLoadedResult);
+        runtimeAccessPort.clearPreloadedTextures();
         modelCache.removeMatching(key -> key.endsWith(":" + modelName), this::disposeModel);
     }
 
@@ -82,22 +90,22 @@ public final class ModelRepository implements ModelRepositoryPort, ModelDiagnost
         if (requestKey == null) {
             return;
         }
-        loadCoordinator.removeMatching(key -> key.equals(requestKey.cacheKey()), ModelRepository::cleanupLoadedResult);
+        loadCoordinator.removeMatching(key -> key.equals(requestKey.cacheKey()), this::cleanupLoadedResult);
         modelCache.removeMatching(key -> key.equals(requestKey.cacheKey()), this::disposeModel);
     }
 
     @Override
     public void reloadAll() {
-        loadCoordinator.cancelAll(ModelRepository::cleanupLoadedResult);
+        loadCoordinator.cancelAll(this::cleanupLoadedResult);
         modelCache.clear(this::disposeModel);
         extensionPort.onRepositoryReloadAll();
-        TextureRepository.clearPreloaded();
+        runtimeAccessPort.clearPreloadedTextures();
     }
 
     @Override
     public void tick() {
         modelCache.tick(this::disposeModel);
-        TextureRepository.tick();
+        runtimeAccessPort.tickTextures();
     }
 
     @Override
@@ -127,7 +135,7 @@ public final class ModelRepository implements ModelRepositoryPort, ModelDiagnost
 
     private ManagedModel finalizeLoadedModel(ModelRequestKey requestKey, ModelLoadCoordinator.AsyncLoadResult result) {
         try {
-            ModelInstance modelInstance = renderBackendRegistry.createModelFromHandle(
+            ModelInstance modelInstance = runtimeAccessPort.createModelFromHandle(
                     result.modelHandle,
                     result.modelInfo.getFolderPath(),
                     result.modelInfo.isPMD());
@@ -137,8 +145,6 @@ public final class ModelRepository implements ModelRepositoryPort, ModelDiagnost
             }
 
             ManagedModel managedModel = createManagedModel(requestKey, modelInstance);
-            modelCache.put(requestKey.cacheKey(), managedModel);
-            totalModelsLoaded.incrementAndGet();
             return managedModel;
         } catch (Exception e) {
             logger.error("Failed to finalize model: {}", requestKey, e);
@@ -173,10 +179,10 @@ public final class ModelRepository implements ModelRepositoryPort, ModelDiagnost
             if (config.hiddenMaterials.isEmpty()) {
                 return;
             }
-            int materialCount = NativeRuntimeBridgeHolder.get().getMaterialCount(modelHandle);
+            int materialCount = runtimeAccessPort.getMaterialCount(modelHandle);
             for (int index : config.hiddenMaterials) {
                 if (index >= 0 && index < materialCount) {
-                    NativeRuntimeBridgeHolder.get().setMaterialVisible(modelHandle, index, false);
+                    runtimeAccessPort.setMaterialVisible(modelHandle, index, false);
                 }
             }
         } catch (Exception e) {
@@ -207,9 +213,9 @@ public final class ModelRepository implements ModelRepositoryPort, ModelDiagnost
         }
     }
 
-    private static void cleanupLoadedResult(ModelLoadCoordinator.AsyncLoadResult result) {
+    private void cleanupLoadedResult(ModelLoadCoordinator.AsyncLoadResult result) {
         if (result != null && result.modelHandle != 0L) {
-            NativeRuntimeBridgeHolder.get().deleteModel(result.modelHandle);
+            runtimeAccessPort.deleteModel(result.modelHandle);
         }
     }
 }

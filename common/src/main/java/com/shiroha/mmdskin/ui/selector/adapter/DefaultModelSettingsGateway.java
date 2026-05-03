@@ -8,12 +8,12 @@ import com.shiroha.mmdskin.ui.selector.port.ModelSettingsGateway;
 public class DefaultModelSettingsGateway implements ModelSettingsGateway {
     @Override
     public ModelConfigData loadConfig(String modelName) {
-        return ModelConfigManager.getConfig(modelName);
+        return ModelConfigManager.getConfig(modelName).copy();
     }
 
     @Override
     public void saveConfig(String modelName, ModelConfigData config) {
-        ModelConfigManager.saveConfig(modelName, config);
+        ModelConfigManager.saveConfig(modelName, config == null ? null : config.copy());
     }
 
     @Override

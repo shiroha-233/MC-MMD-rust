@@ -1,4 +1,4 @@
-package com.shiroha.mmdskin.ui.network;
+package com.shiroha.mmdskin.stage.client.network;
 
 import com.shiroha.mmdskin.stage.domain.model.StageCameraMode;
 import com.shiroha.mmdskin.stage.domain.model.StageDescriptor;
@@ -81,18 +81,29 @@ public final class StageNetworkHandler {
         sendStagePacket(packet);
     }
 
-    public static void sendRemoteStageStart(StageDescriptor descriptor) {
+    public static void sendRemoteStageStart(UUID sessionId, StageDescriptor descriptor) {
+        if (sessionId == null) {
+            LOGGER.warn("[多人舞台] 会话标识缺失，无法广播开始");
+            return;
+        }
         if (descriptor == null || !descriptor.isValid()) {
             LOGGER.warn("[多人舞台] 远端舞台描述无效，无法广播开始");
             return;
         }
         StagePacket packet = new StagePacket(StagePacketType.REMOTE_STAGE_START);
+        packet.sessionId = sessionId.toString();
         packet.descriptor = descriptor.copy();
         sendStagePacket(packet);
     }
 
-    public static void sendRemoteStageStop() {
-        sendStagePacket(new StagePacket(StagePacketType.REMOTE_STAGE_STOP));
+    public static void sendRemoteStageStop(UUID sessionId) {
+        if (sessionId == null) {
+            LOGGER.warn("[多人舞台] 会话标识缺失，无法广播结束");
+            return;
+        }
+        StagePacket packet = new StagePacket(StagePacketType.REMOTE_STAGE_STOP);
+        packet.sessionId = sessionId.toString();
+        sendStagePacket(packet);
     }
 
     public static void sendStageWatchEnd(UUID targetUUID, UUID sessionId) {

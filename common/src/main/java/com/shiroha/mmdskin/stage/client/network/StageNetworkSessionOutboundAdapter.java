@@ -1,21 +1,28 @@
-package com.shiroha.mmdskin.ui.network;
+package com.shiroha.mmdskin.stage.client.network;
 
 import com.shiroha.mmdskin.stage.application.port.StageSessionOutboundPort;
+import com.shiroha.mmdskin.stage.application.port.StageSessionReadyCommand;
 import com.shiroha.mmdskin.stage.domain.model.StageInviteDecision;
 
-import java.util.List;
 import java.util.UUID;
 
-public final class StageNetworkSessionOutboundAdapter implements StageSessionOutboundPort {
-    public static final StageNetworkSessionOutboundAdapter INSTANCE = new StageNetworkSessionOutboundAdapter();
-
-    private StageNetworkSessionOutboundAdapter() {
-    }
+/** 文件职责：把舞台会话出站命令适配到网络层。 */
+public enum StageNetworkSessionOutboundAdapter implements StageSessionOutboundPort {
+    INSTANCE;
 
     @Override
-    public void sendReady(UUID hostUUID, UUID sessionId, boolean ready, boolean useHostCamera,
-                          String motionPackName, List<String> motionFiles) {
-        StageNetworkHandler.sendReady(hostUUID, sessionId, ready, useHostCamera, motionPackName, motionFiles);
+    public void sendReady(StageSessionReadyCommand command) {
+        if (command == null) {
+            return;
+        }
+        StageNetworkHandler.sendReady(
+                command.hostUUID(),
+                command.sessionId(),
+                command.ready(),
+                command.useHostCamera(),
+                command.motionPackName(),
+                command.motionFiles()
+        );
     }
 
     @Override

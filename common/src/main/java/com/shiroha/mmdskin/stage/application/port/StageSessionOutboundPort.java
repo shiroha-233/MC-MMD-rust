@@ -2,12 +2,11 @@ package com.shiroha.mmdskin.stage.application.port;
 
 import com.shiroha.mmdskin.stage.domain.model.StageInviteDecision;
 
-import java.util.List;
 import java.util.UUID;
 
+/** 定义舞台会话对外网络发送边界。 */
 public interface StageSessionOutboundPort {
-    void sendReady(UUID hostUUID, UUID sessionId, boolean ready, boolean useHostCamera,
-                   String motionPackName, List<String> motionFiles);
+    void sendReady(StageSessionReadyCommand command);
 
     void sendStageInvite(UUID targetUUID, UUID sessionId);
 

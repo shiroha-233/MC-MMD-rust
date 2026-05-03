@@ -31,6 +31,7 @@ import org.lwjgl.opengl.GL30C;
 import java.util.List;
 import java.util.Locale;
 
+/** 舞台工作台 Skia 渲染器。 */
 final class SkiaStageWorkbenchRenderer {
     private static final Logger LOGGER = LogManager.getLogger();
 
@@ -82,22 +83,22 @@ final class SkiaStageWorkbenchRenderer {
             String secondaryActionText,
             String footerStatus,
             List<String> detailLines,
-            StageWorkbenchScreen.UiRect leftPanel,
-            StageWorkbenchScreen.UiRect rightPanel,
-            StageWorkbenchScreen.UiRect leftHeader,
-            StageWorkbenchScreen.UiRect packList,
-            StageWorkbenchScreen.UiRect refreshButton,
-            StageWorkbenchScreen.UiRect motionList,
-            StageWorkbenchScreen.UiRect detailsArea,
-            StageWorkbenchScreen.UiRect customMotionToggle,
-            StageWorkbenchScreen.UiRect useHostCameraToggle,
-            StageWorkbenchScreen.UiRect cinematicToggle,
-            StageWorkbenchScreen.UiRect cameraSlider,
-            StageWorkbenchScreen.UiRect primaryButton,
-            StageWorkbenchScreen.UiRect secondaryButton,
-            StageWorkbenchScreen.UiRect rightHeader,
-            StageWorkbenchScreen.UiRect sessionButton,
-            StageWorkbenchScreen.UiRect sessionList,
+            StageWorkbenchLayout.UiRect leftPanel,
+            StageWorkbenchLayout.UiRect rightPanel,
+            StageWorkbenchLayout.UiRect leftHeader,
+            StageWorkbenchLayout.UiRect packList,
+            StageWorkbenchLayout.UiRect refreshButton,
+            StageWorkbenchLayout.UiRect motionList,
+            StageWorkbenchLayout.UiRect detailsArea,
+            StageWorkbenchLayout.UiRect customMotionToggle,
+            StageWorkbenchLayout.UiRect useHostCameraToggle,
+            StageWorkbenchLayout.UiRect cinematicToggle,
+            StageWorkbenchLayout.UiRect cameraSlider,
+            StageWorkbenchLayout.UiRect primaryButton,
+            StageWorkbenchLayout.UiRect secondaryButton,
+            StageWorkbenchLayout.UiRect rightHeader,
+            StageWorkbenchLayout.UiRect sessionButton,
+            StageWorkbenchLayout.UiRect sessionList,
             boolean refreshHovered,
             boolean customMotionHovered,
             boolean useHostCameraHovered,
@@ -106,6 +107,9 @@ final class SkiaStageWorkbenchRenderer {
             boolean primaryHovered,
             boolean secondaryHovered,
             boolean sessionButtonHovered,
+            int hoveredPackIndex,
+            int hoveredMotionIndex,
+            int hoveredSessionIndex,
             boolean guestMode,
             boolean hostMode,
             boolean showCustomMotionToggle,
@@ -118,9 +122,9 @@ final class SkiaStageWorkbenchRenderer {
             float packScrollOffset,
             float motionScrollOffset,
             float sessionScrollOffset,
-            List<StageWorkbenchScreen.PackRowView> packRows,
-            List<StageWorkbenchScreen.MotionRowView> motionRows,
-            List<StageWorkbenchScreen.SessionRowView> sessionRows,
+            List<StageWorkbenchUiStateSnapshot.PackRow> packRows,
+            List<StageWorkbenchUiStateSnapshot.MotionRow> motionRows,
+            List<StageWorkbenchUiStateSnapshot.SessionRow> sessionRows,
             int listPadding,
             int packRowHeight,
             int motionRowHeight,
@@ -209,7 +213,7 @@ final class SkiaStageWorkbenchRenderer {
         drawRightPanel(canvas, view);
     }
 
-    private void drawPanel(Canvas canvas, Image sceneSnapshot, float scaleX, float scaleY, StageWorkbenchScreen.UiRect rect) {
+    private void drawPanel(Canvas canvas, Image sceneSnapshot, float scaleX, float scaleY, StageWorkbenchLayout.UiRect rect) {
         float x = rect.x();
         float y = rect.y();
         float w = rect.w();
@@ -273,7 +277,7 @@ final class SkiaStageWorkbenchRenderer {
         drawText(canvas, smallFont, fitText(text, smallFont, maxWidth), x, baselineY, 0xBDD2E1EF, 0x7A0F1722);
     }
 
-    private void drawListOutline(Canvas canvas, StageWorkbenchScreen.UiRect rect) {
+    private void drawListOutline(Canvas canvas, StageWorkbenchLayout.UiRect rect) {
         RRect outer = RRect.makeLTRB(rect.x(), rect.y(), rect.x() + rect.w(), rect.y() + rect.h(), 3.0f);
         try (Paint border = strokePaint(0x18FFFFFF, 1.0f)) {
             canvas.drawRRect(outer, border);
@@ -289,10 +293,10 @@ final class SkiaStageWorkbenchRenderer {
 
         canvas.save();
         canvas.clipRect(Rect.makeLTRB(view.packList().x(), view.packList().y(), view.packList().x() + view.packList().w(), view.packList().y() + view.packList().h()));
-        for (StageWorkbenchScreen.PackRowView row : view.packRows()) {
+        for (StageWorkbenchUiStateSnapshot.PackRow row : view.packRows()) {
             float bottom = y + view.packRowHeight();
             if (bottom >= visibleTop && y <= visibleBottom) {
-                drawSimpleRow(canvas, left, y, right, bottom, row.label(), "", row.selected(), row.hovered(), false, "");
+                drawSimpleRow(canvas, left, y, right, bottom, row.label(), "", row.selected(), row.index() == view.hoveredPackIndex(), false, "");
             }
             y += view.packRowHeight() + view.rowGap();
         }
@@ -308,10 +312,10 @@ final class SkiaStageWorkbenchRenderer {
 
         canvas.save();
         canvas.clipRect(Rect.makeLTRB(view.motionList().x(), view.motionList().y(), view.motionList().x() + view.motionList().w(), view.motionList().y() + view.motionList().h()));
-        for (StageWorkbenchScreen.MotionRowView row : view.motionRows()) {
+        for (StageWorkbenchUiStateSnapshot.MotionRow row : view.motionRows()) {
             float bottom = y + view.motionRowHeight();
             if (bottom >= visibleTop && y <= visibleBottom) {
-                drawSimpleRow(canvas, left, y, right, bottom, row.label(), row.subtitle(), row.selected(), row.hovered(), false, "");
+                drawSimpleRow(canvas, left, y, right, bottom, row.label(), row.subtitle(), row.selected(), row.index() == view.hoveredMotionIndex(), false, "");
             }
             y += view.motionRowHeight() + view.rowGap();
         }
@@ -327,10 +331,10 @@ final class SkiaStageWorkbenchRenderer {
 
         canvas.save();
         canvas.clipRect(Rect.makeLTRB(view.sessionList().x(), view.sessionList().y(), view.sessionList().x() + view.sessionList().w(), view.sessionList().y() + view.sessionList().h()));
-        for (StageWorkbenchScreen.SessionRowView row : view.sessionRows()) {
+        for (StageWorkbenchUiStateSnapshot.SessionRow row : view.sessionRows()) {
             float bottom = y + view.sessionRowHeight();
             if (bottom >= visibleTop && y <= visibleBottom) {
-                drawSimpleRow(canvas, left, y, right, bottom, row.label(), row.subtitle(), row.selected(), row.hovered(), row.actionable(), row.actionText());
+                drawSimpleRow(canvas, left, y, right, bottom, row.label(), row.subtitle(), row.selected(), row.index() == view.hoveredSessionIndex(), row.actionable(), row.actionText());
             }
             y += view.sessionRowHeight() + view.rowGap();
         }
@@ -390,7 +394,7 @@ final class SkiaStageWorkbenchRenderer {
         }
     }
 
-    private void drawToggleRow(Canvas canvas, StageWorkbenchScreen.UiRect rect, String label, boolean enabled, boolean hovered) {
+    private void drawToggleRow(Canvas canvas, StageWorkbenchLayout.UiRect rect, String label, boolean enabled, boolean hovered) {
         float toggleWidth = 26.0f;
         float toggleHeight = 10.0f;
         float toggleX = rect.x() + rect.w() - toggleWidth;
@@ -413,7 +417,7 @@ final class SkiaStageWorkbenchRenderer {
         }
     }
 
-    private void drawSlider(Canvas canvas, StageWorkbenchScreen.UiRect rect, String label, float normalized, boolean hovered) {
+    private void drawSlider(Canvas canvas, StageWorkbenchLayout.UiRect rect, String label, float normalized, boolean hovered) {
         String labelText = Component.translatable("gui.mmdskin.stage.workbench.camera_height").getString();
         if (labelText == null || labelText.isBlank()) {
             labelText = label;
@@ -439,7 +443,7 @@ final class SkiaStageWorkbenchRenderer {
         }
     }
 
-    private void drawButton(Canvas canvas, StageWorkbenchScreen.UiRect rect, String text, boolean hovered, boolean primary, boolean enabled) {
+    private void drawButton(Canvas canvas, StageWorkbenchLayout.UiRect rect, String text, boolean hovered, boolean primary, boolean enabled) {
         int border = hovered ? 0x4CFFFFFF : (primary ? 0x34FFFFFF : 0x28FFFFFF);
         int fill = primary ? (hovered ? 0x18FFFFFF : 0x0CFFFFFF) : (hovered ? 0x14FFFFFF : 0x00000000);
         RRect outer = RRect.makeLTRB(rect.x(), rect.y(), rect.x() + rect.w(), rect.y() + rect.h(), 2.0f);

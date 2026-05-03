@@ -1,5 +1,6 @@
 package com.shiroha.mmdskin.render.backend.factory;
 
+import com.shiroha.mmdskin.bridge.runtime.NativeRenderBackendPort;
 import com.shiroha.mmdskin.model.runtime.ModelInstance;
 import com.shiroha.mmdskin.render.backend.mode.ModelInstanceFactory;
 import com.shiroha.mmdskin.render.backend.mode.RenderCategory;
@@ -15,6 +16,14 @@ public class CpuSkinningBackendFactory implements ModelInstanceFactory {
     private static final Logger logger = LogManager.getLogger();
 
     private static final int PRIORITY = 0;
+    private final NativeRenderBackendPort nativeRenderBackendPort;
+
+    public CpuSkinningBackendFactory(NativeRenderBackendPort nativeRenderBackendPort) {
+        if (nativeRenderBackendPort == null) {
+            throw new IllegalArgumentException("nativeRenderBackendPort cannot be null");
+        }
+        this.nativeRenderBackendPort = nativeRenderBackendPort;
+    }
 
     @Override
     public RenderCategory getCategory() {
@@ -45,7 +54,7 @@ public class CpuSkinningBackendFactory implements ModelInstanceFactory {
     @Override
     public ModelInstance createModel(String modelFilename, String modelDir, boolean isPMD, long layerCount) {
         try {
-            return OpenGlModelInstance.create(modelFilename, modelDir, isPMD, layerCount);
+            return OpenGlModelInstance.create(nativeRenderBackendPort, modelFilename, modelDir, isPMD, layerCount);
         } catch (Throwable e) {
             logger.error("CPU ????????: {}", modelFilename, e);
             return null;
@@ -55,7 +64,7 @@ public class CpuSkinningBackendFactory implements ModelInstanceFactory {
     @Override
     public ModelInstance createModelFromHandle(long modelHandle, String modelDir) {
         try {
-            return OpenGlModelInstance.createFromHandle(modelHandle, modelDir);
+            return OpenGlModelInstance.createFromHandle(nativeRenderBackendPort, modelHandle, modelDir);
         } catch (Throwable e) {
             logger.error("CPU ?????????????", e);
             return null;

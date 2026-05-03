@@ -9,7 +9,7 @@ import org.apache.logging.log4j.Logger;
 
 public class ConfigManager {
     private static final Logger logger = LogManager.getLogger();
-    private static IConfigProvider provider;
+    private static volatile IConfigProvider provider;
 
     public static void init(IConfigProvider configProvider) {
         provider = configProvider;

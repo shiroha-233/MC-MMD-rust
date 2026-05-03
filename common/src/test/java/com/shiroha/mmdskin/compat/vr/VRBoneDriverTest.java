@@ -4,6 +4,8 @@ import net.minecraft.util.Mth;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VRBoneDriverTest {
 
@@ -58,6 +60,28 @@ class VRBoneDriverTest {
         assertEquals(0.0f, dst[4], EPSILON);
         assertEquals(0.0f, dst[5], EPSILON);
         assertEquals(1.0f, dst[6], EPSILON);
+    }
+
+    @Test
+    void shouldRejectTrackingPacketsWithInvalidContract() {
+        assertFalse(VRBoneDriver.hasUsableTrackingData(null));
+        assertFalse(VRBoneDriver.hasUsableTrackingData(new float[VRBoneDriver.TRACKING_PACKET_LENGTH - 1]));
+
+        float[] packetWithNaN = new float[VRBoneDriver.TRACKING_PACKET_LENGTH];
+        writeTrackingPoint(packetWithNaN, 0, 0.0f, 1.0f, 0.0f, 0.0f);
+        writeTrackingPoint(packetWithNaN, 7, 1.0f, 1.0f, 0.0f, 0.0f);
+        packetWithNaN[10] = Float.NaN;
+        assertFalse(VRBoneDriver.hasUsableTrackingData(packetWithNaN));
+    }
+
+    @Test
+    void shouldAcceptTrackingPacketsWithFiniteHeadAndHandData() {
+        float[] packet = new float[VRBoneDriver.TRACKING_PACKET_LENGTH];
+        writeTrackingPoint(packet, 0, 0.0f, 1.6f, 0.0f, 0.0f);
+        writeTrackingPoint(packet, 7, 0.2f, 1.2f, 0.1f, 0.3f);
+        writeTrackingPoint(packet, 14, -0.2f, 1.2f, 0.1f, -0.3f);
+
+        assertTrue(VRBoneDriver.hasUsableTrackingData(packet));
     }
 
     private static void writeTrackingPoint(float[] tracking,

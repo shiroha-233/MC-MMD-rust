@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.stage.client.playback;
 
-import com.shiroha.mmdskin.bridge.runtime.NativeAnimationBridgeHolder;
+import com.shiroha.mmdskin.bridge.runtime.NativeAnimationPort;
 import com.shiroha.mmdskin.config.PathConstants;
 import com.shiroha.mmdskin.config.StageConfig;
 import com.shiroha.mmdskin.config.StagePack;
@@ -15,58 +15,44 @@ import org.apache.logging.log4j.Logger;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/** 文件职责：执行舞台播放运行时逻辑并驱动相机控制器。 */
 public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePort {
-    public static final DefaultStagePlaybackRuntime INSTANCE = new DefaultStagePlaybackRuntime();
-
     private static final Logger LOGGER = LogManager.getLogger();
     private static final float VMD_FPS = 30.0f;
-    private static volatile StageLocalModelBindingPort defaultLocalModelBindingPort =
-            mergedAnim -> StageLocalModelBindingPort.StageLocalModelBinding.empty();
 
-    private volatile StageLocalModelBindingPort localModelBindingPort;
+    private final StageLocalModelBindingPort localModelBindingPort;
+    private final NativeAnimationPort animationPort;
+    private final MMDCameraController cameraController;
 
-    private DefaultStagePlaybackRuntime() {
-        resetCollaborators();
-    }
-
-    public synchronized void configureRuntimeCollaborators(StageLocalModelBindingPort localModelBindingPort) {
-        DefaultStagePlaybackRuntime.defaultLocalModelBindingPort = java.util.Objects.requireNonNull(
-                localModelBindingPort,
-                "localModelBindingPort"
-        );
-        resetCollaborators();
-    }
-
-    synchronized void setCollaboratorsForTesting(StageLocalModelBindingPort localModelBindingPort) {
-        this.localModelBindingPort = java.util.Objects.requireNonNull(localModelBindingPort, "localModelBindingPort");
-    }
-
-    synchronized void resetCollaborators() {
-        this.localModelBindingPort = defaultLocalModelBindingPort;
+    public DefaultStagePlaybackRuntime(StageLocalModelBindingPort localModelBindingPort,
+                                       NativeAnimationPort animationPort,
+                                       MMDCameraController cameraController) {
+        this.localModelBindingPort = Objects.requireNonNull(localModelBindingPort, "localModelBindingPort");
+        this.animationPort = Objects.requireNonNull(animationPort, "animationPort");
+        this.cameraController = Objects.requireNonNull(cameraController, "cameraController");
     }
 
     @Override
     public void enterStageSelection(boolean waitingForHost) {
-        MMDCameraController controller = MMDCameraController.getInstance();
-        controller.enterStageMode();
-        controller.setWaitingForHost(waitingForHost);
+        cameraController.enterStageMode();
+        cameraController.setWaitingForHost(waitingForHost);
     }
 
     @Override
     public void setWaitingForHost(boolean waitingForHost) {
-        MMDCameraController.getInstance().setWaitingForHost(waitingForHost);
+        cameraController.setWaitingForHost(waitingForHost);
     }
 
     @Override
     public void exitStageSelection() {
-        MMDCameraController controller = MMDCameraController.getInstance();
-        boolean wasInStageMode = controller.isInStageMode();
-        controller.setWaitingForHost(false);
-        if (controller.isInStageMode()) {
-            controller.exitStageMode();
+        boolean wasInStageMode = cameraController.isInStageMode();
+        cameraController.setWaitingForHost(false);
+        if (cameraController.isInStageMode()) {
+            cameraController.exitStageMode();
             if (wasInStageMode) {
                 VoicePlaybackManager.getInstance().onLocalPlayerStageEnd(resolveCurrentStageModelName());
             }
@@ -75,14 +61,13 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
 
     @Override
     public void stopActivePlaybackForRemoteEnd() {
-        MMDCameraController controller = MMDCameraController.getInstance();
-        boolean wasWatching = controller.isWatching();
-        boolean wasInStageMode = controller.isInStageMode();
-        controller.setWaitingForHost(false);
-        if (controller.isWatching()) {
-            controller.exitWatchMode(false);
-        } else if (controller.isInStageMode()) {
-            controller.exitStageMode();
+        boolean wasWatching = cameraController.isWatching();
+        boolean wasInStageMode = cameraController.isInStageMode();
+        cameraController.setWaitingForHost(false);
+        if (cameraController.isWatching()) {
+            cameraController.exitWatchMode(false);
+        } else if (cameraController.isInStageMode()) {
+            cameraController.exitStageMode();
         }
         if (wasWatching || wasInStageMode) {
             VoicePlaybackManager.getInstance().onLocalPlayerStageEnd(resolveCurrentStageModelName());
@@ -91,14 +76,13 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
 
     @Override
     public void applyFrameSync(float frame) {
-        MMDCameraController.getInstance().onFrameSync(frame);
+        cameraController.onFrameSync(frame);
     }
 
     @Override
     public void applyInitialFrameSync(float frame) {
-        MMDCameraController controller = MMDCameraController.getInstance();
-        controller.onFrameSync(frame);
-        controller.syncAudioPosition(frame / VMD_FPS);
+        cameraController.onFrameSync(frame);
+        cameraController.syncAudioPosition(frame / VMD_FPS);
     }
 
     @Override
@@ -108,7 +92,6 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
             return HostStartResult.failed();
         }
 
-        var animationBridge = NativeAnimationBridgeHolder.get();
         StageConfig config = StageConfig.getInstance();
         config.lastStagePack = pack.getName();
         config.cinematicMode = cinematicMode;
@@ -137,7 +120,7 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
             return HostStartResult.failed();
         }
 
-        long mergedAnim = animationBridge.loadAnimation(0, motionFiles.get(0).path);
+        long mergedAnim = animationPort.loadAnimation(0, motionFiles.get(0).path);
         if (mergedAnim == 0) {
             LOGGER.error("[舞台模式] 动作 VMD 加载失败: {}", motionFiles.get(0).path);
             return HostStartResult.failed();
@@ -145,30 +128,30 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
 
         List<Long> tempHandles = new ArrayList<>();
         for (int i = 1; i < motionFiles.size(); i++) {
-            long tempAnim = animationBridge.loadAnimation(0, motionFiles.get(i).path);
+            long tempAnim = animationPort.loadAnimation(0, motionFiles.get(i).path);
             if (tempAnim != 0) {
-                animationBridge.mergeAnimation(mergedAnim, tempAnim);
+                animationPort.mergeAnimation(mergedAnim, tempAnim);
                 tempHandles.add(tempAnim);
             }
         }
         for (long handle : tempHandles) {
-            animationBridge.deleteAnimation(handle);
+            animationPort.deleteAnimation(handle);
         }
 
         long cameraAnim = 0;
         if (cameraFile != null) {
-            cameraAnim = animationBridge.loadAnimation(0, cameraFile.path);
+            cameraAnim = animationPort.loadAnimation(0, cameraFile.path);
         }
 
         StageDescriptor sessionDescriptor = buildSessionDescriptor(pack, motionFiles, cameraFile);
         if (sessionDescriptor == null || !sessionDescriptor.isValid()) {
             cleanupHandles(mergedAnim, cameraAnim);
-            LOGGER.warn("[舞台模式] 默认舞台描述构建失败");
+            LOGGER.warn("[舞台模式] 舞台描述构建失败");
             return HostStartResult.failed();
         }
 
         StageLocalModelBindingPort.StageLocalModelBinding localModelBinding = localModelBindingPort.bindLocalModel(mergedAnim);
-        boolean started = MMDCameraController.getInstance().startStage(
+        boolean started = cameraController.startStage(
                 mergedAnim,
                 cameraAnim,
                 cinematicMode,
@@ -197,7 +180,7 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
         StageDescriptor effectiveDescriptor = request.descriptor().copy();
         File hostStageDir = new File(PathConstants.getStageAnimDir(), effectiveDescriptor.getPackName());
         if (!hostStageDir.exists() || !hostStageDir.isDirectory()) {
-            LOGGER.warn("[多人舞台] 本地缺少舞台包: {}", effectiveDescriptor.getPackName());
+            LOGGER.warn("[多人舞台] 本地缺少舞台包 {}", effectiveDescriptor.getPackName());
             return GuestStartResult.failed();
         }
 
@@ -207,33 +190,32 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
             return GuestStartResult.failed();
         }
 
-        var animationBridge = NativeAnimationBridgeHolder.get();
         long mergedAnim = 0;
         long cameraAnim = 0;
 
         try {
             for (String motionFile : effectiveDescriptor.getMotionFiles()) {
                 String filePath = new File(motionStageDir, motionFile).getAbsolutePath();
-                long tempAnim = animationBridge.loadAnimation(0, filePath);
+                long tempAnim = animationPort.loadAnimation(0, filePath);
                 if (tempAnim == 0) {
                     continue;
                 }
 
-                boolean hasMotion = animationBridge.hasBoneData(tempAnim) || animationBridge.hasMorphData(tempAnim);
+                boolean hasMotion = animationPort.hasBoneData(tempAnim) || animationPort.hasMorphData(tempAnim);
                 if (hasMotion) {
                     if (mergedAnim == 0) {
                         mergedAnim = tempAnim;
                     } else {
-                        animationBridge.mergeAnimation(mergedAnim, tempAnim);
-                        animationBridge.deleteAnimation(tempAnim);
+                        animationPort.mergeAnimation(mergedAnim, tempAnim);
+                        animationPort.deleteAnimation(tempAnim);
                     }
                 } else {
-                    animationBridge.deleteAnimation(tempAnim);
+                    animationPort.deleteAnimation(tempAnim);
                 }
             }
 
             if (effectiveDescriptor.getCameraFile() != null && !effectiveDescriptor.getCameraFile().isEmpty()) {
-                cameraAnim = animationBridge.loadAnimation(
+                cameraAnim = animationPort.loadAnimation(
                         0,
                         new File(hostStageDir, effectiveDescriptor.getCameraFile()).getAbsolutePath()
                 );
@@ -255,21 +237,20 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
 
             float hostHeightOffset = request.hostHeightOffset() != null ? request.hostHeightOffset() : 0.0f;
             float effectiveHeight = useHostCamera ? hostHeightOffset : StageConfig.getInstance().cameraHeightOffset;
-            MMDCameraController controller = MMDCameraController.getInstance();
 
             if (useHostCamera) {
-                controller.enterWatchMode(hostUUID);
-                if (!controller.isWatching()) {
+                cameraController.enterWatchMode(hostUUID);
+                if (!cameraController.isWatching()) {
                     cleanupHandles(mergedAnim, cameraAnim);
                     LOGGER.warn("[多人舞台] 进入观演模式失败");
                     return GuestStartResult.failed();
                 }
                 if (cameraAnim != 0) {
-                    controller.setWatchCamera(cameraAnim, effectiveHeight);
+                    cameraController.setWatchCamera(cameraAnim, effectiveHeight);
                 }
-                controller.setWatchMotion(mergedAnim, localModelBinding.modelHandle(), localModelBinding.modelName());
+                cameraController.setWatchMotion(mergedAnim, localModelBinding.modelHandle(), localModelBinding.modelName());
                 if (audioPath != null && !audioPath.isEmpty()) {
-                    controller.loadWatchAudio(audioPath);
+                    cameraController.loadWatchAudio(audioPath);
                 }
                 VoicePlaybackManager.getInstance().onLocalPlayerStageStart(localModelBinding.modelName());
                 return GuestStartResult.success(
@@ -278,7 +259,7 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
                 );
             }
 
-            boolean started = controller.startStage(
+            boolean started = cameraController.startStage(
                     mergedAnim != 0 ? mergedAnim : cameraAnim,
                     cameraAnim,
                     StageConfig.getInstance().cinematicMode,
@@ -362,18 +343,16 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
     }
 
     private void cleanupHandles(long mergedAnim, long cameraAnim) {
-        var animationBridge = NativeAnimationBridgeHolder.get();
         if (mergedAnim != 0) {
-            animationBridge.deleteAnimation(mergedAnim);
+            animationPort.deleteAnimation(mergedAnim);
         }
         if (cameraAnim != 0 && cameraAnim != mergedAnim) {
-            animationBridge.deleteAnimation(cameraAnim);
+            animationPort.deleteAnimation(cameraAnim);
         }
     }
 
     private String resolveCurrentStageModelName() {
-        MMDCameraController controller = MMDCameraController.getInstance();
-        String modelName = controller.getActiveStageModelName();
+        String modelName = cameraController.getActiveStageModelName();
         return modelName == null || modelName.isBlank() ? null : modelName;
     }
 }

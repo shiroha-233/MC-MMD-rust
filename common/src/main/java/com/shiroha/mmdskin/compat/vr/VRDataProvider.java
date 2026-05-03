@@ -4,24 +4,27 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * Vivecraft 数据适配层。
- */
+/** 文件职责：向业务层提供与具体 VR 实现解耦的追踪数据读取。 */
 public final class VRDataProvider {
+    private static volatile VrTrackingFacade trackingFacade = VivecraftVrTrackingFacade.INSTANCE;
 
     private VRDataProvider() {
     }
 
+    static void setTrackingFacadeForTesting(VrTrackingFacade trackingFacade) {
+        VRDataProvider.trackingFacade = trackingFacade != null ? trackingFacade : VivecraftVrTrackingFacade.INSTANCE;
+    }
+
     public static boolean isVRPlayer(Player player) {
-        return VivecraftReflectionBridge.isVRPlayer(player);
+        return trackingFacade.isVrPlayer(player);
     }
 
     public static float[] getRenderTrackingData(Player player) {
-        return VivecraftReflectionBridge.getTrackingData(player);
+        return trackingFacade.getTrackingData(player);
     }
 
     public static float getBodyYawRad(Player player, float tickDelta) {
-        float vrYaw = VivecraftReflectionBridge.getBodyYawRadians(player);
+        float vrYaw = trackingFacade.getBodyYawRadians(player);
         if (!Float.isNaN(vrYaw)) {
             return vrYaw;
         }
@@ -33,8 +36,8 @@ public final class VRDataProvider {
     }
 
     public static Vec3 getRenderOrigin(Player player, float tickDelta) {
-        Vec3 renderOrigin = VivecraftReflectionBridge.getLocalPlayerRenderOrigin(tickDelta);
-        if (renderOrigin != null && VivecraftReflectionBridge.isVRPlayer(player)) {
+        Vec3 renderOrigin = trackingFacade.getLocalPlayerRenderOrigin(tickDelta);
+        if (renderOrigin != null && trackingFacade.isVrPlayer(player)) {
             return renderOrigin;
         }
 

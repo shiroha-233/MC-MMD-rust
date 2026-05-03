@@ -1,7 +1,7 @@
 package com.shiroha.mmdskin.render.backend.opengl;
 
 import com.mojang.blaze3d.vertex.BufferUploader;
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
+import com.shiroha.mmdskin.bridge.runtime.NativeRenderBackendPort;
 import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
 import com.shiroha.mmdskin.render.material.ModelMaterial;
 import com.shiroha.mmdskin.texture.runtime.TextureRepository;
@@ -22,10 +22,13 @@ final class OpenGlModelFactory {
     private OpenGlModelFactory() {
     }
 
-    static OpenGlModelInstance create(String modelFilename, String modelDir, boolean isPMD, long layerCount) {
+    static OpenGlModelInstance create(NativeRenderBackendPort nativeBackend,
+                                      String modelFilename,
+                                      String modelDir,
+                                      boolean isPMD,
+                                      long layerCount) {
         ensureShaderInitialized();
 
-        var nativeBackend = NativeRuntimeBridgeHolder.get();
         long model;
         if (isPMD) {
             model = nativeBackend.loadPmdModel(modelFilename, modelDir, layerCount);
@@ -37,17 +40,16 @@ final class OpenGlModelFactory {
             return null;
         }
 
-        OpenGlModelInstance result = createFromHandle(model, modelDir);
+        OpenGlModelInstance result = createFromHandle(nativeBackend, model, modelDir);
         if (result == null) {
             nativeBackend.deleteModel(model);
         }
         return result;
     }
 
-    static OpenGlModelInstance createFromHandle(long model, String modelDir) {
+    static OpenGlModelInstance createFromHandle(NativeRenderBackendPort nativeBackend, long model, String modelDir) {
         ensureShaderInitialized();
 
-        var nativeBackend = NativeRuntimeBridgeHolder.get();
         BufferUploader.reset();
 
         int vertexArrayObject = 0;
@@ -186,7 +188,7 @@ final class OpenGlModelFactory {
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, 0);
 
             OpenGlModelInstance result = new OpenGlModelInstance();
-            result.applyBaseState(model, modelDir, texKeys);
+            result.applyBaseState(nativeBackend, model, modelDir, texKeys);
             result.vertexCount = vertexCount;
             result.posBuffer = posBuffer;
             result.colorBuffer = colorBuffer;

@@ -1,6 +1,8 @@
 package com.shiroha.mmdskin.render.backend;
 
-import com.shiroha.mmdskin.config.ConfigManager;
+import com.shiroha.mmdskin.bridge.runtime.NativeRenderBackendPort;
+import com.shiroha.mmdskin.bridge.runtime.PlatformCapabilityPort;
+import com.shiroha.mmdskin.config.RuntimeConfigPort;
 import com.shiroha.mmdskin.model.runtime.ModelInstance;
 import com.shiroha.mmdskin.render.backend.factory.ModelFactoryRegistry;
 import com.shiroha.mmdskin.render.backend.mode.RenderModeManager;
@@ -8,11 +10,31 @@ import com.shiroha.mmdskin.render.port.RenderBackendSettingsPort;
 
 /** 文件职责：封装渲染后端注册、选择与配置入口。 */
 public final class RenderBackendRegistry implements RenderBackendSettingsPort {
+    private final NativeRenderBackendPort nativeRenderBackendPort;
+    private final PlatformCapabilityPort platformCapabilityPort;
+    private final RuntimeConfigPort runtimeConfigPort;
     private volatile boolean shaderEnabled;
     private volatile int shaderPipelineMode;
 
+    public RenderBackendRegistry(NativeRenderBackendPort nativeRenderBackendPort,
+                                 PlatformCapabilityPort platformCapabilityPort,
+                                 RuntimeConfigPort runtimeConfigPort) {
+        if (nativeRenderBackendPort == null) {
+            throw new IllegalArgumentException("nativeRenderBackendPort cannot be null");
+        }
+        if (platformCapabilityPort == null) {
+            throw new IllegalArgumentException("platformCapabilityPort cannot be null");
+        }
+        if (runtimeConfigPort == null) {
+            throw new IllegalArgumentException("runtimeConfigPort cannot be null");
+        }
+        this.nativeRenderBackendPort = nativeRenderBackendPort;
+        this.platformCapabilityPort = platformCapabilityPort;
+        this.runtimeConfigPort = runtimeConfigPort;
+    }
+
     public void initialize() {
-        ModelFactoryRegistry.registerAll();
+        ModelFactoryRegistry.registerAll(nativeRenderBackendPort, platformCapabilityPort);
         RenderModeManager.init();
         applyConfig();
     }
@@ -59,7 +81,7 @@ public final class RenderBackendRegistry implements RenderBackendSettingsPort {
     }
 
     private void applyConfig() {
-        setGpuSkinningEnabled(ConfigManager.isGpuSkinningEnabled());
-        setShaderEnabled(ConfigManager.isMMDShaderEnabled());
+        setGpuSkinningEnabled(runtimeConfigPort.isGpuSkinningEnabled());
+        setShaderEnabled(runtimeConfigPort.isMmdShaderEnabled());
     }
 }

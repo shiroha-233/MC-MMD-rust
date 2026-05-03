@@ -1,6 +1,5 @@
 package com.shiroha.mmdskin.render.backend.gpu;
 
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
 import com.shiroha.mmdskin.render.shader.ShaderConstants;
 import org.lwjgl.opengl.GL46C;
 import org.lwjgl.system.MemoryUtil;
@@ -16,7 +15,7 @@ final class GpuSkinningModelLifecycle {
         }
 
         long total = 0;
-        int indexCount = (int) NativeRuntimeBridgeHolder.get().getIndexCount(target.nativeModelHandle());
+        int indexCount = (int) target.nativeBackendPort().getIndexCount(target.nativeModelHandle());
         total += (long) indexCount * target.indexElementSize;
         total += (long) target.vertexCount * 12 * 2;
         total += (long) target.vertexCount * 8;
@@ -26,11 +25,11 @@ final class GpuSkinningModelLifecycle {
         total += (long) target.vertexCount * 12 * 2;
         total += (long) ShaderConstants.MAX_BONES * 64;
         if (target.vertexMorphCount > 0) {
-            total += NativeRuntimeBridgeHolder.get().getGpuMorphOffsetsSize(target.nativeModelHandle());
+            total += target.nativeBackendPort().getGpuMorphOffsetsSize(target.nativeModelHandle());
             total += (long) target.vertexMorphCount * 4;
         }
         if (target.uvMorphCount > 0) {
-            total += NativeRuntimeBridgeHolder.get().getGpuUvMorphOffsetsSize(target.nativeModelHandle());
+            total += target.nativeBackendPort().getGpuUvMorphOffsetsSize(target.nativeModelHandle());
             total += (long) target.uvMorphCount * 4;
         }
         if (target.skinnedUvBuffer > 0) {
@@ -44,7 +43,7 @@ final class GpuSkinningModelLifecycle {
             return 0;
         }
 
-        long rustRam = NativeRuntimeBridgeHolder.get().getModelMemoryUsage(target.nativeModelHandle());
+        long rustRam = target.nativeBackendPort().getModelMemoryUsage(target.nativeModelHandle());
         long javaRam = (long) target.vertexCount * 64;
         javaRam += 128;
         if (target.boneMatricesBuffer != null) {

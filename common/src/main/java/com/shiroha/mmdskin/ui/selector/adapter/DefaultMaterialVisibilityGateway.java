@@ -1,6 +1,7 @@
 package com.shiroha.mmdskin.ui.selector.adapter;
 
-import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
+import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
+import com.shiroha.mmdskin.bridge.runtime.NativeModelQueryPort;
 import com.shiroha.mmdskin.config.ModelConfigData;
 import com.shiroha.mmdskin.config.ModelConfigManager;
 import com.shiroha.mmdskin.maid.MaidMMDModelManager;
@@ -12,10 +13,12 @@ import com.shiroha.mmdskin.ui.selector.application.MaterialVisibilityApplication
 import com.shiroha.mmdskin.ui.selector.application.MaterialVisibilityApplicationService.MaterialScreenContext;
 import com.shiroha.mmdskin.ui.selector.port.MaterialVisibilityGateway;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.apache.logging.log4j.LogManager;
@@ -24,6 +27,20 @@ import org.apache.logging.log4j.Logger;
 /** 文件职责：为材质可见性界面提供模型上下文与材质读写能力。 */
 public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGateway {
     private static final Logger LOGGER = LogManager.getLogger();
+
+    private final Supplier<? extends NativeModelPort> nativeModelPortSupplier;
+    private final Supplier<? extends NativeModelQueryPort> nativeModelQueryPortSupplier;
+
+    public DefaultMaterialVisibilityGateway(NativeModelPort nativeModelPort,
+                                            NativeModelQueryPort nativeModelQueryPort) {
+        this(() -> nativeModelPort, () -> nativeModelQueryPort);
+    }
+
+    public DefaultMaterialVisibilityGateway(Supplier<? extends NativeModelPort> nativeModelPortSupplier,
+                                            Supplier<? extends NativeModelQueryPort> nativeModelQueryPortSupplier) {
+        this.nativeModelPortSupplier = nativeModelPortSupplier;
+        this.nativeModelQueryPortSupplier = nativeModelQueryPortSupplier;
+    }
 
     @Override
     public Optional<MaterialScreenContext> createPlayerContext() {
@@ -68,13 +85,14 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
     @Override
     public List<MaterialEntryState> loadMaterials(long modelHandle) {
         List<MaterialEntryState> materials = new ArrayList<>();
-        var nativeBridge = NativeRuntimeBridgeHolder.get();
-        int materialCount = nativeBridge.getMaterialCount(modelHandle);
+        NativeModelPort nativeModelPort = nativeModelPortSupplier.get();
+        NativeModelQueryPort nativeModelQueryPort = nativeModelQueryPortSupplier.get();
+        int materialCount = nativeModelPort.getMaterialCount(modelHandle);
         for (int i = 0; i < materialCount; i++) {
             materials.add(new MaterialEntryState(
                     i,
-                    nativeBridge.getMaterialName(modelHandle, i),
-                    nativeBridge.isMaterialVisible(modelHandle, i)));
+                    nativeModelQueryPort.getMaterialName(modelHandle, i),
+                    nativeModelQueryPort.isMaterialVisible(modelHandle, i)));
         }
         return materials;
     }
@@ -82,7 +100,8 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
     @Override
     public void setAllVisible(long modelHandle, boolean visible) {
         try {
-            NativeRuntimeBridgeHolder.get().setAllMaterialsVisible(modelHandle, visible);
+            NativeModelPort nativeModelPort = nativeModelPortSupplier.get();
+            nativeModelPort.setAllMaterialsVisible(modelHandle, visible);
         } catch (Exception e) {
             LOGGER.warn("Failed to update material visibility", e);
         }
@@ -91,7 +110,8 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
     @Override
     public void setMaterialVisible(long modelHandle, int materialIndex, boolean visible) {
         try {
-            NativeRuntimeBridgeHolder.get().setMaterialVisible(modelHandle, materialIndex, visible);
+            NativeModelPort nativeModelPort = nativeModelPortSupplier.get();
+            nativeModelPort.setMaterialVisible(modelHandle, materialIndex, visible);
         } catch (Exception e) {
             LOGGER.warn("Failed to update material visibility", e);
         }
@@ -101,7 +121,7 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
     public void saveHiddenMaterials(String configModelName, Set<Integer> hiddenMaterials) {
         try {
             ModelConfigData config = ModelConfigManager.getConfig(configModelName);
-            config.hiddenMaterials = hiddenMaterials;
+            config.hiddenMaterials = hiddenMaterials == null ? new HashSet<>() : new HashSet<>(hiddenMaterials);
             ModelConfigManager.saveConfig(configModelName, config);
         } catch (Exception e) {
             LOGGER.warn("Failed to save hidden materials for {}", configModelName, e);
