@@ -1,3 +1,4 @@
+/* 职责：以原生 GuiGraphics 渲染模型设置界面。 */
 package com.shiroha.mmdskin.ui.selector;
 
 import com.shiroha.mmdskin.config.ModelConfigData;
@@ -10,9 +11,9 @@ import net.minecraft.util.Mth;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
 import java.util.List;
 
+/** 文件职责：提供模型设置原生界面。 */
 public class ModelSettingsScreen extends Screen {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final ModelSettingsApplicationService SERVICE = ModelSelectorServices.modelSettings();
@@ -31,9 +32,9 @@ public class ModelSettingsScreen extends Screen {
 
     private final String modelName;
     private final Screen parentScreen;
-    private final SkiaModelSettingsRenderer skiaRenderer = new SkiaModelSettingsRenderer();
 
     private ModelConfigData config;
+    private List<ModelSettingsApplicationService.QuickSlotBinding> quickSlotBindings = List.of();
     private boolean pendingClose;
     private boolean pendingOpenAnimConfig;
     private boolean pendingOpenVoiceConfig;
@@ -68,6 +69,7 @@ public class ModelSettingsScreen extends Screen {
         this.modelName = modelName;
         this.parentScreen = parentScreen;
         this.config = SERVICE.loadEditableConfig(modelName);
+        reloadQuickSlotBindings();
     }
 
     @Override
@@ -82,11 +84,7 @@ public class ModelSettingsScreen extends Screen {
         try {
             updateLayout();
             updateHoverState(mouseX, mouseY);
-
-            SkiaModelSettingsRenderer.SettingsView view = buildView();
-            if (!skiaRenderer.renderSettings(this, view)) {
-                renderFallback(guiGraphics, view);
-            }
+            renderFallback(guiGraphics);
             flushPendingActions(minecraft);
         } catch (Throwable throwable) {
             closeAfterFailure(throwable);
@@ -121,6 +119,7 @@ public class ModelSettingsScreen extends Screen {
             UiRect slotButton = layout.quickSlotButtons[i];
             if (slotButton != null && slotButton.contains(mouseX, mouseY)) {
                 SERVICE.toggleQuickSlot(modelName, i);
+                reloadQuickSlotBindings();
                 return true;
             }
         }
@@ -182,7 +181,6 @@ public class ModelSettingsScreen extends Screen {
 
     @Override
     public void onClose() {
-        skiaRenderer.dispose();
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen == this) {
             minecraft.setScreen(parentScreen);
@@ -193,7 +191,6 @@ public class ModelSettingsScreen extends Screen {
 
     @Override
     public void removed() {
-        skiaRenderer.dispose();
         super.removed();
     }
 
@@ -302,63 +299,6 @@ public class ModelSettingsScreen extends Screen {
         return Mth.clamp(min + (max - min) * Mth.clamp(t, 0.0f, 1.0f), min, max);
     }
 
-    private SkiaModelSettingsRenderer.SettingsView buildView() {
-        List<ModelSettingsApplicationService.QuickSlotBinding> quickSlots = SERVICE.getQuickSlotBindings(modelName);
-        List<SkiaModelSettingsRenderer.QuickSlotView> slotViews = new ArrayList<>(quickSlots.size());
-        for (int i = 0; i < quickSlots.size(); i++) {
-            ModelSettingsApplicationService.QuickSlotBinding binding = quickSlots.get(i);
-            slotViews.add(new SkiaModelSettingsRenderer.QuickSlotView(
-                    buildQuickSlotLabel(binding),
-                    shorten(binding.boundModel(), 12),
-                    binding.boundToCurrentModel(),
-                    hoveredTarget == slotHoverTarget(i),
-                    i,
-                    layout.quickSlotButtons[i]
-            ));
-        }
-
-        return new SkiaModelSettingsRenderer.SettingsView(
-                this.title.getString(),
-                shorten(modelName, 14),
-                Component.translatable("gui.mmdskin.model_settings.eye_tracking").getString(),
-                Component.translatable("gui.mmdskin.model_settings.eye_tracking_enabled").getString(),
-                Component.translatable("gui.mmdskin.model_settings.eye_max_angle", String.format("%.0f", Math.toDegrees(config.eyeMaxAngle))).getString(),
-                Component.translatable("gui.mmdskin.model_settings.model_display").getString(),
-                Component.translatable("gui.mmdskin.model_settings.model_scale", String.format("%.2f", config.modelScale)).getString(),
-                Component.translatable("gui.mmdskin.model_settings.quick_bind").getString(),
-                Component.translatable("gui.mmdskin.model_settings.save").getString(),
-                Component.translatable("gui.mmdskin.model_settings.reset").getString(),
-                Component.translatable("gui.mmdskin.model_settings.anim_config").getString(),
-                Component.translatable("gui.mmdskin.model_settings.voice_config").getString(),
-                Component.translatable("gui.done").getString(),
-                layout.panel,
-                layout.header,
-                layout.eyeCard,
-                layout.eyeToggle,
-                layout.eyeSlider,
-                layout.scaleCard,
-                layout.scaleSlider,
-                layout.quickCard,
-                layout.saveButton,
-                layout.resetButton,
-                layout.animButton,
-                layout.voiceButton,
-                layout.doneButton,
-                config.eyeTrackingEnabled,
-                normalized(config.eyeMaxAngle, 0.05f, 1.0f),
-                normalized(config.modelScale, 0.5f, 2.0f),
-                hoveredTarget == HoverTarget.EYE_TOGGLE,
-                hoveredTarget == HoverTarget.EYE_SLIDER,
-                hoveredTarget == HoverTarget.SCALE_SLIDER,
-                hoveredTarget == HoverTarget.SAVE,
-                hoveredTarget == HoverTarget.RESET,
-                hoveredTarget == HoverTarget.ANIM,
-                hoveredTarget == HoverTarget.VOICE,
-                hoveredTarget == HoverTarget.DONE,
-                slotViews
-        );
-    }
-
     private float normalized(float value, float min, float max) {
         return Mth.clamp((value - min) / (max - min), 0.0f, 1.0f);
     }
@@ -372,33 +312,48 @@ public class ModelSettingsScreen extends Screen {
         };
     }
 
-    private void renderFallback(GuiGraphics guiGraphics, SkiaModelSettingsRenderer.SettingsView view) {
+    private void renderFallback(GuiGraphics guiGraphics) {
+        float eyeAngleNormalized = normalized(config.eyeMaxAngle, 0.05f, 1.0f);
+        float modelScaleNormalized = normalized(config.modelScale, 0.5f, 2.0f);
         guiGraphics.fill(0, 0, this.width, this.height, 0x28000000);
-        guiGraphics.fill(view.panel().x(), view.panel().y(), view.panel().x() + view.panel().w(), view.panel().y() + view.panel().h(), 0x2A000000);
-        guiGraphics.fill(view.panel().x() + 1, view.panel().y() + 1, view.panel().x() + view.panel().w() - 1, view.panel().y() + view.panel().h() - 1, 0x20000000);
+        guiGraphics.fill(layout.panel.x, layout.panel.y, layout.panel.x + layout.panel.w, layout.panel.y + layout.panel.h, 0x2A000000);
+        guiGraphics.fill(layout.panel.x + 1, layout.panel.y + 1, layout.panel.x + layout.panel.w - 1, layout.panel.y + layout.panel.h - 1, 0x20000000);
 
-        guiGraphics.drawString(this.font, view.title(), view.header().x(), view.header().y() + 1, 0xFFF1F5FB, false);
-        guiGraphics.drawString(this.font, view.modelName(), view.header().x(), view.header().y() + 10, 0xC8D5DFEC, false);
+        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, 0xFFF1F5FB, false);
+        guiGraphics.drawString(this.font, shorten(modelName, 14), layout.header.x, layout.header.y + 10, 0xC8D5DFEC, false);
 
-        drawFallbackCard(guiGraphics, view.eyeCard(), view.eyeSectionTitle());
-        guiGraphics.drawString(this.font, view.eyeToggleText(), view.eyeCard().x() + 4, view.eyeCard().y() + 13, 0xFFE9F1FA, false);
-        drawFallbackSlider(guiGraphics, view.eyeSlider(), view.eyeAngleLabel(), view.eyeAngleNormalized());
+        drawFallbackCard(guiGraphics, layout.eyeCard, Component.translatable("gui.mmdskin.model_settings.eye_tracking").getString());
+        guiGraphics.drawString(this.font, Component.translatable("gui.mmdskin.model_settings.eye_tracking_enabled").getString(), layout.eyeCard.x + 4, layout.eyeCard.y + 13, 0xFFE9F1FA, false);
+        drawFallbackSlider(
+                guiGraphics,
+                layout.eyeSlider,
+                Component.translatable("gui.mmdskin.model_settings.eye_max_angle", String.format("%.0f", Math.toDegrees(config.eyeMaxAngle))).getString(),
+                eyeAngleNormalized
+        );
+        drawFallbackToggle(guiGraphics, layout.eyeToggle, config.eyeTrackingEnabled, hoveredTarget == HoverTarget.EYE_TOGGLE);
 
-        drawFallbackCard(guiGraphics, view.scaleCard(), view.scaleSectionTitle());
-        drawFallbackSlider(guiGraphics, view.scaleSlider(), view.modelScaleLabel(), view.modelScaleNormalized());
+        drawFallbackCard(guiGraphics, layout.scaleCard, Component.translatable("gui.mmdskin.model_settings.model_display").getString());
+        drawFallbackSlider(
+                guiGraphics,
+                layout.scaleSlider,
+                Component.translatable("gui.mmdskin.model_settings.model_scale", String.format("%.2f", config.modelScale)).getString(),
+                modelScaleNormalized
+        );
 
-        drawFallbackCard(guiGraphics, view.quickCard(), view.quickSectionTitle());
-        for (SkiaModelSettingsRenderer.QuickSlotView slot : view.quickSlots()) {
-            int bg = slot.boundToCurrentModel() ? 0x52FFFFFF : (slot.hovered() ? 0x38FFFFFF : 0x24000000);
-            guiGraphics.fill(slot.rect().x(), slot.rect().y(), slot.rect().x() + slot.rect().w(), slot.rect().y() + slot.rect().h(), bg);
-            guiGraphics.drawCenteredString(this.font, slot.slotLabel(), slot.rect().centerX(), slot.rect().y() + 4, 0xFFF1F6FD);
+        drawFallbackCard(guiGraphics, layout.quickCard, Component.translatable("gui.mmdskin.model_settings.quick_bind").getString());
+        for (int i = 0; i < quickSlotBindings.size() && i < layout.quickSlotButtons.length; i++) {
+            ModelSettingsApplicationService.QuickSlotBinding binding = quickSlotBindings.get(i);
+            UiRect rect = layout.quickSlotButtons[i];
+            int bg = binding.boundToCurrentModel() ? 0x52FFFFFF : (hoveredTarget == slotHoverTarget(i) ? 0x38FFFFFF : 0x24000000);
+            guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, bg);
+            guiGraphics.drawCenteredString(this.font, buildQuickSlotLabel(binding), rect.centerX(), rect.y + 4, 0xFFF1F6FD);
         }
 
-        drawFallbackButton(guiGraphics, view.saveButton(), view.saveText(), view.saveHovered());
-        drawFallbackButton(guiGraphics, view.resetButton(), view.resetText(), view.resetHovered());
-        drawFallbackButton(guiGraphics, view.animButton(), view.animText(), view.animHovered());
-        drawFallbackButton(guiGraphics, view.voiceButton(), view.voiceText(), view.voiceHovered());
-        drawFallbackButton(guiGraphics, view.doneButton(), view.doneText(), view.doneHovered());
+        drawFallbackButton(guiGraphics, layout.saveButton, Component.translatable("gui.mmdskin.model_settings.save").getString(), hoveredTarget == HoverTarget.SAVE);
+        drawFallbackButton(guiGraphics, layout.resetButton, Component.translatable("gui.mmdskin.model_settings.reset").getString(), hoveredTarget == HoverTarget.RESET);
+        drawFallbackButton(guiGraphics, layout.animButton, Component.translatable("gui.mmdskin.model_settings.anim_config").getString(), hoveredTarget == HoverTarget.ANIM);
+        drawFallbackButton(guiGraphics, layout.voiceButton, Component.translatable("gui.mmdskin.model_settings.voice_config").getString(), hoveredTarget == HoverTarget.VOICE);
+        drawFallbackButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredTarget == HoverTarget.DONE);
     }
 
     private void drawFallbackCard(GuiGraphics guiGraphics, UiRect rect, String title) {
@@ -413,6 +368,13 @@ public class ModelSettingsScreen extends Screen {
         guiGraphics.fill(rect.x, rect.y + 3, fillRight, rect.y + 7, 0x58FFFFFF);
     }
 
+    private void drawFallbackToggle(GuiGraphics guiGraphics, UiRect rect, boolean enabled, boolean hovered) {
+        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, hovered ? 0x30FFFFFF : 0x1A000000);
+        int knobSize = rect.h - 2;
+        int knobX = enabled ? rect.x + rect.w - knobSize - 1 : rect.x + 1;
+        guiGraphics.fill(knobX, rect.y + 1, knobX + knobSize, rect.y + rect.h - 1, 0xFFDDE8F8);
+    }
+
     private void drawFallbackButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
         int bg = hovered ? 0x4AFFFFFF : 0x30000000;
         guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, bg);
@@ -422,6 +384,10 @@ public class ModelSettingsScreen extends Screen {
     private void saveAndClose() {
         SERVICE.save(modelName, config);
         pendingClose = true;
+    }
+
+    private void reloadQuickSlotBindings() {
+        quickSlotBindings = List.copyOf(SERVICE.getQuickSlotBindings(modelName));
     }
 
     private void flushPendingActions(Minecraft minecraft) {
@@ -442,8 +408,7 @@ public class ModelSettingsScreen extends Screen {
     }
 
     private void closeAfterFailure(Throwable throwable) {
-        LOGGER.error("[ModelSettings] Skia settings failed and will close", throwable);
-        skiaRenderer.dispose();
+        LOGGER.error("[ModelSettings] Native settings render failed and will close", throwable);
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen == this) {
             minecraft.setScreen(parentScreen);

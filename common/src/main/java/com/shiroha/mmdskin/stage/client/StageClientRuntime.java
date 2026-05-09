@@ -1,6 +1,8 @@
 package com.shiroha.mmdskin.stage.client;
 
+import com.shiroha.mmdskin.bridge.runtime.NativeAnimationBridgeHolder;
 import com.shiroha.mmdskin.bridge.runtime.NativeAnimationPort;
+import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
 import com.shiroha.mmdskin.bridge.runtime.NativeRuntimePort;
 import com.shiroha.mmdskin.bridge.runtime.NativeScenePort;
 import com.shiroha.mmdskin.stage.application.StageSessionService;
@@ -91,7 +93,8 @@ public final class StageClientRuntime {
     public static StageClientRuntime get() {
         StageClientRuntime runtime = instance;
         if (runtime == null) {
-            throw new IllegalStateException("StageClientRuntime has not been initialized");
+            initialize(NativeRuntimeBridgeHolder.get(), NativeAnimationBridgeHolder.get());
+            runtime = instance;
         }
         return runtime;
     }

@@ -1,3 +1,4 @@
+/* 职责：以原生 GuiGraphics 渲染模型选择界面。 */
 package com.shiroha.mmdskin.ui.selector;
 
 import com.shiroha.mmdskin.ui.selector.application.ModelSelectionApplicationService;
@@ -12,6 +13,7 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
+/** 文件职责：提供玩家模型选择原生界面。 */
 public class ModelSelectorScreen extends Screen {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final ModelSelectionApplicationService SERVICE = ModelSelectorServices.modelSelection();
@@ -28,7 +30,6 @@ public class ModelSelectorScreen extends Screen {
     private static final int CARD_HEIGHT = 14;
     private static final int CARD_GAP = 4;
 
-    private final SkiaModelSelectorRenderer skiaRenderer = new SkiaModelSelectorRenderer();
     private final List<ModelSelectionApplicationService.ModelCard> modelCards = new ArrayList<>();
 
     private String currentModel;
@@ -66,11 +67,7 @@ public class ModelSelectorScreen extends Screen {
             updateLayout();
             updateHoverState(mouseX, mouseY);
             updateScrollAnimation();
-
-            SkiaModelSelectorRenderer.SelectorView view = buildView();
-            if (!skiaRenderer.renderSelector(this, view)) {
-                renderFallback(guiGraphics, view);
-            }
+            renderFallback(guiGraphics);
             flushPendingActions(minecraft);
         } catch (Throwable throwable) {
             closeAfterFailure(throwable);
@@ -130,18 +127,6 @@ public class ModelSelectorScreen extends Screen {
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
-    }
-
-    @Override
-    public void onClose() {
-        skiaRenderer.dispose();
-        super.onClose();
-    }
-
-    @Override
-    public void removed() {
-        skiaRenderer.dispose();
-        super.removed();
     }
 
     @Override
@@ -232,85 +217,50 @@ public class ModelSelectorScreen extends Screen {
         return Math.max(0.0f, contentHeight - layout.listBox.h);
     }
 
-    private SkiaModelSelectorRenderer.SelectorView buildView() {
-        List<SkiaModelSelectorRenderer.CardView> cards = new ArrayList<>(modelCards.size());
-        for (int i = 0; i < modelCards.size(); i++) {
-            ModelSelectionApplicationService.ModelCard card = modelCards.get(i);
-            cards.add(new SkiaModelSelectorRenderer.CardView(
-                    buildCardLabel(card),
-                    card.configurable(),
-                    card.displayName().equals(currentModel),
-                    i == hoveredCard,
-                    i
-            ));
-        }
-
-        return new SkiaModelSelectorRenderer.SelectorView(
-                this.title.getString(),
-                Component.translatable("gui.mmdskin.model_selector.stats",
-                        Math.max(0, modelCards.size() - 1),
-                        shorten(currentModel, 8)).getString(),
-                Component.translatable("gui.done").getString(),
-                Component.translatable("gui.mmdskin.refresh").getString(),
-                Component.translatable("gui.mmdskin.model_settings.title").getString(),
-                "No models",
-                layout.panel,
-                layout.header,
-                layout.listBox,
-                layout.doneButton,
-                layout.refreshButton,
-                layout.settingsButton,
-                hoveredButton == ButtonTarget.DONE,
-                hoveredButton == ButtonTarget.REFRESH,
-                hoveredButton == ButtonTarget.SETTINGS,
-                true,
-                getSelectedCard() != null && getSelectedCard().configurable(),
-                animatedScroll,
-                cards,
-                LIST_PADDING,
-                CARD_HEIGHT,
-                CARD_GAP
-        );
-    }
-
-    private void renderFallback(GuiGraphics guiGraphics, SkiaModelSelectorRenderer.SelectorView view) {
+    private void renderFallback(GuiGraphics guiGraphics) {
         guiGraphics.fill(0, 0, this.width, this.height, 0x28000000);
-        guiGraphics.fill(view.panel().x, view.panel().y, view.panel().x + view.panel().w, view.panel().y + view.panel().h, 0x2A000000);
-        guiGraphics.fill(view.panel().x + 1, view.panel().y + 1, view.panel().x + view.panel().w - 1, view.panel().y + view.panel().h - 1, 0x20000000);
+        guiGraphics.fill(layout.panel.x, layout.panel.y, layout.panel.x + layout.panel.w, layout.panel.y + layout.panel.h, 0x2A000000);
+        guiGraphics.fill(layout.panel.x + 1, layout.panel.y + 1, layout.panel.x + layout.panel.w - 1, layout.panel.y + layout.panel.h - 1, 0x20000000);
 
-        guiGraphics.drawString(this.font, view.title(), view.header().x, view.header().y + 1, 0xFFF1F5FB, false);
-        guiGraphics.drawString(this.font, view.stats(), view.header().x, view.header().y + 10, 0xC8D5DFEC, false);
-        drawFallbackButton(guiGraphics, view.doneButton(), view.doneText(), view.doneHovered(), true);
-        drawFallbackButton(guiGraphics, view.refreshButton(), view.refreshText(), view.refreshHovered(), true);
-        drawFallbackButton(guiGraphics, view.settingsButton(), view.settingsText(), view.settingsHovered(), view.settingsEnabled());
+        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, 0xFFF1F5FB, false);
+        String stats = Component.translatable("gui.mmdskin.model_selector.stats",
+                Math.max(0, modelCards.size() - 1),
+                shorten(currentModel, 8)).getString();
+        guiGraphics.drawString(this.font, stats, layout.header.x, layout.header.y + 10, 0xC8D5DFEC, false);
+        drawFallbackButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredButton == ButtonTarget.DONE, true);
+        drawFallbackButton(guiGraphics, layout.refreshButton, Component.translatable("gui.mmdskin.refresh").getString(), hoveredButton == ButtonTarget.REFRESH, true);
+        ModelSelectionApplicationService.ModelCard selectedCard = getSelectedCard();
+        boolean settingsEnabled = selectedCard != null && selectedCard.configurable();
+        drawFallbackButton(guiGraphics, layout.settingsButton, Component.translatable("gui.mmdskin.model_settings.title").getString(), hoveredButton == ButtonTarget.SETTINGS, settingsEnabled);
 
-        UiRect list = view.listBox();
+        UiRect list = layout.listBox;
         guiGraphics.fill(list.x, list.y, list.x + list.w, list.y + list.h, 0x22000000);
-        if (view.cards().isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, view.emptyText(), list.centerX(), list.centerY() - 4, 0xFFDDE8F8);
+        if (modelCards.isEmpty()) {
+            guiGraphics.drawCenteredString(this.font, "No models", list.centerX(), list.centerY() - 4, 0xFFDDE8F8);
             return;
         }
 
-        int y = Math.round(list.y + view.listPadding() - view.scrollOffset());
-        for (SkiaModelSelectorRenderer.CardView card : view.cards()) {
-            if (y + view.cardHeight() < list.y) {
-                y += view.cardHeight() + view.cardGap();
+        int y = Math.round(list.y + LIST_PADDING - animatedScroll);
+        for (int i = 0; i < modelCards.size(); i++) {
+            ModelSelectionApplicationService.ModelCard card = modelCards.get(i);
+            if (y + CARD_HEIGHT < list.y) {
+                y += CARD_HEIGHT + CARD_GAP;
                 continue;
             }
             if (y > list.y + list.h) {
                 break;
             }
-            int bg = card.selected() ? 0x52FFFFFF : (card.hovered() ? 0x38FFFFFF : 0x24000000);
-            guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + view.cardHeight(), bg);
-            guiGraphics.drawString(this.font, card.label(), list.x + 7, y + 3, 0xFFE9F1FA, false);
-            y += view.cardHeight() + view.cardGap();
+            boolean selected = card.displayName().equals(currentModel);
+            boolean hovered = i == hoveredCard;
+            int bg = selected ? 0x52FFFFFF : (hovered ? 0x38FFFFFF : 0x24000000);
+            guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, bg);
+            guiGraphics.drawString(this.font, buildCardLabel(card), list.x + 7, y + 3, 0xFFE9F1FA, false);
+            y += CARD_HEIGHT + CARD_GAP;
         }
     }
 
     private void drawFallbackButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered, boolean enabled) {
-        int bg = enabled
-                ? (hovered ? 0x4AFFFFFF : 0x30000000)
-                : 0x1A000000;
+        int bg = enabled ? (hovered ? 0x4AFFFFFF : 0x30000000) : 0x1A000000;
         guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, bg);
         guiGraphics.drawCenteredString(this.font, text, rect.centerX(), rect.y + 4, enabled ? 0xFFF1F6FD : 0x9BB2C5D7);
     }
@@ -357,8 +307,7 @@ public class ModelSelectorScreen extends Screen {
     }
 
     private void closeAfterFailure(Throwable throwable) {
-        LOGGER.error("[ModelSelector] Skia selector failed and will close", throwable);
-        skiaRenderer.dispose();
+        LOGGER.error("[ModelSelector] Native selector failed and will close", throwable);
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen == this) {
             minecraft.setScreen(null);

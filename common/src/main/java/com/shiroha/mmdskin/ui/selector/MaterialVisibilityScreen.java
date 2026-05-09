@@ -1,3 +1,4 @@
+/* 职责：以原生 GuiGraphics 渲染材质显隐设置界面。 */
 package com.shiroha.mmdskin.ui.selector;
 
 import com.shiroha.mmdskin.ui.selector.application.MaterialVisibilityApplicationService;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+/** 文件职责：提供材质可见性原生界面。 */
 public class MaterialVisibilityScreen extends Screen {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final MaterialVisibilityApplicationService SERVICE = ModelSelectorServices.materialVisibility();
@@ -32,7 +34,6 @@ public class MaterialVisibilityScreen extends Screen {
     private static final int CARD_GAP = 4;
 
     private final MaterialScreenContext context;
-    private final SkiaMaterialVisibilityRenderer skiaRenderer = new SkiaMaterialVisibilityRenderer();
     private final List<MaterialEntryState> materials = new ArrayList<>();
 
     private boolean pendingClose;
@@ -77,11 +78,7 @@ public class MaterialVisibilityScreen extends Screen {
             updateLayout();
             updateHoverState(mouseX, mouseY);
             updateScrollAnimation();
-
-            SkiaMaterialVisibilityRenderer.MaterialView view = buildView();
-            if (!skiaRenderer.renderMaterialScreen(this, view)) {
-                renderFallback(guiGraphics, view);
-            }
+            renderFallback(guiGraphics);
             flushPendingActions(minecraft);
         } catch (Throwable throwable) {
             closeAfterFailure(throwable);
@@ -145,13 +142,11 @@ public class MaterialVisibilityScreen extends Screen {
     @Override
     public void onClose() {
         saveMaterialVisibility();
-        skiaRenderer.dispose();
         super.onClose();
     }
 
     @Override
     public void removed() {
-        skiaRenderer.dispose();
         super.removed();
     }
 
@@ -245,82 +240,44 @@ public class MaterialVisibilityScreen extends Screen {
         return Math.max(0.0f, contentHeight - layout.listBox.h);
     }
 
-    private SkiaMaterialVisibilityRenderer.MaterialView buildView() {
-        List<SkiaMaterialVisibilityRenderer.MaterialCardView> cards = new ArrayList<>(materials.size());
-        for (int i = 0; i < materials.size(); i++) {
-            MaterialEntryState entry = materials.get(i);
-            cards.add(new SkiaMaterialVisibilityRenderer.MaterialCardView(
-                    buildMaterialLabel(entry),
-                    entry.visible(),
-                    i == hoveredCard,
-                    i
-            ));
-        }
-
-        return new SkiaMaterialVisibilityRenderer.MaterialView(
-                this.title.getString(),
-                shorten(context.modelName(), 8),
-                visibleCount() + " / " + materials.size(),
-                Component.translatable("gui.mmdskin.material_visibility.show_all").getString(),
-                Component.translatable("gui.mmdskin.material_visibility.hide_all").getString(),
-                Component.translatable("gui.mmdskin.material_visibility.invert").getString(),
-                Component.translatable("gui.done").getString(),
-                layout.panel,
-                layout.header,
-                layout.listBox,
-                layout.showAllButton,
-                layout.hideAllButton,
-                layout.invertButton,
-                layout.doneButton,
-                hoveredButton == ButtonTarget.SHOW_ALL,
-                hoveredButton == ButtonTarget.HIDE_ALL,
-                hoveredButton == ButtonTarget.INVERT,
-                hoveredButton == ButtonTarget.DONE,
-                animatedScroll,
-                cards,
-                LIST_PADDING,
-                CARD_HEIGHT,
-                CARD_GAP,
-                "-"
-        );
-    }
-
-    private void renderFallback(GuiGraphics guiGraphics, SkiaMaterialVisibilityRenderer.MaterialView view) {
+    private void renderFallback(GuiGraphics guiGraphics) {
         guiGraphics.fill(0, 0, this.width, this.height, 0x28000000);
-        guiGraphics.fill(view.panel().x(), view.panel().y(), view.panel().x() + view.panel().w(), view.panel().y() + view.panel().h(), 0x2A000000);
-        guiGraphics.fill(view.panel().x() + 1, view.panel().y() + 1, view.panel().x() + view.panel().w() - 1, view.panel().y() + view.panel().h() - 1, 0x20000000);
+        guiGraphics.fill(layout.panel.x, layout.panel.y, layout.panel.x + layout.panel.w, layout.panel.y + layout.panel.h, 0x2A000000);
+        guiGraphics.fill(layout.panel.x + 1, layout.panel.y + 1, layout.panel.x + layout.panel.w - 1, layout.panel.y + layout.panel.h - 1, 0x20000000);
 
-        guiGraphics.drawString(this.font, view.title(), view.header().x(), view.header().y() + 1, 0xFFF1F5FB, false);
-        guiGraphics.drawString(this.font, view.modelName(), view.header().x(), view.header().y() + 10, 0xC8D5DFEC, false);
-        guiGraphics.drawString(this.font, view.counter(), view.header().x(), view.header().y() + 19, 0xBCD0DCE9, false);
+        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, 0xFFF1F5FB, false);
+        guiGraphics.drawString(this.font, shorten(context.modelName(), 8), layout.header.x, layout.header.y + 10, 0xC8D5DFEC, false);
+        guiGraphics.drawString(this.font, visibleCount() + " / " + materials.size(), layout.header.x, layout.header.y + 19, 0xBCD0DCE9, false);
 
-        drawFallbackButton(guiGraphics, view.showAllButton(), view.showAllText(), view.showAllHovered());
-        drawFallbackButton(guiGraphics, view.hideAllButton(), view.hideAllText(), view.hideAllHovered());
-        drawFallbackButton(guiGraphics, view.invertButton(), view.invertText(), view.invertHovered());
-        drawFallbackButton(guiGraphics, view.doneButton(), view.doneText(), view.doneHovered());
+        drawFallbackButton(guiGraphics, layout.showAllButton, Component.translatable("gui.mmdskin.material_visibility.show_all").getString(), hoveredButton == ButtonTarget.SHOW_ALL);
+        drawFallbackButton(guiGraphics, layout.hideAllButton, Component.translatable("gui.mmdskin.material_visibility.hide_all").getString(), hoveredButton == ButtonTarget.HIDE_ALL);
+        drawFallbackButton(guiGraphics, layout.invertButton, Component.translatable("gui.mmdskin.material_visibility.invert").getString(), hoveredButton == ButtonTarget.INVERT);
+        drawFallbackButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredButton == ButtonTarget.DONE);
 
-        UiRect list = view.listBox();
+        UiRect list = layout.listBox;
         guiGraphics.fill(list.x, list.y, list.x + list.w, list.y + list.h, 0x22000000);
-        if (view.cards().isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, view.emptyText(), list.centerX(), list.centerY() - 4, 0xFFDDE8F8);
+        if (materials.isEmpty()) {
+            guiGraphics.drawCenteredString(this.font, "-", list.centerX(), list.centerY() - 4, 0xFFDDE8F8);
             return;
         }
 
-        int y = Math.round(list.y + view.listPadding() - view.scrollOffset());
-        for (SkiaMaterialVisibilityRenderer.MaterialCardView card : view.cards()) {
-            if (y + view.cardHeight() < list.y) {
-                y += view.cardHeight() + view.cardGap();
+        int y = Math.round(list.y + LIST_PADDING - animatedScroll);
+        for (int i = 0; i < materials.size(); i++) {
+            MaterialEntryState card = materials.get(i);
+            if (y + CARD_HEIGHT < list.y) {
+                y += CARD_HEIGHT + CARD_GAP;
                 continue;
             }
             if (y > list.y + list.h) {
                 break;
             }
+            boolean hovered = i == hoveredCard;
             int bg = card.visible()
-                    ? (card.hovered() ? 0x3EFFFFFF : 0x24000000)
-                    : (card.hovered() ? 0x66FFFFFF : 0x4AFFFFFF);
-            guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + view.cardHeight(), bg);
-            guiGraphics.drawString(this.font, card.label(), list.x + 7, y + 3, 0xFFE9F1FA, false);
-            y += view.cardHeight() + view.cardGap();
+                    ? (hovered ? 0x3EFFFFFF : 0x24000000)
+                    : (hovered ? 0x66FFFFFF : 0x4AFFFFFF);
+            guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, bg);
+            guiGraphics.drawString(this.font, buildMaterialLabel(card), list.x + 7, y + 3, 0xFFE9F1FA, false);
+            y += CARD_HEIGHT + CARD_GAP;
         }
     }
 
@@ -357,8 +314,7 @@ public class MaterialVisibilityScreen extends Screen {
     }
 
     private void closeAfterFailure(Throwable throwable) {
-        LOGGER.error("[MaterialVisibility] Skia material visibility screen failed and will close", throwable);
-        skiaRenderer.dispose();
+        LOGGER.error("[MaterialVisibility] Native material visibility render failed and will close", throwable);
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen == this) {
             minecraft.setScreen(null);

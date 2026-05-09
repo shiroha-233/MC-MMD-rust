@@ -5,9 +5,8 @@ import com.shiroha.mmdskin.debug.client.PerformanceHud;
 import com.shiroha.mmdskin.forge.network.MmdSkinNetworkPack;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
-import com.shiroha.mmdskin.stage.application.StageSessionService;
+import com.shiroha.mmdskin.stage.client.StageClientRuntime;
 import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
-import com.shiroha.mmdskin.stage.client.sync.StageAnimSyncHelper;
 import com.shiroha.mmdskin.ui.QuickModelSwitcher;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import com.shiroha.mmdskin.ui.network.NetworkOpCode;
@@ -59,7 +58,7 @@ final class ForgeClientRuntimeHooks {
         ClientRenderRuntime.get().modelRepository().tick();
         VoicePlaybackManager.getInstance().tick();
         PlayerVoiceSceneObserver.getInstance().tick(minecraft);
-        StageAnimSyncHelper.tickPending();
+        StageClientRuntime.get().animSyncHelper().tickPending();
 
         if (minecraft.screen == null || minecraft.screen instanceof ConfigWheelScreen) {
             boolean keyDown = keyConfigWheel.isDown();
@@ -109,7 +108,7 @@ final class ForgeClientRuntimeHooks {
         MmdSkinRendererPlayerHelper.onDisconnect();
         PlayerVoiceSceneObserver.getInstance().onDisconnect();
         VoicePlaybackManager.getInstance().onDisconnect();
-        StageSessionService.getInstance().onDisconnect();
+        StageClientRuntime.get().sessionService().onDisconnect();
     }
 
     void onPlayerDeath(LivingDeathEvent event) {

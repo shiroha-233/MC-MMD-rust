@@ -7,9 +7,8 @@ import com.shiroha.mmdskin.fabric.maid.MaidCompatMixinPlugin;
 import com.shiroha.mmdskin.fabric.network.MmdSkinNetworkPack;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
-import com.shiroha.mmdskin.stage.application.StageSessionService;
+import com.shiroha.mmdskin.stage.client.StageClientRuntime;
 import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
-import com.shiroha.mmdskin.stage.client.sync.StageAnimSyncHelper;
 import com.shiroha.mmdskin.ui.QuickModelSwitcher;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import com.shiroha.mmdskin.ui.network.NetworkOpCode;
@@ -62,7 +61,7 @@ final class FabricClientRuntimeHooks {
         ClientRenderRuntime.get().modelRepository().tick();
         VoicePlaybackManager.getInstance().tick();
         PlayerVoiceSceneObserver.getInstance().tick(minecraft);
-        StageAnimSyncHelper.tickPending();
+        StageClientRuntime.get().animSyncHelper().tickPending();
         BoneSyncManager.tickLocal();
 
         if (!player.isAlive()) {
@@ -122,7 +121,7 @@ final class FabricClientRuntimeHooks {
         BoneSyncManager.onDisconnect();
         PlayerVoiceSceneObserver.getInstance().onDisconnect();
         VoicePlaybackManager.getInstance().onDisconnect();
-        StageSessionService.getInstance().onDisconnect();
+        StageClientRuntime.get().sessionService().onDisconnect();
     }
 
     private void tryOpenMaidConfigWheel(Minecraft minecraft) {

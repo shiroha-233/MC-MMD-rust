@@ -1,3 +1,4 @@
+/* 职责：以原生 GuiGraphics 渲染语音包绑定界面。 */
 package com.shiroha.mmdskin.ui.selector;
 
 import com.shiroha.mmdskin.config.UIConstants;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/** 文件职责：提供语音包绑定原生界面。 */
 public class VoicePackBindingScreen extends Screen {
     private static final Logger LOGGER = LogManager.getLogger();
 
@@ -38,7 +40,6 @@ public class VoicePackBindingScreen extends Screen {
     private final String modelName;
     private final List<Option> options = new ArrayList<>();
     private final Map<RowKind, String> values = new LinkedHashMap<>();
-    private final SkiaVoicePackBindingRenderer skiaRenderer = new SkiaVoicePackBindingRenderer();
 
     private int hoveredRow = -1;
     private HoverTarget hoveredTarget = HoverTarget.NONE;
@@ -76,11 +77,7 @@ public class VoicePackBindingScreen extends Screen {
         try {
             updateLayout();
             updateHoverState(mouseX, mouseY);
-
-            SkiaVoicePackBindingRenderer.BindingView view = buildView();
-            if (!skiaRenderer.renderBindings(this, view)) {
-                renderFallback(guiGraphics, view);
-            }
+            renderFallback(guiGraphics);
             flushPendingClose(minecraft);
         } catch (Throwable throwable) {
             closeAfterFailure(minecraft, throwable);
@@ -129,7 +126,6 @@ public class VoicePackBindingScreen extends Screen {
 
     @Override
     public void removed() {
-        skiaRenderer.dispose();
         super.removed();
     }
 
@@ -185,53 +181,36 @@ public class VoicePackBindingScreen extends Screen {
         }
     }
 
-    private SkiaVoicePackBindingRenderer.BindingView buildView() {
+    private void renderFallback(GuiGraphics guiGraphics) {
         List<RowKind> rows = visibleRows();
-        List<SkiaVoicePackBindingRenderer.RowView> rowViews = new ArrayList<>(rows.size());
-        for (int i = 0; i < rows.size(); i++) {
-            RowKind rowKind = rows.get(i);
-            rowViews.add(new SkiaVoicePackBindingRenderer.RowView(
-                    Component.translatable(rowKind.translationKey()).getString(),
-                    buildValueLabel(rowKind),
-                    values.get(rowKind) != null,
-                    hoveredRow == i,
-                    layout.rowRects[i]
-            ));
-        }
-
-        return new SkiaVoicePackBindingRenderer.BindingView(
-                this.title.getString(),
-                Component.translatable("gui.mmdskin.voice.current_model", modelName == null ? UIConstants.DEFAULT_MODEL_NAME : modelName).getString(),
-                Component.translatable("gui.done").getString(),
-                Component.translatable("gui.cancel").getString(),
-                layout.panel,
-                layout.header,
-                layout.doneButton,
-                layout.cancelButton,
-                hoveredTarget == HoverTarget.DONE,
-                hoveredTarget == HoverTarget.CANCEL,
-                rowViews
-        );
-    }
-
-    private void renderFallback(GuiGraphics guiGraphics, SkiaVoicePackBindingRenderer.BindingView view) {
         guiGraphics.fill(0, 0, this.width, this.height, 0x22000000);
-        guiGraphics.fill(view.panel().x(), view.panel().y(), view.panel().x() + view.panel().w(), view.panel().y() + view.panel().h(), 0x2A000000);
-        guiGraphics.fill(view.panel().x() + 1, view.panel().y() + 1, view.panel().x() + view.panel().w() - 1, view.panel().y() + view.panel().h() - 1, 0x20000000);
+        guiGraphics.fill(layout.panel.x, layout.panel.y, layout.panel.x + layout.panel.w, layout.panel.y + layout.panel.h, 0x2A000000);
+        guiGraphics.fill(layout.panel.x + 1, layout.panel.y + 1, layout.panel.x + layout.panel.w - 1, layout.panel.y + layout.panel.h - 1, 0x20000000);
 
-        guiGraphics.drawString(this.font, view.title(), view.header().x(), view.header().y() + 2, 0xFFF1F5FB, false);
-        guiGraphics.drawString(this.font, view.modelText(), view.header().x(), view.header().y() + 12, 0xC8D5DFEC, false);
+        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 2, 0xFFF1F5FB, false);
+        guiGraphics.drawString(
+                this.font,
+                Component.translatable("gui.mmdskin.voice.current_model", modelName == null ? UIConstants.DEFAULT_MODEL_NAME : modelName).getString(),
+                layout.header.x,
+                layout.header.y + 12,
+                0xC8D5DFEC,
+                false
+        );
 
-        for (SkiaVoicePackBindingRenderer.RowView row : view.rows()) {
-            int bg = row.hovered() ? 0x36FFFFFF : (row.assigned() ? 0x28000000 : 0x1A000000);
-            guiGraphics.fill(row.rect().x(), row.rect().y(), row.rect().x() + row.rect().w(), row.rect().y() + row.rect().h(), bg);
-            guiGraphics.drawString(this.font, row.label(), row.rect().x() + 6, row.rect().y() + 4, 0xFFE9F1FA, false);
-            guiGraphics.drawString(this.font, row.value(), row.rect().x() + 6, row.rect().y() + 18, row.assigned() ? 0xFFF1F6FD : 0xC8D5DFEC, false);
-            guiGraphics.drawString(this.font, ">", row.rect().x() + row.rect().w() - 10, row.rect().y() + 12, 0xD8E6F4FF, false);
+        for (int i = 0; i < rows.size() && i < layout.rowRects.length; i++) {
+            RowKind rowKind = rows.get(i);
+            UiRect rect = layout.rowRects[i];
+            boolean assigned = values.get(rowKind) != null;
+            boolean hovered = hoveredRow == i;
+            int bg = hovered ? 0x36FFFFFF : (assigned ? 0x28000000 : 0x1A000000);
+            guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, bg);
+            guiGraphics.drawString(this.font, Component.translatable(rowKind.translationKey()).getString(), rect.x + 6, rect.y + 4, 0xFFE9F1FA, false);
+            guiGraphics.drawString(this.font, buildValueLabel(rowKind), rect.x + 6, rect.y + 18, assigned ? 0xFFF1F6FD : 0xC8D5DFEC, false);
+            guiGraphics.drawString(this.font, ">", rect.x + rect.w - 10, rect.y + 12, 0xD8E6F4FF, false);
         }
 
-        drawFallbackButton(guiGraphics, view.doneButton(), view.doneText(), view.doneHovered());
-        drawFallbackButton(guiGraphics, view.cancelButton(), view.cancelText(), view.cancelHovered());
+        drawFallbackButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredTarget == HoverTarget.DONE);
+        drawFallbackButton(guiGraphics, layout.cancelButton, Component.translatable("gui.cancel").getString(), hoveredTarget == HoverTarget.CANCEL);
     }
 
     private void drawFallbackButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
@@ -241,8 +220,7 @@ public class VoicePackBindingScreen extends Screen {
     }
 
     private void closeAfterFailure(Minecraft minecraft, Throwable throwable) {
-        LOGGER.error("[VoicePackBinding] Skia binding screen failed and will close", throwable);
-        skiaRenderer.dispose();
+        LOGGER.error("[VoicePackBinding] Native binding render failed and will close", throwable);
         if (minecraft.screen == this) {
             minecraft.setScreen(parent);
         }
@@ -257,7 +235,6 @@ public class VoicePackBindingScreen extends Screen {
             return;
         }
         pendingClose = false;
-        skiaRenderer.dispose();
         minecraft.setScreen(parent);
     }
 

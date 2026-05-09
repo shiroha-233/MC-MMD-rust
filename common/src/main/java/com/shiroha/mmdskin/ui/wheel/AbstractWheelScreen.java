@@ -1,14 +1,23 @@
 package com.shiroha.mmdskin.ui.wheel;
 
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import org.joml.Matrix4f;
 
 import java.util.List;
 
-/** 轮盘界面基类。 */
+/** 轮盘界面基类，负责原生 GuiGraphics 轮盘渲染与交互动画。 */
 public abstract class AbstractWheelScreen extends Screen {
 
     public record WheelStyle(
@@ -22,6 +31,10 @@ public abstract class AbstractWheelScreen extends Screen {
     private static final int TEXT_PRIMARY = 0xFFF7FBFF;
     private static final int TEXT_SECONDARY = 0xD6DCE7F5;
     private static final int TEXT_MUTED = 0xAEB8C7D8;
+    private static final int OUTLINE_DIM = 0x42FFFFFF;
+    private static final int BACKDROP_DIM = 0x46000000;
+    private static final float SEGMENT_GAP_DEGREES = 1.8f;
+    private static final float CENTER_BUBBLE_SCALE = 0.74f;
 
     protected final WheelStyle style;
     protected int centerX;
@@ -29,8 +42,6 @@ public abstract class AbstractWheelScreen extends Screen {
     protected int outerRadius;
     protected int innerRadius;
     protected int selectedSlot = -1;
-
-    private final SkiaWheelRenderer skiaRenderer = new SkiaWheelRenderer();
 
     private float[] slotPop = new float[0];
     private float[] slotVelocity = new float[0];
@@ -84,21 +95,19 @@ public abstract class AbstractWheelScreen extends Screen {
     protected void renderWheelBase(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, List<WheelEntry> entries) {
         updateSelectedSlot(mouseX, mouseY);
         updateAnimations(entries.size());
-        if (skiaRenderer.renderWheelBase(this, entries, selectedSlot, slotPop, openProgress)) {
-            return;
-        }
-        if (this.minecraft == null || this.minecraft.level == null) {
-            this.renderBackground(guiGraphics);
-        }
+        renderBackdrop(guiGraphics);
         if (!entries.isEmpty()) {
-            renderSegmentFallback(guiGraphics, entries);
+            renderSegmentWheel(guiGraphics, entries);
         }
+        renderCenterDecor(guiGraphics);
     }
 
     protected void renderCenterBubble(GuiGraphics guiGraphics, String text, int textColor) {
-        if (skiaRenderer.renderCenterBubble(this, text, textColor, centerPop)) {
-            return;
-        }
+        float bubbleScale = 0.98f + centerPop * 0.06f;
+        int bubbleRadius = Math.max(30, Math.round(innerRadius * CENTER_BUBBLE_SCALE * bubbleScale));
+        fillCircle(guiGraphics, centerX, centerY, bubbleRadius + 3, withAlpha(style.centerBorder(), 148));
+        fillCircle(guiGraphics, centerX, centerY, bubbleRadius, withAlpha(style.centerBg(), 220));
+        drawCircleOutline(guiGraphics, centerX, centerY, bubbleRadius + 1, withAlpha(0xFFFFFF, 42));
 
         String display = fitText(text, Math.max(88, Math.round(innerRadius * 1.4f)));
         int textWidth = this.font.width(display);
@@ -107,10 +116,6 @@ public abstract class AbstractWheelScreen extends Screen {
     }
 
     protected void renderEmptyState(GuiGraphics guiGraphics, Component hint) {
-        if (skiaRenderer.renderEmptyState(this, hint)) {
-            return;
-        }
-
         int width = Math.max(180, this.font.width(hint) + 48);
         int height = 36;
         int x = centerX - width / 2;
@@ -126,27 +131,45 @@ public abstract class AbstractWheelScreen extends Screen {
                 .build();
     }
 
-    private void renderSegmentFallback(GuiGraphics guiGraphics, List<WheelEntry> entries) {
+    private void renderBackdrop(GuiGraphics guiGraphics) {
+        if (this.minecraft == null || this.minecraft.level == null) {
+            this.renderBackground(guiGraphics);
+        }
+        guiGraphics.fill(0, 0, this.width, this.height, BACKDROP_DIM);
+    }
+
+    private void renderSegmentWheel(GuiGraphics guiGraphics, List<WheelEntry> entries) {
         int count = entries.size();
-        double segmentAngle = 360.0 / count;
-        int ringOuter = outerRadius;
+        float segmentAngle = 360.0f / count;
         int ringInner = innerRadius;
-        double gap = 1.2;
+        int ringOuter = outerRadius;
+
+        drawCircleArcOutline(guiGraphics, centerX, centerY, ringOuter + 3, OUTLINE_DIM, 2.1f);
+        drawCircleArcOutline(guiGraphics, centerX, centerY, ringInner - 2, withAlpha(style.lineColorDim(), 190), 1.8f);
 
         for (int i = 0; i < count; i++) {
             WheelEntry entry = entries.get(i);
             float pop = slotPop[i];
-            double start = i * segmentAngle - 90.0 + gap * 0.5;
-            double sweep = Math.max(10.0, segmentAngle - gap);
+            float start = i * segmentAngle - 90.0f + SEGMENT_GAP_DEGREES * 0.5f;
+            float sweep = Math.max(8.0f, segmentAngle - SEGMENT_GAP_DEGREES);
+            float expandedOuter = ringOuter + pop * 5.0f + openProgress * 2.5f;
+            float expandedInner = Math.max(12.0f, ringInner - pop * 2.0f);
+
             int fillColor = i == selectedSlot
-                    ? blendColors(withAlpha(0x68B7FF, 156), withAlpha(0x8CCBFF, 182), pop * 0.45f)
-                    : withAlpha(0xFFFFFF, 82);
-            fillAnnularSector(guiGraphics, centerX, centerY, ringInner, ringOuter, start, start + sweep, fillColor);
+                    ? blendColors(withAlpha(style.lineColor(), 136), withAlpha(0xB6E1FF, 190), 0.42f + pop * 0.36f)
+                    : blendColors(withAlpha(0x0A1320, 132), withAlpha(style.lineColorDim(), 118), 0.18f + openProgress * 0.20f);
+            int edgeColor = i == selectedSlot
+                    ? blendColors(withAlpha(style.highlightColor(), 200), withAlpha(0xFFFFFF, 214), pop * 0.40f)
+                    : withAlpha(style.lineColorDim(), 144);
+
+            drawAnnularSegment(guiGraphics, centerX, centerY, expandedInner, expandedOuter, start, sweep, fillColor);
+            drawAnnularSegmentOutline(guiGraphics, centerX, centerY, expandedInner, expandedOuter, start, sweep, edgeColor, 1.8f);
+            drawSeparator(guiGraphics, centerX, centerY, expandedInner + 4.0f, expandedOuter - 4.0f, start, withAlpha(0xFFFFFF, 44));
 
             double angle = Math.toRadians(i * segmentAngle + segmentAngle / 2.0 - 90.0);
             float cos = (float) Math.cos(angle);
             float sin = (float) Math.sin(angle);
-            float textRadius = ringInner + (ringOuter - ringInner) * 0.54f + pop * 2.0f;
+            float textRadius = expandedInner + (expandedOuter - expandedInner) * 0.54f + pop * 2.0f;
             int cx = Math.round(centerX + cos * textRadius);
             int cy = Math.round(centerY + sin * textRadius);
             float halfSweepRad = (float) Math.toRadians(sweep * 0.5f);
@@ -158,6 +181,12 @@ public abstract class AbstractWheelScreen extends Screen {
                 renderDualEntry(guiGraphics, entry.primaryText(), entry.secondaryText(), cx, cy, pop, maxTextWidth);
             }
         }
+    }
+
+    private void renderCenterDecor(GuiGraphics guiGraphics) {
+        int haloRadius = Math.max(18, Math.round(innerRadius * 0.86f + openProgress * 4.0f));
+        drawCircleOutline(guiGraphics, centerX, centerY, haloRadius, withAlpha(style.lineColorDim(), 86));
+        drawCircleOutline(guiGraphics, centerX, centerY, Math.max(12, haloRadius - 6), withAlpha(0xFFFFFF, 26));
     }
 
     private void renderSingleEntry(GuiGraphics guiGraphics, String text, int centerTextX, int centerTextY, float pop, int maxWidth) {
@@ -281,30 +310,85 @@ public abstract class AbstractWheelScreen extends Screen {
         }
     }
 
-    private void fillAnnularSector(GuiGraphics guiGraphics, int cx, int cy, int inner, int outer,
-                                   double startAngleDeg, double endAngleDeg, int color) {
-        double normalizedStart = (startAngleDeg % 360.0 + 360.0) % 360.0;
-        double normalizedEnd = (endAngleDeg % 360.0 + 360.0) % 360.0;
-        int innerSq = inner * inner;
-        int outerSq = outer * outer;
-        for (int y = -outer; y <= outer; y++) {
-            for (int x = -outer; x <= outer; x++) {
-                int r2 = x * x + y * y;
-                if (r2 < innerSq || r2 > outerSq) {
-                    continue;
-                }
-                double angle = Math.toDegrees(Math.atan2(y, x));
-                if (angle < 0) {
-                    angle += 360.0;
-                }
-                boolean inRange = normalizedStart <= normalizedEnd
-                        ? (angle >= normalizedStart && angle <= normalizedEnd)
-                        : (angle >= normalizedStart || angle <= normalizedEnd);
-                if (inRange) {
-                    guiGraphics.fill(cx + x, cy + y, cx + x + 1, cy + y + 1, color);
-                }
-            }
+    private void drawCircleArcOutline(GuiGraphics guiGraphics, float cx, float cy, float radius, int color, float width) {
+        drawRing(guiGraphics, cx, cy, Math.max(0.0f, radius - width), radius, 0.0f, 360.0f, color);
+    }
+
+    private void drawSeparator(GuiGraphics guiGraphics, float cx, float cy, float inner, float outer, float angleDeg, int color) {
+        float radians = (float) Math.toRadians(angleDeg);
+        float dx = Mth.cos(radians);
+        float dy = Mth.sin(radians);
+        float nx = -dy * 0.9f;
+        float ny = dx * 0.9f;
+        drawQuad(guiGraphics,
+                cx + dx * inner - nx, cy + dy * inner - ny,
+                cx + dx * inner + nx, cy + dy * inner + ny,
+                cx + dx * outer + nx, cy + dy * outer + ny,
+                cx + dx * outer - nx, cy + dy * outer - ny,
+                color);
+    }
+
+    private void drawAnnularSegment(GuiGraphics guiGraphics, float cx, float cy,
+                                    float inner, float outer, float startDeg, float sweepDeg, int color) {
+        drawRing(guiGraphics, cx, cy, inner, outer, startDeg, sweepDeg, color);
+    }
+
+    private void drawAnnularSegmentOutline(GuiGraphics guiGraphics, float cx, float cy,
+                                           float inner, float outer, float startDeg, float sweepDeg,
+                                           int color, float width) {
+        drawRing(guiGraphics, cx, cy, outer - width, outer, startDeg, sweepDeg, color);
+        drawRing(guiGraphics, cx, cy, inner, inner + width, startDeg, sweepDeg, color);
+        drawSeparator(guiGraphics, cx, cy, inner, outer, startDeg, color);
+        drawSeparator(guiGraphics, cx, cy, inner, outer, startDeg + sweepDeg, color);
+    }
+
+    private void drawRing(GuiGraphics guiGraphics, float cx, float cy,
+                          float inner, float outer, float startDeg, float sweepDeg, int color) {
+        int segments = Math.max(12, Math.round(Math.abs(sweepDeg) / 5.5f));
+        float startRad = (float) Math.toRadians(startDeg);
+        float stepRad = (float) Math.toRadians(sweepDeg / segments);
+
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        PoseStack.Pose pose = guiGraphics.pose().last();
+        Matrix4f matrix = pose.pose();
+        BufferBuilder builder = Tesselator.getInstance().getBuilder();
+        builder.begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        for (int i = 0; i <= segments; i++) {
+            float angle = startRad + stepRad * i;
+            float cos = Mth.cos(angle);
+            float sin = Mth.sin(angle);
+            addVertex(builder, matrix, cx + cos * outer, cy + sin * outer, color);
+            addVertex(builder, matrix, cx + cos * inner, cy + sin * inner, color);
         }
+        BufferUploader.drawWithShader(builder.end());
+    }
+
+    private void drawQuad(GuiGraphics guiGraphics,
+                          float ax, float ay,
+                          float bx, float by,
+                          float cx, float cy,
+                          float dx, float dy,
+                          int color) {
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        PoseStack.Pose pose = guiGraphics.pose().last();
+        Matrix4f matrix = pose.pose();
+        BufferBuilder builder = Tesselator.getInstance().getBuilder();
+        builder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        addVertex(builder, matrix, ax, ay, color);
+        addVertex(builder, matrix, bx, by, color);
+        addVertex(builder, matrix, cx, cy, color);
+        addVertex(builder, matrix, dx, dy, color);
+        BufferUploader.drawWithShader(builder.end());
+    }
+
+    private void addVertex(BufferBuilder builder, Matrix4f matrix, float x, float y, int color) {
+        builder.vertex(matrix, x, y, 0.0f)
+                .color(red(color), green(color), blue(color), alpha(color))
+                .endVertex();
     }
 
     private int roundedInset(int radius, int row) {
@@ -344,11 +428,5 @@ public abstract class AbstractWheelScreen extends Screen {
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
-    }
-
-    @Override
-    public void removed() {
-        skiaRenderer.dispose();
-        super.removed();
     }
 }

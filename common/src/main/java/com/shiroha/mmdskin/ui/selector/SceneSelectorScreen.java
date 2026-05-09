@@ -1,3 +1,4 @@
+/* 职责：以原生 GuiGraphics 渲染场景模型选择界面。 */
 package com.shiroha.mmdskin.ui.selector;
 
 import com.shiroha.mmdskin.asset.catalog.ModelInfo;
@@ -14,6 +15,7 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
+/** 文件职责：提供场景模型选择原生界面。 */
 public class SceneSelectorScreen extends Screen {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final SceneModelCatalog SCENE_CATALOG = SceneModelCatalog.getInstance();
@@ -30,7 +32,6 @@ public class SceneSelectorScreen extends Screen {
     private static final int CARD_HEIGHT = 14;
     private static final int CARD_GAP = 4;
 
-    private final SkiaSceneSelectorRenderer skiaRenderer = new SkiaSceneSelectorRenderer();
     private final List<SceneCardEntry> sceneCards = new ArrayList<>();
 
     private String currentScene;
@@ -68,11 +69,7 @@ public class SceneSelectorScreen extends Screen {
             updateLayout();
             updateHoverState(mouseX, mouseY);
             updateScrollAnimation();
-
-            SkiaSceneSelectorRenderer.SceneView view = buildView();
-            if (!skiaRenderer.renderSceneSelector(this, view)) {
-                renderFallback(guiGraphics, view);
-            }
+            renderFallback(guiGraphics);
             flushPendingActions(minecraft);
         } catch (Throwable throwable) {
             closeAfterFailure(throwable);
@@ -123,18 +120,6 @@ public class SceneSelectorScreen extends Screen {
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
-    }
-
-    @Override
-    public void onClose() {
-        skiaRenderer.dispose();
-        super.onClose();
-    }
-
-    @Override
-    public void removed() {
-        skiaRenderer.dispose();
-        super.removed();
     }
 
     @Override
@@ -215,76 +200,45 @@ public class SceneSelectorScreen extends Screen {
         return Math.max(0.0f, contentHeight - layout.listBox.h);
     }
 
-    private SkiaSceneSelectorRenderer.SceneView buildView() {
+    private void renderFallback(GuiGraphics guiGraphics) {
         SceneModelManager manager = SceneModelManager.getInstance();
         boolean hasScene = manager.isActive() || manager.isLoading();
         String secondaryText = hasScene
                 ? Component.translatable("gui.mmdskin.scene_selector.cancel").getString()
                 : Component.translatable("gui.mmdskin.refresh").getString();
-
-        List<SkiaSceneSelectorRenderer.SceneCardView> cards = new ArrayList<>(sceneCards.size());
-        for (int i = 0; i < sceneCards.size(); i++) {
-            SceneCardEntry card = sceneCards.get(i);
-            cards.add(new SkiaSceneSelectorRenderer.SceneCardView(
-                    shorten(card.displayName, 14),
-                    card.displayName.equals(currentScene),
-                    i == hoveredCard,
-                    i
-            ));
-        }
-
-        return new SkiaSceneSelectorRenderer.SceneView(
-                this.title.getString(),
-                buildStatusText(),
-                Component.translatable("gui.done").getString(),
-                secondaryText,
-                layout.panel,
-                layout.header,
-                layout.listBox,
-                layout.doneButton,
-                layout.secondaryButton,
-                hoveredButton == ButtonTarget.DONE,
-                hoveredButton == ButtonTarget.SECONDARY,
-                animatedScroll,
-                cards,
-                LIST_PADDING,
-                CARD_HEIGHT,
-                CARD_GAP,
-                "No scenes"
-        );
-    }
-
-    private void renderFallback(GuiGraphics guiGraphics, SkiaSceneSelectorRenderer.SceneView view) {
         guiGraphics.fill(0, 0, this.width, this.height, 0x28000000);
-        guiGraphics.fill(view.panel().x(), view.panel().y(), view.panel().x() + view.panel().w(), view.panel().y() + view.panel().h(), 0x2A000000);
-        guiGraphics.fill(view.panel().x() + 1, view.panel().y() + 1, view.panel().x() + view.panel().w() - 1, view.panel().y() + view.panel().h() - 1, 0x20000000);
+        guiGraphics.fill(layout.panel.x, layout.panel.y, layout.panel.x + layout.panel.w, layout.panel.y + layout.panel.h, 0x2A000000);
+        guiGraphics.fill(layout.panel.x + 1, layout.panel.y + 1, layout.panel.x + layout.panel.w - 1, layout.panel.y + layout.panel.h - 1, 0x20000000);
 
-        guiGraphics.drawString(this.font, view.title(), view.header().x(), view.header().y() + 1, 0xFFF1F5FB, false);
-        guiGraphics.drawString(this.font, view.status(), view.header().x(), view.header().y() + 10, 0xC8D5DFEC, false);
+        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, 0xFFF1F5FB, false);
+        guiGraphics.drawString(this.font, buildStatusText(), layout.header.x, layout.header.y + 10, 0xC8D5DFEC, false);
 
-        drawFallbackButton(guiGraphics, view.doneButton(), view.doneText(), view.doneHovered());
-        drawFallbackButton(guiGraphics, view.secondaryButton(), view.secondaryText(), view.secondaryHovered());
+        drawFallbackButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredButton == ButtonTarget.DONE);
+        drawFallbackButton(guiGraphics, layout.secondaryButton, secondaryText, hoveredButton == ButtonTarget.SECONDARY);
 
-        UiRect list = view.listBox();
+        UiRect list = layout.listBox;
         guiGraphics.fill(list.x, list.y, list.x + list.w, list.y + list.h, 0x22000000);
-        if (view.cards().isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, view.emptyText(), list.centerX(), list.centerY() - 4, 0xFFDDE8F8);
+        if (sceneCards.isEmpty()) {
+            guiGraphics.drawCenteredString(this.font, "No scenes", list.centerX(), list.centerY() - 4, 0xFFDDE8F8);
             return;
         }
 
-        int y = Math.round(list.y + view.listPadding() - view.scrollOffset());
-        for (SkiaSceneSelectorRenderer.SceneCardView card : view.cards()) {
-            if (y + view.cardHeight() < list.y) {
-                y += view.cardHeight() + view.cardGap();
+        int y = Math.round(list.y + LIST_PADDING - animatedScroll);
+        for (int i = 0; i < sceneCards.size(); i++) {
+            SceneCardEntry card = sceneCards.get(i);
+            if (y + CARD_HEIGHT < list.y) {
+                y += CARD_HEIGHT + CARD_GAP;
                 continue;
             }
             if (y > list.y + list.h) {
                 break;
             }
-            int bg = card.selected() ? 0x52FFFFFF : (card.hovered() ? 0x38FFFFFF : 0x24000000);
-            guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + view.cardHeight(), bg);
-            guiGraphics.drawString(this.font, card.label(), list.x + 7, y + 3, 0xFFE9F1FA, false);
-            y += view.cardHeight() + view.cardGap();
+            boolean selected = card.displayName.equals(currentScene);
+            boolean hovered = i == hoveredCard;
+            int bg = selected ? 0x52FFFFFF : (hovered ? 0x38FFFFFF : 0x24000000);
+            guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, bg);
+            guiGraphics.drawString(this.font, shorten(card.displayName, 14), list.x + 7, y + 3, 0xFFE9F1FA, false);
+            y += CARD_HEIGHT + CARD_GAP;
         }
     }
 
@@ -335,8 +289,7 @@ public class SceneSelectorScreen extends Screen {
     }
 
     private void closeAfterFailure(Throwable throwable) {
-        LOGGER.error("[SceneSelector] Skia selector failed and will close", throwable);
-        skiaRenderer.dispose();
+        LOGGER.error("[SceneSelector] Native selector render failed and will close", throwable);
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen == this) {
             minecraft.setScreen(null);

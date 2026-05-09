@@ -3,11 +3,10 @@ package com.shiroha.mmdskin.ui.stage;
 import com.shiroha.mmdskin.stage.client.camera.port.StageCameraUiPort;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackUiPort;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.Screen;
 
 import java.util.UUID;
 
-/** 文件职责：适配舞台播放与相机 UI 调用到具体界面。 */
+/** 文件职责：适配舞台播放与相机流程到原生舞台选择界面。 */
 public enum StagePlaybackUiAdapter implements StagePlaybackUiPort, StageCameraUiPort {
     INSTANCE;
 
@@ -20,7 +19,7 @@ public enum StagePlaybackUiAdapter implements StagePlaybackUiPort, StageCameraUi
     public void markStageSelectionStartedAndClose() {
         Minecraft minecraft = Minecraft.getInstance();
         Runnable action = () -> {
-            if (minecraft.screen instanceof StageWorkbenchScreen screen) {
+            if (minecraft.screen instanceof StageSelectScreen screen) {
                 screen.markStartedByHost();
                 minecraft.setScreen(null);
             }
@@ -35,10 +34,7 @@ public enum StagePlaybackUiAdapter implements StagePlaybackUiPort, StageCameraUi
     @Override
     public void openStageSelection() {
         Minecraft minecraft = Minecraft.getInstance();
-        Runnable action = () -> {
-            Screen screen = new StageWorkbenchScreen(StageWorkbenchFacade.getInstance());
-            minecraft.setScreen(screen);
-        };
+        Runnable action = () -> minecraft.setScreen(new StageSelectScreen());
         if (minecraft.isSameThread()) {
             action.run();
         } else {
@@ -50,7 +46,7 @@ public enum StagePlaybackUiAdapter implements StagePlaybackUiPort, StageCameraUi
     public void closeStageSelectionIfOpen() {
         Minecraft minecraft = Minecraft.getInstance();
         Runnable action = () -> {
-            if (minecraft.screen instanceof StageWorkbenchScreen screen) {
+            if (minecraft.screen instanceof StageSelectScreen screen) {
                 screen.prepareForExternalClose();
                 minecraft.setScreen(null);
             }
