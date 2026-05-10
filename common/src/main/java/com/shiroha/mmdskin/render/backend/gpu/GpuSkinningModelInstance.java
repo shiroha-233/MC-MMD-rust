@@ -26,8 +26,8 @@ import org.lwjgl.system.MemoryUtil;
 
 /** 文件职责：承载 GPU skinning 模型实例状态。 */
 public class GpuSkinningModelInstance extends BaseModelInstance {
-    static SkinningComputeShader computeShader;
-    static ToonShaderCpu toonShaderCpu;
+    static volatile SkinningComputeShader computeShader;
+    static volatile ToonShaderCpu toonShaderCpu;
     static final ToonConfig toonConfig = ToonConfig.getInstance();
 
     int vertexCount;
@@ -109,7 +109,7 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
     ByteBuffer subMeshDataBuf;
     PoseStack currentDeliverStack;
 
-    boolean initialized;
+    volatile boolean initialized;
     long lastGpuUploadRevision = -1L;
     int lastBlockBrightness = Integer.MIN_VALUE;
     int lastSkyBrightness = Integer.MIN_VALUE;

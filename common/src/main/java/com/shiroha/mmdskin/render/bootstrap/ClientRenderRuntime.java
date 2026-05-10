@@ -17,7 +17,7 @@ import com.shiroha.mmdskin.config.RuntimeConfigPort;
 import com.shiroha.mmdskin.config.RuntimeConfigPortHolder;
 import com.shiroha.mmdskin.expression.ExpressionApplicationService;
 import com.shiroha.mmdskin.expression.ModelMorphCatalog;
-import com.shiroha.mmdskin.maid.MaidModelRepositoryExtension;
+import com.shiroha.mmdskin.compat.maid.model.MaidModelRepositoryExtension;
 import com.shiroha.mmdskin.model.port.ModelDiagnosticsPort;
 import com.shiroha.mmdskin.model.port.ModelRepositoryPort;
 import com.shiroha.mmdskin.model.runtime.DefaultModelRuntimeAccessPort;

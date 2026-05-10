@@ -2,7 +2,7 @@ package com.shiroha.mmdskin.scene.client;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.shiroha.mmdskin.asset.catalog.ModelInfo;
+import com.shiroha.mmdskin.asset.catalog.ModelCatalogEntry;
 import com.shiroha.mmdskin.bridge.runtime.NativeScenePort;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import com.shiroha.mmdskin.model.runtime.ModelInstance;
@@ -95,7 +95,7 @@ public final class SceneModelManager {
             return;
         }
 
-        ModelInfo modelInfo = catalog.findByFolderName(folderName).orElse(null);
+        ModelCatalogEntry modelInfo = catalog.findByFolderName(folderName).orElse(null);
         if (modelInfo == null) {
             logger.warn("Scene model not found: {}", folderName);
             removeScene();

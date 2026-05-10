@@ -598,63 +598,26 @@ public class StageSelectScreen extends Screen {
     }
 
     private static String shortPackStats(StagePack pack) {
-        int motion = 0;
-        int camera = 0;
-        for (StagePack.VmdFileInfo info : pack.getVmdFiles()) {
-            if (info.hasBones || info.hasMorphs) {
-                motion++;
-            }
-            if (info.hasCamera) {
-                camera++;
-            }
-        }
-        return "M" + motion + "/C" + camera + "/A" + pack.getAudioFiles().size();
+        return StageScreenUtils.shortPackStats(pack);
     }
 
     private static int brighten(int color) {
-        int a = color >>> 24;
-        int r = Math.min(255, ((color >>> 16) & 0xFF) + 18);
-        int g = Math.min(255, ((color >>> 8) & 0xFF) + 18);
-        int b = Math.min(255, (color & 0xFF) + 18);
-        return (a << 24) | (r << 16) | (g << 8) | b;
+        return StageScreenUtils.brighten(color);
     }
 
     private static String motionTag(StagePack.VmdFileInfo info) {
-        StringBuilder builder = new StringBuilder();
-        if (info.hasBones) {
-            builder.append('B');
-        }
-        if (info.hasMorphs) {
-            if (builder.length() > 0) {
-                builder.append('/');
-            }
-            builder.append('M');
-        }
-        if (info.hasCamera) {
-            if (builder.length() > 0) {
-                builder.append('/');
-            }
-            builder.append('C');
-        }
-        return builder.toString();
+        return StageScreenUtils.motionTag(info);
     }
 
     private static String stripExtension(String text) {
-        int dot = text.lastIndexOf('.');
-        return dot > 0 ? text.substring(0, dot) : text;
+        return StageScreenUtils.stripExtension(text);
     }
 
     private static String shorten(String text, int maxChars) {
-        if (text == null) {
-            return "";
-        }
-        if (text.length() <= maxChars) {
-            return text;
-        }
-        return maxChars <= 2 ? text.substring(0, Math.max(0, maxChars)) : text.substring(0, maxChars - 2) + "..";
+        return StageScreenUtils.shorten(text, maxChars);
     }
 
     private static String wb(String suffix, Object... args) {
-        return Component.translatable("gui.mmdskin.stage.workbench." + suffix, args).getString();
+        return StageScreenUtils.wb(suffix, args);
     }
 }

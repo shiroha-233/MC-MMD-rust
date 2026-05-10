@@ -4,7 +4,7 @@ import com.shiroha.mmdskin.compat.vr.VRArmHider;
 import com.shiroha.mmdskin.forge.YsmCompat;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import com.shiroha.mmdskin.compat.iris.IrisCompat;
-import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
+import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
 import net.minecraft.client.Camera;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.LevelRenderer;
@@ -32,7 +32,7 @@ public abstract class LevelRendererMixin {
         }
 
         String playerName = player.getName().getString();
-        String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, true);
+        String selectedModel = PlayerModelSyncService.getPlayerModel(player.getUUID(), playerName, true);
 
         boolean isMmdDefault = selectedModel == null || selectedModel.isEmpty()
                 || selectedModel.equals("默认 (原版渲染)");

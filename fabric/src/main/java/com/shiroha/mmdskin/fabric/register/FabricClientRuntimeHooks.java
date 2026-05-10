@@ -1,10 +1,11 @@
 package com.shiroha.mmdskin.fabric.register;
 
-import com.shiroha.mmdskin.bonesync.BoneSyncManager;
+import com.shiroha.mmdskin.player.sync.BoneSyncManager;
 import com.shiroha.mmdskin.config.UIConstants;
 import com.shiroha.mmdskin.debug.client.PerformanceHud;
 import com.shiroha.mmdskin.fabric.maid.MaidCompatMixinPlugin;
 import com.shiroha.mmdskin.fabric.network.MmdSkinNetworkPack;
+import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
 import com.shiroha.mmdskin.stage.client.StageClientRuntime;
@@ -12,7 +13,6 @@ import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
 import com.shiroha.mmdskin.ui.QuickModelSwitcher;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import com.shiroha.mmdskin.ui.network.NetworkOpCode;
-import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import com.shiroha.mmdskin.ui.wheel.ConfigWheelScreen;
 import com.shiroha.mmdskin.ui.wheel.MaidConfigWheelScreen;
 import com.shiroha.mmdskin.voice.runtime.PlayerVoiceSceneObserver;
@@ -109,14 +109,14 @@ final class FabricClientRuntimeHooks {
         }
         String selectedModel = ModelSelectorConfig.getInstance().getPlayerModel(player.getName().getString());
         if (selectedModel != null && !selectedModel.isEmpty() && !selectedModel.equals(UIConstants.DEFAULT_MODEL_NAME)) {
-            PlayerModelSyncManager.broadcastLocalModelSelection(player.getUUID(), selectedModel);
+            PlayerModelSyncService.broadcastLocalModelSelection(player.getUUID(), selectedModel);
         }
         MmdSkinNetworkPack.sendToServer(NetworkOpCode.REQUEST_ALL_MODELS, player.getUUID(), "");
     }
 
     private void onDisconnect() {
         MMDCameraController.getInstance().exitStageMode();
-        PlayerModelSyncManager.onDisconnect();
+        PlayerModelSyncService.onDisconnect();
         MmdSkinRendererPlayerHelper.onDisconnect();
         BoneSyncManager.onDisconnect();
         PlayerVoiceSceneObserver.getInstance().onDisconnect();

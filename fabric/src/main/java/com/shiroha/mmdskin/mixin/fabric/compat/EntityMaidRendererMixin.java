@@ -1,9 +1,9 @@
 package com.shiroha.mmdskin.mixin.fabric.compat;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.shiroha.mmdskin.compat.maid.render.MaidMMDRenderer;
+import com.shiroha.mmdskin.compat.maid.runtime.MaidMMDModelManager;
 import com.shiroha.mmdskin.fabric.maid.MaidCompatMixinPlugin;
-import com.shiroha.mmdskin.maid.MaidMMDModelManager;
-import com.shiroha.mmdskin.maid.MaidMMDRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.world.entity.LivingEntity;

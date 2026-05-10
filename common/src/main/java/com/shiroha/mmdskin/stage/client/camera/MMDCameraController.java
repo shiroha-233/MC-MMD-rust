@@ -91,7 +91,7 @@ public final class MMDCameraController {
         return StageClientRuntime.get().cameraController();
     }
 
-    public void enterStageMode() {
+    public synchronized void enterStageMode() {
         if (!stateMachine.canEnterStageMode()) {
             return;
         }
@@ -123,7 +123,7 @@ public final class MMDCameraController {
         applyPose(introStartPose);
     }
 
-    public boolean startStage(long motionAnim, long cameraAnim, boolean cinematic,
+    public synchronized boolean startStage(long motionAnim, long cameraAnim, boolean cinematic,
                               long modelHandle, String modelName, String audioPath, float heightOffset) {
         if (!stateMachine.canStartStage()) {
             return false;
@@ -168,7 +168,7 @@ public final class MMDCameraController {
         return true;
     }
 
-    public void exitStageMode() {
+    public synchronized void exitStageMode() {
         if (stateMachine.isInactive()) {
             return;
         }
@@ -204,7 +204,7 @@ public final class MMDCameraController {
         environmentController.releaseAllKeys();
     }
 
-    public void updateCamera() {
+    public synchronized void updateCamera() {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player != null && stateMachine.shouldPinPlayer()) {
             minecraft.player.setPos(anchorX, anchorY, anchorZ);
@@ -221,7 +221,7 @@ public final class MMDCameraController {
         }
     }
 
-    public void checkEscapeKey() {
+    public synchronized void checkEscapeKey() {
         if (stateMachine.isInactive()) {
             return;
         }
@@ -333,31 +333,31 @@ public final class MMDCameraController {
         return cameraFov;
     }
 
-    public void setPlaybackSpeed(float speed) {
+    public synchronized void setPlaybackSpeed(float speed) {
         playbackSession.setPlaybackSpeed(speed);
     }
 
-    public float getPlaybackSpeed() {
+    public synchronized float getPlaybackSpeed() {
         return playbackSession.playbackSpeed();
     }
 
-    public String getActiveStageModelName() {
+    public synchronized String getActiveStageModelName() {
         return playbackSession.modelName();
     }
 
-    public boolean isWaitingForHost() {
+    public synchronized boolean isWaitingForHost() {
         return waitingForHost;
     }
 
-    public void setWaitingForHost(boolean waiting) {
+    public synchronized void setWaitingForHost(boolean waiting) {
         this.waitingForHost = waiting;
     }
 
-    public UUID getWatchingHostUUID() {
+    public synchronized UUID getWatchingHostUUID() {
         return watchingHostUUID;
     }
 
-    public void enterWatchMode(UUID hostUUID) {
+    public synchronized void enterWatchMode(UUID hostUUID) {
         if (stateMachine.isWatching()) {
             return;
         }
@@ -395,7 +395,7 @@ public final class MMDCameraController {
         stateMachine.enterWatching();
     }
 
-    public void setWatchCamera(long cameraAnimHandle, float heightOffset) {
+    public synchronized void setWatchCamera(long cameraAnimHandle, float heightOffset) {
         if (!stateMachine.isWatching()) {
             return;
         }
@@ -408,7 +408,7 @@ public final class MMDCameraController {
         }
     }
 
-    public void setWatchMotion(long motionAnim, long modelHandle, String modelName) {
+    public synchronized void setWatchMotion(long motionAnim, long modelHandle, String modelName) {
         if (!stateMachine.isWatching()) {
             return;
         }
@@ -418,7 +418,7 @@ public final class MMDCameraController {
         }
     }
 
-    public void loadWatchAudio(String audioPath) {
+    public synchronized void loadWatchAudio(String audioPath) {
         if (!stateMachine.isWatching()) {
             return;
         }
@@ -429,7 +429,7 @@ public final class MMDCameraController {
         }
     }
 
-    public void syncAudioPosition(float seconds) {
+    public synchronized void syncAudioPosition(float seconds) {
         if (!audioPlayer.isLoaded()) {
             return;
         }
@@ -439,11 +439,11 @@ public final class MMDCameraController {
         }
     }
 
-    public void exitWatchMode() {
+    public synchronized void exitWatchMode() {
         exitWatchMode(true);
     }
 
-    public void exitWatchMode(boolean sendLeave) {
+    public synchronized void exitWatchMode(boolean sendLeave) {
         if (!stateMachine.isWatching()) {
             return;
         }
@@ -497,7 +497,7 @@ public final class MMDCameraController {
         stateMachine.enterOutro();
     }
 
-    public void onFrameSync(float hostFrame) {
+    public synchronized void onFrameSync(float hostFrame) {
         if (!stateMachine.isWatching() && !stateMachine.isPlaying()) {
             return;
         }

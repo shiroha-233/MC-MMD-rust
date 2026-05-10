@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.render.backend.mode;
 
-import com.shiroha.mmdskin.asset.catalog.ModelInfo;
+import com.shiroha.mmdskin.asset.catalog.ModelCatalogEntry;
 import com.shiroha.mmdskin.model.runtime.ModelInstance;
 
 /**
@@ -32,7 +32,7 @@ public interface ModelInstanceFactory {
 
     ModelInstance createModelFromHandle(long modelHandle, String modelDir);
 
-    default ModelInstance createModel(ModelInfo modelInfo, long layerCount) {
+    default ModelInstance createModel(ModelCatalogEntry modelInfo, long layerCount) {
         if (modelInfo == null) {
             return null;
         }

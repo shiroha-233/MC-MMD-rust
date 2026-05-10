@@ -1,0 +1,52 @@
+/** 文件职责：编排女仆动作选择后的本地播放与远端同步。 */
+package com.shiroha.mmdskin.compat.maid.service;
+
+import com.shiroha.mmdskin.compat.maid.network.MaidActionNetworkHandler;
+import com.shiroha.mmdskin.compat.maid.runtime.MaidMMDModelManager;
+import com.shiroha.mmdskin.ui.config.ActionWheelConfig;
+import com.shiroha.mmdskin.ui.wheel.service.ActionOption;
+import com.shiroha.mmdskin.voice.runtime.VoicePlaybackManager;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.function.Supplier;
+
+public class DefaultMaidActionService implements MaidActionService {
+    private final Supplier<List<ActionWheelConfig.ActionEntry>> actionEntriesSupplier;
+    private final MaidActionRuntimePort runtimePort;
+    private final MaidActionSyncPort syncPort;
+
+    public DefaultMaidActionService() {
+        this(() -> ActionWheelConfig.getInstance().getDisplayedActions(), MaidMMDModelManager::playAnimation,
+                MaidActionNetworkHandler.getInstance());
+    }
+
+    DefaultMaidActionService(Supplier<List<ActionWheelConfig.ActionEntry>> actionEntriesSupplier,
+                             MaidActionRuntimePort runtimePort,
+                             MaidActionSyncPort syncPort) {
+        this.actionEntriesSupplier = Objects.requireNonNull(actionEntriesSupplier, "actionEntriesSupplier");
+        this.runtimePort = Objects.requireNonNull(runtimePort, "runtimePort");
+        this.syncPort = Objects.requireNonNull(syncPort, "syncPort");
+    }
+
+    @Override
+    public List<ActionOption> loadActions() {
+        return actionEntriesSupplier.get().stream()
+                .map(entry -> new ActionOption(entry.name, entry.animId))
+                .toList();
+    }
+
+    @Override
+    public void selectAction(UUID maidUUID, int maidEntityId, String animId) {
+        if (maidUUID == null || animId == null || animId.isEmpty()) {
+            return;
+        }
+        runtimePort.playLocalAction(maidUUID, animId);
+        VoicePlaybackManager.getInstance().onMaidCustomAction(maidUUID.toString());
+        syncPort.syncMaidAction(maidEntityId, animId);
+    }
+
+    interface MaidActionRuntimePort {
+        void playLocalAction(UUID maidUUID, String animId);
+    }
+}

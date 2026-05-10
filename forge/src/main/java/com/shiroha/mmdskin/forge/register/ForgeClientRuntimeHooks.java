@@ -3,6 +3,7 @@ package com.shiroha.mmdskin.forge.register;
 import com.shiroha.mmdskin.config.UIConstants;
 import com.shiroha.mmdskin.debug.client.PerformanceHud;
 import com.shiroha.mmdskin.forge.network.MmdSkinNetworkPack;
+import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
 import com.shiroha.mmdskin.stage.client.StageClientRuntime;
@@ -10,7 +11,6 @@ import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
 import com.shiroha.mmdskin.ui.QuickModelSwitcher;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import com.shiroha.mmdskin.ui.network.NetworkOpCode;
-import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import com.shiroha.mmdskin.ui.wheel.ConfigWheelScreen;
 import com.shiroha.mmdskin.ui.wheel.MaidConfigWheelScreen;
 import com.shiroha.mmdskin.voice.runtime.PlayerVoiceSceneObserver;
@@ -96,7 +96,7 @@ final class ForgeClientRuntimeHooks {
         }
         String selectedModel = ModelSelectorConfig.getInstance().getPlayerModel(minecraft.player.getName().getString());
         if (selectedModel != null && !selectedModel.isEmpty() && !selectedModel.equals(UIConstants.DEFAULT_MODEL_NAME)) {
-            PlayerModelSyncManager.broadcastLocalModelSelection(minecraft.player.getUUID(), selectedModel);
+            PlayerModelSyncService.broadcastLocalModelSelection(minecraft.player.getUUID(), selectedModel);
         }
         MmdSkinRegisterCommon.channel.sendToServer(
             new MmdSkinNetworkPack(NetworkOpCode.REQUEST_ALL_MODELS, minecraft.player.getUUID(), ""));
@@ -104,7 +104,7 @@ final class ForgeClientRuntimeHooks {
 
     void onPlayerLoggedOut(ClientPlayerNetworkEvent.LoggingOut event) {
         MMDCameraController.getInstance().exitStageMode();
-        PlayerModelSyncManager.onDisconnect();
+        PlayerModelSyncService.onDisconnect();
         MmdSkinRendererPlayerHelper.onDisconnect();
         PlayerVoiceSceneObserver.getInstance().onDisconnect();
         VoicePlaybackManager.getInstance().onDisconnect();

@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.model.runtime;
 
-import com.shiroha.mmdskin.animation.runtime.AnimationLibrary;
+import com.shiroha.mmdskin.model.runtime.AnimationLibrary;
 import com.shiroha.mmdskin.bridge.runtime.NativeAnimationPort;
 import com.shiroha.mmdskin.bridge.runtime.NativeMatrixPort;
 import com.shiroha.mmdskin.player.runtime.EntityAnimState;

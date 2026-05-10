@@ -1,8 +1,8 @@
 package com.shiroha.mmdskin.ui.wheel.service;
 
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
+import com.shiroha.mmdskin.player.sync.PlayerActionSyncService;
 import com.shiroha.mmdskin.ui.config.ActionWheelConfig;
-import com.shiroha.mmdskin.ui.network.ActionWheelNetworkHandler;
 import com.shiroha.mmdskin.voice.runtime.VoicePlaybackManager;
 import net.minecraft.client.Minecraft;
 
@@ -17,7 +17,7 @@ public class DefaultActionWheelService implements ActionWheelService {
 
     public DefaultActionWheelService() {
         this(() -> ActionWheelConfig.getInstance().getDisplayedActions(), new MinecraftActionRuntimePort(),
-                ActionWheelNetworkHandler.getInstance());
+                PlayerActionSyncService.getInstance());
     }
 
     DefaultActionWheelService(Supplier<List<ActionWheelConfig.ActionEntry>> actionEntriesSupplier,

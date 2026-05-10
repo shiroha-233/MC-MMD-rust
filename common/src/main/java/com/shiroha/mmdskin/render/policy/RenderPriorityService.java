@@ -1,9 +1,9 @@
 package com.shiroha.mmdskin.render.policy;
 
 import com.shiroha.mmdskin.config.UIConstants;
+import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
 import com.shiroha.mmdskin.render.entity.MobReplacementService;
 import com.shiroha.mmdskin.render.pipeline.RenderPerformanceProfiler;
-import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -210,7 +210,7 @@ public final class RenderPriorityService {
 
         Minecraft minecraft = Minecraft.getInstance();
         boolean localPlayer = minecraft.player != null && minecraft.player.getUUID().equals(player.getUUID());
-        String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), player.getName().getString(), localPlayer);
+        String selectedModel = PlayerModelSyncService.getPlayerModel(player.getUUID(), player.getName().getString(), localPlayer);
         return selectedModel != null
                 && !selectedModel.isBlank()
                 && !UIConstants.DEFAULT_MODEL_NAME.equals(selectedModel);

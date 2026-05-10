@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.render.entity;
 
-import com.shiroha.mmdskin.asset.catalog.ModelInfo;
+import com.shiroha.mmdskin.asset.catalog.ModelCatalogEntry;
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.config.UIConstants;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -31,7 +31,7 @@ public final class MobReplacementService {
             return null;
         }
 
-        return ModelInfo.findByFolderName(modelName) != null ? modelName : null;
+        return ModelCatalogEntry.findByFolderName(modelName) != null ? modelName : null;
     }
 
     public static boolean isMaidEntity(LivingEntity entity) {

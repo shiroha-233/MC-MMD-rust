@@ -4,7 +4,7 @@ import com.shiroha.mmdskin.compat.vr.VRArmHider;
 import com.shiroha.mmdskin.compat.vr.VRHandRenderer;
 import com.shiroha.mmdskin.fabric.YsmCompat;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
-import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
+import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.ItemInHandRenderer;
@@ -34,7 +34,7 @@ public abstract class ItemInHandRendererMixin {
         }
 
         String playerName = player.getName().getString();
-        String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, true);
+        String selectedModel = PlayerModelSyncService.getPlayerModel(player.getUUID(), playerName, true);
 
         boolean isMmdDefault = selectedModel == null || selectedModel.isEmpty() || selectedModel.equals("默认 (原版渲染)");
         boolean isMmdActive = !isMmdDefault;

@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.voice.runtime;
 
-import com.shiroha.mmdskin.maid.MaidMMDModelManager;
+import com.shiroha.mmdskin.compat.maid.runtime.MaidMMDModelManager;
 import com.shiroha.mmdskin.voice.VoiceEventContext;
 import com.shiroha.mmdskin.voice.VoiceEventType;
 import com.shiroha.mmdskin.voice.VoiceTargetType;

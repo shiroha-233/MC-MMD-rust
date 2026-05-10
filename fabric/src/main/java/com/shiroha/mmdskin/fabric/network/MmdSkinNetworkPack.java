@@ -2,13 +2,14 @@ package com.shiroha.mmdskin.fabric.network;
 
 import java.util.UUID;
 
+import com.shiroha.mmdskin.player.sync.ClientNetworkBindings;
 import com.shiroha.mmdskin.fabric.register.MmdSkinRegisterCommon;
-import com.shiroha.mmdskin.maid.MaidMMDModelManager;
+import com.shiroha.mmdskin.compat.maid.runtime.MaidMMDModelManager;
 import com.shiroha.mmdskin.player.animation.PendingAnimSignalCache;
+import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.player.sync.MorphSyncHelper;
 import com.shiroha.mmdskin.ui.network.NetworkOpCode;
-import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
@@ -21,6 +22,19 @@ import net.minecraft.world.entity.player.Player;
  * Fabric 网络包发送与客户端处理
  */
 public class MmdSkinNetworkPack {
+    private MmdSkinNetworkPack() {
+    }
+
+    public static int toOpCode(ClientNetworkBindings.NetworkMessageType messageType) {
+        return switch (messageType) {
+            case CUSTOM_ANIM -> NetworkOpCode.CUSTOM_ANIM;
+            case RESET_PHYSICS -> NetworkOpCode.RESET_PHYSICS;
+            case MODEL_SELECT -> NetworkOpCode.MODEL_SELECT;
+            case MORPH_SYNC -> NetworkOpCode.MORPH_SYNC;
+            case STAGE_MULTI -> NetworkOpCode.STAGE_MULTI;
+            case BONE_SYNC -> NetworkOpCode.BONE_SYNC;
+        };
+    }
 
     public static void sendToServer(int opCode, UUID playerUUID, int arg0) {
         FriendlyByteBuf buffer = PacketByteBufs.create();
@@ -103,7 +117,7 @@ public class MmdSkinNetworkPack {
                 if (target != null) MmdSkinRendererPlayerHelper.CustomAnim(target, data);
             }
             case NetworkOpCode.MODEL_SELECT -> {
-                PlayerModelSyncManager.onRemotePlayerModelReceived(playerUUID, data);
+                PlayerModelSyncService.onRemotePlayerModelReceived(playerUUID, data);
             }
             case NetworkOpCode.MORPH_SYNC -> {
                 if (target != null) MorphSyncHelper.applyRemoteMorph(target, data);

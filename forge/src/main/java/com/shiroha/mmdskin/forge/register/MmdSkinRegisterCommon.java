@@ -2,7 +2,7 @@ package com.shiroha.mmdskin.forge.register;
 
 import com.shiroha.mmdskin.forge.network.MmdSkinNetworkPack;
 import com.shiroha.mmdskin.forge.stage.ForgeStageSessionRegistry;
-import com.shiroha.mmdskin.ui.network.ServerModelRegistry;
+import com.shiroha.mmdskin.player.sync.ServerModelRegistry;
 
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;

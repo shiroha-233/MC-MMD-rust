@@ -1,8 +1,8 @@
 package com.shiroha.mmdskin.forge.maid;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.shiroha.mmdskin.maid.MaidMMDModelManager;
-import com.shiroha.mmdskin.maid.MaidMMDRenderer;
+import com.shiroha.mmdskin.compat.maid.render.MaidMMDRenderer;
+import com.shiroha.mmdskin.compat.maid.runtime.MaidMMDModelManager;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;

@@ -1,7 +1,7 @@
 /* 职责：以原生 GuiGraphics 渲染场景模型选择界面。 */
 package com.shiroha.mmdskin.ui.selector;
 
-import com.shiroha.mmdskin.asset.catalog.ModelInfo;
+import com.shiroha.mmdskin.asset.catalog.ModelCatalogEntry;
 import com.shiroha.mmdskin.scene.client.SceneModelCatalog;
 import com.shiroha.mmdskin.scene.client.SceneModelManager;
 import net.minecraft.client.Minecraft;
@@ -250,8 +250,8 @@ public class SceneSelectorScreen extends Screen {
 
     private void loadAvailableScenes() {
         sceneCards.clear();
-        List<ModelInfo> models = SCENE_CATALOG.listModels();
-        for (ModelInfo info : models) {
+        List<ModelCatalogEntry> models = SCENE_CATALOG.listModels();
+        for (ModelCatalogEntry info : models) {
             sceneCards.add(new SceneCardEntry(info.getFolderName()));
         }
     }

@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.fabric.config;
 
-import com.shiroha.mmdskin.asset.catalog.ModelInfo;
+import com.shiroha.mmdskin.asset.catalog.ModelCatalogEntry;
 import com.shiroha.mmdskin.config.ConfigData;
 import com.shiroha.mmdskin.config.PhysicsConfigSnapshot;
 import com.shiroha.mmdskin.config.UIConstants;
@@ -466,7 +466,7 @@ public class ModConfigScreen {
     static List<String> createModelSelections() {
         List<String> selections = new ArrayList<>();
         selections.add(UIConstants.DEFAULT_MODEL_NAME);
-        for (ModelInfo modelInfo : ModelInfo.scanModels()) {
+        for (ModelCatalogEntry modelInfo : ModelCatalogEntry.scanModels()) {
             String folderName = modelInfo.getFolderName();
             if (!folderName.isBlank() && !selections.contains(folderName)) {
                 selections.add(folderName);
@@ -501,7 +501,7 @@ public class ModConfigScreen {
         Iterator<String> iterator = data.mobModelReplacements.values().iterator();
         while (iterator.hasNext()) {
             String modelName = iterator.next();
-            if (modelName == null || modelName.isBlank() || ModelInfo.findByFolderName(modelName) == null) {
+            if (modelName == null || modelName.isBlank() || ModelCatalogEntry.findByFolderName(modelName) == null) {
                 iterator.remove();
             }
         }

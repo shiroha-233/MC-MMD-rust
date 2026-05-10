@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.model.runtime.loading;
 
-import com.shiroha.mmdskin.asset.catalog.ModelInfo;
+import com.shiroha.mmdskin.asset.catalog.ModelCatalogEntry;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -20,7 +20,7 @@ public final class ModelPropertiesLoader {
     public static void load(String modelName, Properties properties) {
         properties.clear();
 
-        ModelInfo info = ModelInfo.findByFolderName(modelName);
+        ModelCatalogEntry info = ModelCatalogEntry.findByFolderName(modelName);
         if (info == null) {
             logger.warn("模型属性加载失败，模型未找到: {}", modelName);
             return;

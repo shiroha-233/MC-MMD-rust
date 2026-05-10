@@ -1,9 +1,9 @@
 package com.shiroha.mmdskin.ui.wheel;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import com.shiroha.mmdskin.maid.MaidActionWheelScreen;
-import com.shiroha.mmdskin.maid.MaidMMDModelManager;
-import com.shiroha.mmdskin.maid.MaidModelSelectorScreen;
+import com.shiroha.mmdskin.compat.maid.runtime.MaidMMDModelManager;
+import com.shiroha.mmdskin.compat.maid.ui.MaidActionWheelScreen;
+import com.shiroha.mmdskin.compat.maid.ui.MaidModelSelectorScreen;
 import com.shiroha.mmdskin.ui.selector.MaterialVisibilityScreen;
 import com.shiroha.mmdskin.ui.selector.VoicePackBindingScreen;
 import com.shiroha.mmdskin.util.KeyMappingUtil;

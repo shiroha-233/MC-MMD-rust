@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.scene.client;
 
-import com.shiroha.mmdskin.asset.catalog.ModelInfo;
+import com.shiroha.mmdskin.asset.catalog.ModelCatalogEntry;
 import com.shiroha.mmdskin.config.PathConstants;
 
 import java.io.File;
@@ -17,7 +17,7 @@ public final class SceneModelCatalog {
     private static final long CACHE_TTL_MILLIS = 5000L;
     private static final SceneModelCatalog INSTANCE = new SceneModelCatalog();
 
-    private volatile List<ModelInfo> cachedModels;
+    private volatile List<ModelCatalogEntry> cachedModels;
     private volatile long cacheTimestamp;
 
     private SceneModelCatalog() {
@@ -27,21 +27,21 @@ public final class SceneModelCatalog {
         return INSTANCE;
     }
 
-    public List<ModelInfo> listModels() {
+    public List<ModelCatalogEntry> listModels() {
         long now = System.currentTimeMillis();
-        List<ModelInfo> snapshot = cachedModels;
+        List<ModelCatalogEntry> snapshot = cachedModels;
         if (snapshot != null && (now - cacheTimestamp) < CACHE_TTL_MILLIS) {
             return snapshot;
         }
 
-        List<ModelInfo> loadedModels = scanSceneModelDirectory();
-        List<ModelInfo> immutableModels = List.copyOf(loadedModels);
+        List<ModelCatalogEntry> loadedModels = scanSceneModelDirectory();
+        List<ModelCatalogEntry> immutableModels = List.copyOf(loadedModels);
         cachedModels = immutableModels;
         cacheTimestamp = now;
         return immutableModels;
     }
 
-    public Optional<ModelInfo> findByFolderName(String folderName) {
+    public Optional<ModelCatalogEntry> findByFolderName(String folderName) {
         return listModels().stream()
                 .filter(info -> info.getFolderName().equals(folderName))
                 .findFirst();
@@ -52,7 +52,7 @@ public final class SceneModelCatalog {
         cacheTimestamp = 0L;
     }
 
-    private List<ModelInfo> scanSceneModelDirectory() {
+    private List<ModelCatalogEntry> scanSceneModelDirectory() {
         PathConstants.ensureSceneModelDir();
         File sceneDir = PathConstants.getSceneModelDir();
         if (!sceneDir.exists() || !sceneDir.isDirectory()) {
@@ -64,9 +64,9 @@ public final class SceneModelCatalog {
             return List.of();
         }
 
-        List<ModelInfo> models = new ArrayList<>();
+        List<ModelCatalogEntry> models = new ArrayList<>();
         for (File sceneFolder : sceneFolders) {
-            ModelInfo modelInfo = scanFolder(sceneFolder);
+            ModelCatalogEntry modelInfo = scanFolder(sceneFolder);
             if (modelInfo != null) {
                 models.add(modelInfo);
             }
@@ -76,7 +76,7 @@ public final class SceneModelCatalog {
         return models;
     }
 
-    private ModelInfo scanFolder(File dir) {
+    private ModelCatalogEntry scanFolder(File dir) {
         FileFilter pmxFilter = file -> file.isFile() && file.getName().toLowerCase().endsWith(".pmx");
         FileFilter pmdFilter = file -> file.isFile() && file.getName().toLowerCase().endsWith(".pmd");
         FileFilter vrmFilter = file -> file.isFile() && file.getName().toLowerCase().endsWith(".vrm");
@@ -102,8 +102,8 @@ public final class SceneModelCatalog {
         return null;
     }
 
-    private ModelInfo buildModelInfo(File folder, File modelFile, boolean isPmd, boolean isVrm) {
-        return new ModelInfo(folder.getName(), folder.getAbsolutePath(),
+    private ModelCatalogEntry buildModelInfo(File folder, File modelFile, boolean isPmd, boolean isVrm) {
+        return new ModelCatalogEntry(folder.getName(), folder.getAbsolutePath(),
                 modelFile.getAbsolutePath(), modelFile.getName(), isPmd, isVrm, modelFile.length());
     }
 

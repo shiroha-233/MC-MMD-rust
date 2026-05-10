@@ -7,7 +7,7 @@ import com.shiroha.mmdskin.player.model.PlayerModelResolver;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import com.shiroha.mmdskin.model.runtime.ModelInstance;
 import com.shiroha.mmdskin.stage.client.sync.StageAnimSyncHelper;
-import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
+import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.entity.player.Player;
@@ -23,7 +23,7 @@ public final class MmdSkinRendererPlayerHelper {
         String playerName = player.getName().getString();
         Minecraft mc = Minecraft.getInstance();
         boolean isLocalPlayer = mc.player != null && mc.player.getUUID().equals(player.getUUID());
-        String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
+        String selectedModel = PlayerModelSyncService.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
         return selectedModel != null && !selectedModel.isEmpty() && !selectedModel.equals(UIConstants.DEFAULT_MODEL_NAME);
     }
 

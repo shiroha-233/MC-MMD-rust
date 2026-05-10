@@ -2,7 +2,7 @@
 package com.shiroha.mmdskin.ui.selector;
 
 import com.shiroha.mmdskin.config.UIConstants;
-import com.shiroha.mmdskin.maid.MaidMMDModelManager;
+import com.shiroha.mmdskin.compat.maid.runtime.MaidMMDModelManager;
 import com.shiroha.mmdskin.voice.VoiceUsageMode;
 import com.shiroha.mmdskin.voice.config.VoicePackBindingsConfig;
 import com.shiroha.mmdskin.voice.pack.LocalVoicePackRepository;

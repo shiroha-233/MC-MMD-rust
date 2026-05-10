@@ -2,13 +2,14 @@ package com.shiroha.mmdskin.forge.network;
 
 import com.shiroha.mmdskin.forge.register.MmdSkinRegisterCommon;
 import com.shiroha.mmdskin.forge.stage.ForgeStageSessionRegistry;
-import com.shiroha.mmdskin.maid.MaidMMDModelManager;
+import com.shiroha.mmdskin.compat.maid.runtime.MaidMMDModelManager;
 import com.shiroha.mmdskin.player.animation.PendingAnimSignalCache;
+import com.shiroha.mmdskin.player.sync.ClientNetworkBindings;
+import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.player.sync.MorphSyncHelper;
+import com.shiroha.mmdskin.player.sync.ServerModelRegistry;
 import com.shiroha.mmdskin.ui.network.NetworkOpCode;
-import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
-import com.shiroha.mmdskin.ui.network.ServerModelRegistry;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
@@ -34,12 +35,25 @@ public class MmdSkinNetworkPack {
     public UUID playerUUID;
     public String animId;
     public int arg0;
+    public byte[] binaryPayload;
+
+    public static int toOpCode(ClientNetworkBindings.NetworkMessageType messageType) {
+        return switch (messageType) {
+            case CUSTOM_ANIM -> NetworkOpCode.CUSTOM_ANIM;
+            case RESET_PHYSICS -> NetworkOpCode.RESET_PHYSICS;
+            case MODEL_SELECT -> NetworkOpCode.MODEL_SELECT;
+            case MORPH_SYNC -> NetworkOpCode.MORPH_SYNC;
+            case STAGE_MULTI -> NetworkOpCode.STAGE_MULTI;
+            case BONE_SYNC -> NetworkOpCode.BONE_SYNC;
+        };
+    }
 
     public MmdSkinNetworkPack(int opCode, UUID playerUUID, String animId) {
         this.opCode = opCode;
         this.playerUUID = playerUUID;
         this.animId = animId;
         this.arg0 = 0;
+        this.binaryPayload = new byte[0];
     }
 
     public MmdSkinNetworkPack(int opCode, UUID playerUUID, int arg0) {
@@ -47,6 +61,7 @@ public class MmdSkinNetworkPack {
         this.playerUUID = playerUUID;
         this.animId = "";
         this.arg0 = arg0;
+        this.binaryPayload = new byte[0];
     }
 
     public MmdSkinNetworkPack(int opCode, UUID playerUUID, int entityId, String modelName) {
@@ -54,21 +69,37 @@ public class MmdSkinNetworkPack {
         this.playerUUID = playerUUID;
         this.animId = modelName;
         this.arg0 = entityId;
+        this.binaryPayload = new byte[0];
+    }
+
+    public MmdSkinNetworkPack(int opCode, UUID playerUUID, byte[] binaryPayload) {
+        this.opCode = opCode;
+        this.playerUUID = playerUUID;
+        this.animId = "";
+        this.arg0 = 0;
+        this.binaryPayload = binaryPayload != null ? binaryPayload : new byte[0];
     }
 
     public MmdSkinNetworkPack(FriendlyByteBuf buffer) {
         opCode = buffer.readInt();
         playerUUID = buffer.readUUID();
 
-        if (NetworkOpCode.isStringPayload(opCode)) {
+        if (opCode == NetworkOpCode.BONE_SYNC) {
+            animId = "";
+            arg0 = 0;
+            binaryPayload = buffer.readByteArray();
+        } else if (NetworkOpCode.isStringPayload(opCode)) {
             animId = buffer.readUtf();
             arg0 = 0;
+            binaryPayload = new byte[0];
         } else if (NetworkOpCode.isEntityStringPayload(opCode)) {
             arg0 = buffer.readInt();
             animId = buffer.readUtf();
+            binaryPayload = new byte[0];
         } else {
             animId = "";
             arg0 = buffer.readInt();
+            binaryPayload = new byte[0];
         }
     }
 
@@ -76,7 +107,9 @@ public class MmdSkinNetworkPack {
         buffer.writeInt(opCode);
         buffer.writeUUID(playerUUID);
 
-        if (NetworkOpCode.isStringPayload(opCode)) {
+        if (opCode == NetworkOpCode.BONE_SYNC) {
+            buffer.writeByteArray(binaryPayload != null ? binaryPayload : new byte[0]);
+        } else if (NetworkOpCode.isStringPayload(opCode)) {
             buffer.writeUtf(animId);
         } else if (NetworkOpCode.isEntityStringPayload(opCode)) {
             buffer.writeInt(arg0);
@@ -152,7 +185,7 @@ public class MmdSkinNetworkPack {
                 }
             }
             case NetworkOpCode.MODEL_SELECT -> {
-                PlayerModelSyncManager.onRemotePlayerModelReceived(playerUUID, animId);
+                PlayerModelSyncService.onRemotePlayerModelReceived(playerUUID, animId);
             }
             case NetworkOpCode.MAID_MODEL -> {
                 Entity maidEntity = mc.level.getEntity(arg0);

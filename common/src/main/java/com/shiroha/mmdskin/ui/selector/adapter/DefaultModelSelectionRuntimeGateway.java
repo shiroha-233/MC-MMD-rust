@@ -1,8 +1,8 @@
 package com.shiroha.mmdskin.ui.selector.adapter;
 
 import com.shiroha.mmdskin.model.runtime.ModelRequestKey;
+import com.shiroha.mmdskin.player.sync.PlayerModelSelectionSyncService;
 import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
-import com.shiroha.mmdskin.ui.network.ModelSelectorNetworkHandler;
 import com.shiroha.mmdskin.ui.selector.port.ModelSelectionRuntimeGateway;
 import net.minecraft.client.Minecraft;
 
@@ -10,7 +10,7 @@ import net.minecraft.client.Minecraft;
 public class DefaultModelSelectionRuntimeGateway implements ModelSelectionRuntimeGateway {
     @Override
     public void afterLocalModelSelection(String modelName) {
-        ModelSelectorNetworkHandler.getInstance().syncModelSelection(modelName);
+        PlayerModelSelectionSyncService.getInstance().syncModelSelection(modelName);
 
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) {

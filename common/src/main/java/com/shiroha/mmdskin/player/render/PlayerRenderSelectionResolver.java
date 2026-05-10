@@ -1,7 +1,7 @@
 package com.shiroha.mmdskin.player.render;
 
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
-import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
+import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 
@@ -14,7 +14,7 @@ final class PlayerRenderSelectionResolver {
         Minecraft minecraft = Minecraft.getInstance();
         boolean isLocalPlayer = minecraft.player != null && minecraft.player.getUUID().equals(player.getUUID());
         String playerName = player.getName().getString();
-        String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
+        String selectedModel = PlayerModelSyncService.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
         PlayerRenderRequest request = new PlayerRenderRequest(
                 player,
                 selectedModel,

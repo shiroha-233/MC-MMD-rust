@@ -1,14 +1,9 @@
 package com.shiroha.mmdskin.forge.register;
 
+import com.shiroha.mmdskin.compat.maid.network.MaidActionNetworkHandler;
+import com.shiroha.mmdskin.compat.maid.network.MaidModelNetworkHandler;
 import com.shiroha.mmdskin.forge.network.MmdSkinNetworkPack;
-import com.shiroha.mmdskin.maid.MaidActionNetworkHandler;
-import com.shiroha.mmdskin.maid.MaidModelNetworkHandler;
-import com.shiroha.mmdskin.stage.client.network.StageNetworkHandler;
-import com.shiroha.mmdskin.ui.network.ActionWheelNetworkHandler;
-import com.shiroha.mmdskin.ui.network.ModelSelectorNetworkHandler;
-import com.shiroha.mmdskin.ui.network.MorphWheelNetworkHandler;
-import com.shiroha.mmdskin.ui.network.NetworkOpCode;
-import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
+import com.shiroha.mmdskin.player.sync.ClientNetworkBindings;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraftforge.api.distmarker.Dist;
@@ -27,47 +22,49 @@ final class ForgeClientNetworkBindings {
 
         Minecraft minecraft = Minecraft.getInstance();
 
-        ActionWheelNetworkHandler.getInstance().setNetworkSender(animId -> {
-            LocalPlayer player = minecraft.player;
-            if (player != null) {
+        ClientNetworkBindings.bind(new ClientNetworkBindings.ClientNetworkSender() {
+            @Override
+            public void sendString(java.util.UUID playerUUID,
+                                   ClientNetworkBindings.NetworkMessageType messageType,
+                                   String payload) {
+                LocalPlayer player = minecraft.player;
+                java.util.UUID resolvedPlayerUuid = playerUUID;
+                if (resolvedPlayerUuid == null) {
+                    if (player == null) {
+                        return;
+                    }
+                    resolvedPlayerUuid = player.getUUID();
+                }
                 MmdSkinRegisterCommon.channel.sendToServer(
-                    new MmdSkinNetworkPack(NetworkOpCode.CUSTOM_ANIM, player.getUUID(), animId));
+                        new MmdSkinNetworkPack(MmdSkinNetworkPack.toOpCode(messageType), resolvedPlayerUuid, payload));
+            }
+
+            @Override
+            public void sendInt(ClientNetworkBindings.NetworkMessageType messageType, int payload) {
+                LocalPlayer player = minecraft.player;
+                if (player == null) {
+                    return;
+                }
+                MmdSkinRegisterCommon.channel.sendToServer(
+                        new MmdSkinNetworkPack(MmdSkinNetworkPack.toOpCode(messageType), player.getUUID(), payload));
+            }
+
+            @Override
+            public void sendBinary(ClientNetworkBindings.NetworkMessageType messageType, byte[] payload) {
+                LocalPlayer player = minecraft.player;
+                if (player == null) {
+                    return;
+                }
+                MmdSkinRegisterCommon.channel.sendToServer(
+                        new MmdSkinNetworkPack(MmdSkinNetworkPack.toOpCode(messageType), player.getUUID(), payload));
             }
         });
-
-        ActionWheelNetworkHandler.getInstance().setAnimStopSender(() -> {
-            LocalPlayer player = minecraft.player;
-            if (player != null) {
-                MmdSkinRegisterCommon.channel.sendToServer(
-                    new MmdSkinNetworkPack(NetworkOpCode.RESET_PHYSICS, player.getUUID(), 0));
-            }
-        });
-
-        MorphWheelNetworkHandler.getInstance().setNetworkSender(morphName -> {
-            LocalPlayer player = minecraft.player;
-            if (player != null) {
-                MmdSkinRegisterCommon.channel.sendToServer(
-                    new MmdSkinNetworkPack(NetworkOpCode.MORPH_SYNC, player.getUUID(), morphName));
-            }
-        });
-
-        ModelSelectorNetworkHandler.getInstance().setNetworkSender(modelName -> {
-            LocalPlayer player = minecraft.player;
-            if (player != null) {
-                MmdSkinRegisterCommon.channel.sendToServer(
-                    new MmdSkinNetworkPack(NetworkOpCode.MODEL_SELECT, player.getUUID(), modelName));
-            }
-        });
-
-        PlayerModelSyncManager.setNetworkBroadcaster((playerUUID, modelName) ->
-            MmdSkinRegisterCommon.channel.sendToServer(
-                new MmdSkinNetworkPack(NetworkOpCode.MODEL_SELECT, playerUUID, modelName)));
 
         MaidModelNetworkHandler.getInstance().setNetworkSender((entityId, modelName) -> {
             LocalPlayer player = minecraft.player;
             if (player != null) {
                 MmdSkinRegisterCommon.channel.sendToServer(
-                    new MmdSkinNetworkPack(NetworkOpCode.MAID_MODEL, player.getUUID(), entityId, modelName));
+                    new MmdSkinNetworkPack(com.shiroha.mmdskin.ui.network.NetworkOpCode.MAID_MODEL, player.getUUID(), entityId, modelName));
             }
         });
 
@@ -75,15 +72,7 @@ final class ForgeClientNetworkBindings {
             LocalPlayer player = minecraft.player;
             if (player != null) {
                 MmdSkinRegisterCommon.channel.sendToServer(
-                    new MmdSkinNetworkPack(NetworkOpCode.MAID_ACTION, player.getUUID(), entityId, animId));
-            }
-        });
-
-        StageNetworkHandler.setStageMultiSender(data -> {
-            LocalPlayer player = minecraft.player;
-            if (player != null) {
-                MmdSkinRegisterCommon.channel.sendToServer(
-                    new MmdSkinNetworkPack(NetworkOpCode.STAGE_MULTI, player.getUUID(), data));
+                    new MmdSkinNetworkPack(com.shiroha.mmdskin.ui.network.NetworkOpCode.MAID_ACTION, player.getUUID(), entityId, animId));
             }
         });
     }

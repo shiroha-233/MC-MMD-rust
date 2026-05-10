@@ -1,6 +1,6 @@
 package com.shiroha.mmdskin.model.runtime.loading;
 
-import com.shiroha.mmdskin.asset.catalog.ModelInfo;
+import com.shiroha.mmdskin.asset.catalog.ModelCatalogEntry;
 import com.shiroha.mmdskin.model.port.ModelRuntimeAccessPort;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import java.util.Set;
@@ -28,10 +28,10 @@ public final class ModelLoadCoordinator {
 
     public static final class AsyncLoadResult {
         public final long modelHandle;
-        public final ModelInfo modelInfo;
+        public final ModelCatalogEntry modelInfo;
         public final String modelName;
 
-        AsyncLoadResult(long modelHandle, ModelInfo modelInfo, String modelName) {
+        AsyncLoadResult(long modelHandle, ModelCatalogEntry modelInfo, String modelName) {
             this.modelHandle = modelHandle;
             this.modelInfo = modelInfo;
             this.modelName = modelName;
@@ -104,7 +104,7 @@ public final class ModelLoadCoordinator {
         }
         failedLoads.remove(fullCacheKey);
 
-        ModelInfo modelInfo = ModelInfo.findByFolderName(modelName);
+        ModelCatalogEntry modelInfo = ModelCatalogEntry.findByFolderName(modelName);
         if (modelInfo == null) {
             if (missingModels.add(modelName)) {
                 logger.warn("模型本地不存在，跳过加载: {}", modelName);
@@ -151,7 +151,7 @@ public final class ModelLoadCoordinator {
         failedLoads.clear();
     }
 
-    private void startBackgroundLoad(String fullCacheKey, ModelInfo modelInfo, String modelName) {
+    private void startBackgroundLoad(String fullCacheKey, ModelCatalogEntry modelInfo, String modelName) {
         long startTime = System.currentTimeMillis();
 
         PendingLoad pendingLoad = new PendingLoad();
@@ -173,7 +173,7 @@ public final class ModelLoadCoordinator {
     }
 
     private AsyncLoadResult loadModelHandle(String fullCacheKey,
-                                            ModelInfo modelInfo,
+                                            ModelCatalogEntry modelInfo,
                                             String modelName,
                                             long startTime,
                                             PendingLoad pendingLoad) {
@@ -219,7 +219,7 @@ public final class ModelLoadCoordinator {
         }
     }
 
-    private long loadNativeModel(ModelInfo modelInfo) {
+    private long loadNativeModel(ModelCatalogEntry modelInfo) {
         if (modelInfo.isVRM()) {
             return runtimeAccessPort.loadVrmModel(modelInfo.getModelFilePath(), modelInfo.getFolderPath(), 3);
         }

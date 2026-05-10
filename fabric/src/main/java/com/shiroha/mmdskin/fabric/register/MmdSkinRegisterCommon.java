@@ -1,8 +1,8 @@
 package com.shiroha.mmdskin.fabric.register;
 
 import com.shiroha.mmdskin.fabric.stage.FabricStageSessionRegistry;
+import com.shiroha.mmdskin.player.sync.ServerModelRegistry;
 import com.shiroha.mmdskin.ui.network.NetworkOpCode;
-import com.shiroha.mmdskin.ui.network.ServerModelRegistry;
 
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
@@ -37,10 +37,13 @@ public class MmdSkinRegisterCommon {
             }
 
             String strData = null;
+            byte[] binaryData = null;
             int entityId = 0;
             int intArg = 0;
 
-            if (NetworkOpCode.isStringPayload(opCode)) {
+            if (opCode == NetworkOpCode.BONE_SYNC) {
+                binaryData = buf.readByteArray();
+            } else if (NetworkOpCode.isStringPayload(opCode)) {
                 strData = buf.readUtf();
             } else if (NetworkOpCode.isEntityStringPayload(opCode)) {
                 entityId = buf.readInt();
@@ -76,7 +79,9 @@ public class MmdSkinRegisterCommon {
             packetBuf.writeInt(opCode);
             packetBuf.writeUUID(realUUID);
 
-            if (NetworkOpCode.isStringPayload(opCode)) {
+            if (opCode == NetworkOpCode.BONE_SYNC) {
+                packetBuf.writeByteArray(binaryData != null ? binaryData : new byte[0]);
+            } else if (NetworkOpCode.isStringPayload(opCode)) {
                 packetBuf.writeUtf(strData);
             } else if (NetworkOpCode.isEntityStringPayload(opCode)) {
                 packetBuf.writeInt(entityId);

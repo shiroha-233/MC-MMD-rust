@@ -7,10 +7,10 @@ import com.shiroha.mmdskin.expression.ExpressionSelection;
 import com.shiroha.mmdskin.expression.ExpressionSelectionCodec;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import com.shiroha.mmdskin.model.runtime.ModelRequestKey;
+import com.shiroha.mmdskin.player.sync.PlayerMorphSyncService;
 import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import com.shiroha.mmdskin.ui.config.MorphWheelConfig;
-import com.shiroha.mmdskin.ui.network.MorphWheelNetworkHandler;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -33,7 +33,7 @@ public class DefaultMorphWheelService implements MorphWheelService {
         this(() -> MorphWheelConfig.getInstance().getDisplayedMorphs(),
                 DefaultMorphWheelService::resolveMorphFilePath,
                 new MinecraftMorphRuntimePort(),
-                MorphWheelNetworkHandler.getInstance());
+                PlayerMorphSyncService.getInstance());
     }
 
     DefaultMorphWheelService(

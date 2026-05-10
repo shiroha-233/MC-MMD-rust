@@ -2,7 +2,7 @@ package com.shiroha.mmdskin.player.animation;
 
 import com.shiroha.mmdskin.player.runtime.EntityAnimState;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
-import com.shiroha.mmdskin.ui.network.ActionWheelNetworkHandler;
+import com.shiroha.mmdskin.player.sync.PlayerActionSyncService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.InteractionHand;
@@ -25,7 +25,7 @@ public class AnimationStateManager {
                 boolean local = isLocalPlayer(player);
                 if (local && shouldStopCustomAnimation(player)) {
                     stopCustomAnim(model);
-                    ActionWheelNetworkHandler.getInstance().syncAnimStop();
+                    PlayerActionSyncService.getInstance().syncAnimStop();
                 }
             }
         }

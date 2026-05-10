@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.shiroha.mmdskin.config.PathConstants;
 import com.shiroha.mmdskin.config.UIConstants;
-import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
+import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -142,7 +142,7 @@ public class ModelSelectorConfig {
 
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.player != null && mc.player.getName().getString().equals(playerName)) {
-            PlayerModelSyncManager.broadcastLocalModelSelection(mc.player.getUUID(), modelName);
+            PlayerModelSyncService.broadcastLocalModelSelection(mc.player.getUUID(), modelName);
         }
     }
 

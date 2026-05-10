@@ -1,7 +1,7 @@
 package com.shiroha.mmdskin.voice.runtime;
 
 import com.shiroha.mmdskin.config.UIConstants;
-import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
+import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.resources.ResourceLocation;
@@ -37,7 +37,7 @@ final class VoiceRuntimeSupport {
     }
 
     static String resolvePlayerModelName(AbstractClientPlayer player, boolean localPlayer) {
-        return normalizeModelName(PlayerModelSyncManager.getPlayerModel(
+        return normalizeModelName(PlayerModelSyncService.getPlayerModel(
                 player.getUUID(),
                 player.getName().getString(),
                 localPlayer

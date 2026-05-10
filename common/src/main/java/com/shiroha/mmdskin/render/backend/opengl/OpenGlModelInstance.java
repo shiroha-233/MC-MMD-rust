@@ -18,9 +18,9 @@ import org.joml.Vector3f;
 
 /** 文件职责：承载 CPU/OpenGL 蒙皮模型实例状态。 */
 public class OpenGlModelInstance extends BaseModelInstance {
-    static boolean isShaderInited = false;
-    static int MMDShaderProgram;
-    static ToonShaderCpu toonShaderCpu;
+    static volatile boolean isShaderInited = false;
+    static volatile int MMDShaderProgram;
+    static volatile ToonShaderCpu toonShaderCpu;
     static final ToonConfig toonConfig = ToonConfig.getInstance();
 
     int shaderProgram;
