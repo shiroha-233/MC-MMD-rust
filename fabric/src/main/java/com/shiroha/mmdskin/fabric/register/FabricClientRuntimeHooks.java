@@ -15,8 +15,6 @@ import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import com.shiroha.mmdskin.ui.network.NetworkOpCode;
 import com.shiroha.mmdskin.ui.wheel.ConfigWheelScreen;
 import com.shiroha.mmdskin.ui.wheel.MaidConfigWheelScreen;
-import com.shiroha.mmdskin.voice.runtime.PlayerVoiceSceneObserver;
-import com.shiroha.mmdskin.voice.runtime.VoicePlaybackManager;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -59,8 +57,6 @@ final class FabricClientRuntimeHooks {
         }
 
         ClientRenderRuntime.get().modelRepository().tick();
-        VoicePlaybackManager.getInstance().tick();
-        PlayerVoiceSceneObserver.getInstance().tick(minecraft);
         StageClientRuntime.get().animSyncHelper().tickPending();
         BoneSyncManager.tickLocal();
 
@@ -119,8 +115,6 @@ final class FabricClientRuntimeHooks {
         PlayerModelSyncService.onDisconnect();
         MmdSkinRendererPlayerHelper.onDisconnect();
         BoneSyncManager.onDisconnect();
-        PlayerVoiceSceneObserver.getInstance().onDisconnect();
-        VoicePlaybackManager.getInstance().onDisconnect();
         StageClientRuntime.get().sessionService().onDisconnect();
     }
 

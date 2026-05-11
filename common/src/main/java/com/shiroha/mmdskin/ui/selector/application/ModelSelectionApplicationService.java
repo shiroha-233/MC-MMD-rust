@@ -1,9 +1,9 @@
+/* 职责：管理玩家模型选择与快速切换。 */
 package com.shiroha.mmdskin.ui.selector.application;
 
 import com.shiroha.mmdskin.config.UIConstants;
 import com.shiroha.mmdskin.ui.selector.port.ModelSelectionGateway;
 import com.shiroha.mmdskin.ui.selector.port.ModelSelectionRuntimeGateway;
-import com.shiroha.mmdskin.voice.runtime.VoicePlaybackManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,7 +38,6 @@ public class ModelSelectionApplicationService {
     public void selectModel(String modelName) {
         gateway.setSelectedModel(modelName);
         runtimeGateway.afterLocalModelSelection(modelName);
-        VoicePlaybackManager.getInstance().onLocalPlayerModelSwitched(modelName);
     }
 
     public QuickSwitchResult switchToSlot(int slot) {

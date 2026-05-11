@@ -44,7 +44,6 @@ final class MmdClientResourceBootstrap {
         PathConstants.ensureDirectoryExists(PathConstants.getCustomMorphDir());
         PathConstants.ensureDirectoryExists(PathConstants.getDefaultMorphDir());
         PathConstants.ensureDirectoryExists(PathConstants.getSceneModelDir());
-        PathConstants.ensureDirectoryExists(PathConstants.getVoicePackDir());
     }
 
     private static void extractDefaultAnimIfNeeded() {

@@ -5,7 +5,6 @@ import com.shiroha.mmdskin.asset.catalog.ModelCatalogEntry;
 import com.shiroha.mmdskin.compat.maid.network.MaidModelNetworkHandler;
 import com.shiroha.mmdskin.compat.maid.runtime.MaidMMDModelManager;
 import com.shiroha.mmdskin.config.UIConstants;
-import com.shiroha.mmdskin.voice.runtime.VoicePlaybackManager;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -51,7 +50,6 @@ public class DefaultMaidModelSelectionService implements MaidModelSelectionServi
             return;
         }
         bindingPort.bindModel(maidUUID, modelName);
-        VoicePlaybackManager.getInstance().onMaidModelSwitched(maidUUID.toString(), modelName);
         syncPort.syncMaidModel(maidEntityId, modelName);
     }
 

@@ -3,9 +3,6 @@ package com.shiroha.mmdskin.render.entity;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import com.shiroha.mmdskin.player.runtime.EntityAnimState;
 import com.shiroha.mmdskin.render.scene.MutableRenderPose;
-import com.shiroha.mmdskin.voice.runtime.VoicePlaybackManager;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -31,8 +28,6 @@ public final class EntityAnimationResolver {
         params.translation.zero();
 
         if (entity instanceof LivingEntity living) {
-            ResourceLocation entityTypeId = BuiltInRegistries.ENTITY_TYPE.getKey(living.getType());
-            VoicePlaybackManager.getInstance().onMobFrame(living, entityTypeId != null ? entityTypeId.toString() : living.getType().toString(), null);
             if (living.getHealth() <= 0.0f) {
                 changeAnimOnce(model, EntityAnimState.State.Die, 0);
                 return;

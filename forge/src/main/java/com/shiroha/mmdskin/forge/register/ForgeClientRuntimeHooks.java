@@ -13,8 +13,6 @@ import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import com.shiroha.mmdskin.ui.network.NetworkOpCode;
 import com.shiroha.mmdskin.ui.wheel.ConfigWheelScreen;
 import com.shiroha.mmdskin.ui.wheel.MaidConfigWheelScreen;
-import com.shiroha.mmdskin.voice.runtime.PlayerVoiceSceneObserver;
-import com.shiroha.mmdskin.voice.runtime.VoicePlaybackManager;
 import java.util.UUID;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -56,8 +54,6 @@ final class ForgeClientRuntimeHooks {
         }
 
         ClientRenderRuntime.get().modelRepository().tick();
-        VoicePlaybackManager.getInstance().tick();
-        PlayerVoiceSceneObserver.getInstance().tick(minecraft);
         StageClientRuntime.get().animSyncHelper().tickPending();
 
         if (minecraft.screen == null || minecraft.screen instanceof ConfigWheelScreen) {
@@ -106,8 +102,6 @@ final class ForgeClientRuntimeHooks {
         MMDCameraController.getInstance().exitStageMode();
         PlayerModelSyncService.onDisconnect();
         MmdSkinRendererPlayerHelper.onDisconnect();
-        PlayerVoiceSceneObserver.getInstance().onDisconnect();
-        VoicePlaybackManager.getInstance().onDisconnect();
         StageClientRuntime.get().sessionService().onDisconnect();
     }
 

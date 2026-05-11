@@ -1,11 +1,9 @@
 package com.shiroha.mmdskin.ui.wheel;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import com.shiroha.mmdskin.ui.selector.MaterialVisibilityScreen;
 import com.shiroha.mmdskin.ui.selector.ModelSelectorScreen;
 import com.shiroha.mmdskin.ui.selector.SceneSelectorScreen;
-import com.shiroha.mmdskin.ui.selector.VoicePackBindingScreen;
 import com.shiroha.mmdskin.ui.stage.StagePlaybackUiAdapter;
 import com.shiroha.mmdskin.util.KeyMappingUtil;
 import net.minecraft.client.KeyMapping;
@@ -55,9 +53,6 @@ public class ConfigWheelScreen extends AbstractWheelScreen {
         configSlots.add(new ConfigSlot("material",
                 Component.translatable("gui.mmdskin.config.material_control").getString(),
                 "mat", this::openMaterialVisibility));
-        configSlots.add(new ConfigSlot("voice",
-                Component.translatable("gui.mmdskin.config.voice_pack").getString(),
-                "voice", this::openVoiceBindings));
         configSlots.add(new ConfigSlot("scene",
                 Component.translatable("gui.mmdskin.config.scene_mode").getString(),
                 "scene", this::openSceneSelector));
@@ -150,11 +145,6 @@ public class ConfigWheelScreen extends AbstractWheelScreen {
             Minecraft.getInstance().gui.getChat().addMessage(
                     Component.translatable("message.mmdskin.player.model_not_found"));
         }
-    }
-
-    private void openVoiceBindings() {
-        Minecraft.getInstance().setScreen(VoicePackBindingScreen.createForPlayer(
-                this, ModelSelectorConfig.getInstance().getSelectedModel()));
     }
 
     private void openSceneSelector() {

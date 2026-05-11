@@ -37,7 +37,6 @@ public class ModelSettingsScreen extends Screen {
     private List<ModelSettingsApplicationService.QuickSlotBinding> quickSlotBindings = List.of();
     private boolean pendingClose;
     private boolean pendingOpenAnimConfig;
-    private boolean pendingOpenVoiceConfig;
     private HoverTarget hoveredTarget = HoverTarget.NONE;
     private Layout layout = Layout.empty();
     private ActiveSlider activeSlider = ActiveSlider.NONE;
@@ -60,7 +59,6 @@ public class ModelSettingsScreen extends Screen {
         SAVE,
         RESET,
         ANIM,
-        VOICE,
         DONE
     }
 
@@ -134,10 +132,6 @@ public class ModelSettingsScreen extends Screen {
         }
         if (layout.animButton.contains(mouseX, mouseY)) {
             pendingOpenAnimConfig = true;
-            return true;
-        }
-        if (layout.voiceButton.contains(mouseX, mouseY)) {
-            pendingOpenVoiceConfig = true;
             return true;
         }
         if (layout.doneButton.contains(mouseX, mouseY)) {
@@ -228,13 +222,12 @@ public class ModelSettingsScreen extends Screen {
 
         int actionsBottom = panel.y + panel.h - 6;
         UiRect doneButton = new UiRect(header.x, actionsBottom - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
-        UiRect voiceButton = new UiRect(header.x, doneButton.y - BUTTON_GAP - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
-        UiRect animButton = new UiRect(header.x, voiceButton.y - BUTTON_GAP - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
+        UiRect animButton = new UiRect(header.x, doneButton.y - BUTTON_GAP - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
         UiRect resetButton = new UiRect(header.x, animButton.y - BUTTON_GAP - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
         UiRect saveButton = new UiRect(header.x, resetButton.y - BUTTON_GAP - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
 
         layout = new Layout(panel, header, eyeCard, eyeToggle, eyeSlider, scaleCard, scaleSlider, quickCard, quickButtons,
-                saveButton, resetButton, animButton, voiceButton, doneButton);
+                saveButton, resetButton, animButton, doneButton);
     }
 
     private void updateHoverState(int mouseX, int mouseY) {
@@ -273,10 +266,6 @@ public class ModelSettingsScreen extends Screen {
         }
         if (layout.animButton.contains(mouseX, mouseY)) {
             hoveredTarget = HoverTarget.ANIM;
-            return;
-        }
-        if (layout.voiceButton.contains(mouseX, mouseY)) {
-            hoveredTarget = HoverTarget.VOICE;
             return;
         }
         if (layout.doneButton.contains(mouseX, mouseY)) {
@@ -352,7 +341,6 @@ public class ModelSettingsScreen extends Screen {
         drawFallbackButton(guiGraphics, layout.saveButton, Component.translatable("gui.mmdskin.model_settings.save").getString(), hoveredTarget == HoverTarget.SAVE);
         drawFallbackButton(guiGraphics, layout.resetButton, Component.translatable("gui.mmdskin.model_settings.reset").getString(), hoveredTarget == HoverTarget.RESET);
         drawFallbackButton(guiGraphics, layout.animButton, Component.translatable("gui.mmdskin.model_settings.anim_config").getString(), hoveredTarget == HoverTarget.ANIM);
-        drawFallbackButton(guiGraphics, layout.voiceButton, Component.translatable("gui.mmdskin.model_settings.voice_config").getString(), hoveredTarget == HoverTarget.VOICE);
         drawFallbackButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredTarget == HoverTarget.DONE);
     }
 
@@ -394,11 +382,6 @@ public class ModelSettingsScreen extends Screen {
         if (pendingOpenAnimConfig && minecraft.screen == this) {
             pendingOpenAnimConfig = false;
             minecraft.setScreen(new ModelAnimationScreen(modelName, this));
-            return;
-        }
-        if (pendingOpenVoiceConfig && minecraft.screen == this) {
-            pendingOpenVoiceConfig = false;
-            minecraft.setScreen(VoicePackBindingScreen.createForPlayer(this, modelName));
             return;
         }
         if (pendingClose && minecraft.screen == this) {
@@ -467,12 +450,11 @@ public class ModelSettingsScreen extends Screen {
             UiRect saveButton,
             UiRect resetButton,
             UiRect animButton,
-            UiRect voiceButton,
             UiRect doneButton
     ) {
         static Layout empty() {
             UiRect empty = UiRect.empty();
-            return new Layout(empty, empty, empty, empty, empty, empty, empty, empty, new UiRect[4], empty, empty, empty, empty, empty);
+            return new Layout(empty, empty, empty, empty, empty, empty, empty, empty, new UiRect[4], empty, empty, empty, empty);
         }
     }
 }

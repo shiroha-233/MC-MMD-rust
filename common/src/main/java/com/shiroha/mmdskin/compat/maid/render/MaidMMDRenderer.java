@@ -7,7 +7,6 @@ import com.shiroha.mmdskin.compat.maid.runtime.MaidMMDModelManager;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import com.shiroha.mmdskin.player.runtime.EntityAnimState;
 import com.shiroha.mmdskin.render.scene.RenderScene;
-import com.shiroha.mmdskin.voice.runtime.VoicePlaybackManager;
 import java.util.UUID;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.world.entity.LivingEntity;
@@ -36,11 +35,6 @@ public class MaidMMDRenderer {
 
         try {
             updateAnimationState(entity, modelData);
-            VoicePlaybackManager.getInstance().onMaidFrame(
-                    entity,
-                    maidUUID.toString(),
-                    MaidMMDModelManager.getBindingModelName(maidUUID));
-
             Vector3f entityTrans = getEntityTranslation(modelData);
             float modelSize = modelData.renderProperties().modelScale();
             poseStack.scale(modelSize, modelSize, modelSize);

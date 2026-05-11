@@ -1,3 +1,4 @@
+/** 负责 Forge 侧模块配置界面。 */
 package com.shiroha.mmdskin.forge.config;
 
 import com.shiroha.mmdskin.asset.catalog.ModelCatalogEntry;
@@ -6,7 +7,6 @@ import com.shiroha.mmdskin.config.PhysicsConfigSnapshot;
 import com.shiroha.mmdskin.config.UIConstants;
 import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
 import com.shiroha.mmdskin.render.entity.MobReplacementTargets;
-import com.shiroha.mmdskin.voice.config.VoicePackBindingsConfig;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
 import me.shedaniel.clothconfig2.api.ConfigCategory;
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
@@ -421,25 +421,6 @@ public class ModConfigScreen {
             ));
         }
 
-        ConfigCategory mobVoiceCategory = builder.getOrCreateCategory(
-            Component.translatable("gui.mmdskin.mod_settings.category.mob_voice_pack"));
-        mobVoiceCategory.addEntry(entryBuilder
-            .startTextDescription(Component.translatable("gui.mmdskin.mod_settings.mob_voice_pack.description"))
-            .build());
-        mobVoiceCategory.addEntry(new MobVoicePackListEntry(
-            Component.translatable("gui.mmdskin.voice.row.default"),
-            VoicePackBindingsConfig.getInstance().getMobDefaultPackId(),
-            value -> VoicePackBindingsConfig.getInstance().setMobDefaultPackId(value)
-        ));
-        for (MobReplacementTargets.Target target : MobReplacementTargets.all()) {
-            String entityTypeId = target.entityTypeId().toString();
-            mobVoiceCategory.addEntry(new MobVoicePackListEntry(
-                target,
-                VoicePackBindingsConfig.getInstance().getMobEntityTypePackId(entityTypeId),
-                value -> VoicePackBindingsConfig.getInstance().setMobEntityTypePackId(entityTypeId, value)
-            ));
-        }
-
         builder.setSavingRunnable(() -> saveConfig(data));
 
         return builder.build();
@@ -480,13 +461,6 @@ public class ModConfigScreen {
             return Component.translatable("gui.mmdskin.mod_settings.mob_replacement.vanilla");
         }
         return Component.literal(modelName);
-    }
-
-    static Component toVoicePackSelectionComponent(String packLabel) {
-        if (packLabel == null || packLabel.isBlank()) {
-            return Component.translatable("gui.mmdskin.voice.pack.none");
-        }
-        return Component.literal(packLabel);
     }
 
     static void saveMobReplacementSelection(ConfigData data, String entityTypeId, String value) {

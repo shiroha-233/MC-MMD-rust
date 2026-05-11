@@ -5,7 +5,6 @@ import com.shiroha.mmdskin.compat.maid.network.MaidActionNetworkHandler;
 import com.shiroha.mmdskin.compat.maid.runtime.MaidMMDModelManager;
 import com.shiroha.mmdskin.ui.config.ActionWheelConfig;
 import com.shiroha.mmdskin.ui.wheel.service.ActionOption;
-import com.shiroha.mmdskin.voice.runtime.VoicePlaybackManager;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -42,7 +41,6 @@ public class DefaultMaidActionService implements MaidActionService {
             return;
         }
         runtimePort.playLocalAction(maidUUID, animId);
-        VoicePlaybackManager.getInstance().onMaidCustomAction(maidUUID.toString());
         syncPort.syncMaidAction(maidEntityId, animId);
     }
 

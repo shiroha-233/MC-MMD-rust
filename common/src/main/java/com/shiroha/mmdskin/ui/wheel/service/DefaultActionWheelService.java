@@ -1,9 +1,9 @@
+/* 职责：驱动玩家动作轮盘的动作执行与同步。 */
 package com.shiroha.mmdskin.ui.wheel.service;
 
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.player.sync.PlayerActionSyncService;
 import com.shiroha.mmdskin.ui.config.ActionWheelConfig;
-import com.shiroha.mmdskin.voice.runtime.VoicePlaybackManager;
 import net.minecraft.client.Minecraft;
 
 import java.util.List;
@@ -41,7 +41,6 @@ public class DefaultActionWheelService implements ActionWheelService {
             return;
         }
         if (runtimePort.playLocalAction(animId)) {
-            VoicePlaybackManager.getInstance().onLocalPlayerCustomAction(animId);
             syncPort.syncAction(animId);
         }
     }
