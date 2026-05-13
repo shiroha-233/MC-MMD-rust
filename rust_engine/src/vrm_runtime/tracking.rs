@@ -255,10 +255,7 @@ mod tests {
 
         assert_eq!(calibration.left.wrist_offset_model, Vec3::ZERO);
         assert_eq!(calibration.right.wrist_offset_model, Vec3::ZERO);
-        assert_eq!(
-            calibration.left.wrist_rotation_offset_model,
-            Quat::IDENTITY
-        );
+        assert_eq!(calibration.left.wrist_rotation_offset_model, Quat::IDENTITY);
         assert_eq!(
             calibration.right.wrist_rotation_offset_model,
             Quat::IDENTITY

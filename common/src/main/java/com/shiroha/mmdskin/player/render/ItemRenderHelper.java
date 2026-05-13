@@ -1,7 +1,9 @@
+/* 文件职责：根据手部矩阵驱动双手物品的渲染姿态。 */
 package com.shiroha.mmdskin.player.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.bridge.runtime.NativeMatrixPort;
+import com.shiroha.mmdskin.config.ModelConfigData;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
@@ -9,6 +11,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemDisplayContext;
+import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 
@@ -46,18 +49,39 @@ public class ItemRenderHelper {
     }
 
     public static void renderItems(AbstractClientPlayer player, ManagedModel model,
-                                    PoseStack matrixStack, MultiBufferSource vertexConsumers, int packedLight) {
-        renderHandItem(player, model, matrixStack, vertexConsumers, packedLight, InteractionHand.MAIN_HAND);
-        renderHandItem(player, model, matrixStack, vertexConsumers, packedLight, InteractionHand.OFF_HAND);
+                                   PoseStack matrixStack, MultiBufferSource vertexConsumers,
+                                   int packedLight, float heldItemScale) {
+        renderHandItem(
+                player,
+                model,
+                matrixStack,
+                vertexConsumers,
+                packedLight,
+                InteractionHand.MAIN_HAND,
+                heldItemScale);
+        renderHandItem(
+                player,
+                model,
+                matrixStack,
+                vertexConsumers,
+                packedLight,
+                InteractionHand.OFF_HAND,
+                heldItemScale);
     }
 
     private static void renderHandItem(AbstractClientPlayer player, ManagedModel model,
                                           PoseStack matrixStack, MultiBufferSource vertexConsumers,
-                                          int packedLight, InteractionHand hand) {
+                                          int packedLight, InteractionHand hand, float heldItemScale) {
+        ItemStack itemStack = player.getItemInHand(hand);
+        if (itemStack.isEmpty()) {
+            return;
+        }
+
         boolean isMainHand = (hand == InteractionHand.MAIN_HAND);
         NativeMatrixPort runtimeBridge = matrixPort;
         long modelHandle = model.modelInstance().getModelHandle();
         long handMat = isMainHand ? model.entityState().rightHandMat : model.entityState().leftHandMat;
+        float itemScale = resolveItemScale(heldItemScale);
 
         runtimeBridge.populateHandMatrix(modelHandle, handMat, isMainHand);
 
@@ -69,14 +93,15 @@ public class ItemRenderHelper {
 
         applyConfiguredRotation(matrixStack, player, model, hand);
 
-        matrixStack.scale(10.0f, 10.0f, 10.0f);
+        float baseScale = 10.0f * itemScale;
+        matrixStack.scale(baseScale, baseScale, baseScale);
 
         ItemDisplayContext displayCtx = isMainHand
                 ? ItemDisplayContext.THIRD_PERSON_RIGHT_HAND
                 : ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
 
         Minecraft.getInstance().getItemRenderer().renderStatic(
-            player, player.getItemInHand(hand), displayCtx, !isMainHand,
+            player, itemStack, displayCtx, !isMainHand,
             matrixStack, vertexConsumers, player.level(), packedLight, OverlayTexture.NO_OVERLAY, 0
         );
 
@@ -126,6 +151,16 @@ public class ItemRenderHelper {
         } catch (NumberFormatException e) {
             return defaultValue;
         }
+    }
+
+    private static boolean isFinitePositive(float value) {
+        return Float.isFinite(value) && value > 0.0f;
+    }
+
+    private static float resolveItemScale(float heldItemScale) {
+        return isFinitePositive(heldItemScale)
+                ? heldItemScale
+                : ModelConfigData.DEFAULT_HELD_ITEM_SCALE;
     }
 
     private static String getHandState(AbstractClientPlayer player, InteractionHand hand) {

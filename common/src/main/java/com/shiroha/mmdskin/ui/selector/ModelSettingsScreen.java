@@ -22,7 +22,7 @@ public class ModelSettingsScreen extends Screen {
     private static final int WINDOW_MARGIN = 10;
     private static final int MIN_WINDOW_WIDTH = 168;
     private static final int MAX_WINDOW_WIDTH = 210;
-    private static final int MIN_WINDOW_HEIGHT = 292;
+    private static final int MIN_WINDOW_HEIGHT = 340;
 
     private static final int HEADER_HEIGHT = 34;
     private static final int SECTION_GAP = 4;
@@ -45,7 +45,8 @@ public class ModelSettingsScreen extends Screen {
     private enum ActiveSlider {
         NONE,
         EYE,
-        SCALE
+        SCALE,
+        HELD_BLOCK
     }
 
     private enum HoverTarget {
@@ -53,6 +54,7 @@ public class ModelSettingsScreen extends Screen {
         EYE_TOGGLE,
         EYE_SLIDER,
         SCALE_SLIDER,
+        HELD_BLOCK_SLIDER,
         SLOT_0,
         SLOT_1,
         SLOT_2,
@@ -110,6 +112,11 @@ public class ModelSettingsScreen extends Screen {
         }
         if (layout.scaleSlider.contains(mouseX, mouseY)) {
             activeSlider = ActiveSlider.SCALE;
+            updateSliderValue(activeSlider, mouseX);
+            return true;
+        }
+        if (layout.heldBlockSlider.contains(mouseX, mouseY)) {
+            activeSlider = ActiveSlider.HELD_BLOCK;
             updateSliderValue(activeSlider, mouseX);
             return true;
         }
@@ -212,7 +219,11 @@ public class ModelSettingsScreen extends Screen {
         UiRect scaleCard = new UiRect(header.x, scaleY, header.w, CARD_HEIGHT);
         UiRect scaleSlider = new UiRect(scaleCard.x + 4, scaleCard.y + 26, scaleCard.w - 8, 10);
 
-        int quickY = scaleCard.y + scaleCard.h + SECTION_GAP;
+        int heldBlockY = scaleCard.y + scaleCard.h + SECTION_GAP;
+        UiRect heldBlockCard = new UiRect(header.x, heldBlockY, header.w, CARD_HEIGHT);
+        UiRect heldBlockSlider = new UiRect(heldBlockCard.x + 4, heldBlockCard.y + 26, heldBlockCard.w - 8, 10);
+
+        int quickY = heldBlockCard.y + heldBlockCard.h + SECTION_GAP;
         UiRect quickCard = new UiRect(header.x, quickY, header.w, QUICK_CARD_HEIGHT);
         UiRect[] quickButtons = new UiRect[4];
         int quickButtonWidth = (quickCard.w - BUTTON_GAP) / 2;
@@ -227,7 +238,8 @@ public class ModelSettingsScreen extends Screen {
         UiRect resetButton = new UiRect(header.x, animButton.y - BUTTON_GAP - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
         UiRect saveButton = new UiRect(header.x, resetButton.y - BUTTON_GAP - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
 
-        layout = new Layout(panel, header, eyeCard, eyeToggle, eyeSlider, scaleCard, scaleSlider, quickCard, quickButtons,
+        layout = new Layout(panel, header, eyeCard, eyeToggle, eyeSlider, scaleCard, scaleSlider,
+                heldBlockCard, heldBlockSlider, quickCard, quickButtons,
                 saveButton, resetButton, animButton, doneButton);
     }
 
@@ -243,6 +255,10 @@ public class ModelSettingsScreen extends Screen {
         }
         if (layout.scaleSlider.contains(mouseX, mouseY)) {
             hoveredTarget = HoverTarget.SCALE_SLIDER;
+            return;
+        }
+        if (layout.heldBlockSlider.contains(mouseX, mouseY)) {
+            hoveredTarget = HoverTarget.HELD_BLOCK_SLIDER;
             return;
         }
         for (int i = 0; i < layout.quickSlotButtons.length; i++) {
@@ -276,11 +292,27 @@ public class ModelSettingsScreen extends Screen {
 
     private void updateSliderValue(ActiveSlider slider, double mouseX) {
         if (slider == ActiveSlider.EYE) {
-            config.eyeMaxAngle = valueFromSlider(layout.eyeSlider, mouseX, 0.05f, 1.0f);
+            config.eyeMaxAngle = valueFromSlider(
+                    layout.eyeSlider,
+                    mouseX,
+                    ModelConfigData.MIN_EYE_MAX_ANGLE,
+                    ModelConfigData.MAX_EYE_MAX_ANGLE);
             return;
         }
         if (slider == ActiveSlider.SCALE) {
-            config.modelScale = valueFromSlider(layout.scaleSlider, mouseX, 0.5f, 2.0f);
+            config.modelScale = valueFromSlider(
+                    layout.scaleSlider,
+                    mouseX,
+                    ModelConfigData.MIN_MODEL_SCALE,
+                    ModelConfigData.MAX_MODEL_SCALE);
+            return;
+        }
+        if (slider == ActiveSlider.HELD_BLOCK) {
+            config.heldItemScale = valueFromSlider(
+                    layout.heldBlockSlider,
+                    mouseX,
+                    ModelConfigData.MIN_HELD_ITEM_SCALE,
+                    ModelConfigData.MAX_HELD_ITEM_SCALE);
         }
     }
 
@@ -303,8 +335,18 @@ public class ModelSettingsScreen extends Screen {
     }
 
     private void renderFallback(GuiGraphics guiGraphics) {
-        float eyeAngleNormalized = normalized(config.eyeMaxAngle, 0.05f, 1.0f);
-        float modelScaleNormalized = normalized(config.modelScale, 0.5f, 2.0f);
+        float eyeAngleNormalized = normalized(
+                config.eyeMaxAngle,
+                ModelConfigData.MIN_EYE_MAX_ANGLE,
+                ModelConfigData.MAX_EYE_MAX_ANGLE);
+        float modelScaleNormalized = normalized(
+                config.modelScale,
+                ModelConfigData.MIN_MODEL_SCALE,
+                ModelConfigData.MAX_MODEL_SCALE);
+        float heldBlockScaleNormalized = normalized(
+                config.heldItemScale,
+                ModelConfigData.MIN_HELD_ITEM_SCALE,
+                ModelConfigData.MAX_HELD_ITEM_SCALE);
         TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
         TranslucentTrayChrome.drawPanel(guiGraphics, layout.panel.x, layout.panel.y, layout.panel.w, layout.panel.h);
 
@@ -327,6 +369,14 @@ public class ModelSettingsScreen extends Screen {
                 layout.scaleSlider,
                 Component.translatable("gui.mmdskin.model_settings.model_scale", String.format("%.2f", config.modelScale)).getString(),
                 modelScaleNormalized
+        );
+
+        drawFallbackCard(guiGraphics, layout.heldBlockCard, Component.translatable("gui.mmdskin.model_settings.held_item_display").getString());
+        drawFallbackSlider(
+                guiGraphics,
+                layout.heldBlockSlider,
+                Component.translatable("gui.mmdskin.model_settings.held_item_scale", String.format("%.2f", config.heldItemScale)).getString(),
+                heldBlockScaleNormalized
         );
 
         drawFallbackCard(guiGraphics, layout.quickCard, Component.translatable("gui.mmdskin.model_settings.quick_bind").getString());
@@ -445,6 +495,8 @@ public class ModelSettingsScreen extends Screen {
             UiRect eyeSlider,
             UiRect scaleCard,
             UiRect scaleSlider,
+            UiRect heldBlockCard,
+            UiRect heldBlockSlider,
             UiRect quickCard,
             UiRect[] quickSlotButtons,
             UiRect saveButton,
@@ -454,7 +506,7 @@ public class ModelSettingsScreen extends Screen {
     ) {
         static Layout empty() {
             UiRect empty = UiRect.empty();
-            return new Layout(empty, empty, empty, empty, empty, empty, empty, empty, new UiRect[4], empty, empty, empty, empty);
+            return new Layout(empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, new UiRect[4], empty, empty, empty, empty);
         }
     }
 }

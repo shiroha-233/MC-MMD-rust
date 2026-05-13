@@ -224,10 +224,7 @@ mod tests {
             .expect("annotation snapshot");
 
         assert_eq!(snapshot.hmd_visible_materials, vec![false, false, false]);
-        assert_eq!(
-            snapshot.mirror_visible_materials,
-            vec![false, false, false]
-        );
+        assert_eq!(snapshot.mirror_visible_materials, vec![false, false, false]);
     }
 
     #[test]

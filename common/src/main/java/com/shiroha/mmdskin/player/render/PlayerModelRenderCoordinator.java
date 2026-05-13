@@ -1,9 +1,11 @@
+/* 文件职责：协调玩家模型在普通视角、第一人称与 VR 场景中的渲染切换。 */
 package com.shiroha.mmdskin.player.render;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.shiroha.mmdskin.config.RuntimeConfigPortHolder;
 import com.shiroha.mmdskin.config.ModelConfigManager;
+import com.shiroha.mmdskin.config.RuntimeConfigPortHolder;
+import com.shiroha.mmdskin.config.ModelConfigData;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import com.shiroha.mmdskin.player.animation.AnimationStateManager;
 import com.shiroha.mmdskin.player.animation.PendingAnimSignalCache;
@@ -39,7 +41,8 @@ final class PlayerModelRenderCoordinator {
         boolean isVr = selection.isLocalPlayer() && vrRuntime.isLocalPlayerInVr();
         syncVrState(modelData, player, tickDelta, isVr, vrRuntime);
 
-        float combinedScale = size[0] * ModelConfigManager.getConfig(selection.selectedModel()).modelScale;
+        ModelConfigData modelConfig = ModelConfigManager.getConfig(selection.selectedModel());
+        float combinedScale = size[0] * modelConfig.modelScale;
         if (selection.isLocalPlayer()) {
             FirstPersonManager.preRender(combinedScale, true);
         }
@@ -69,7 +72,13 @@ final class PlayerModelRenderCoordinator {
                 needsPostRenderSync = false;
             }
 
-            ItemRenderHelper.renderItems(player, modelData, matrixStack, vertexConsumers, packedLight);
+            ItemRenderHelper.renderItems(
+                    player,
+                    modelData,
+                    matrixStack,
+                    vertexConsumers,
+                    packedLight,
+                    modelConfig.heldItemScale);
             return PlayerRenderAction.CANCEL;
         } finally {
             try {

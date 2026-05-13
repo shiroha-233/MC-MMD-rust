@@ -849,8 +849,8 @@ impl VrIkSolver {
         let mut rotation_offset =
             (bind_pose.rotation_offset * controller_mount_rotation(side)).normalize();
         if hand_face_flip {
-            rotation_offset = (rotation_offset * Quat::from_rotation_y(std::f32::consts::PI))
-                .normalize();
+            rotation_offset =
+                (rotation_offset * Quat::from_rotation_y(std::f32::consts::PI)).normalize();
         }
         rotation_offset = (rotation_offset * manual_wrist_rotation_offset_model).normalize();
         WristTarget {
