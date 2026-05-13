@@ -55,8 +55,6 @@ public final class DefaultStageLocalModelBindingPort implements StageLocalModelB
         }
         scenePort.setAutoBlinkEnabled(modelHandle, false);
         scenePort.setEyeTrackingEnabled(modelHandle, false);
-        modelPort.setLegIkEnabled(modelHandle, StageConfig.getInstance().legIkEnabled);
-        modelPort.setMotionIkEnabled(modelHandle, StageConfig.getInstance().motionIkEnabled);
     }
 
     @Override
@@ -87,8 +85,6 @@ public final class DefaultStageLocalModelBindingPort implements StageLocalModelB
             if (handle != 0L) {
                 scenePort.setAutoBlinkEnabled(handle, true);
                 scenePort.setEyeTrackingEnabled(handle, true);
-                modelPort.setLegIkEnabled(handle, true);
-                modelPort.setMotionIkEnabled(handle, true);
             }
             MmdSkinRendererPlayerHelper.resetModelAnimationState(minecraft.player, modelData);
         }

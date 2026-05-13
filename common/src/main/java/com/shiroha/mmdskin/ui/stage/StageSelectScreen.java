@@ -60,8 +60,6 @@ public class StageSelectScreen extends Screen {
     private boolean hoveredCinematic;
     private boolean hoveredUseHostCamera;
     private boolean hoveredAudioSlider;
-    private boolean hoveredLegIk;
-    private boolean hoveredMotionIk;
     private boolean hoveredPrimary;
     private boolean hoveredCancel;
     private boolean hoveredMergeAll;
@@ -88,8 +86,6 @@ public class StageSelectScreen extends Screen {
     private int audioSliderX;
     private int audioSliderWidth;
     private int useHostCameraY;
-    private int legIkToggleY;
-    private int motionIkToggleY;
     private int cinematicToggleY;
 
     public StageSelectScreen() {
@@ -176,14 +172,6 @@ public class StageSelectScreen extends Screen {
         if (isAudioSliderHovered(mouseX, mouseY)) {
             draggingAudioVolume = true;
             updateAudioVolume(mouseX);
-            return true;
-        }
-        if (hoveredLegIk) {
-            state.toggleLegIkEnabled();
-            return true;
-        }
-        if (hoveredMotionIk) {
-            state.toggleMotionIkEnabled();
             return true;
         }
         if (!facade.isSessionMember() && isCameraSliderHovered(mouseX, mouseY)) {
@@ -322,9 +310,7 @@ public class StageSelectScreen extends Screen {
         audioSliderX = leftPanelX + 8;
         audioSliderWidth = LEFT_PANEL_WIDTH - 16;
         useHostCameraY = footerTop + 7;
-        legIkToggleY = audioSliderTrackY + 10;
-        motionIkToggleY = legIkToggleY + 16;
-        cinematicToggleY = motionIkToggleY + 16;
+        cinematicToggleY = audioSliderTrackY + 10;
 
         if (assignPanel != null) {
             assignPanel.layout(this.width, this.height, facade.isSessionMember());
@@ -350,8 +336,6 @@ public class StageSelectScreen extends Screen {
         hoveredCinematic = isRectHovered(mouseX, mouseY, leftPanelX + 10, cinematicToggleY, LEFT_PANEL_WIDTH - 20, 14);
         hoveredUseHostCamera = facade.isSessionMember() && isRectHovered(mouseX, mouseY, leftPanelX + 10, useHostCameraY, LEFT_PANEL_WIDTH - 20, 14);
         hoveredAudioSlider = isAudioSliderHovered(mouseX, mouseY);
-        hoveredLegIk = isRectHovered(mouseX, mouseY, leftPanelX + 10, legIkToggleY, LEFT_PANEL_WIDTH - 20, 14);
-        hoveredMotionIk = isRectHovered(mouseX, mouseY, leftPanelX + 10, motionIkToggleY, LEFT_PANEL_WIDTH - 20, 14);
         hoveredPrimary = isRectHovered(mouseX, mouseY, footerPrimaryX, footerButtonY, footerButtonWidth, BUTTON_HEIGHT);
         hoveredCancel = isRectHovered(mouseX, mouseY, footerSecondaryX, footerButtonY, footerButtonWidth, BUTTON_HEIGHT);
         hoveredMergeAll = false;
@@ -447,10 +431,6 @@ public class StageSelectScreen extends Screen {
             drawCameraSlider(graphics);
         }
         drawAudioSlider(graphics);
-        drawToggle(graphics, leftPanelX + 10, legIkToggleY, LEFT_PANEL_WIDTH - 20, 14, state.legIkEnabled(), hoveredLegIk,
-                wb("leg_ik.short"));
-        drawToggle(graphics, leftPanelX + 10, motionIkToggleY, LEFT_PANEL_WIDTH - 20, 14, state.motionIkEnabled(), hoveredMotionIk,
-                wb("motion_ik.short"));
         drawToggle(graphics, leftPanelX + 10, cinematicToggleY, LEFT_PANEL_WIDTH - 20, 14, state.cinematicMode(), hoveredCinematic,
                 Component.translatable("gui.mmdskin.stage.cinematic").getString());
 
@@ -577,9 +557,7 @@ public class StageSelectScreen extends Screen {
                 selectedPack != null ? selectedPack.getName() : "",
                 state.cinematicMode(),
                 state.cameraHeightOffset(),
-                state.audioVolume(),
-                state.legIkEnabled(),
-                state.motionIkEnabled()
+                state.audioVolume()
         );
     }
 

@@ -317,9 +317,5 @@ public class NativeFunc {
 
     public native void SetVRIKParams(long model, float armIKStrength);
 
-    public native void SetLegIkEnabled(long model, boolean enabled);
-
-    public native void SetMotionIkEnabled(long model, boolean enabled);
-
     public native void SetVRHandMode(long model, int mode);
 }

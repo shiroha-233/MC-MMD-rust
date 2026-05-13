@@ -30,14 +30,12 @@ class StageWorkbenchFacadeTest {
                 configAccess
         );
 
-        facade.savePreferences("beta", false, 1.25f, 0.65f, false, false);
+        facade.savePreferences("beta", false, 1.25f, 0.65f);
 
         assertEquals("beta", facade.loadPreferences().lastStagePack());
         assertFalse(facade.loadPreferences().cinematicMode());
         assertEquals(1.25f, facade.loadPreferences().cameraHeightOffset());
         assertEquals(0.65f, facade.loadPreferences().audioVolume());
-        assertFalse(facade.loadPreferences().legIkEnabled());
-        assertFalse(facade.loadPreferences().motionIkEnabled());
         assertEquals(packs, facade.loadStagePacks());
     }
 

@@ -52,14 +52,6 @@ public final class VRBoneDriver {
         }
 
         @Override
-        public void setLegIkEnabled(long modelHandle, boolean enabled) {
-        }
-
-        @Override
-        public void setMotionIkEnabled(long modelHandle, boolean enabled) {
-        }
-
-        @Override
         public int getMaterialCount(long modelHandle) {
             return 0;
         }

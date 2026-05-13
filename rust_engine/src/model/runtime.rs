@@ -59,8 +59,6 @@ fn rand_float() -> f32 {
     })
 }
 
-const LEG_IK_BONE_NAMES: &[&str] = &["左足ＩＫ", "右足ＩＫ", "左つま先ＩＫ", "右つま先ＩＫ"];
-
 /// MMD 运行时模型
 pub struct MmdModel {
     // 静态数据
@@ -126,8 +124,6 @@ pub struct MmdModel {
     // 物理系统
     physics: Option<MMDPhysics>,
     physics_enabled: bool,
-    leg_ik_enabled: bool,
-    motion_ik_enabled: bool,
     /// 骨骼变换缓冲区（避免每帧堆分配）
     physics_bone_transforms_buf: Vec<Mat4>,
 
@@ -273,8 +269,6 @@ impl MmdModel {
             model_transform: Mat4::IDENTITY,
             physics: None,
             physics_enabled: false,
-            leg_ik_enabled: true,
-            motion_ik_enabled: true,
             physics_bone_transforms_buf: Vec::new(),
             material_visible: Vec::new(),
             user_material_visible: Vec::new(),
@@ -990,16 +984,8 @@ impl MmdModel {
         self.begin_animation();
 
         if let Some(animation) = vmd {
-            animation.evaluate_with_weight(
-                frame,
-                1.0,
-                &mut self.bone_manager,
-                &mut self.morph_manager,
-                self.motion_ik_enabled,
-            );
+            animation.evaluate(frame, &mut self.bone_manager, &mut self.morph_manager);
         }
-
-        self.apply_leg_ik_preference();
 
         // 应用头部旋转
         self.apply_head_rotation();
@@ -1188,9 +1174,7 @@ impl MmdModel {
 
         // 评估所有层并混合结果
         self.animation_layer_manager
-            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager, self.motion_ik_enabled);
-
-        self.apply_leg_ik_preference();
+            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager);
 
         // 应用 VPD 骨骼姿势覆盖（在动画评估后）
         self.apply_vpd_bone_overrides();
@@ -2163,9 +2147,7 @@ impl MmdModel {
         self.begin_animation();
 
         self.animation_layer_manager
-            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager, self.motion_ik_enabled);
-
-        self.apply_leg_ik_preference();
+            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager);
 
         // 应用 VPD 骨骼姿势覆盖（在动画评估后）
         self.apply_vpd_bone_overrides();
@@ -2241,9 +2223,7 @@ impl MmdModel {
         self.bone_manager.reset_all_ik_enabled();
 
         self.animation_layer_manager
-            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager, self.motion_ik_enabled);
-
-        self.apply_leg_ik_preference();
+            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager);
 
         self.apply_vpd_bone_overrides();
         self.update_auto_blink(elapsed);
@@ -2367,30 +2347,6 @@ impl MmdModel {
     /// 启用/禁用物理
     pub fn set_physics_enabled(&mut self, enabled: bool) {
         self.physics_enabled = enabled;
-    }
-
-    pub fn set_leg_ik_enabled(&mut self, enabled: bool) {
-        self.leg_ik_enabled = enabled;
-        if enabled {
-            for &bone_name in LEG_IK_BONE_NAMES {
-                self.bone_manager.set_ik_enabled_by_name(bone_name, true);
-            }
-        } else {
-            self.apply_leg_ik_preference();
-        }
-    }
-
-    pub fn set_motion_ik_enabled(&mut self, enabled: bool) {
-        self.motion_ik_enabled = enabled;
-    }
-
-    fn apply_leg_ik_preference(&mut self) {
-        if self.leg_ik_enabled {
-            return;
-        }
-        for &bone_name in LEG_IK_BONE_NAMES {
-            self.bone_manager.set_ik_enabled_by_name(bone_name, false);
-        }
     }
 
     /// 获取物理是否启用

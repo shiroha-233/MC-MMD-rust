@@ -15,16 +15,12 @@ final class StageSelectState {
     private boolean cinematicMode;
     private float cameraHeightOffset;
     private float audioVolume;
-    private boolean legIkEnabled;
-    private boolean motionIkEnabled;
 
     StageSelectState(StageWorkbenchFacade.WorkbenchPreferences preferences, List<StagePack> initialStagePacks) {
         Objects.requireNonNull(preferences, "preferences");
         this.cinematicMode = preferences.cinematicMode();
         this.cameraHeightOffset = Mth.clamp(preferences.cameraHeightOffset(), -2.0f, 2.0f);
         this.audioVolume = Mth.clamp(preferences.audioVolume(), 0.0f, 1.0f);
-        this.legIkEnabled = preferences.legIkEnabled();
-        this.motionIkEnabled = preferences.motionIkEnabled();
         replaceStagePacks(initialStagePacks, preferences.lastStagePack());
     }
 
@@ -60,14 +56,6 @@ final class StageSelectState {
 
     void toggleCinematicMode() {
         cinematicMode = !cinematicMode;
-    }
-
-    void toggleLegIkEnabled() {
-        legIkEnabled = !legIkEnabled;
-    }
-
-    void toggleMotionIkEnabled() {
-        motionIkEnabled = !motionIkEnabled;
     }
 
     void setCameraHeightOffset(float cameraHeightOffset) {
@@ -107,14 +95,6 @@ final class StageSelectState {
 
     float audioVolume() {
         return audioVolume;
-    }
-
-    boolean legIkEnabled() {
-        return legIkEnabled;
-    }
-
-    boolean motionIkEnabled() {
-        return motionIkEnabled;
     }
 
     private int resolvePackIndex(String preferredPackName) {

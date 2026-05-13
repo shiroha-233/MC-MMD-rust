@@ -21,7 +21,7 @@ class StageSelectScreenTest {
     void shouldRestorePackSelectionAndDropMissingHostMotion() {
         FakeLobbyAccess lobbyAccess = new FakeLobbyAccess();
         FakeConfigAccess configAccess = new FakeConfigAccess();
-        configAccess.preferences = new StageWorkbenchFacade.WorkbenchPreferences("beta", true, 0.75f, 0.55f, false, false);
+        configAccess.preferences = new StageWorkbenchFacade.WorkbenchPreferences("beta", true, 0.75f, 0.55f);
         StageWorkbenchFacade facade = new StageWorkbenchFacade(
                 lobbyAccess,
                 () -> List.of(createPack("alpha", List.of("dance.vmd")), createPack("beta", List.of("solo.vmd"))),
@@ -33,8 +33,6 @@ class StageSelectScreenTest {
 
         assertEquals("beta", screen.debugState().selectedPack().getName());
         assertEquals(0.55f, screen.debugState().audioVolume());
-        assertFalse(screen.debugState().legIkEnabled());
-        assertFalse(screen.debugState().motionIkEnabled());
         screen.debugState().toggleSelectedHostMotion("ghost.vmd");
 
         screen.debugState().replaceStagePacks(List.of(createPack("alpha", List.of("dance.vmd"))), "alpha");

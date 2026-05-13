@@ -361,15 +361,6 @@ impl AnimationLayer {
 
     /// 评估动画并应用到骨骼管理器
     pub fn evaluate(&self, bone_manager: &mut BoneManager, morph_manager: &mut MorphManager) {
-        self.evaluate_with_options(bone_manager, morph_manager, true);
-    }
-
-    pub fn evaluate_with_options(
-        &self,
-        bone_manager: &mut BoneManager,
-        morph_manager: &mut MorphManager,
-        motion_ik_enabled: bool,
-    ) {
         if !self.enabled {
             return;
         }
@@ -406,7 +397,7 @@ impl AnimationLayer {
         };
 
         if self.state == AnimationLayerState::Transitioning {
-            self.evaluate_transition(bone_manager, morph_manager, motion_ik_enabled);
+            self.evaluate_transition(bone_manager, morph_manager);
         } else if let Some(ref animation) = self.animation {
             if self.effective_weight > 0.001 {
                 animation.evaluate_with_weight(
@@ -414,7 +405,6 @@ impl AnimationLayer {
                     self.effective_weight,
                     bone_manager,
                     morph_manager,
-                    motion_ik_enabled,
                 );
             }
         }
@@ -433,7 +423,6 @@ impl AnimationLayer {
         &self,
         bone_manager: &mut BoneManager,
         morph_manager: &mut MorphManager,
-        motion_ik_enabled: bool,
     ) {
         let t = self.transition_progress;
 
@@ -447,7 +436,6 @@ impl AnimationLayer {
                 self.effective_weight,
                 bone_manager,
                 morph_manager,
-                motion_ik_enabled,
             );
         }
 
@@ -663,7 +651,6 @@ impl AnimationLayerManager {
         &self,
         bone_manager: &mut BoneManager,
         morph_manager: &mut MorphManager,
-        motion_ik_enabled: bool,
     ) {
         // 收集所有活跃层（包括过渡中的层）
         let active_layers: Vec<usize> = self
@@ -686,7 +673,7 @@ impl AnimationLayerManager {
         // 对每个活跃层进行评估（使用 layer.evaluate 以支持过渡）
         for layer_idx in active_layers {
             if let Some(layer) = self.layers.get(layer_idx) {
-                layer.evaluate_with_options(bone_manager, morph_manager, motion_ik_enabled);
+                layer.evaluate(bone_manager, morph_manager);
             }
         }
     }
