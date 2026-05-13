@@ -1,6 +1,6 @@
 //! 动画轨道 - 复刻 mdanceio 实现
 
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat3, Mat4, Quat, Vec3};
 use std::collections::BTreeMap;
 
 use super::bezier_curve::BezierCurveFactory;
@@ -596,13 +596,8 @@ impl CameraMotionTrack {
         (prev, next)
     }
 
-    /// 从 CameraKeyframe 计算相机位置
-    /// 复刻 mdanceio PerspectiveCamera.update() 的矩阵法：
-    ///   1. angle 直接使用（mdanceio 的 CAMERA_DIRECTION 和 ANGLE_SCALE_FACTOR 双重取反抵消）
-    ///   2. 四元数旋转顺序 z * x * y
-    ///   3. 视图矩阵 = rotation * translation(-look_at)，然后 Z 列加 -distance（DISTANCE_FACTOR=-1）
-    ///   4. 求逆得到世界位置
-    ///   5. 转换到 MC 坐标系（Z 取反）并提取 pitch/yaw
+    /// 从 CameraKeyframe 计算相机世界位置与完整欧拉角（pitch/yaw/roll）
+    /// 方向向量法提取 pitch/yaw 保证朝向 look_at，旋转矩阵法提取 roll 保留倾斜
     fn compute_camera_transform(
         look_at: Vec3,
         angle: Vec3,
@@ -610,10 +605,6 @@ impl CameraMotionTrack {
         fov: f32,
         is_perspective: bool,
     ) -> CameraFrameTransform {
-        // mdanceio 在 synchronize_camera 中对 angle 乘 CAMERA_DIRECTION(-1,1,1)，
-        // 然后在 camera.update 中再乘 ANGLE_SCALE_FACTOR(-1,1,1)，双重取反抵消。
-        // 因此直接使用 VMD 原始 angle，不做任何缩放。
-
         // 四元数旋转顺序: z * x * y (mdanceio camera.rs:115-118)
         let qx = Quat::from_rotation_x(angle.x);
         let qy = Quat::from_rotation_y(angle.y);
@@ -625,7 +616,7 @@ impl CameraMotionTrack {
         let trans_mat = Mat4::from_translation(-look_at);
         let mut view_matrix = rot_mat * trans_mat;
 
-        // mdanceio project.rs:1135 DISTANCE_FACTOR = -1.0，需要对 distance 取反
+        // mdanceio DISTANCE_FACTOR = -1.0
         view_matrix.w_axis.z += -distance;
 
         // 从视图矩阵求逆提取相机世界位置
@@ -636,16 +627,31 @@ impl CameraMotionTrack {
         let position_mc = Vec3::new(position_mmd.x, position_mmd.y, -position_mmd.z);
         let look_at_mc = Vec3::new(look_at.x, look_at.y, -look_at.z);
 
-        // 从相机指向 look_at 的方向提取 MC pitch/yaw
+        // 方向向量法提取 pitch/yaw（保证相机朝向 look_at）
         let dir = (look_at_mc - position_mc).normalize_or_zero();
-        // MC pitch: 正值 = 朝下看，yaw: 0 = 南(+Z)
         let mc_pitch = (-dir.y).asin();
         let mc_yaw = (-dir.x).atan2(dir.z);
 
-        // roll 置零：MC Camera.setRotation() 不支持 roll，VMD angle.z 无法应用
+        // 从旋转矩阵提取 roll：比较实际 up 与无 roll 时的 up
+        let cam_world = view_orientation.inverse();
+        let r = Mat3::from_quat(cam_world);
+        // 实际 up 向量（旋转矩阵的 Y 列），Z 取反转 MC 坐标
+        let actual_up = Vec3::new(r.y_axis.x, r.y_axis.y, -r.y_axis.z);
+        // 无 roll 时的 up：从 forward 和 world_up 推导
+        let world_up = Vec3::Y;
+        let right = dir.cross(world_up).normalize_or_zero();
+        let no_roll_up = if right.length_squared() > 1e-6 {
+            right.cross(dir).normalize()
+        } else {
+            // forward 接近垂直时退化，roll 无意义
+            Vec3::Y
+        };
+        // roll = actual_up 相对 no_roll_up 绕 forward 轴的旋转角
+        let mc_roll = no_roll_up.cross(actual_up).dot(dir).atan2(no_roll_up.dot(actual_up));
+
         CameraFrameTransform {
             position: position_mc,
-            rotation: Vec3::new(mc_pitch, mc_yaw, 0.0),
+            rotation: Vec3::new(mc_pitch, mc_yaw, mc_roll),
             fov,
             is_perspective,
         }
