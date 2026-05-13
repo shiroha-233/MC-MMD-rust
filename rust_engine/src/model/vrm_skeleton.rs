@@ -1,18 +1,17 @@
 //! glTF skin/nodes → BoneSet 骨骼系统转换（含 MMD 虚拟骨骼 + IK 骨骼注入）
 
-use std::collections::HashMap;
 use glam::{Mat4, Quat, Vec3};
+use std::collections::HashMap;
 
-use crate::skeleton::{BoneLink, BoneFlags, BoneSet, IkLink, IkConfig};
-use super::vrm_extensions::HumanoidMapping;
 use super::bone_mapping;
+use super::vrm_extensions::HumanoidMapping;
+use crate::skeleton::{BoneFlags, BoneLink, BoneSet, IkConfig, IkLink};
 
 /// VRM→PMX 单位缩放（1m → 12.5 PMX 单位）
 const VRM_TO_PMX_SCALE: f32 = 12.5;
 
 /// MMD 虚拟骨骼数量（全ての親 + センター + グルーブ）
 pub(crate) const VIRTUAL_BONE_COUNT: usize = 3;
-
 
 fn build_parent_map(document: &gltf::Document) -> HashMap<usize, usize> {
     let mut parent_map = HashMap::new();
@@ -46,7 +45,8 @@ fn compute_world_transform_recursive(
     let local = Mat4::from_cols_array_2d(&nodes[node_idx].transform().matrix());
     let world = match parent_map.get(&node_idx) {
         Some(&parent_idx) => {
-            let parent_world = compute_world_transform_recursive(parent_idx, nodes, parent_map, cache);
+            let parent_world =
+                compute_world_transform_recursive(parent_idx, nodes, parent_map, cache);
             parent_world * local
         }
         None => local,
@@ -70,18 +70,26 @@ pub(crate) fn build_skeleton(
     let parent_map = build_parent_map(document);
 
     let joint_nodes: Vec<usize> = skin.joints().map(|n| n.index()).collect();
-    let node_to_joint: HashMap<usize, usize> = joint_nodes.iter().enumerate()
+    let node_to_joint: HashMap<usize, usize> = joint_nodes
+        .iter()
+        .enumerate()
         .map(|(joint_idx, &node_idx)| (node_idx, joint_idx))
         .collect();
 
     let node_world_transforms = compute_node_world_transforms(document);
 
     let reader = skin.reader(|buffer| Some(&buffers[buffer.index()]));
-    let ibms: Vec<Mat4> = reader.read_inverse_bind_matrices()
+    let ibms: Vec<Mat4> = reader
+        .read_inverse_bind_matrices()
         .map(|iter| iter.map(|m| Mat4::from_cols_array_2d(&m)).collect())
         .unwrap_or_default();
 
-    let hips_pos = find_hips_world_pos(humanoid_mapping, &joint_nodes, &ibms, &node_world_transforms);
+    let hips_pos = find_hips_world_pos(
+        humanoid_mapping,
+        &joint_nodes,
+        &ibms,
+        &node_world_transforms,
+    );
 
     let mut bone_set = BoneSet::new();
     bone_set.set_vrm(true);
@@ -103,9 +111,16 @@ pub(crate) fn build_skeleton(
         // X-flip + Z-flip 与 PMX 统一坐标空间
         let world_pos = if joint_idx < ibms.len() {
             let bind_matrix = ibms[joint_idx].inverse();
-            Vec3::new(-bind_matrix.col(3).x, bind_matrix.col(3).y, -bind_matrix.col(3).z)
+            Vec3::new(
+                -bind_matrix.col(3).x,
+                bind_matrix.col(3).y,
+                -bind_matrix.col(3).z,
+            )
         } else {
-            let wt = node_world_transforms.get(&node_idx).copied().unwrap_or(Mat4::IDENTITY);
+            let wt = node_world_transforms
+                .get(&node_idx)
+                .copied()
+                .unwrap_or(Mat4::IDENTITY);
             Vec3::new(-wt.col(3).x, wt.col(3).y, -wt.col(3).z)
         };
 
@@ -114,7 +129,8 @@ pub(crate) fn build_skeleton(
         if Some(joint_idx) == hips_joint_idx {
             bone.parent_index = 2; // グルーブ
         } else {
-            bone.parent_index = parent_map.get(&node_idx)
+            bone.parent_index = parent_map
+                .get(&node_idx)
                 .and_then(|&parent_node| node_to_joint.get(&parent_node))
                 .map(|&idx| (idx + VIRTUAL_BONE_COUNT) as i32)
                 .unwrap_or(-1);
@@ -159,26 +175,39 @@ fn inject_ik_bones(bone_set: &mut BoneSet) {
             }
         };
 
-        let target_pos = bone_set.get_bone(target_idx)
+        let target_pos = bone_set
+            .get_bone(target_idx)
             .map(|b| b.initial_position)
             .unwrap_or(Vec3::ZERO);
 
-        let parent_idx = bone_set.find_bone_by_name(parent_name)
+        let parent_idx = bone_set
+            .find_bone_by_name(parent_name)
             .map(|idx| idx as i32)
             .unwrap_or(0);
 
-        let links: Vec<IkLink> = chain_names.iter().filter_map(|&name| {
-            bone_set.find_bone_by_name(name).map(|idx| {
-                let is_knee = name.contains("ひざ");
-                IkLink {
-                    bone_index: idx as i32,
-                    has_limits: is_knee,
-                    // X+Z flip 后膝盖弯曲方向为 X 轴正方向
-                    limit_min: if is_knee { Vec3::new(0.008726646, 0.0, 0.0) } else { Vec3::ZERO },
-                    limit_max: if is_knee { Vec3::new(std::f32::consts::PI, 0.0, 0.0) } else { Vec3::ZERO },
-                }
+        let links: Vec<IkLink> = chain_names
+            .iter()
+            .filter_map(|&name| {
+                bone_set.find_bone_by_name(name).map(|idx| {
+                    let is_knee = name.contains("ひざ");
+                    IkLink {
+                        bone_index: idx as i32,
+                        has_limits: is_knee,
+                        // X+Z flip 后膝盖弯曲方向为 X 轴正方向
+                        limit_min: if is_knee {
+                            Vec3::new(0.008726646, 0.0, 0.0)
+                        } else {
+                            Vec3::ZERO
+                        },
+                        limit_max: if is_knee {
+                            Vec3::new(std::f32::consts::PI, 0.0, 0.0)
+                        } else {
+                            Vec3::ZERO
+                        },
+                    }
+                })
             })
-        }).collect();
+            .collect();
 
         if links.is_empty() {
             log::warn!("IK 注入跳过 {}: IK 链骨骼未找到", ik_name);
@@ -206,7 +235,12 @@ fn inject_ik_bones(bone_set: &mut BoneSet) {
         }
 
         bone_set.add_bone(ik_bone);
-        log::info!("IK 注入: {} → 目标={} 链长={}", ik_name, target_name, chain_names.len());
+        log::info!(
+            "IK 注入: {} → 目标={} 链长={}",
+            ik_name,
+            target_name,
+            chain_names.len()
+        );
     }
 }
 
@@ -241,9 +275,16 @@ fn find_hips_world_pos(
             if let Some(joint_idx) = joint_nodes.iter().position(|&n| n == node_idx) {
                 let world_pos = if joint_idx < ibms.len() {
                     let bind_matrix = ibms[joint_idx].inverse();
-                    Vec3::new(-bind_matrix.col(3).x, bind_matrix.col(3).y, -bind_matrix.col(3).z)
+                    Vec3::new(
+                        -bind_matrix.col(3).x,
+                        bind_matrix.col(3).y,
+                        -bind_matrix.col(3).z,
+                    )
                 } else {
-                    let wt = node_world_transforms.get(&node_idx).copied().unwrap_or(Mat4::IDENTITY);
+                    let wt = node_world_transforms
+                        .get(&node_idx)
+                        .copied()
+                        .unwrap_or(Mat4::IDENTITY);
                     Vec3::new(-wt.col(3).x, wt.col(3).y, -wt.col(3).z)
                 };
                 return world_pos * VRM_TO_PMX_SCALE;
@@ -261,9 +302,20 @@ fn apply_arm_rest_rotations(bone_set: &mut BoneSet) {
     propagate_parent_rest_rotation(bone_set);
 }
 
-fn apply_single_arm_rest(bone_set: &mut BoneSet, upper_name: &str, lower_name: &str, is_left: bool) {
-    let upper_idx = match bone_set.find_bone_by_name(upper_name) { Some(i) => i, None => return };
-    let lower_idx = match bone_set.find_bone_by_name(lower_name) { Some(i) => i, None => return };
+fn apply_single_arm_rest(
+    bone_set: &mut BoneSet,
+    upper_name: &str,
+    lower_name: &str,
+    is_left: bool,
+) {
+    let upper_idx = match bone_set.find_bone_by_name(upper_name) {
+        Some(i) => i,
+        None => return,
+    };
+    let lower_idx = match bone_set.find_bone_by_name(lower_name) {
+        Some(i) => i,
+        None => return,
+    };
 
     let upper_pos = bone_set.get_bone(upper_idx).unwrap().initial_position;
     let lower_pos = bone_set.get_bone(lower_idx).unwrap().initial_position;
@@ -292,7 +344,10 @@ fn apply_single_arm_rest(bone_set: &mut BoneSet, upper_name: &str, lower_name: &
 
     log::info!(
         "VRM 手臂修正: {} 当前={:.1}° 目标={:.1}° 修正={:.1}°",
-        upper_name, current_angle.to_degrees(), target_angle.to_degrees(), correction.to_degrees()
+        upper_name,
+        current_angle.to_degrees(),
+        target_angle.to_degrees(),
+        correction.to_degrees()
     );
 }
 

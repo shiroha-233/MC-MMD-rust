@@ -4,8 +4,8 @@ mod skinning;
 
 pub use skinning::{compute_skinning, SkinningContext};
 
-use glam::{Vec3, Mat4};
 use crate::model::VertexWeight;
+use glam::{Mat4, Vec3};
 
 /// 蒙皮输入数据
 pub struct SkinningInput<'a> {

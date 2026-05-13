@@ -3,3 +3,4 @@
 pub mod vr_ik;
 
 pub use vr_ik::VrIkSolver;
+pub(crate) use vr_ik::{VrDebugState, VrTrackedPose, VrTrackingFrame, XR_TO_MODEL_SCALE};

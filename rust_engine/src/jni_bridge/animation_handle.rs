@@ -1,7 +1,7 @@
 //! 动画句柄
 
-use std::sync::Arc;
 use crate::animation::VmdAnimation;
+use std::sync::Arc;
 
 /// 动画句柄包装
 pub struct AnimationHandle {

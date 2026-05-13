@@ -10,7 +10,7 @@ use crate::morph::{Morph, MorphManager, MorphType, VertexMorphOffset};
 const EPSILON: f32 = 1e-6;
 
 /// VRM 表情名 → MMD 日文表情名（输入已统一为小写）
-fn vrm_expression_to_mmd(vrm_name: &str) -> &str {
+pub(crate) fn vrm_expression_to_mmd(vrm_name: &str) -> &str {
     match vrm_name {
         // 眨眼
         "blink" => "まばたき",
@@ -33,7 +33,10 @@ fn vrm_expression_to_mmd(vrm_name: &str) -> &str {
 
 /// 从 morph target 数据中提取非零顶点偏移
 fn collect_vertex_offsets(target: &MorphTargetData) -> Vec<VertexMorphOffset> {
-    target.position_offsets.iter().enumerate()
+    target
+        .position_offsets
+        .iter()
+        .enumerate()
         .filter(|(_, offset)| offset.length_squared() > EPSILON * EPSILON)
         .map(|(i, &offset)| VertexMorphOffset {
             vertex_index: i as u32,
@@ -56,7 +59,11 @@ pub(crate) fn convert_morph_targets(
     // 阶段1：将每个 morph target 注册为原始 Vertex Morph
     for (idx, target) in morph_targets.iter().enumerate() {
         let offsets = collect_vertex_offsets(target);
-        log::debug!("VRM morph target[{}]: {} 个非零顶点偏移", idx, offsets.len());
+        log::debug!(
+            "VRM morph target[{}]: {} 个非零顶点偏移",
+            idx,
+            offsets.len()
+        );
         let mut morph = Morph::new(format!("morph_{}", idx), MorphType::Vertex);
         morph.vertex_offsets = offsets;
         manager.add_morph(morph);
@@ -64,12 +71,14 @@ pub(crate) fn convert_morph_targets(
 
     log::info!(
         "VRM Morph 阶段1: {} 个原始 morph target, {} 个 VRM 表情待烘焙",
-        morph_targets.len(), vrm_expressions.map.len()
+        morph_targets.len(),
+        vrm_expressions.map.len()
     );
 
     // 阶段2：将 VRM expressions 烘焙为组合 Vertex Morph（MMD 日文名）
-    for (expr_name, binds) in &vrm_expressions.map {
+    for (expr_name, clip) in &vrm_expressions.map {
         let mmd_name = vrm_expression_to_mmd(expr_name).to_string();
+        let binds = &clip.morph_target_binds;
 
         if manager.find_morph_by_name(&mmd_name).is_some() {
             log::debug!("VRM 表情 '{}' → '{}' 已存在，跳过", expr_name, mmd_name);
@@ -79,7 +88,10 @@ pub(crate) fn convert_morph_targets(
         let combined_offsets = bake_expression_offsets(morph_targets, binds, vertex_count);
         log::info!(
             "VRM 表情 '{}' → '{}': binds={:?}, 烘焙偏移={} 个",
-            expr_name, mmd_name, binds, combined_offsets.len()
+            expr_name,
+            mmd_name,
+            binds,
+            combined_offsets.len()
         );
         if combined_offsets.is_empty() {
             log::warn!("VRM 表情 '{}' 烘焙结果为空，跳过注册", expr_name);
@@ -91,7 +103,10 @@ pub(crate) fn convert_morph_targets(
         manager.add_morph(morph);
     }
 
-    log::info!("VRM Morph 阶段2完成: MorphManager 共 {} 个 morph", manager.morph_count());
+    log::info!(
+        "VRM Morph 阶段2完成: MorphManager 共 {} 个 morph",
+        manager.morph_count()
+    );
     manager
 }
 
@@ -113,7 +128,9 @@ fn bake_expression_offsets(
         }
     }
 
-    combined.iter().enumerate()
+    combined
+        .iter()
+        .enumerate()
         .filter(|(_, v)| v.length_squared() > EPSILON * EPSILON)
         .map(|(i, &offset)| VertexMorphOffset {
             vertex_index: i as u32,

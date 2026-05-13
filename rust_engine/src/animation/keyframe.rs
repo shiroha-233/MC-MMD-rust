@@ -1,6 +1,6 @@
 //! 关键帧定义 - 复刻 mdanceio 实现
 
-use glam::{Vec3, Quat};
+use glam::{Quat, Vec3};
 
 /// 骨骼关键帧
 #[derive(Debug, Clone)]
@@ -82,7 +82,10 @@ impl Default for MorphKeyframe {
 impl MorphKeyframe {
     /// 创建新的 Morph 关键帧
     pub fn new(frame_index: u32, weight: f32) -> Self {
-        Self { frame_index, weight }
+        Self {
+            frame_index,
+            weight,
+        }
     }
 }
 
@@ -157,6 +160,10 @@ pub struct IkKeyframe {
 impl IkKeyframe {
     /// 创建新的 IK 关键帧
     pub fn new(frame_index: u32, ik_name: String, enabled: bool) -> Self {
-        Self { frame_index, ik_name, enabled }
+        Self {
+            frame_index,
+            ik_name,
+            enabled,
+        }
     }
 }

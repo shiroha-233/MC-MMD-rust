@@ -3,11 +3,11 @@
 //! 实现 MMD Morph 系统：Vertex / Bone / Group / Flip / Material / UV Morph。
 //! 支持 Group/Flip Morph 递归展开，并提供 GPU 蒙皮路径的有效权重计算。
 
-use std::collections::HashMap;
 use glam::{Vec2, Vec3, Vec4};
+use std::collections::HashMap;
 
+use super::{MaterialMorphOffset, Morph, MorphType};
 use crate::skeleton::BoneManager;
-use super::{Morph, MorphType, MaterialMorphOffset};
 
 /// Morph 权重阈值，低于此值视为不活跃
 const MORPH_WEIGHT_EPSILON: f32 = 0.001;
@@ -42,7 +42,7 @@ impl MaterialMorphValues {
             toon_tint: Vec4::ONE,
         }
     }
-    
+
     pub fn add_identity() -> Self {
         Self {
             diffuse: Vec4::ZERO,
@@ -56,7 +56,7 @@ impl MaterialMorphValues {
             toon_tint: Vec4::ZERO,
         }
     }
-    
+
     /// 乘算：lerp(1.0, offset, weight) 累乘
     fn apply_multiply(&mut self, offset: &MaterialMorphOffset, weight: f32) {
         let w = weight;
@@ -71,7 +71,7 @@ impl MaterialMorphValues {
         self.environment_tint *= Vec4::ONE * inv_w + offset.environment_tint * w;
         self.toon_tint *= Vec4::ONE * inv_w + offset.toon_tint * w;
     }
-    
+
     /// 加算
     fn apply_additive(&mut self, offset: &MaterialMorphOffset, weight: f32) {
         self.diffuse += offset.diffuse * weight;
@@ -129,67 +129,67 @@ impl MorphManager {
             vertex_count: 0,
         }
     }
-    
+
     pub fn set_material_count(&mut self, count: usize) {
         self.material_count = count;
         self.material_morph_results = vec![MaterialMorphResult::default(); count];
     }
-    
+
     pub fn set_vertex_count(&mut self, count: usize) {
         self.vertex_count = count;
         self.uv_morph_deltas = vec![Vec2::ZERO; count];
     }
-    
+
     pub fn add_morph(&mut self, morph: Morph) {
         let index = self.morphs.len();
         self.name_to_index.insert(morph.name.clone(), index);
         self.morphs.push(morph);
     }
-    
+
     pub fn find_morph_by_name(&self, name: &str) -> Option<usize> {
         self.name_to_index.get(name).copied()
     }
-    
+
     pub fn morph_count(&self) -> usize {
         self.morphs.len()
     }
-    
+
     pub fn get_morph(&self, index: usize) -> Option<&Morph> {
         self.morphs.get(index)
     }
-    
+
     pub fn get_morph_mut(&mut self, index: usize) -> Option<&mut Morph> {
         self.morphs.get_mut(index)
     }
-    
+
     pub fn set_morph_weight(&mut self, index: usize, weight: f32) {
         if let Some(morph) = self.morphs.get_mut(index) {
             morph.set_weight(weight);
         }
     }
-    
+
     pub fn get_morph_weight(&self, index: usize) -> f32 {
         self.morphs.get(index).map(|m| m.weight).unwrap_or(0.0)
     }
-    
+
     pub fn reset_all_weights(&mut self) {
         for morph in &mut self.morphs {
             morph.reset();
         }
     }
-    
+
     pub fn get_material_morph_result(&self, material_index: usize) -> Option<&MaterialMorphResult> {
         self.material_morph_results.get(material_index)
     }
-    
+
     pub fn get_material_morph_results(&self) -> &[MaterialMorphResult] {
         &self.material_morph_results
     }
-    
+
     pub fn get_uv_morph_deltas(&self) -> &[Vec2] {
         &self.uv_morph_deltas
     }
-    
+
     /// 应用所有 Morph（遵循 MMD 规范，Group/Flip 递归展开）
     pub fn apply_morphs(&mut self, bone_manager: &mut BoneManager, positions: &mut [Vec3]) {
         for result in &mut self.material_morph_results {
@@ -198,12 +198,15 @@ impl MorphManager {
         for delta in &mut self.uv_morph_deltas {
             *delta = Vec2::ZERO;
         }
-        
-        let active_morphs: Vec<(usize, f32)> = self.morphs.iter().enumerate()
+
+        let active_morphs: Vec<(usize, f32)> = self
+            .morphs
+            .iter()
+            .enumerate()
             .filter(|(_, m)| m.weight.abs() > MORPH_WEIGHT_EPSILON)
             .map(|(i, m)| (i, m.weight))
             .collect();
-        
+
         for (morph_idx, weight) in active_morphs {
             // 拆分借用：morphs 只读，material_morph_results / uv_morph_deltas 可写
             apply_single_morph(
@@ -218,7 +221,7 @@ impl MorphManager {
             );
         }
     }
-    
+
     /// 计算所有 Morph 的有效权重（递归展开 Group/Flip），写入外部缓冲区
     pub fn compute_effective_weights_into(&self, out: &mut [f32]) {
         for (i, morph) in self.morphs.iter().enumerate() {
@@ -232,7 +235,8 @@ impl MorphManager {
         use std::mem::size_of;
         let mut total: u64 = 0;
         total += (self.morphs.capacity() * size_of::<Morph>()) as u64;
-        total += (self.name_to_index.capacity() * (size_of::<String>() + size_of::<usize>())) as u64;
+        total +=
+            (self.name_to_index.capacity() * (size_of::<String>() + size_of::<usize>())) as u64;
         total += (self.material_morph_results.capacity() * size_of::<MaterialMorphResult>()) as u64;
         total += (self.uv_morph_deltas.capacity() * size_of::<Vec2>()) as u64;
         total
@@ -254,10 +258,12 @@ fn accumulate_effective_weight(
         Some(m) => m,
         None => return,
     };
-    
+
     match morph.morph_type {
         MorphType::Group => {
-            let subs: Vec<(usize, f32)> = morph.group_offsets.iter()
+            let subs: Vec<(usize, f32)> = morph
+                .group_offsets
+                .iter()
                 .filter_map(|sub| {
                     let sub_idx = sub.morph_index as usize;
                     if sub_idx < morphs.len() && sub_idx != morph_idx {
@@ -306,12 +312,12 @@ fn apply_single_morph(
     if depth > MAX_GROUP_MORPH_DEPTH || effective_weight.abs() < MORPH_WEIGHT_EPSILON {
         return;
     }
-    
+
     let morph = match morphs.get(morph_idx) {
         Some(m) => m,
         None => return,
     };
-    
+
     match morph.morph_type {
         MorphType::Vertex => {
             apply_vertex_morph(&morph.vertex_offsets, effective_weight, positions);
@@ -320,7 +326,9 @@ fn apply_single_morph(
             apply_bone_morph(&morph.bone_offsets, effective_weight, bone_manager);
         }
         MorphType::Group => {
-            let subs: Vec<(usize, f32)> = morph.group_offsets.iter()
+            let subs: Vec<(usize, f32)> = morph
+                .group_offsets
+                .iter()
                 .filter_map(|sub| {
                     let sub_idx = sub.morph_index as usize;
                     if sub_idx < morphs.len() && sub_idx != morph_idx {
@@ -332,8 +340,14 @@ fn apply_single_morph(
                 .collect();
             for (sub_idx, sub_weight) in subs {
                 apply_single_morph(
-                    morphs, material_morph_results, uv_morph_deltas,
-                    sub_idx, sub_weight, bone_manager, positions, depth + 1,
+                    morphs,
+                    material_morph_results,
+                    uv_morph_deltas,
+                    sub_idx,
+                    sub_weight,
+                    bone_manager,
+                    positions,
+                    depth + 1,
                 );
             }
         }
@@ -347,14 +361,24 @@ fn apply_single_morph(
                 let sub_influence = sub.influence;
                 if sub_idx < morphs.len() && sub_idx != morph_idx {
                     apply_single_morph(
-                        morphs, material_morph_results, uv_morph_deltas,
-                        sub_idx, sub_influence, bone_manager, positions, depth + 1,
+                        morphs,
+                        material_morph_results,
+                        uv_morph_deltas,
+                        sub_idx,
+                        sub_influence,
+                        bone_manager,
+                        positions,
+                        depth + 1,
                     );
                 }
             }
         }
         MorphType::Material => {
-            apply_material_morph(&morph.material_offsets, effective_weight, material_morph_results);
+            apply_material_morph(
+                &morph.material_offsets,
+                effective_weight,
+                material_morph_results,
+            );
         }
         MorphType::Uv | MorphType::AdditionalUv1 => {
             apply_uv_morph(&morph.uv_offsets, effective_weight, uv_morph_deltas);
@@ -365,11 +389,7 @@ fn apply_single_morph(
     }
 }
 
-fn apply_vertex_morph(
-    offsets: &[super::VertexMorphOffset],
-    weight: f32,
-    positions: &mut [Vec3],
-) {
+fn apply_vertex_morph(offsets: &[super::VertexMorphOffset], weight: f32, positions: &mut [Vec3]) {
     for offset in offsets {
         let idx = offset.vertex_index as usize;
         if idx < positions.len() {
@@ -388,17 +408,28 @@ fn apply_bone_morph(
         let translation = offset.translation * weight;
         // 四元数短弧插值：dot < 0 时取反
         let (ox, oy, oz, ow) = if offset.rotation.w < 0.0 {
-            (-offset.rotation.x, -offset.rotation.y, -offset.rotation.z, -offset.rotation.w)
+            (
+                -offset.rotation.x,
+                -offset.rotation.y,
+                -offset.rotation.z,
+                -offset.rotation.w,
+            )
         } else {
-            (offset.rotation.x, offset.rotation.y, offset.rotation.z, offset.rotation.w)
+            (
+                offset.rotation.x,
+                offset.rotation.y,
+                offset.rotation.z,
+                offset.rotation.w,
+            )
         };
         let rotation = glam::Quat::from_xyzw(
             ox * weight,
             oy * weight,
             oz * weight,
             1.0 - (1.0 - ow) * weight,
-        ).normalize();
-        
+        )
+        .normalize();
+
         if let Some(bone) = bone_manager.get_bone_mut(idx) {
             bone.animation_translate += translation;
             bone.animation_rotate = bone.animation_rotate * rotation;
@@ -434,11 +465,7 @@ fn apply_material_morph(
     }
 }
 
-fn apply_uv_morph(
-    offsets: &[super::UvMorphOffset],
-    weight: f32,
-    uv_morph_deltas: &mut [Vec2],
-) {
+fn apply_uv_morph(offsets: &[super::UvMorphOffset], weight: f32, uv_morph_deltas: &mut [Vec2]) {
     for offset in offsets {
         let idx = offset.vertex_index as usize;
         if idx < uv_morph_deltas.len() {

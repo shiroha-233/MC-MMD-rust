@@ -1,14 +1,13 @@
 //! 动画轨道 - 复刻 mdanceio 实现
 
+use glam::{Mat3, Mat4, Quat, Vec3};
 use std::collections::BTreeMap;
-use glam::{Vec3, Quat, Mat4};
 
 use super::bezier_curve::BezierCurveFactory;
 use super::interpolation::{
-    coefficient, lerp_element_wise, lerp_f32, 
-    BoneKeyframeInterpolation, KeyframeInterpolationPoint,
+    coefficient, lerp_element_wise, lerp_f32, BoneKeyframeInterpolation, KeyframeInterpolationPoint,
 };
-use super::keyframe::{BoneKeyframe, MorphKeyframe, IkKeyframe};
+use super::keyframe::{BoneKeyframe, IkKeyframe, MorphKeyframe};
 
 /// 骨骼帧变换结果
 #[derive(Debug, Clone, Copy)]
@@ -63,16 +62,16 @@ impl BoneFrameTransform {
 /// 动画轨道 trait
 pub trait MotionTrack {
     type Frame;
-    
+
     /// 查找精确帧
     fn find(&self, frame_index: u32) -> Option<Self::Frame>;
-    
+
     /// 查找最近的前后帧索引
     fn search_closest(&self, frame_index: u32) -> (Option<u32>, Option<u32>);
-    
+
     /// 求值指定帧
     fn seek(&self, frame_index: u32, bezier_factory: &dyn BezierCurveFactory) -> Self::Frame;
-    
+
     /// 精确求值（支持帧间插值）
     fn seek_precisely(
         &self,
@@ -80,15 +79,15 @@ pub trait MotionTrack {
         amount: f32,
         bezier_factory: &dyn BezierCurveFactory,
     ) -> Self::Frame;
-    
+
     /// 获取轨道长度
     fn len(&self) -> usize;
-    
+
     /// 是否为空
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
-    
+
     /// 获取最大帧索引
     fn max_frame_index(&self) -> u32;
 }
@@ -118,10 +117,13 @@ impl BoneMotionTrack {
     }
 
     /// 查找最近的前后关键帧
-    fn search_closest_keyframes(&self, frame_index: u32) -> (Option<&BoneKeyframe>, Option<&BoneKeyframe>) {
+    fn search_closest_keyframes(
+        &self,
+        frame_index: u32,
+    ) -> (Option<&BoneKeyframe>, Option<&BoneKeyframe>) {
         let mut prev = None;
         let mut next = None;
-        
+
         for (idx, kf) in &self.keyframes {
             if *idx <= frame_index {
                 prev = Some(kf);
@@ -130,7 +132,7 @@ impl BoneMotionTrack {
                 break;
             }
         }
-        
+
         (prev, next)
     }
 }
@@ -145,25 +147,27 @@ impl MotionTrack for BoneMotionTrack {
     type Frame = BoneFrameTransform;
 
     fn find(&self, frame_index: u32) -> Option<Self::Frame> {
-        self.keyframes.get(&frame_index).map(|kf| BoneFrameTransform {
-            translation: kf.translation,
-            orientation: kf.orientation,
-            interpolation: BoneKeyframeInterpolation::build(
-                &kf.interpolation_x,
-                &kf.interpolation_y,
-                &kf.interpolation_z,
-                &kf.interpolation_r,
-            ),
-            local_transform_mix: None,
-            enable_physics: kf.is_physics_simulation_enabled,
-            disable_physics: false,
-        })
+        self.keyframes
+            .get(&frame_index)
+            .map(|kf| BoneFrameTransform {
+                translation: kf.translation,
+                orientation: kf.orientation,
+                interpolation: BoneKeyframeInterpolation::build(
+                    &kf.interpolation_x,
+                    &kf.interpolation_y,
+                    &kf.interpolation_z,
+                    &kf.interpolation_r,
+                ),
+                local_transform_mix: None,
+                enable_physics: kf.is_physics_simulation_enabled,
+                disable_physics: false,
+            })
     }
 
     fn search_closest(&self, frame_index: u32) -> (Option<u32>, Option<u32>) {
         let mut prev = None;
         let mut next = None;
-        
+
         for idx in self.keyframes.keys() {
             if *idx <= frame_index {
                 prev = Some(*idx);
@@ -172,7 +176,7 @@ impl MotionTrack for BoneMotionTrack {
                 break;
             }
         }
-        
+
         (prev, next)
     }
 
@@ -181,18 +185,18 @@ impl MotionTrack for BoneMotionTrack {
         if let Some(frame) = self.find(frame_index) {
             return frame;
         }
-        
+
         // 查找前后关键帧
         let (prev_kf, next_kf) = self.search_closest_keyframes(frame_index);
-        
+
         match (prev_kf, next_kf) {
             (Some(prev), Some(next)) => {
                 let interval = next.frame_index - prev.frame_index;
                 let coef = coefficient(prev.frame_index, next.frame_index, frame_index);
-                
+
                 let prev_enabled = prev.is_physics_simulation_enabled;
                 let next_enabled = next.is_physics_simulation_enabled;
-                
+
                 // 物理状态变化处理
                 if prev_enabled && !next_enabled {
                     BoneFrameTransform {
@@ -215,19 +219,22 @@ impl MotionTrack for BoneMotionTrack {
                         KeyframeInterpolationPoint::new(&next.interpolation_y),
                         KeyframeInterpolationPoint::new(&next.interpolation_z),
                     ];
-                    
+
                     let amounts = Vec3::new(
                         translation_interpolation[0].curve_value(interval, coef, bezier_factory),
                         translation_interpolation[1].curve_value(interval, coef, bezier_factory),
                         translation_interpolation[2].curve_value(interval, coef, bezier_factory),
                     );
-                    
-                    let translation = lerp_element_wise(prev.translation, next.translation, amounts);
-                    
-                    let orientation_interpolation = KeyframeInterpolationPoint::new(&next.interpolation_r);
-                    let amount = orientation_interpolation.curve_value(interval, coef, bezier_factory);
+
+                    let translation =
+                        lerp_element_wise(prev.translation, next.translation, amounts);
+
+                    let orientation_interpolation =
+                        KeyframeInterpolationPoint::new(&next.interpolation_r);
+                    let amount =
+                        orientation_interpolation.curve_value(interval, coef, bezier_factory);
                     let orientation = prev.orientation.slerp(next.orientation, amount);
-                    
+
                     BoneFrameTransform {
                         translation,
                         orientation,
@@ -289,17 +296,17 @@ impl MotionTrack for BoneMotionTrack {
         bezier_factory: &dyn BezierCurveFactory,
     ) -> Self::Frame {
         let f0 = self.seek(frame_index, bezier_factory);
-        
+
         if amount > 0.0 {
             let f1 = self.seek(frame_index.saturating_add(1), bezier_factory);
-            
+
             let local_transform_mix = match (f0.local_transform_mix, f1.local_transform_mix) {
                 (Some(a0), Some(a1)) => Some(lerp_f32(a0, a1, amount)),
                 (None, Some(a1)) => Some(amount * a1),
                 (Some(a0), None) => Some((1.0 - amount) * a0),
                 _ => None,
             };
-            
+
             BoneFrameTransform {
                 translation: f0.translation.lerp(f1.translation, amount),
                 orientation: f0.orientation.slerp(f1.orientation, amount),
@@ -347,10 +354,13 @@ impl MorphMotionTrack {
     }
 
     /// 查找最近的前后关键帧
-    fn search_closest_keyframes(&self, frame_index: u32) -> (Option<&MorphKeyframe>, Option<&MorphKeyframe>) {
+    fn search_closest_keyframes(
+        &self,
+        frame_index: u32,
+    ) -> (Option<&MorphKeyframe>, Option<&MorphKeyframe>) {
         let mut prev = None;
         let mut next = None;
-        
+
         for (idx, kf) in &self.keyframes {
             if *idx <= frame_index {
                 prev = Some(kf);
@@ -359,7 +369,7 @@ impl MorphMotionTrack {
                 break;
             }
         }
-        
+
         (prev, next)
     }
 }
@@ -380,7 +390,7 @@ impl MotionTrack for MorphMotionTrack {
     fn search_closest(&self, frame_index: u32) -> (Option<u32>, Option<u32>) {
         let mut prev = None;
         let mut next = None;
-        
+
         for idx in self.keyframes.keys() {
             if *idx <= frame_index {
                 prev = Some(*idx);
@@ -389,7 +399,7 @@ impl MotionTrack for MorphMotionTrack {
                 break;
             }
         }
-        
+
         (prev, next)
     }
 
@@ -398,10 +408,10 @@ impl MotionTrack for MorphMotionTrack {
         if let Some(weight) = self.find(frame_index) {
             return weight;
         }
-        
+
         // 查找前后关键帧
         let (prev_kf, next_kf) = self.search_closest_keyframes(frame_index);
-        
+
         match (prev_kf, next_kf) {
             (Some(prev), Some(next)) => {
                 // Morph 使用线性插值
@@ -421,7 +431,7 @@ impl MotionTrack for MorphMotionTrack {
         bezier_factory: &dyn BezierCurveFactory,
     ) -> Self::Frame {
         let w0 = self.seek(frame_index, bezier_factory);
-        
+
         if amount > 0.0 {
             let w1 = self.seek(frame_index.saturating_add(1), bezier_factory);
             lerp_f32(w0, w1, amount)
@@ -567,10 +577,13 @@ impl CameraMotionTrack {
     }
 
     /// 查找最近的前后关键帧
-    fn search_closest_keyframes(&self, frame_index: u32) -> (Option<&CameraKeyframe>, Option<&CameraKeyframe>) {
+    fn search_closest_keyframes(
+        &self,
+        frame_index: u32,
+    ) -> (Option<&CameraKeyframe>, Option<&CameraKeyframe>) {
         let mut prev = None;
         let mut next = None;
-        
+
         for (idx, kf) in &self.keyframes {
             if *idx <= frame_index {
                 prev = Some(kf);
@@ -579,22 +592,19 @@ impl CameraMotionTrack {
                 break;
             }
         }
-        
+
         (prev, next)
     }
 
-    /// 从 CameraKeyframe 计算相机位置
-    /// 复刻 mdanceio PerspectiveCamera.update() 的矩阵法：
-    ///   1. angle 直接使用（mdanceio 的 CAMERA_DIRECTION 和 ANGLE_SCALE_FACTOR 双重取反抵消）
-    ///   2. 四元数旋转顺序 z * x * y
-    ///   3. 视图矩阵 = rotation * translation(-look_at)，然后 Z 列加 -distance（DISTANCE_FACTOR=-1）
-    ///   4. 求逆得到世界位置
-    ///   5. 转换到 MC 坐标系（Z 取反）并提取 pitch/yaw
-    fn compute_camera_transform(look_at: Vec3, angle: Vec3, distance: f32, fov: f32, is_perspective: bool) -> CameraFrameTransform {
-        // mdanceio 在 synchronize_camera 中对 angle 乘 CAMERA_DIRECTION(-1,1,1)，
-        // 然后在 camera.update 中再乘 ANGLE_SCALE_FACTOR(-1,1,1)，双重取反抵消。
-        // 因此直接使用 VMD 原始 angle，不做任何缩放。
-
+    /// 从 CameraKeyframe 计算相机世界位置与完整欧拉角（pitch/yaw/roll）
+    /// 方向向量法提取 pitch/yaw 保证朝向 look_at，旋转矩阵法提取 roll 保留倾斜
+    fn compute_camera_transform(
+        look_at: Vec3,
+        angle: Vec3,
+        distance: f32,
+        fov: f32,
+        is_perspective: bool,
+    ) -> CameraFrameTransform {
         // 四元数旋转顺序: z * x * y (mdanceio camera.rs:115-118)
         let qx = Quat::from_rotation_x(angle.x);
         let qy = Quat::from_rotation_y(angle.y);
@@ -606,7 +616,7 @@ impl CameraMotionTrack {
         let trans_mat = Mat4::from_translation(-look_at);
         let mut view_matrix = rot_mat * trans_mat;
 
-        // mdanceio project.rs:1135 DISTANCE_FACTOR = -1.0，需要对 distance 取反
+        // mdanceio DISTANCE_FACTOR = -1.0
         view_matrix.w_axis.z += -distance;
 
         // 从视图矩阵求逆提取相机世界位置
@@ -617,23 +627,42 @@ impl CameraMotionTrack {
         let position_mc = Vec3::new(position_mmd.x, position_mmd.y, -position_mmd.z);
         let look_at_mc = Vec3::new(look_at.x, look_at.y, -look_at.z);
 
-        // 从相机指向 look_at 的方向提取 MC pitch/yaw
+        // 方向向量法提取 pitch/yaw（保证相机朝向 look_at）
         let dir = (look_at_mc - position_mc).normalize_or_zero();
-        // MC pitch: 正值 = 朝下看，yaw: 0 = 南(+Z)
         let mc_pitch = (-dir.y).asin();
         let mc_yaw = (-dir.x).atan2(dir.z);
 
-        // roll 置零：MC Camera.setRotation() 不支持 roll，VMD angle.z 无法应用
+        // 从旋转矩阵提取 roll：比较实际 up 与无 roll 时的 up
+        let cam_world = view_orientation.inverse();
+        let r = Mat3::from_quat(cam_world);
+        // 实际 up 向量（旋转矩阵的 Y 列），Z 取反转 MC 坐标
+        let actual_up = Vec3::new(r.y_axis.x, r.y_axis.y, -r.y_axis.z);
+        // 无 roll 时的 up：从 forward 和 world_up 推导
+        let world_up = Vec3::Y;
+        let right = dir.cross(world_up).normalize_or_zero();
+        let no_roll_up = if right.length_squared() > 1e-6 {
+            right.cross(dir).normalize()
+        } else {
+            // forward 接近垂直时退化，roll 无意义
+            Vec3::Y
+        };
+        // roll = actual_up 相对 no_roll_up 绕 forward 轴的旋转角
+        let mc_roll = no_roll_up.cross(actual_up).dot(dir).atan2(no_roll_up.dot(actual_up));
+
         CameraFrameTransform {
             position: position_mc,
-            rotation: Vec3::new(mc_pitch, mc_yaw, 0.0),
+            rotation: Vec3::new(mc_pitch, mc_yaw, mc_roll),
             fov,
             is_perspective,
         }
     }
 
     /// 求值指定帧的原始参数（整数帧，不经过 compute_camera_transform）
-    fn seek_raw(&self, frame_index: u32, bezier_factory: &dyn BezierCurveFactory) -> CameraRawFrame {
+    fn seek_raw(
+        &self,
+        frame_index: u32,
+        bezier_factory: &dyn BezierCurveFactory,
+    ) -> CameraRawFrame {
         if self.keyframes.is_empty() {
             return CameraRawFrame::default();
         }
@@ -658,23 +687,31 @@ impl CameraMotionTrack {
                 let coef = coefficient(prev.frame_index, next.frame_index, frame_index);
                 Self::interpolate_keyframes_raw(prev, next, interval, coef, bezier_factory)
             }
-            (Some(kf), None) | (None, Some(kf)) => {
-                CameraRawFrame {
-                    look_at: kf.look_at,
-                    angle: kf.angle,
-                    distance: kf.distance,
-                    fov: kf.fov,
-                    is_perspective: kf.is_perspective,
-                }
-            }
+            (Some(kf), None) | (None, Some(kf)) => CameraRawFrame {
+                look_at: kf.look_at,
+                angle: kf.angle,
+                distance: kf.distance,
+                fov: kf.fov,
+                is_perspective: kf.is_perspective,
+            },
             (None, None) => CameraRawFrame::default(),
         }
     }
 
     /// 求值指定帧（整数帧）
-    pub fn seek(&self, frame_index: u32, bezier_factory: &dyn BezierCurveFactory) -> CameraFrameTransform {
+    pub fn seek(
+        &self,
+        frame_index: u32,
+        bezier_factory: &dyn BezierCurveFactory,
+    ) -> CameraFrameTransform {
         let raw = self.seek_raw(frame_index, bezier_factory);
-        Self::compute_camera_transform(raw.look_at, raw.angle, raw.distance, raw.fov, raw.is_perspective)
+        Self::compute_camera_transform(
+            raw.look_at,
+            raw.angle,
+            raw.distance,
+            raw.fov,
+            raw.is_perspective,
+        )
     }
 
     /// 精确求值（支持帧间插值）
@@ -702,9 +739,21 @@ impl CameraMotionTrack {
                 fov: lerp_f32(f0.fov, f1.fov, amount),
                 is_perspective: f0.is_perspective,
             };
-            Self::compute_camera_transform(raw.look_at, raw.angle, raw.distance, raw.fov, raw.is_perspective)
+            Self::compute_camera_transform(
+                raw.look_at,
+                raw.angle,
+                raw.distance,
+                raw.fov,
+                raw.is_perspective,
+            )
         } else {
-            Self::compute_camera_transform(f0.look_at, f0.angle, f0.distance, f0.fov, f0.is_perspective)
+            Self::compute_camera_transform(
+                f0.look_at,
+                f0.angle,
+                f0.distance,
+                f0.fov,
+                f0.is_perspective,
+            )
         }
     }
 

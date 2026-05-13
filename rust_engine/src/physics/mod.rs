@@ -3,10 +3,10 @@
 use glam::{Mat4, Vec3};
 
 pub mod bullet_ffi;
+pub mod config;
+mod mmd_joint;
 mod mmd_physics;
 mod mmd_rigid_body;
-mod mmd_joint;
-pub mod config;
 
 /// Z 轴翻转变换（左手 ↔ 右手坐标系转换，与 saba InvZ 一致）
 ///
@@ -18,8 +18,8 @@ pub(crate) fn inv_z(m: Mat4) -> Mat4 {
     z * m * z
 }
 
+pub use bullet_ffi::{get_alloc_stats, BulletAllocStats};
+pub use config::{get_config, reset_config, set_config, PhysicsConfig};
+pub use mmd_joint::MmdJointData;
 pub use mmd_physics::MMDPhysics;
 pub use mmd_rigid_body::{MmdRigidBodyData, PhysicsMode};
-pub use mmd_joint::MmdJointData;
-pub use config::{PhysicsConfig, get_config, set_config, reset_config};
-pub use bullet_ffi::{BulletAllocStats, get_alloc_stats};

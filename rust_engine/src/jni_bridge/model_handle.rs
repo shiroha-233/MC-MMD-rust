@@ -1,7 +1,7 @@
 //! 模型句柄
 
-use std::sync::{Arc, Mutex};
 use crate::model::MmdModel;
+use std::sync::{Arc, Mutex};
 
 /// 模型句柄包装
 pub struct ModelHandle {

@@ -107,3 +107,4 @@ rust_engine/deps/mdanceio/
 /docs
 **/natives
 CLAUDE.md
+/rust_engine/deps

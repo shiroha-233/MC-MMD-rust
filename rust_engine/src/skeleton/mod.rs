@@ -4,12 +4,11 @@ mod bone_link;
 mod bone_set;
 mod ik_solver;
 
-pub use bone_link::{BoneLink, BoneFlags, IkConfig, IkLink, AppendConfig};
+pub use bone_link::{AppendConfig, BoneFlags, BoneLink, IkConfig, IkLink};
 pub use bone_set::BoneSet;
 pub use ik_solver::IkSolver;
 
-use glam::{Vec3, Quat, Mat4};
-
+use glam::{Mat4, Quat, Vec3};
 
 /// 骨骼变换数据
 #[derive(Clone, Copy, Debug)]
@@ -35,12 +34,16 @@ impl BoneTransform {
     pub fn to_matrix(&self) -> Mat4 {
         Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.translation)
     }
-    
+
     /// 从矩阵分解
     #[inline]
     pub fn from_matrix(m: Mat4) -> Self {
         let (scale, rotation, translation) = m.to_scale_rotation_translation();
-        Self { translation, rotation, scale }
+        Self {
+            translation,
+            rotation,
+            scale,
+        }
     }
 }
 
