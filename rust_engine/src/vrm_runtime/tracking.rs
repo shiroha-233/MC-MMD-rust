@@ -201,7 +201,7 @@ pub(crate) fn vivecraft_body_tracking_calibration() -> BodyTrackingCalibration {
         // Vivecraft tracking should only drive local upper-body pose, not move the whole model.
         body_yaw_follow_gain: 0.0,
         horizontal_translation_follow_gain: 0.0,
-        vertical_translation_follow_gain: 0.0,
+        vertical_translation_follow_gain: 0.7,
         body_translation_clamp_model: 0.0,
         shoulder_follow_gain: 0.0,
         ..BodyTrackingCalibration::default()

@@ -489,12 +489,14 @@ impl VrIkSolver {
             None => return,
         };
 
+        let head_model_rotation =
+            (head.rotation * Quat::from_rotation_y(std::f32::consts::PI)).normalize();
         let parent_global_rot = self
             .cache
             .neck
             .map(|index| mat4_rotation(bones.get_global_transform(index)))
             .unwrap_or(Quat::IDENTITY);
-        let local_rot = parent_global_rot.inverse() * head.rotation;
+        let local_rot = parent_global_rot.inverse() * head_model_rotation;
 
         if strength >= 1.0 {
             bones.set_bone_rotation(head_idx, local_rot);
