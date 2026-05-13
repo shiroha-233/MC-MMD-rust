@@ -61,13 +61,14 @@ public final class StageWorkbenchFacade {
     }
 
     public void savePreferences(String selectedPackName, boolean cinematicMode, float cameraHeightOffset,
-                                float audioVolume, boolean legIkEnabled) {
+                                float audioVolume, boolean legIkEnabled, boolean motionIkEnabled) {
         configAccess.savePreferences(new WorkbenchPreferences(
                 selectedPackName == null ? "" : selectedPackName,
                 cinematicMode,
                 cameraHeightOffset,
                 audioVolume,
-                legIkEnabled
+                legIkEnabled,
+                motionIkEnabled
         ));
     }
 
@@ -183,7 +184,7 @@ public final class StageWorkbenchFacade {
     }
 
     public record WorkbenchPreferences(String lastStagePack, boolean cinematicMode, float cameraHeightOffset,
-                                       float audioVolume, boolean legIkEnabled) {
+                                       float audioVolume, boolean legIkEnabled, boolean motionIkEnabled) {
     }
 
     interface ConfigAccess {
@@ -371,7 +372,8 @@ public final class StageWorkbenchFacade {
                     config.cinematicMode,
                     config.cameraHeightOffset,
                     config.audioVolume,
-                    config.legIkEnabled
+                    config.legIkEnabled,
+                    config.motionIkEnabled
             );
         }
 
@@ -383,6 +385,7 @@ public final class StageWorkbenchFacade {
             config.cameraHeightOffset = preferences.cameraHeightOffset();
             config.audioVolume = preferences.audioVolume();
             config.legIkEnabled = preferences.legIkEnabled();
+            config.motionIkEnabled = preferences.motionIkEnabled();
             config.save();
         }
     }

@@ -245,6 +245,8 @@
   "gui.mmdskin.stage.workbench.audio_volume.short": "音量",
   "gui.mmdskin.stage.workbench.leg_ik": "腿部 IK",
   "gui.mmdskin.stage.workbench.leg_ik.short": "腿部 IK",
+  "gui.mmdskin.stage.workbench.motion_ik": "动作 IK",
+  "gui.mmdskin.stage.workbench.motion_ik.short": "动作 IK",
   "gui.mmdskin.stage.workbench.ready_to_launch": "已满足开始条件，可以启动舞台工作台播放。",
   "gui.mmdskin.follow.join_hint": "加入 %s 的舞蹈",
   "gui.mmdskin.follow.exit_hint": "按 ESC 退出跟随",

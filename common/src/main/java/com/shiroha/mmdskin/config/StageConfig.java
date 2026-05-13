@@ -25,6 +25,7 @@ public class StageConfig {
     public float cameraHeightOffset = 0.0f;
     public float audioVolume = 1.0f;
     public boolean legIkEnabled = true;
+    public boolean motionIkEnabled = true;
 
     private StageConfig() {}
 
@@ -84,6 +85,9 @@ public class StageConfig {
         audioVolume = clamp(audioVolume, 0.0f, 1.0f);
         if (root == null || !root.has("legIkEnabled")) {
             legIkEnabled = true;
+        }
+        if (root == null || !root.has("motionIkEnabled")) {
+            motionIkEnabled = true;
         }
     }
 

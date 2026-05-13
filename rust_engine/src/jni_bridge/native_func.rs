@@ -3341,6 +3341,20 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetLegIkEnabled(
     }
 }
 
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetMotionIkEnabled(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    enabled: jboolean,
+) {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut m = model_arc.lock().unwrap();
+        m.set_motion_ik_enabled(enabled != 0);
+    }
+}
+
 /// 设置 VR 手部渲染模式（0=全身, 1=仅左手, 2=仅右手）
 #[no_mangle]
 pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetVRHandMode(

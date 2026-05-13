@@ -507,7 +507,7 @@ impl VmdAnimation {
         bone_manager: &mut BoneManager,
         morph_manager: &mut MorphManager,
     ) {
-        self.evaluate_with_weight(frame, 1.0, bone_manager, morph_manager);
+        self.evaluate_with_weight(frame, 1.0, bone_manager, morph_manager, true);
     }
 
     /// 带权重评估动画
@@ -523,6 +523,7 @@ impl VmdAnimation {
         weight: f32,
         bone_manager: &mut BoneManager,
         morph_manager: &mut MorphManager,
+        motion_ik_enabled: bool,
     ) {
         let frame = frame.max(0.0);
         let frame_index = frame.floor() as u32;
@@ -571,10 +572,12 @@ impl VmdAnimation {
         }
 
         // 应用 IK 启用/禁用状态
-        for ik_name in self.motion.ik_track_names() {
-            let enabled = self.motion.is_ik_enabled(ik_name, frame_index);
-            if weight >= 1.0 {
-                bone_manager.set_ik_enabled_by_name(ik_name, enabled);
+        if motion_ik_enabled {
+            for ik_name in self.motion.ik_track_names() {
+                let enabled = self.motion.is_ik_enabled(ik_name, frame_index);
+                if weight >= 1.0 {
+                    bone_manager.set_ik_enabled_by_name(ik_name, enabled);
+                }
             }
         }
     }

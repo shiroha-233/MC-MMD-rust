@@ -127,6 +127,7 @@ pub struct MmdModel {
     physics: Option<MMDPhysics>,
     physics_enabled: bool,
     leg_ik_enabled: bool,
+    motion_ik_enabled: bool,
     /// 骨骼变换缓冲区（避免每帧堆分配）
     physics_bone_transforms_buf: Vec<Mat4>,
 
@@ -273,6 +274,7 @@ impl MmdModel {
             physics: None,
             physics_enabled: false,
             leg_ik_enabled: true,
+            motion_ik_enabled: true,
             physics_bone_transforms_buf: Vec::new(),
             material_visible: Vec::new(),
             user_material_visible: Vec::new(),
@@ -988,7 +990,13 @@ impl MmdModel {
         self.begin_animation();
 
         if let Some(animation) = vmd {
-            animation.evaluate(frame, &mut self.bone_manager, &mut self.morph_manager);
+            animation.evaluate_with_weight(
+                frame,
+                1.0,
+                &mut self.bone_manager,
+                &mut self.morph_manager,
+                self.motion_ik_enabled,
+            );
         }
 
         self.apply_leg_ik_preference();
@@ -1180,7 +1188,7 @@ impl MmdModel {
 
         // 评估所有层并混合结果
         self.animation_layer_manager
-            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager);
+            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager, self.motion_ik_enabled);
 
         self.apply_leg_ik_preference();
 
@@ -2155,7 +2163,7 @@ impl MmdModel {
         self.begin_animation();
 
         self.animation_layer_manager
-            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager);
+            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager, self.motion_ik_enabled);
 
         self.apply_leg_ik_preference();
 
@@ -2233,7 +2241,7 @@ impl MmdModel {
         self.bone_manager.reset_all_ik_enabled();
 
         self.animation_layer_manager
-            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager);
+            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager, self.motion_ik_enabled);
 
         self.apply_leg_ik_preference();
 
@@ -2370,6 +2378,10 @@ impl MmdModel {
         } else {
             self.apply_leg_ik_preference();
         }
+    }
+
+    pub fn set_motion_ik_enabled(&mut self, enabled: bool) {
+        self.motion_ik_enabled = enabled;
     }
 
     fn apply_leg_ik_preference(&mut self) {

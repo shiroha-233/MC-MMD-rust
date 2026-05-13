@@ -30,13 +30,14 @@ class StageWorkbenchFacadeTest {
                 configAccess
         );
 
-        facade.savePreferences("beta", false, 1.25f, 0.65f, false);
+        facade.savePreferences("beta", false, 1.25f, 0.65f, false, false);
 
         assertEquals("beta", facade.loadPreferences().lastStagePack());
         assertFalse(facade.loadPreferences().cinematicMode());
         assertEquals(1.25f, facade.loadPreferences().cameraHeightOffset());
         assertEquals(0.65f, facade.loadPreferences().audioVolume());
         assertFalse(facade.loadPreferences().legIkEnabled());
+        assertFalse(facade.loadPreferences().motionIkEnabled());
         assertEquals(packs, facade.loadStagePacks());
     }
 
@@ -219,7 +220,7 @@ class StageWorkbenchFacadeTest {
 
     private static final class FakeConfigAccess implements StageWorkbenchFacade.ConfigAccess {
         private StageWorkbenchFacade.WorkbenchPreferences preferences =
-                new StageWorkbenchFacade.WorkbenchPreferences("", true, 0.0f, 1.0f, true);
+                new StageWorkbenchFacade.WorkbenchPreferences("", true, 0.0f, 1.0f, true, true);
 
         @Override
         public StageWorkbenchFacade.WorkbenchPreferences loadPreferences() {

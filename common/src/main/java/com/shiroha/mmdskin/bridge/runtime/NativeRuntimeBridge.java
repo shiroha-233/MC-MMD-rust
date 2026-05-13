@@ -166,6 +166,11 @@ public final class NativeRuntimeBridge implements
     }
 
     @Override
+    public void setMotionIkEnabled(long modelHandle, boolean enabled) {
+        nativeFunc().SetMotionIkEnabled(modelHandle, enabled);
+    }
+
+    @Override
     public boolean isAndroid() {
         return NativeFunc.isAndroid();
     }

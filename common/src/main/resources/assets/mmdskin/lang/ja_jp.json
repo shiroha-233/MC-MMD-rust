@@ -238,6 +238,8 @@
   "gui.mmdskin.stage.workbench.audio_volume.short": "音量",
   "gui.mmdskin.stage.workbench.leg_ik": "脚 IK",
   "gui.mmdskin.stage.workbench.leg_ik.short": "脚 IK",
+  "gui.mmdskin.stage.workbench.motion_ik": "モーション IK",
+  "gui.mmdskin.stage.workbench.motion_ik.short": "モーション IK",
   "gui.mmdskin.stage.workbench.ready_to_launch": "ステージワークベンチの再生セッションを開始できます。",
   "gui.mmdskin.follow.join_hint": "%s のダンスに参加",
   "gui.mmdskin.follow.exit_hint": "ESC でフォローを終了",

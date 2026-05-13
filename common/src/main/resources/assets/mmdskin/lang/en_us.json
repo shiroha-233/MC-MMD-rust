@@ -238,6 +238,8 @@
   "gui.mmdskin.stage.workbench.audio_volume.short": "Volume",
   "gui.mmdskin.stage.workbench.leg_ik": "Leg IK",
   "gui.mmdskin.stage.workbench.leg_ik.short": "Leg IK",
+  "gui.mmdskin.stage.workbench.motion_ik": "Motion IK",
+  "gui.mmdskin.stage.workbench.motion_ik.short": "Motion IK",
   "gui.mmdskin.stage.workbench.ready_to_launch": "Ready to launch the stage workbench playback session.",
   "gui.mmdskin.follow.join_hint": "Join %s's dance",
   "gui.mmdskin.follow.exit_hint": "Press ESC to stop following",

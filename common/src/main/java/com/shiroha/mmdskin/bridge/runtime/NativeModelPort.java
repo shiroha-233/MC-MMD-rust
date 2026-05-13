@@ -22,6 +22,8 @@ public interface NativeModelPort {
 
     void setLegIkEnabled(long modelHandle, boolean enabled);
 
+    void setMotionIkEnabled(long modelHandle, boolean enabled);
+
     int getMaterialCount(long modelHandle);
 
     void setMaterialVisible(long modelHandle, int materialIndex, boolean visible);
