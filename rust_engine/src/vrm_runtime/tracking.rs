@@ -239,7 +239,7 @@ impl Default for VrmRuntimeInput {
             body_calibration: BodyTrackingCalibration::default(),
             look_at: LookAtInput::default(),
             expression_weights: HashMap::new(),
-            first_person: true,
+            first_person: false,
             delta_time: 0.0,
         }
     }
@@ -294,6 +294,7 @@ mod tests {
         );
         assert!((input.arm_ik_calibration.forearm_twist_ratio - 0.4).abs() < 1e-6);
         assert!(!input.arm_ik_calibration.hand_face_flip);
+        assert!(!input.first_person);
     }
 
     #[test]

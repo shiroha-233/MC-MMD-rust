@@ -13,7 +13,7 @@ public interface MaterialVisibilityGateway {
 
     Optional<MaterialScreenContext> createMaidContext(UUID maidUuid, String maidName);
 
-    List<MaterialEntryState> loadMaterials(long modelHandle);
+    List<MaterialEntryState> loadMaterials(MaterialScreenContext context);
 
     void setAllVisible(long modelHandle, boolean visible);
 

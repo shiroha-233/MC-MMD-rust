@@ -81,11 +81,6 @@ class MmdSkinApiTest {
             }
 
             @Override
-            public boolean isVrmModel(long modelHandle) {
-                return false;
-            }
-
-            @Override
             public String getMaterialName(long modelHandle, int materialIndex) {
                 return "";
             }
@@ -173,11 +168,6 @@ class MmdSkinApiTest {
             @Override
             public String getMorphName(long modelHandle, int morphIndex) {
                 return "";
-            }
-
-            @Override
-            public boolean isVrmModel(long modelHandle) {
-                return false;
             }
 
             @Override

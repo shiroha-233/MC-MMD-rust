@@ -335,11 +335,6 @@ public final class NativeRuntimeBridge implements
     }
 
     @Override
-    public boolean isVrmModel(long modelHandle) {
-        return nativeFunc().IsVrmModel(modelHandle);
-    }
-
-    @Override
     public String getMaterialName(long modelHandle, int materialIndex) {
         return nativeFunc().GetMaterialName(modelHandle, materialIndex);
     }

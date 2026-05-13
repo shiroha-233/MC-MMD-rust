@@ -129,6 +129,7 @@ pub struct MmdModel {
 
     // 材质可见性控制（用于脱外套等功能）
     material_visible: Vec<bool>,
+    user_material_visible: Vec<bool>,
 
     // GPU 蒙皮数据缓冲区
     /// 骨骼索引（ivec4 格式，每顶点 4 个索引）
@@ -183,7 +184,6 @@ pub struct MmdModel {
     /// 头部检测是否已初始化
     head_detection_initialized: bool,
     /// 用户设置的材质可见性备份（进入第一人称前保存，退出时恢复）
-    material_visible_backup: Vec<bool>,
     /// 眼睛骨骼索引缓存（両目 > 目 > 左目/右目 > 头部 fallback）
     eye_bone_index: Option<usize>,
     /// 左/右目的索引（用于取中点）
@@ -197,7 +197,6 @@ pub struct MmdModel {
     /// 手部检测是否已初始化
     hand_detection_initialized: bool,
     /// 进入手部模式前的材质可见性备份
-    hand_mode_visible_backup: Vec<bool>,
 
     // ======== VR 联动 ========
     /// VR 模式是否启用
@@ -272,6 +271,7 @@ impl MmdModel {
             physics_enabled: false,
             physics_bone_transforms_buf: Vec::new(),
             material_visible: Vec::new(),
+            user_material_visible: Vec::new(),
             bone_indices: Vec::new(),
             bone_weights: Vec::new(),
             original_positions: Vec::new(),
@@ -292,7 +292,6 @@ impl MmdModel {
             vr_hand_mode: 0,
             hand_submesh_flags: Vec::new(),
             hand_detection_initialized: false,
-            hand_mode_visible_backup: Vec::new(),
             vr_enabled: false,
             vr_tracking_data: [0.0; 21],
             vr_tracking_frame: None,
@@ -307,7 +306,6 @@ impl MmdModel {
             head_bone_index: None,
             head_submesh_flags: Vec::new(),
             head_detection_initialized: false,
-            material_visible_backup: Vec::new(),
             eye_bone_index: None,
             eye_bone_pair: None,
         }
@@ -341,6 +339,27 @@ impl MmdModel {
         self.material_visible = visible;
     }
 
+    pub(crate) fn user_material_visibility_snapshot(&self) -> Vec<bool> {
+        normalized_material_visibility(&self.user_material_visible, self.material_count())
+    }
+
+    fn refresh_effective_material_visibility(&mut self) {
+        let user_visible = self.user_material_visibility_snapshot();
+        self.replace_material_visibility(user_visible);
+
+        if self.first_person_enabled {
+            self.apply_first_person_material_mask();
+        }
+        if self.vr_hand_mode != 0 {
+            self.apply_vr_hand_material_mask();
+        }
+    }
+
+    fn set_user_material_visibility(&mut self, visible: Vec<bool>) {
+        self.user_material_visible = normalized_material_visibility(&visible, self.material_count());
+        self.refresh_effective_material_visibility();
+    }
+
     pub(crate) fn build_first_person_heuristic_masks(
         &mut self,
         baseline_visible: &[bool],
@@ -359,6 +378,44 @@ impl MmdModel {
         }
 
         (hmd_visible_materials, mirror_visible_materials)
+    }
+
+    fn apply_first_person_material_mask(&mut self) {
+        let (head_materials, body_materials) = self.classify_head_materials();
+        let mut hidden_count = 0;
+        for material_id in head_materials {
+            if body_materials.contains(&material_id) || material_id >= self.material_visible.len() {
+                continue;
+            }
+            self.material_visible[material_id] = false;
+            hidden_count += 1;
+        }
+        log::info!(
+            "First person material mask applied: hidden_materials={}, head_submeshes={}",
+            hidden_count,
+            self.head_submesh_flags.iter().filter(|&&x| x).count()
+        );
+    }
+
+    fn apply_vr_hand_material_mask(&mut self) {
+        if self.vr_hand_mode == 0 {
+            return;
+        }
+
+        if !self.hand_detection_initialized {
+            self.init_hand_detection();
+        }
+
+        let mut hand_mat_ids = std::collections::HashSet::new();
+        for (i, &flag) in self.hand_submesh_flags.iter().enumerate() {
+            if flag == self.vr_hand_mode && i < self.submeshes.len() {
+                hand_mat_ids.insert(self.submeshes[i].material_id as usize);
+            }
+        }
+
+        for (i, vis) in self.material_visible.iter_mut().enumerate() {
+            *vis = *vis && hand_mat_ids.contains(&i);
+        }
     }
 
     pub(crate) fn classify_head_materials(&mut self) -> (HashSet<usize>, HashSet<usize>) {
@@ -485,7 +542,9 @@ impl MmdModel {
 
     /// 初始化材质可见性（默认全部可见）
     pub fn init_material_visibility(&mut self) {
-        self.material_visible = vec![true; self.materials.len()];
+        let visible = vec![true; self.materials.len()];
+        self.user_material_visible = visible.clone();
+        self.material_visible = visible;
     }
 
     /// 获取材质是否可见
@@ -495,30 +554,36 @@ impl MmdModel {
 
     /// 设置材质可见性
     pub fn set_material_visible(&mut self, index: usize, visible: bool) {
-        if index < self.material_visible.len() {
-            self.material_visible[index] = visible;
+        self.user_material_visible =
+            normalized_material_visibility(&self.user_material_visible, self.material_count());
+        if index < self.user_material_visible.len() {
+            self.user_material_visible[index] = visible;
+            self.refresh_effective_material_visibility();
         }
     }
 
     /// 根据材质名称设置可见性（支持部分匹配）
     pub fn set_material_visible_by_name(&mut self, name: &str, visible: bool) -> usize {
         let mut count = 0;
+        self.user_material_visible =
+            normalized_material_visibility(&self.user_material_visible, self.material_count());
         for (i, mat) in self.materials.iter().enumerate() {
             if mat.name.contains(name) {
-                if i < self.material_visible.len() {
-                    self.material_visible[i] = visible;
+                if i < self.user_material_visible.len() {
+                    self.user_material_visible[i] = visible;
                     count += 1;
                 }
             }
+        }
+        if count > 0 {
+            self.refresh_effective_material_visibility();
         }
         count
     }
 
     /// 设置所有材质可见性
     pub fn set_all_materials_visible(&mut self, visible: bool) {
-        for v in &mut self.material_visible {
-            *v = visible;
-        }
+        self.set_user_material_visibility(vec![visible; self.material_count()]);
     }
 
     /// 获取材质名称
@@ -697,77 +762,21 @@ impl MmdModel {
     }
 
     /// 设置第一人称模式
-    /// 启用时隐藏头部相关子网格的材质，禁用时恢复
+    /// 启用时只生成临时有效遮罩，用户材质配置不被覆盖。
     pub fn set_first_person_mode(&mut self, enabled: bool) {
+        if self.first_person_enabled == enabled {
+            return;
+        }
+
+        self.first_person_enabled = enabled;
         if let Some(mut runtime_state) = self.vrm_runtime_state.take() {
             runtime_state.input.first_person = enabled;
-            self.first_person_enabled = enabled;
             runtime_state.refresh_output(self);
             self.vrm_runtime_state = Some(runtime_state);
             return;
         }
 
-        if self.first_person_enabled == enabled {
-            return;
-        }
-
-        // 确保头部检测已初始化
-        if !self.head_detection_initialized {
-            self.init_head_detection();
-        }
-
-        self.first_person_enabled = enabled;
-
-        if enabled {
-            // 备份当前材质可见性
-            self.material_visible_backup = self.material_visible.clone();
-
-            // 收集非头部子网格使用的材质 ID（共享材质不能隐藏）
-            let mut body_material_ids: std::collections::HashSet<usize> =
-                std::collections::HashSet::new();
-            for (i, submesh) in self.submeshes.iter().enumerate() {
-                let is_head = i < self.head_submesh_flags.len() && self.head_submesh_flags[i];
-                if !is_head {
-                    body_material_ids.insert(submesh.material_id as usize);
-                }
-            }
-
-            // 仅隐藏只被头部子网格使用的材质
-            let mut hidden_count = 0;
-            for (i, submesh) in self.submeshes.iter().enumerate() {
-                if i < self.head_submesh_flags.len() && self.head_submesh_flags[i] {
-                    let mat_id = submesh.material_id as usize;
-                    let mat_name = self
-                        .materials
-                        .get(mat_id)
-                        .map(|m| m.name.as_str())
-                        .unwrap_or("?");
-                    if mat_id < self.material_visible.len() && !body_material_ids.contains(&mat_id)
-                    {
-                        self.material_visible[mat_id] = false;
-                        hidden_count += 1;
-                        log::info!("  第一人称隐藏材质: [{}] {}", mat_id, mat_name);
-                    } else if body_material_ids.contains(&mat_id) {
-                        log::info!(
-                            "  第一人称跳过共享材质: [{}] {} (身体也在使用)",
-                            mat_id,
-                            mat_name
-                        );
-                    }
-                }
-            }
-            log::info!(
-                "第一人称模式启用: 隐藏 {} 个材质, 头部子网格 {} 个",
-                hidden_count,
-                self.head_submesh_flags.iter().filter(|&&x| x).count()
-            );
-        } else {
-            // 恢复材质可见性
-            if !self.material_visible_backup.is_empty() {
-                self.material_visible = self.material_visible_backup.clone();
-                self.material_visible_backup.clear();
-            }
-        }
+        self.refresh_effective_material_visibility();
     }
 
     /// 获取第一人称模式是否启用
@@ -2210,6 +2219,7 @@ impl MmdModel {
 
         self.animation_layer_manager.update(elapsed);
         self.begin_animation();
+        self.bone_manager.reset_all_ik_enabled();
 
         self.animation_layer_manager
             .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager);
@@ -2707,37 +2717,9 @@ impl MmdModel {
             return;
         }
 
-        if mode == 0 {
-            // 恢复材质可见性
-            if !self.hand_mode_visible_backup.is_empty() {
-                self.material_visible = self.hand_mode_visible_backup.clone();
-                self.hand_mode_visible_backup.clear();
-            }
-        } else {
-            // 备份并切换到手部模式
-            if self.hand_mode_visible_backup.is_empty() {
-                self.hand_mode_visible_backup = self.material_visible.clone();
-            }
-
-            // 收集目标手的材质 ID
-            let mut hand_mat_ids = std::collections::HashSet::new();
-            for (i, &flag) in self.hand_submesh_flags.iter().enumerate() {
-                if flag == mode {
-                    if i < self.submeshes.len() {
-                        hand_mat_ids.insert(self.submeshes[i].material_id as usize);
-                    }
-                }
-            }
-
-            // 隐藏所有材质，仅显示目标手的材质
-            for (i, vis) in self.material_visible.iter_mut().enumerate() {
-                *vis = hand_mat_ids.contains(&i);
-            }
-        }
+        self.refresh_effective_material_visibility();
     }
 
-    /// 计算模型在 Rust 堆上的内存占用（字节）
-    /// 遍历所有 Vec 的 capacity × 元素大小，精度约 95%+
     pub fn memory_usage(&self) -> u64 {
         use std::mem::size_of;
         let mut total: u64 = 0;
@@ -2792,7 +2774,6 @@ impl MmdModel {
 
         // 材质可见性
         total += (self.material_visible.capacity() * size_of::<bool>()) as u64;
-        total += (self.material_visible_backup.capacity() * size_of::<bool>()) as u64;
         total += (self.head_submesh_flags.capacity() * size_of::<bool>()) as u64;
 
         // 子系统估算
@@ -2836,11 +2817,50 @@ impl Default for MmdModel {
     }
 }
 
+fn normalized_material_visibility(source: &[bool], material_count: usize) -> Vec<bool> {
+    if source.len() == material_count {
+        return source.to_vec();
+    }
+
+    let mut visible = vec![true; material_count];
+    for (index, value) in source.iter().copied().enumerate().take(material_count) {
+        visible[index] = value;
+    }
+    visible
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::skeleton::BoneLink;
     use crate::vr::{VrTrackedPose, XR_TO_MODEL_SCALE};
     use crate::vrm_runtime::{ArmIkHandCalibration, BodyTrackingCalibration};
+
+    #[test]
+    fn set_first_person_mode_should_restore_user_material_visibility() {
+        let mut model = make_material_visibility_test_model();
+        model.set_material_visible(2, false);
+
+        model.set_first_person_mode(true);
+
+        assert!(model.is_material_visible(0));
+        assert!(!model.is_material_visible(1));
+        assert!(!model.is_material_visible(2));
+        assert_eq!(
+            model.user_material_visibility_snapshot(),
+            vec![true, true, false]
+        );
+
+        model.set_first_person_mode(false);
+
+        assert!(model.is_material_visible(0));
+        assert!(model.is_material_visible(1));
+        assert!(!model.is_material_visible(2));
+        assert_eq!(
+            model.user_material_visibility_snapshot(),
+            vec![true, true, false]
+        );
+    }
 
     #[test]
     fn set_vr_tracking_data_should_preserve_arm_and_body_calibration() {
@@ -2914,6 +2934,25 @@ mod tests {
             frame.body_calibration.shoulder_width_model,
             body_calibration.shoulder_width_model
         );
+    }
+
+    fn make_material_visibility_test_model() -> MmdModel {
+        let mut model = MmdModel::new();
+        model.materials = vec![
+            MmdMaterial::default(),
+            MmdMaterial::default(),
+            MmdMaterial::default(),
+        ];
+        model.submeshes = vec![
+            SubMesh::new(0, 3, 0),
+            SubMesh::new(3, 3, 1),
+            SubMesh::new(6, 3, 2),
+        ];
+        model.head_submesh_flags = vec![false, true, false];
+        model.head_detection_initialized = true;
+        model.bone_manager.add_bone(BoneLink::new("Head".to_string()));
+        model.init_material_visibility();
+        model
     }
 }
 

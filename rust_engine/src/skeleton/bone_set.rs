@@ -298,6 +298,13 @@ impl BoneSet {
         }
     }
 
+    /// 重置所有 IK 求解器为启用状态
+    pub fn reset_all_ik_enabled(&mut self) {
+        for solver in &mut self.ik_solvers {
+            solver.enabled = true;
+        }
+    }
+
     /// 更新骨骼变换
     ///
     /// 参考 nphysics Multibody::update_kinematics

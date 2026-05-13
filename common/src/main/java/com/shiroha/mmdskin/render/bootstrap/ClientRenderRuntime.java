@@ -66,7 +66,6 @@ public final class ClientRenderRuntime {
         VRBoneDriver.configureRuntimeCollaborators(modelPort);
         PerformanceHud.configureRuntimeCollaborators(modelQueryPort);
         FirstPersonManager.configureVrRuntime(new DefaultVrRuntimePort());
-        FirstPersonManager.configureNativeModelPort(modelPort);
         LivingEntityModelStateHelper.configureRuntimeCollaborators(scenePort);
         SceneModelManager.getInstance().configureRuntimeCollaborators(scenePort);
         ExpressionApplicationService.configureRuntimeCollaborators(morphPort);

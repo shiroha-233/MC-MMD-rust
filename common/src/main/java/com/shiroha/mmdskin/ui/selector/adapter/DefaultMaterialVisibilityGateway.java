@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -30,6 +32,8 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
 
     private final Supplier<? extends NativeModelPort> nativeModelPortSupplier;
     private final Supplier<? extends NativeModelQueryPort> nativeModelQueryPortSupplier;
+    private final Function<String, ModelConfigData> configLoader;
+    private final BiConsumer<String, Set<Integer>> hiddenMaterialsSaver;
 
     public DefaultMaterialVisibilityGateway(NativeModelPort nativeModelPort,
                                             NativeModelQueryPort nativeModelQueryPort) {
@@ -38,8 +42,22 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
 
     public DefaultMaterialVisibilityGateway(Supplier<? extends NativeModelPort> nativeModelPortSupplier,
                                             Supplier<? extends NativeModelQueryPort> nativeModelQueryPortSupplier) {
+        this(
+                nativeModelPortSupplier,
+                nativeModelQueryPortSupplier,
+                ModelConfigManager::getConfig,
+                DefaultMaterialVisibilityGateway::persistHiddenMaterials
+        );
+    }
+
+    DefaultMaterialVisibilityGateway(Supplier<? extends NativeModelPort> nativeModelPortSupplier,
+                                     Supplier<? extends NativeModelQueryPort> nativeModelQueryPortSupplier,
+                                     Function<String, ModelConfigData> configLoader,
+                                     BiConsumer<String, Set<Integer>> hiddenMaterialsSaver) {
         this.nativeModelPortSupplier = nativeModelPortSupplier;
         this.nativeModelQueryPortSupplier = nativeModelQueryPortSupplier;
+        this.configLoader = configLoader;
+        this.hiddenMaterialsSaver = hiddenMaterialsSaver;
     }
 
     @Override
@@ -83,16 +101,17 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
     }
 
     @Override
-    public List<MaterialEntryState> loadMaterials(long modelHandle) {
+    public List<MaterialEntryState> loadMaterials(MaterialScreenContext context) {
         List<MaterialEntryState> materials = new ArrayList<>();
         NativeModelPort nativeModelPort = nativeModelPortSupplier.get();
         NativeModelQueryPort nativeModelQueryPort = nativeModelQueryPortSupplier.get();
-        int materialCount = nativeModelPort.getMaterialCount(modelHandle);
+        Set<Integer> configuredHiddenMaterials = loadConfiguredHiddenMaterials(context.configModelName());
+        int materialCount = nativeModelPort.getMaterialCount(context.modelHandle());
         for (int i = 0; i < materialCount; i++) {
             materials.add(new MaterialEntryState(
                     i,
-                    nativeModelQueryPort.getMaterialName(modelHandle, i),
-                    nativeModelQueryPort.isMaterialVisible(modelHandle, i)));
+                    nativeModelQueryPort.getMaterialName(context.modelHandle(), i),
+                    isConfiguredVisible(context, nativeModelQueryPort, configuredHiddenMaterials, i)));
         }
         return materials;
     }
@@ -120,11 +139,44 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
     @Override
     public void saveHiddenMaterials(String configModelName, Set<Integer> hiddenMaterials) {
         try {
-            ModelConfigData config = ModelConfigManager.getConfig(configModelName);
-            config.hiddenMaterials = hiddenMaterials == null ? new HashSet<>() : new HashSet<>(hiddenMaterials);
-            ModelConfigManager.saveConfig(configModelName, config);
+            hiddenMaterialsSaver.accept(
+                    configModelName,
+                    hiddenMaterials == null ? new HashSet<>() : new HashSet<>(hiddenMaterials)
+            );
         } catch (Exception e) {
             LOGGER.warn("Failed to save hidden materials for {}", configModelName, e);
         }
+    }
+
+    private Set<Integer> loadConfiguredHiddenMaterials(String configModelName) {
+        if (configModelName == null || configModelName.isEmpty()) {
+            return Set.of();
+        }
+        try {
+            ModelConfigData config = configLoader.apply(configModelName);
+            if (config == null || config.hiddenMaterials == null || config.hiddenMaterials.isEmpty()) {
+                return Set.of();
+            }
+            return Set.copyOf(config.hiddenMaterials);
+        } catch (Exception e) {
+            LOGGER.warn("Failed to load hidden materials for {}", configModelName, e);
+            return Set.of();
+        }
+    }
+
+    private boolean isConfiguredVisible(MaterialScreenContext context,
+                                        NativeModelQueryPort nativeModelQueryPort,
+                                        Set<Integer> configuredHiddenMaterials,
+                                        int materialIndex) {
+        if (context.configModelName() == null || context.configModelName().isEmpty()) {
+            return nativeModelQueryPort.isMaterialVisible(context.modelHandle(), materialIndex);
+        }
+        return !configuredHiddenMaterials.contains(materialIndex);
+    }
+
+    private static void persistHiddenMaterials(String configModelName, Set<Integer> hiddenMaterials) {
+        ModelConfigData config = ModelConfigManager.getConfig(configModelName);
+        config.hiddenMaterials = hiddenMaterials == null ? new HashSet<>() : new HashSet<>(hiddenMaterials);
+        ModelConfigManager.saveConfig(configModelName, config);
     }
 }

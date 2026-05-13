@@ -38,9 +38,6 @@ public abstract class BaseModelInstance implements ModelInstance {
     protected String modelDir;
     private String cachedModelName;
 
-    private boolean isVrmModel;
-    private boolean isVrmChecked;
-
     protected long lastUpdateTime = -1;
 
     protected final Quaternionf tempQuat = new Quaternionf();
@@ -137,18 +134,6 @@ public abstract class BaseModelInstance implements ModelInstance {
             cachedModelName = ModelInstance.super.getModelName();
         }
         return cachedModelName;
-    }
-
-    protected boolean checkVrm() {
-        if (!isVrmChecked && model != 0) {
-            isVrmChecked = true;
-            try {
-                isVrmModel = backendPort().isVrmModel(model);
-            } catch (Exception e) {
-                isVrmModel = false;
-            }
-        }
-        return isVrmModel;
     }
 
     @Override

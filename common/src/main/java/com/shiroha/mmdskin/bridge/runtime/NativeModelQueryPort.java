@@ -72,11 +72,6 @@ public interface NativeModelQueryPort {
         }
 
         @Override
-        public boolean isVrmModel(long modelHandle) {
-            return false;
-        }
-
-        @Override
         public String getMaterialName(long modelHandle, int materialIndex) {
             return "";
         }
@@ -116,8 +111,6 @@ public interface NativeModelQueryPort {
     int getMorphCount(long modelHandle);
 
     String getMorphName(long modelHandle, int morphIndex);
-
-    boolean isVrmModel(long modelHandle);
 
     String getMaterialName(long modelHandle, int materialIndex);
 

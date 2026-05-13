@@ -3,6 +3,7 @@ package com.shiroha.mmdskin.ui.selector.application;
 import com.shiroha.mmdskin.ui.selector.port.MaterialVisibilityGateway;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -25,7 +26,7 @@ public class MaterialVisibilityApplicationService {
     }
 
     public List<MaterialEntryState> loadMaterials(MaterialScreenContext context) {
-        return new ArrayList<>(gateway.loadMaterials(context.modelHandle()));
+        return new ArrayList<>(gateway.loadMaterials(context));
     }
 
     public void setAllVisible(MaterialScreenContext context, List<MaterialEntryState> materials, boolean visible) {
@@ -59,13 +60,35 @@ public class MaterialVisibilityApplicationService {
             return;
         }
 
+        Set<Integer> hiddenMaterials = snapshotHiddenMaterials(materials);
+        gateway.saveHiddenMaterials(context.configModelName(), hiddenMaterials);
+    }
+
+    public boolean saveIfChanged(MaterialScreenContext context,
+                                 List<MaterialEntryState> materials,
+                                 Set<Integer> originalHiddenMaterials) {
+        if (context.configModelName() == null || context.configModelName().isEmpty()) {
+            return false;
+        }
+
+        Set<Integer> hiddenMaterials = snapshotHiddenMaterials(materials);
+        Set<Integer> baseline = originalHiddenMaterials == null ? Collections.emptySet() : originalHiddenMaterials;
+        if (hiddenMaterials.equals(baseline)) {
+            return false;
+        }
+
+        gateway.saveHiddenMaterials(context.configModelName(), hiddenMaterials);
+        return true;
+    }
+
+    public Set<Integer> snapshotHiddenMaterials(List<MaterialEntryState> materials) {
         Set<Integer> hiddenMaterials = new HashSet<>();
         for (MaterialEntryState material : materials) {
             if (!material.visible()) {
                 hiddenMaterials.add(material.index());
             }
         }
-        gateway.saveHiddenMaterials(context.configModelName(), hiddenMaterials);
+        return hiddenMaterials;
     }
 
     public record MaterialScreenContext(long modelHandle, String modelName, String configModelName) {

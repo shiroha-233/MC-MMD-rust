@@ -107,25 +107,17 @@ impl FirstPersonRuntime {
                 }
                 match annotation.first_person_type {
                     FirstPersonType::Auto => {
-                        mirror_visible_materials[material_id] = true;
                         if head_materials.contains(&material_id)
                             && !body_materials.contains(&material_id)
                         {
                             hmd_visible_materials[material_id] = false;
-                        } else {
-                            hmd_visible_materials[material_id] = true;
                         }
                     }
-                    FirstPersonType::Both => {
-                        hmd_visible_materials[material_id] = true;
-                        mirror_visible_materials[material_id] = true;
-                    }
+                    FirstPersonType::Both => {}
                     FirstPersonType::ThirdPersonOnly => {
                         hmd_visible_materials[material_id] = false;
-                        mirror_visible_materials[material_id] = true;
                     }
                     FirstPersonType::FirstPersonOnly => {
-                        hmd_visible_materials[material_id] = true;
                         mirror_visible_materials[material_id] = false;
                     }
                 }
@@ -198,6 +190,44 @@ mod tests {
             .expect("annotation snapshot");
         assert_eq!(snapshot.hmd_visible_materials, vec![false, false, true]);
         assert_eq!(snapshot.mirror_visible_materials, vec![true, true, false]);
+    }
+
+    #[test]
+    fn capture_from_annotations_should_not_revive_baseline_hidden_materials() {
+        let runtime = FirstPersonRuntime::new(
+            FirstPersonConfig {
+                mesh_annotations: vec![
+                    FirstPersonMeshAnnotation {
+                        material_ids: vec![0],
+                        first_person_type: FirstPersonType::Both,
+                    },
+                    FirstPersonMeshAnnotation {
+                        material_ids: vec![1],
+                        first_person_type: FirstPersonType::ThirdPersonOnly,
+                    },
+                    FirstPersonMeshAnnotation {
+                        material_ids: vec![2],
+                        first_person_type: FirstPersonType::FirstPersonOnly,
+                    },
+                ],
+                ..FirstPersonConfig::default()
+            },
+            None,
+        );
+
+        let mut model = MmdModel::new();
+        model.materials = vec![Default::default(), Default::default(), Default::default()];
+        model.submeshes = vec![];
+
+        let snapshot = runtime
+            .capture_from_annotations(&mut model, &[false, false, false], true)
+            .expect("annotation snapshot");
+
+        assert_eq!(snapshot.hmd_visible_materials, vec![false, false, false]);
+        assert_eq!(
+            snapshot.mirror_visible_materials,
+            vec![false, false, false]
+        );
     }
 
     #[test]

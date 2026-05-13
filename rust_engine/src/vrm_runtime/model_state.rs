@@ -18,6 +18,8 @@ pub(crate) struct VrmModelRuntimeState {
 
 impl VrmModelRuntimeState {
     pub(crate) fn new(model: &mut MmdModel, extensions: VrmExtensions) -> Self {
+        let mut input = VrmRuntimeInput::default();
+        input.first_person = model.is_first_person_enabled();
         Self {
             control_rig: ControlRigRuntime::new(model),
             constraints: ConstraintRuntime::new(extensions.node_constraints, &model.bone_manager),
@@ -28,18 +30,16 @@ impl VrmModelRuntimeState {
                 extensions.look_at.clone(),
             ),
             spring_bone: SpringBoneRuntime::new(extensions.spring_bones, &model.bone_manager),
-            input: VrmRuntimeInput::default(),
+            input,
             output: VrmRuntimeOutput::default(),
         }
     }
 
     pub(crate) fn initialize_output(&mut self, model: &mut MmdModel) {
-        let baseline_visible = (0..model.material_count())
-            .map(|index| model.is_material_visible(index))
-            .collect::<Vec<_>>();
-        let snapshot =
-            self.first_person
-                .capture(model, &baseline_visible, model.is_first_person_enabled());
+        let baseline_visible = model.user_material_visibility_snapshot();
+        let snapshot = self
+            .first_person
+            .capture(model, &baseline_visible, self.input.first_person);
         self.apply_snapshot(model, snapshot);
     }
 
@@ -80,13 +80,7 @@ impl VrmModelRuntimeState {
     }
 
     pub(crate) fn refresh_output(&mut self, model: &mut MmdModel) {
-        let baseline_visible = if self.output.mirror_visible_materials.is_empty() {
-            (0..model.material_count())
-                .map(|index| model.is_material_visible(index))
-                .collect::<Vec<_>>()
-        } else {
-            self.output.mirror_visible_materials.clone()
-        };
+        let baseline_visible = model.user_material_visibility_snapshot();
         let snapshot = self
             .first_person
             .capture(model, &baseline_visible, self.input.first_person);

@@ -13,7 +13,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /** 文件职责：提供材质可见性原生界面。 */
@@ -35,6 +37,7 @@ public class MaterialVisibilityScreen extends Screen {
 
     private final MaterialScreenContext context;
     private final List<MaterialEntryState> materials = new ArrayList<>();
+    private final Set<Integer> initialHiddenMaterials = new HashSet<>();
 
     private boolean pendingClose;
     private float targetScroll;
@@ -290,10 +293,12 @@ public class MaterialVisibilityScreen extends Screen {
     private void loadMaterials() {
         materials.clear();
         materials.addAll(SERVICE.loadMaterials(context));
+        initialHiddenMaterials.clear();
+        initialHiddenMaterials.addAll(SERVICE.snapshotHiddenMaterials(materials));
     }
 
     private void saveMaterialVisibility() {
-        SERVICE.save(context, materials);
+        SERVICE.saveIfChanged(context, materials, initialHiddenMaterials);
     }
 
     private int visibleCount() {

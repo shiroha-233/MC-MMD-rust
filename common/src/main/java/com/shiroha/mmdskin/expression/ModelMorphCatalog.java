@@ -17,13 +17,11 @@ public final class ModelMorphCatalog {
     private static volatile NativeModelQueryPort modelQueryPort = NativeModelQueryPort.noop();
 
     private final long modelHandle;
-    private final boolean vrmModel;
     private final List<MorphEntry> entries;
     private final Map<String, Integer> exactIndexByNormalizedName;
 
-    private ModelMorphCatalog(long modelHandle, boolean vrmModel, List<MorphEntry> entries) {
+    private ModelMorphCatalog(long modelHandle, List<MorphEntry> entries) {
         this.modelHandle = modelHandle;
-        this.vrmModel = vrmModel;
         this.entries = entries;
         this.exactIndexByNormalizedName = new HashMap<>();
         for (MorphEntry entry : entries) {
@@ -44,7 +42,7 @@ public final class ModelMorphCatalog {
     }
 
     static ModelMorphCatalog forTesting(List<MorphEntry> entries) {
-        return new ModelMorphCatalog(-1L, false, List.copyOf(entries));
+        return new ModelMorphCatalog(-1L, List.copyOf(entries));
     }
 
     private static ModelMorphCatalog load(long modelHandle) {
@@ -58,15 +56,11 @@ public final class ModelMorphCatalog {
             }
             entries.add(new MorphEntry(i, originalName, normalizeName(originalName), tokenize(originalName)));
         }
-        return new ModelMorphCatalog(modelHandle, nativeBridge.isVrmModel(modelHandle), entries);
+        return new ModelMorphCatalog(modelHandle, entries);
     }
 
     public long modelHandle() {
         return modelHandle;
-    }
-
-    public boolean vrmModel() {
-        return vrmModel;
     }
 
     public int findBest(ExpressionMatchRule rule, List<Integer> excludedIndices) {

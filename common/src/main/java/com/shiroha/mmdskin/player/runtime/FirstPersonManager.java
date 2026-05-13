@@ -1,6 +1,5 @@
 package com.shiroha.mmdskin.player.runtime;
 
-import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
 import com.shiroha.mmdskin.config.RuntimeConfigPortHolder;
 import com.shiroha.mmdskin.player.port.VrRuntimePort;
 import net.minecraft.client.CameraType;
@@ -10,76 +9,15 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 /** 文件职责：维护本地第一人称与 VR 视角相关的模型状态。 */
 public final class FirstPersonManager {
-    private static final Logger logger = LogManager.getLogger();
-    private static final NativeModelPort NOOP_NATIVE_MODEL_PORT = new NativeModelPort() {
-        @Override
-        public boolean setLayerBoneMask(long modelHandle, int layer, String rootBoneName) {
-            return false;
-        }
-
-        @Override
-        public boolean setLayerBoneExclude(long modelHandle, int layer, String rootBoneName) {
-            return false;
-        }
-
-        @Override
-        public long getModelMemoryUsage(long modelHandle) {
-            return 0L;
-        }
-
-        @Override
-        public void setFirstPersonMode(long modelHandle, boolean enabled) {
-        }
-
-        @Override
-        public void getEyeBonePosition(long modelHandle, float[] output) {
-        }
-
-        @Override
-        public void applyVrTrackingInput(long modelHandle, float[] trackingData) {
-        }
-
-        @Override
-        public void setVrEnabled(long modelHandle, boolean enabled) {
-        }
-
-        @Override
-        public void setVrIkParams(long modelHandle, float armIkStrength) {
-        }
-
-        @Override
-        public int getMaterialCount(long modelHandle) {
-            return 0;
-        }
-
-        @Override
-        public void setMaterialVisible(long modelHandle, int materialIndex, boolean visible) {
-        }
-
-        @Override
-        public void setAllMaterialsVisible(long modelHandle, boolean visible) {
-        }
-
-        @Override
-        public void deleteModel(long modelHandle) {
-        }
-    };
-
     private static final float MODEL_SCALE = 0.09f;
 
     private static float cachedModelScale = 1.0f;
 
     private static boolean activeDesktopFirstPerson = false;
     private static boolean activeVrEyeCamera = false;
-    private static boolean nativeFirstPersonModeActive = false;
-
-    private static long trackedModelHandle = 0;
-
     private static final float[] eyeBonePos = new float[3];
     private static boolean eyeBoneValid = false;
 
@@ -88,8 +26,6 @@ public final class FirstPersonManager {
 
     private static Vec3 lastCameraPos = Vec3.ZERO;
     private static volatile VrRuntimePort vrRuntimePort = VrRuntimePort.noop();
-    private static volatile NativeModelPort nativeModelPort = NOOP_NATIVE_MODEL_PORT;
-
     private FirstPersonManager() {
     }
 
@@ -99,10 +35,6 @@ public final class FirstPersonManager {
 
     public static void configureVrRuntime(VrRuntimePort vrRuntimePort) {
         FirstPersonManager.vrRuntimePort = vrRuntimePort != null ? vrRuntimePort : VrRuntimePort.noop();
-    }
-
-    public static void configureNativeModelPort(NativeModelPort nativeModelPort) {
-        FirstPersonManager.nativeModelPort = nativeModelPort != null ? nativeModelPort : NOOP_NATIVE_MODEL_PORT;
     }
 
     public static VrRuntimePort vrRuntime() {
@@ -129,7 +61,7 @@ public final class FirstPersonManager {
         return mc.player != null && MmdSkinRendererPlayerHelper.isUsingMmdModel(mc.player);
     }
 
-    public static void preRender(long modelHandle, float modelScale, boolean isLocalPlayer) {
+    public static void preRender(float modelScale, boolean isLocalPlayer) {
         if (!isLocalPlayer) {
             return;
         }
@@ -137,19 +69,6 @@ public final class FirstPersonManager {
         boolean desktopFirstPerson = shouldRenderFirstPerson();
         boolean vrModelActive = isLocalVrMmdModelActive();
         boolean vrEyeCamera = vrModelActive && isVrFirstPersonRequested() && vrRuntimePort.isLocalPlayerEyePass();
-        boolean nativeFirstPerson = desktopFirstPerson || vrEyeCamera;
-
-        if (modelHandle != trackedModelHandle) {
-            disableTrackedModel();
-            trackedModelHandle = modelHandle;
-            clearPerModelState();
-        }
-
-        if (nativeFirstPerson != nativeFirstPersonModeActive) {
-            nativeModelPort.setFirstPersonMode(modelHandle, nativeFirstPerson);
-            nativeFirstPersonModeActive = nativeFirstPerson;
-        }
-
         activeDesktopFirstPerson = desktopFirstPerson;
         activeVrEyeCamera = vrEyeCamera;
 
@@ -158,9 +77,11 @@ public final class FirstPersonManager {
         }
     }
 
-    public static void postRender(long modelHandle, Player player, float tickDelta) {
-        nativeModelPort.getEyeBonePosition(modelHandle, eyeBonePos);
-        eyeBoneValid = (eyeBonePos[0] != 0.0f || eyeBonePos[1] != 0.0f || eyeBonePos[2] != 0.0f);
+    public static void postRender(Player player, float tickDelta) {
+        eyeBonePos[0] = 0.0f;
+        eyeBonePos[1] = 0.0f;
+        eyeBonePos[2] = 0.0f;
+        eyeBoneValid = false;
         updateVrModelRootOffset(player, tickDelta);
     }
 
@@ -241,11 +162,8 @@ public final class FirstPersonManager {
     }
 
     public static void reset() {
-        disableTrackedModel();
         activeDesktopFirstPerson = false;
         activeVrEyeCamera = false;
-        nativeFirstPersonModeActive = false;
-        trackedModelHandle = 0;
         cachedModelScale = 1.0f;
         clearEyeBoneState();
         clearVrModelRootOffset();
@@ -253,7 +171,7 @@ public final class FirstPersonManager {
     }
 
     private static void ensureActiveState() {
-        if (!activeDesktopFirstPerson && !activeVrEyeCamera && !nativeFirstPersonModeActive) {
+        if (!activeDesktopFirstPerson && !activeVrEyeCamera) {
             return;
         }
 
@@ -265,10 +183,8 @@ public final class FirstPersonManager {
         }
 
         if (vrModelActive) {
-            disableTrackedModel();
             activeDesktopFirstPerson = false;
             activeVrEyeCamera = false;
-            nativeFirstPersonModeActive = false;
             lastCameraPos = Vec3.ZERO;
             return;
         }
@@ -309,7 +225,7 @@ public final class FirstPersonManager {
     }
 
     private static void updateVrModelRootOffset(Player player, float tickDelta) {
-        if (player == null || !eyeBoneValid || trackedModelHandle == 0 || !isLocalVrMmdModelActive()) {
+        if (player == null || !eyeBoneValid || !isLocalVrMmdModelActive()) {
             return;
         }
 
@@ -323,15 +239,6 @@ public final class FirstPersonManager {
         vrModelRootOffset = new Vec3(0.0d, correctedY, 0.0d);
         vrModelRootOffsetValid = true;
     }
-
-    private static void clearPerModelState() {
-        activeDesktopFirstPerson = false;
-        activeVrEyeCamera = false;
-        nativeFirstPersonModeActive = false;
-        clearEyeBoneState();
-        clearVrModelRootOffset();
-    }
-
     private static void clearEyeBoneState() {
         eyeBonePos[0] = 0.0f;
         eyeBonePos[1] = 0.0f;
@@ -342,19 +249,5 @@ public final class FirstPersonManager {
     private static void clearVrModelRootOffset() {
         vrModelRootOffset = Vec3.ZERO;
         vrModelRootOffsetValid = false;
-    }
-
-    private static void disableTrackedModel() {
-        if (!nativeFirstPersonModeActive || trackedModelHandle == 0) {
-            return;
-        }
-
-        try {
-            nativeModelPort.setFirstPersonMode(trackedModelHandle, false);
-        } catch (Exception e) {
-            logger.warn("Failed to disable first-person mode for model {}", trackedModelHandle, e);
-        } finally {
-            nativeFirstPersonModeActive = false;
-        }
     }
 }
