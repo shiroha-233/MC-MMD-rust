@@ -1,3 +1,4 @@
+/* 文件职责：声明 Java 调用 Rust 引擎的 JNI 边界。 */
 package com.shiroha.mmdskin;
 
 import java.nio.ByteBuffer;
@@ -315,6 +316,8 @@ public class NativeFunc {
     public native void SetVREnabled(long model, boolean enabled);
 
     public native void SetVRIKParams(long model, float armIKStrength);
+
+    public native void SetLegIkEnabled(long model, boolean enabled);
 
     public native void SetVRHandMode(long model, int mode);
 }

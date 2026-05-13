@@ -1,3 +1,4 @@
+/* 文件职责：协调舞台模式下的相机、音频与观演状态。 */
 package com.shiroha.mmdskin.stage.client.camera;
 
 import com.shiroha.mmdskin.bridge.runtime.NativeAnimationPort;
@@ -152,6 +153,7 @@ public final class MMDCameraController {
             playerStageAnimationPort.prepareLocalModelForStage(modelHandle);
         }
 
+        audioPlayer.setVolume(StageConfig.getInstance().audioVolume);
         if (audioPath != null && !audioPath.isEmpty()) {
             if (audioPlayer.load(audioPath)) {
                 audioPlayer.play();
@@ -422,6 +424,7 @@ public final class MMDCameraController {
         if (!stateMachine.isWatching()) {
             return;
         }
+        audioPlayer.setVolume(StageConfig.getInstance().audioVolume);
         if (audioPlayer.load(audioPath)) {
             audioPlayer.play();
         } else {

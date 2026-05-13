@@ -1,3 +1,4 @@
+/* 文件职责：将 VR 跟踪数据转换并驱动模型骨骼。 */
 package com.shiroha.mmdskin.compat.vr;
 
 import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
@@ -48,6 +49,10 @@ public final class VRBoneDriver {
 
         @Override
         public void setVrIkParams(long modelHandle, float armIkStrength) {
+        }
+
+        @Override
+        public void setLegIkEnabled(long modelHandle, boolean enabled) {
         }
 
         @Override

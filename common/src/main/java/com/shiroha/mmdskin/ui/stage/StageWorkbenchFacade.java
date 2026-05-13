@@ -1,3 +1,4 @@
+/* 文件职责：为舞台工作台 UI 收口会话与开播操作。 */
 package com.shiroha.mmdskin.ui.stage;
 
 import com.shiroha.mmdskin.config.StageConfig;
@@ -59,11 +60,14 @@ public final class StageWorkbenchFacade {
         return packCatalog.loadStagePacks();
     }
 
-    public void savePreferences(String selectedPackName, boolean cinematicMode, float cameraHeightOffset) {
+    public void savePreferences(String selectedPackName, boolean cinematicMode, float cameraHeightOffset,
+                                float audioVolume, boolean legIkEnabled) {
         configAccess.savePreferences(new WorkbenchPreferences(
                 selectedPackName == null ? "" : selectedPackName,
                 cinematicMode,
-                cameraHeightOffset
+                cameraHeightOffset,
+                audioVolume,
+                legIkEnabled
         ));
     }
 
@@ -178,7 +182,8 @@ public final class StageWorkbenchFacade {
         lobbyAccess.declineInvite();
     }
 
-    public record WorkbenchPreferences(String lastStagePack, boolean cinematicMode, float cameraHeightOffset) {
+    public record WorkbenchPreferences(String lastStagePack, boolean cinematicMode, float cameraHeightOffset,
+                                       float audioVolume, boolean legIkEnabled) {
     }
 
     interface ConfigAccess {
@@ -361,7 +366,13 @@ public final class StageWorkbenchFacade {
         @Override
         public WorkbenchPreferences loadPreferences() {
             StageConfig config = StageConfig.getInstance();
-            return new WorkbenchPreferences(config.lastStagePack, config.cinematicMode, config.cameraHeightOffset);
+            return new WorkbenchPreferences(
+                    config.lastStagePack,
+                    config.cinematicMode,
+                    config.cameraHeightOffset,
+                    config.audioVolume,
+                    config.legIkEnabled
+            );
         }
 
         @Override
@@ -370,6 +381,8 @@ public final class StageWorkbenchFacade {
             config.lastStagePack = preferences.lastStagePack();
             config.cinematicMode = preferences.cinematicMode();
             config.cameraHeightOffset = preferences.cameraHeightOffset();
+            config.audioVolume = preferences.audioVolume();
+            config.legIkEnabled = preferences.legIkEnabled();
             config.save();
         }
     }

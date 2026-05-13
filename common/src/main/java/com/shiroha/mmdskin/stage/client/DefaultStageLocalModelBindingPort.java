@@ -1,6 +1,9 @@
+/* 文件职责：把本地玩家当前选择的模型绑定到舞台播放会话。 */
 package com.shiroha.mmdskin.stage.client;
 
+import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
 import com.shiroha.mmdskin.bridge.runtime.NativeScenePort;
+import com.shiroha.mmdskin.config.StageConfig;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import com.shiroha.mmdskin.model.runtime.ModelRequestKey;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
@@ -15,9 +18,11 @@ import java.util.Objects;
 /** 文件职责：把本地玩家当前选择的模型绑定到舞台播放会话。 */
 public final class DefaultStageLocalModelBindingPort implements StageLocalModelBindingPort, PlayerStageAnimationPort {
     private final NativeScenePort scenePort;
+    private final NativeModelPort modelPort;
 
-    public DefaultStageLocalModelBindingPort(NativeScenePort scenePort) {
+    public DefaultStageLocalModelBindingPort(NativeScenePort scenePort, NativeModelPort modelPort) {
         this.scenePort = Objects.requireNonNull(scenePort, "scenePort");
+        this.modelPort = Objects.requireNonNull(modelPort, "modelPort");
     }
 
     @Override
@@ -50,6 +55,7 @@ public final class DefaultStageLocalModelBindingPort implements StageLocalModelB
         }
         scenePort.setAutoBlinkEnabled(modelHandle, false);
         scenePort.setEyeTrackingEnabled(modelHandle, false);
+        modelPort.setLegIkEnabled(modelHandle, StageConfig.getInstance().legIkEnabled);
     }
 
     @Override
@@ -80,6 +86,7 @@ public final class DefaultStageLocalModelBindingPort implements StageLocalModelB
             if (handle != 0L) {
                 scenePort.setAutoBlinkEnabled(handle, true);
                 scenePort.setEyeTrackingEnabled(handle, true);
+                modelPort.setLegIkEnabled(handle, true);
             }
             MmdSkinRendererPlayerHelper.resetModelAnimationState(minecraft.player, modelData);
         }

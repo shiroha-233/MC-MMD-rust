@@ -1,3 +1,4 @@
+/* 文件职责：执行舞台播放运行时逻辑并驱动相机控制器。 */
 package com.shiroha.mmdskin.stage.client.playback;
 
 import com.shiroha.mmdskin.bridge.runtime.NativeAnimationPort;
@@ -86,6 +87,7 @@ public final class DefaultStagePlaybackRuntime implements StagePlaybackRuntimePo
         config.lastStagePack = pack.getName();
         config.cinematicMode = cinematicMode;
         config.cameraHeightOffset = cameraHeightOffset;
+        config.audioVolume = Math.max(0.0f, Math.min(1.0f, config.audioVolume));
         config.save();
 
         StagePack.VmdFileInfo cameraFile = null;

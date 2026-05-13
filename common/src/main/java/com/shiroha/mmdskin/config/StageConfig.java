@@ -1,7 +1,9 @@
+/* 文件职责：保存和加载舞台模式的本地偏好配置。 */
 package com.shiroha.mmdskin.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -21,6 +23,8 @@ public class StageConfig {
     public String lastStagePack = "";
     public boolean cinematicMode = true;
     public float cameraHeightOffset = 0.0f;
+    public float audioVolume = 1.0f;
+    public boolean legIkEnabled = true;
 
     private StageConfig() {}
 
@@ -43,8 +47,10 @@ public class StageConfig {
             File configFile = PathConstants.getConfigFile(PathConstants.STAGE_CONFIG);
             if (configFile.exists()) {
                 String json = Files.readString(configFile.toPath());
-                StageConfig config = GSON.fromJson(json, StageConfig.class);
+                JsonObject root = GSON.fromJson(json, JsonObject.class);
+                StageConfig config = GSON.fromJson(root, StageConfig.class);
                 if (config != null) {
+                    config.normalizeLoadedValues(root);
                     return config;
                 }
             }
@@ -62,5 +68,26 @@ public class StageConfig {
         } catch (Exception e) {
             logger.warn("[StageConfig] 保存失败: {}", e.getMessage());
         }
+    }
+
+    private void normalizeLoadedValues(JsonObject root) {
+        if (lastStagePack == null) {
+            lastStagePack = "";
+        }
+        if (!Float.isFinite(cameraHeightOffset)) {
+            cameraHeightOffset = 0.0f;
+        }
+        cameraHeightOffset = clamp(cameraHeightOffset, -2.0f, 2.0f);
+        if (root == null || !root.has("audioVolume") || !Float.isFinite(audioVolume)) {
+            audioVolume = 1.0f;
+        }
+        audioVolume = clamp(audioVolume, 0.0f, 1.0f);
+        if (root == null || !root.has("legIkEnabled")) {
+            legIkEnabled = true;
+        }
+    }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
     }
 }

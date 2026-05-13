@@ -2,6 +2,7 @@
 package com.shiroha.mmdskin.ui.stage;
 
 import com.shiroha.mmdskin.config.StagePack;
+import net.minecraft.util.Mth;
 
 import java.util.List;
 import java.util.Objects;
@@ -13,11 +14,15 @@ final class StageSelectState {
     private String selectedHostMotionFileName;
     private boolean cinematicMode;
     private float cameraHeightOffset;
+    private float audioVolume;
+    private boolean legIkEnabled;
 
     StageSelectState(StageWorkbenchFacade.WorkbenchPreferences preferences, List<StagePack> initialStagePacks) {
         Objects.requireNonNull(preferences, "preferences");
         this.cinematicMode = preferences.cinematicMode();
-        this.cameraHeightOffset = preferences.cameraHeightOffset();
+        this.cameraHeightOffset = Mth.clamp(preferences.cameraHeightOffset(), -2.0f, 2.0f);
+        this.audioVolume = Mth.clamp(preferences.audioVolume(), 0.0f, 1.0f);
+        this.legIkEnabled = preferences.legIkEnabled();
         replaceStagePacks(initialStagePacks, preferences.lastStagePack());
     }
 
@@ -55,8 +60,16 @@ final class StageSelectState {
         cinematicMode = !cinematicMode;
     }
 
+    void toggleLegIkEnabled() {
+        legIkEnabled = !legIkEnabled;
+    }
+
     void setCameraHeightOffset(float cameraHeightOffset) {
-        this.cameraHeightOffset = cameraHeightOffset;
+        this.cameraHeightOffset = Mth.clamp(cameraHeightOffset, -2.0f, 2.0f);
+    }
+
+    void setAudioVolume(float audioVolume) {
+        this.audioVolume = Mth.clamp(audioVolume, 0.0f, 1.0f);
     }
 
     List<StagePack> stagePacks() {
@@ -84,6 +97,14 @@ final class StageSelectState {
 
     float cameraHeightOffset() {
         return cameraHeightOffset;
+    }
+
+    float audioVolume() {
+        return audioVolume;
+    }
+
+    boolean legIkEnabled() {
+        return legIkEnabled;
     }
 
     private int resolvePackIndex(String preferredPackName) {

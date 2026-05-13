@@ -16,15 +16,15 @@ import java.util.Objects;
 
 /** 文件职责：渲染并处理舞台房间侧栏，包括 host 邀请与 guest 自选动作。 */
 final class StageAssignPanel {
-    private static final int PANEL_WIDTH = 208;
-    private static final int PANEL_MARGIN = 10;
-    private static final int PANEL_PADDING = 10;
-    private static final int HEADER_HEIGHT = 22;
-    private static final int BUTTON_HEIGHT = 16;
-    private static final int LIST_ROW_HEIGHT = 18;
-    private static final int ROW_GAP = 3;
-    private static final int TOGGLE_HEIGHT = 14;
-    private static final int INVITE_BUTTON_WIDTH = 70;
+    private static final int PANEL_WIDTH = 192;
+    private static final int PANEL_MARGIN = 8;
+    private static final int PANEL_PADDING = 8;
+    private static final int HEADER_HEIGHT = 20;
+    private static final int BUTTON_HEIGHT = 15;
+    private static final int LIST_ROW_HEIGHT = 16;
+    private static final int ROW_GAP = 2;
+    private static final int TOGGLE_HEIGHT = 13;
+    private static final int INVITE_BUTTON_WIDTH = 66;
 
     private static final int COLOR_ACCENT = TranslucentTrayChrome.ACCENT;
     private static final int COLOR_TEXT = TranslucentTrayChrome.BODY_TEXT;
@@ -75,14 +75,14 @@ final class StageAssignPanel {
         this.panelX = screenWidth - PANEL_WIDTH - PANEL_MARGIN;
         this.panelY = PANEL_MARGIN;
         this.panelHeight = Math.max(220, screenHeight - PANEL_MARGIN * 2);
-        this.listTop = panelY + HEADER_HEIGHT + 10;
+        this.listTop = panelY + HEADER_HEIGHT + 8;
         this.inviteButtonX = panelX + PANEL_WIDTH - PANEL_PADDING - INVITE_BUTTON_WIDTH;
-        this.inviteButtonY = panelY + 4;
+        this.inviteButtonY = panelY + 5;
 
         if (sessionMember) {
             this.listBottom = panelY + Math.max(94, panelHeight / 2);
-            this.guestToggleY = listBottom + 10;
-            this.guestMotionTop = guestToggleY + TOGGLE_HEIGHT + 8;
+            this.guestToggleY = listBottom + 8;
+            this.guestMotionTop = guestToggleY + TOGGLE_HEIGHT + 7;
             this.guestMotionBottom = panelY + panelHeight - PANEL_PADDING;
         } else {
             this.listBottom = panelY + panelHeight - PANEL_PADDING;
@@ -214,9 +214,9 @@ final class StageAssignPanel {
                 fillRow(graphics, y, COLOR_ROW);
             }
             String prefix = memberView.host() ? "HOST" : memberView.local() ? "YOU" : "GUEST";
-            graphics.drawString(font, shorten(prefix + " " + memberView.name(), 18), panelX + PANEL_PADDING, y + 5, COLOR_TEXT, false);
+            graphics.drawString(font, shorten(prefix + " " + memberView.name(), 17), panelX + PANEL_PADDING, y + 4, COLOR_TEXT, false);
             String state = guestStateText(memberView.state(), memberView.useHostCamera());
-            graphics.drawString(font, shorten(state, 14), panelX + PANEL_WIDTH - PANEL_PADDING - font.width(shorten(state, 14)), y + 5, colorForState(memberView.state()), false);
+            graphics.drawString(font, shorten(state, 13), panelX + PANEL_WIDTH - PANEL_PADDING - font.width(shorten(state, 13)), y + 4, colorForState(memberView.state()), false);
         }
     }
 
@@ -238,9 +238,9 @@ final class StageAssignPanel {
             } else {
                 fillRow(graphics, y, COLOR_ROW);
             }
-            graphics.drawString(font, shorten(entry.name(), 18), panelX + PANEL_PADDING, y + 5, entry.nearby() ? COLOR_TEXT : COLOR_TEXT_MUTED, false);
+            graphics.drawString(font, shorten(entry.name(), 17), panelX + PANEL_PADDING, y + 4, entry.nearby() ? COLOR_TEXT : COLOR_TEXT_MUTED, false);
             String action = hostActionText(entry);
-            graphics.drawString(font, shorten(action, 12), panelX + PANEL_WIDTH - PANEL_PADDING - font.width(shorten(action, 12)), y + 5, colorForHostEntry(entry), false);
+            graphics.drawString(font, shorten(action, 11), panelX + PANEL_WIDTH - PANEL_PADDING - font.width(shorten(action, 11)), y + 4, colorForHostEntry(entry), false);
         }
     }
 
@@ -275,10 +275,10 @@ final class StageAssignPanel {
             } else {
                 fillRow(graphics, y, COLOR_ROW);
             }
-            drawCheckbox(graphics, panelX + PANEL_PADDING, y + 5, facade.isLocalCustomMotionSelected(info.name));
-            graphics.drawString(font, shorten(stripExtension(info.name), 15), panelX + PANEL_PADDING + 14, y + 5, COLOR_TEXT, false);
+            drawCheckbox(graphics, panelX + PANEL_PADDING, y + 4, facade.isLocalCustomMotionSelected(info.name));
+            graphics.drawString(font, shorten(stripExtension(info.name), 14), panelX + PANEL_PADDING + 13, y + 4, COLOR_TEXT, false);
             String tag = motionTag(info);
-            graphics.drawString(font, tag, panelX + PANEL_WIDTH - PANEL_PADDING - font.width(tag), y + 5, COLOR_TEXT_MUTED, false);
+            graphics.drawString(font, tag, panelX + PANEL_WIDTH - PANEL_PADDING - font.width(tag), y + 4, COLOR_TEXT_MUTED, false);
         }
         graphics.disableScissor();
         drawScrollbar(graphics, guestMotionTop, guestMotionBottom, motionScroll, maxMotionScroll());

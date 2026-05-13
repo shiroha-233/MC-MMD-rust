@@ -1,3 +1,4 @@
+/* 文件职责：验证原生舞台选择界面的状态同步与关闭语义。 */
 package com.shiroha.mmdskin.ui.stage;
 
 import com.shiroha.mmdskin.config.StagePack;
@@ -10,6 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -19,7 +21,7 @@ class StageSelectScreenTest {
     void shouldRestorePackSelectionAndDropMissingHostMotion() {
         FakeLobbyAccess lobbyAccess = new FakeLobbyAccess();
         FakeConfigAccess configAccess = new FakeConfigAccess();
-        configAccess.preferences = new StageWorkbenchFacade.WorkbenchPreferences("beta", true, 0.75f);
+        configAccess.preferences = new StageWorkbenchFacade.WorkbenchPreferences("beta", true, 0.75f, 0.55f, false);
         StageWorkbenchFacade facade = new StageWorkbenchFacade(
                 lobbyAccess,
                 () -> List.of(createPack("alpha", List.of("dance.vmd")), createPack("beta", List.of("solo.vmd"))),
@@ -30,6 +32,8 @@ class StageSelectScreenTest {
         StageSelectScreen screen = new StageSelectScreen(facade);
 
         assertEquals("beta", screen.debugState().selectedPack().getName());
+        assertEquals(0.55f, screen.debugState().audioVolume());
+        assertFalse(screen.debugState().legIkEnabled());
         screen.debugState().toggleSelectedHostMotion("ghost.vmd");
 
         screen.debugState().replaceStagePacks(List.of(createPack("alpha", List.of("dance.vmd"))), "alpha");
@@ -211,7 +215,8 @@ class StageSelectScreenTest {
     }
 
     private static final class FakeConfigAccess implements StageWorkbenchFacade.ConfigAccess {
-        private StageWorkbenchFacade.WorkbenchPreferences preferences = new StageWorkbenchFacade.WorkbenchPreferences("", false, 0.0f);
+        private StageWorkbenchFacade.WorkbenchPreferences preferences =
+                new StageWorkbenchFacade.WorkbenchPreferences("", false, 0.0f, 1.0f, true);
 
         @Override
         public StageWorkbenchFacade.WorkbenchPreferences loadPreferences() {

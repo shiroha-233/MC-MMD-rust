@@ -1,3 +1,4 @@
+/* 文件职责：验证舞台工作台门面行为。 */
 package com.shiroha.mmdskin.ui.stage;
 
 import com.shiroha.mmdskin.config.StagePack;
@@ -29,11 +30,13 @@ class StageWorkbenchFacadeTest {
                 configAccess
         );
 
-        facade.savePreferences("beta", false, 1.25f);
+        facade.savePreferences("beta", false, 1.25f, 0.65f, false);
 
         assertEquals("beta", facade.loadPreferences().lastStagePack());
         assertFalse(facade.loadPreferences().cinematicMode());
         assertEquals(1.25f, facade.loadPreferences().cameraHeightOffset());
+        assertEquals(0.65f, facade.loadPreferences().audioVolume());
+        assertFalse(facade.loadPreferences().legIkEnabled());
         assertEquals(packs, facade.loadStagePacks());
     }
 
@@ -215,7 +218,8 @@ class StageWorkbenchFacadeTest {
     }
 
     private static final class FakeConfigAccess implements StageWorkbenchFacade.ConfigAccess {
-        private StageWorkbenchFacade.WorkbenchPreferences preferences = new StageWorkbenchFacade.WorkbenchPreferences("", true, 0.0f);
+        private StageWorkbenchFacade.WorkbenchPreferences preferences =
+                new StageWorkbenchFacade.WorkbenchPreferences("", true, 0.0f, 1.0f, true);
 
         @Override
         public StageWorkbenchFacade.WorkbenchPreferences loadPreferences() {

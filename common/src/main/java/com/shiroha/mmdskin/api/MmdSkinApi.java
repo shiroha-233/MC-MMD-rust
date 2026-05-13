@@ -1,3 +1,4 @@
+/* 文件职责：提供外部模组访问当前 MMD 模型信息的公共 API。 */
 package com.shiroha.mmdskin.api;
 
 import com.shiroha.mmdskin.bridge.runtime.NativeModelQueryPort;
@@ -52,6 +53,10 @@ public final class MmdSkinApi {
 
         @Override
         public void setVrIkParams(long modelHandle, float armIkStrength) {
+        }
+
+        @Override
+        public void setLegIkEnabled(long modelHandle, boolean enabled) {
         }
 
         @Override

@@ -1,3 +1,4 @@
+/* 文件职责：集中封装渲染运行时需要的 native 调用。 */
 package com.shiroha.mmdskin.bridge.runtime;
 
 import com.shiroha.mmdskin.NativeFunc;
@@ -157,6 +158,11 @@ public final class NativeRuntimeBridge implements
     @Override
     public void setVrIkParams(long modelHandle, float armIkStrength) {
         nativeFunc().SetVRIKParams(modelHandle, armIkStrength);
+    }
+
+    @Override
+    public void setLegIkEnabled(long modelHandle, boolean enabled) {
+        nativeFunc().SetLegIkEnabled(modelHandle, enabled);
     }
 
     @Override

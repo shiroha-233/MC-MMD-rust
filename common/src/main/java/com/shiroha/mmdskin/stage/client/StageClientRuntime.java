@@ -1,7 +1,9 @@
+/* 文件职责：组装并持有舞台客户端运行时对象图。 */
 package com.shiroha.mmdskin.stage.client;
 
 import com.shiroha.mmdskin.bridge.runtime.NativeAnimationBridgeHolder;
 import com.shiroha.mmdskin.bridge.runtime.NativeAnimationPort;
+import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
 import com.shiroha.mmdskin.bridge.runtime.NativeRuntimeBridgeHolder;
 import com.shiroha.mmdskin.bridge.runtime.NativeRuntimePort;
 import com.shiroha.mmdskin.bridge.runtime.NativeScenePort;
@@ -50,7 +52,7 @@ public final class StageClientRuntime {
         DefaultStageCameraSessionPort sessionPort = new DefaultStageCameraSessionPort(sessionService);
         StageNetworkPlaybackBroadcastAdapter broadcastAdapter = new StageNetworkPlaybackBroadcastAdapter(sessionService);
         DefaultStageLocalModelBindingPort localModelBindingPort =
-                new DefaultStageLocalModelBindingPort((NativeScenePort) runtimeBridge);
+                new DefaultStageLocalModelBindingPort((NativeScenePort) runtimeBridge, (NativeModelPort) runtimeBridge);
 
         Supplier<MMDCameraController> cameraSupplier = () -> {
             MMDCameraController controller = instance != null ? instance.cameraController : null;

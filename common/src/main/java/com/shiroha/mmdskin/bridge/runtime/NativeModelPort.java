@@ -1,3 +1,4 @@
+/* 文件职责：定义模型运行时相关 native 能力边界。 */
 package com.shiroha.mmdskin.bridge.runtime;
 
 /** 文件职责：定义模型运行时相关的 native 能力边界。 */
@@ -18,6 +19,8 @@ public interface NativeModelPort {
     void setVrEnabled(long modelHandle, boolean enabled);
 
     void setVrIkParams(long modelHandle, float armIkStrength);
+
+    void setLegIkEnabled(long modelHandle, boolean enabled);
 
     int getMaterialCount(long modelHandle);
 
