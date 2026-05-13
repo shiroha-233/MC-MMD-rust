@@ -13,26 +13,18 @@ layout(location = 1) out vec4 fragData1;
 layout(location = 2) out vec4 fragData2;
 layout(location = 3) out vec4 fragData3;
 
-float saturate(float value) {
-    return clamp(value, 0.0, 1.0);
-}
-
 void main() {
     vec4 texColor = texture(Sampler0, texCoord0);
     if (texColor.a < AlphaCutoff) {
         discard;
     }
 
-    vec3 viewDir = normalize(-viewPos);
     vec3 normal = normalize(viewNormal);
-    float silhouette = 1.0 - saturate(dot(normal, viewDir));
-    float edge = smoothstep(0.10, 0.55, silhouette);
 
-    if (edge < 0.01) {
-        discard;
-    }
+    vec3 texLum = OutlineColor * dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
+    vec3 finalOutline = mix(OutlineColor, texLum, 0.3);
 
-    fragColor = vec4(OutlineColor, texColor.a * edge);
+    fragColor = vec4(finalOutline, texColor.a);
     fragData1 = vec4(normal * 0.5 + 0.5, 1.0);
     fragData2 = vec4(0.0, 0.0, 0.0, 1.0);
     fragData3 = vec4(0.0, 0.0, 0.0, 1.0);

@@ -1,6 +1,7 @@
 /* 职责：以原生 GuiGraphics 渲染模型选择界面。 */
 package com.shiroha.mmdskin.ui.selector;
 
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import com.shiroha.mmdskin.ui.selector.application.ModelSelectionApplicationService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -218,15 +219,14 @@ public class ModelSelectorScreen extends Screen {
     }
 
     private void renderFallback(GuiGraphics guiGraphics) {
-        guiGraphics.fill(0, 0, this.width, this.height, 0x28000000);
-        guiGraphics.fill(layout.panel.x, layout.panel.y, layout.panel.x + layout.panel.w, layout.panel.y + layout.panel.h, 0x2A000000);
-        guiGraphics.fill(layout.panel.x + 1, layout.panel.y + 1, layout.panel.x + layout.panel.w - 1, layout.panel.y + layout.panel.h - 1, 0x20000000);
+        TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
+        TranslucentTrayChrome.drawPanel(guiGraphics, layout.panel.x, layout.panel.y, layout.panel.w, layout.panel.h);
 
-        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, 0xFFF1F5FB, false);
+        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
         String stats = Component.translatable("gui.mmdskin.model_selector.stats",
                 Math.max(0, modelCards.size() - 1),
                 shorten(currentModel, 8)).getString();
-        guiGraphics.drawString(this.font, stats, layout.header.x, layout.header.y + 10, 0xC8D5DFEC, false);
+        guiGraphics.drawString(this.font, stats, layout.header.x, layout.header.y + 10, TranslucentTrayChrome.SUBTITLE_TEXT, false);
         drawFallbackButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredButton == ButtonTarget.DONE, true);
         drawFallbackButton(guiGraphics, layout.refreshButton, Component.translatable("gui.mmdskin.refresh").getString(), hoveredButton == ButtonTarget.REFRESH, true);
         ModelSelectionApplicationService.ModelCard selectedCard = getSelectedCard();
@@ -234,9 +234,9 @@ public class ModelSelectorScreen extends Screen {
         drawFallbackButton(guiGraphics, layout.settingsButton, Component.translatable("gui.mmdskin.model_settings.title").getString(), hoveredButton == ButtonTarget.SETTINGS, settingsEnabled);
 
         UiRect list = layout.listBox;
-        guiGraphics.fill(list.x, list.y, list.x + list.w, list.y + list.h, 0x22000000);
+        TranslucentTrayChrome.fillListArea(guiGraphics, list.x, list.y, list.w, list.h);
         if (modelCards.isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, "No models", list.centerX(), list.centerY() - 4, 0xFFDDE8F8);
+            guiGraphics.drawCenteredString(this.font, "No models", list.centerX(), list.centerY() - 4, TranslucentTrayChrome.BODY_TEXT);
             return;
         }
 
@@ -252,17 +252,15 @@ public class ModelSelectorScreen extends Screen {
             }
             boolean selected = card.displayName().equals(currentModel);
             boolean hovered = i == hoveredCard;
-            int bg = selected ? 0x52FFFFFF : (hovered ? 0x38FFFFFF : 0x24000000);
+            int bg = TranslucentTrayChrome.cardBackground(selected, hovered);
             guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, bg);
-            guiGraphics.drawString(this.font, buildCardLabel(card), list.x + 7, y + 3, 0xFFE9F1FA, false);
+            guiGraphics.drawString(this.font, buildCardLabel(card), list.x + 7, y + 3, TranslucentTrayChrome.BODY_TEXT, false);
             y += CARD_HEIGHT + CARD_GAP;
         }
     }
 
     private void drawFallbackButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered, boolean enabled) {
-        int bg = enabled ? (hovered ? 0x4AFFFFFF : 0x30000000) : 0x1A000000;
-        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, bg);
-        guiGraphics.drawCenteredString(this.font, text, rect.centerX(), rect.y + 4, enabled ? 0xFFF1F6FD : 0x9BB2C5D7);
+        TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, enabled);
     }
 
     private void reloadModelCards() {

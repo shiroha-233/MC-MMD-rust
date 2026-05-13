@@ -1,6 +1,7 @@
 /* 职责：以原生 GuiGraphics 渲染材质显隐设置界面。 */
 package com.shiroha.mmdskin.ui.selector;
 
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import com.shiroha.mmdskin.ui.selector.application.MaterialVisibilityApplicationService;
 import com.shiroha.mmdskin.ui.selector.application.MaterialVisibilityApplicationService.MaterialEntryState;
 import com.shiroha.mmdskin.ui.selector.application.MaterialVisibilityApplicationService.MaterialScreenContext;
@@ -244,13 +245,12 @@ public class MaterialVisibilityScreen extends Screen {
     }
 
     private void renderFallback(GuiGraphics guiGraphics) {
-        guiGraphics.fill(0, 0, this.width, this.height, 0x28000000);
-        guiGraphics.fill(layout.panel.x, layout.panel.y, layout.panel.x + layout.panel.w, layout.panel.y + layout.panel.h, 0x2A000000);
-        guiGraphics.fill(layout.panel.x + 1, layout.panel.y + 1, layout.panel.x + layout.panel.w - 1, layout.panel.y + layout.panel.h - 1, 0x20000000);
+        TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
+        TranslucentTrayChrome.drawPanel(guiGraphics, layout.panel.x, layout.panel.y, layout.panel.w, layout.panel.h);
 
-        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, 0xFFF1F5FB, false);
-        guiGraphics.drawString(this.font, shorten(context.modelName(), 8), layout.header.x, layout.header.y + 10, 0xC8D5DFEC, false);
-        guiGraphics.drawString(this.font, visibleCount() + " / " + materials.size(), layout.header.x, layout.header.y + 19, 0xBCD0DCE9, false);
+        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
+        guiGraphics.drawString(this.font, shorten(context.modelName(), 8), layout.header.x, layout.header.y + 10, TranslucentTrayChrome.SUBTITLE_TEXT, false);
+        guiGraphics.drawString(this.font, visibleCount() + " / " + materials.size(), layout.header.x, layout.header.y + 19, TranslucentTrayChrome.DETAIL_TEXT, false);
 
         drawFallbackButton(guiGraphics, layout.showAllButton, Component.translatable("gui.mmdskin.material_visibility.show_all").getString(), hoveredButton == ButtonTarget.SHOW_ALL);
         drawFallbackButton(guiGraphics, layout.hideAllButton, Component.translatable("gui.mmdskin.material_visibility.hide_all").getString(), hoveredButton == ButtonTarget.HIDE_ALL);
@@ -258,9 +258,9 @@ public class MaterialVisibilityScreen extends Screen {
         drawFallbackButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredButton == ButtonTarget.DONE);
 
         UiRect list = layout.listBox;
-        guiGraphics.fill(list.x, list.y, list.x + list.w, list.y + list.h, 0x22000000);
+        TranslucentTrayChrome.fillListArea(guiGraphics, list.x, list.y, list.w, list.h);
         if (materials.isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, "-", list.centerX(), list.centerY() - 4, 0xFFDDE8F8);
+            guiGraphics.drawCenteredString(this.font, "-", list.centerX(), list.centerY() - 4, TranslucentTrayChrome.BODY_TEXT);
             return;
         }
 
@@ -276,18 +276,16 @@ public class MaterialVisibilityScreen extends Screen {
             }
             boolean hovered = i == hoveredCard;
             int bg = card.visible()
-                    ? (hovered ? 0x3EFFFFFF : 0x24000000)
-                    : (hovered ? 0x66FFFFFF : 0x4AFFFFFF);
+                    ? TranslucentTrayChrome.cardBackground(false, hovered)
+                    : (hovered ? 0x66FFFFFF : TranslucentTrayChrome.BUTTON_HOVER);
             guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, bg);
-            guiGraphics.drawString(this.font, buildMaterialLabel(card), list.x + 7, y + 3, 0xFFE9F1FA, false);
+            guiGraphics.drawString(this.font, buildMaterialLabel(card), list.x + 7, y + 3, TranslucentTrayChrome.BODY_TEXT, false);
             y += CARD_HEIGHT + CARD_GAP;
         }
     }
 
     private void drawFallbackButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
-        int bg = hovered ? 0x4AFFFFFF : 0x30000000;
-        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, bg);
-        guiGraphics.drawCenteredString(this.font, text, rect.centerX(), rect.y + 4, 0xFFF1F6FD);
+        TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, true);
     }
 
     private void loadMaterials() {

@@ -2,6 +2,7 @@
 package com.shiroha.mmdskin.ui.selector;
 
 import com.shiroha.mmdskin.config.ModelConfigData;
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import com.shiroha.mmdskin.ui.selector.application.ModelSettingsApplicationService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -304,15 +305,14 @@ public class ModelSettingsScreen extends Screen {
     private void renderFallback(GuiGraphics guiGraphics) {
         float eyeAngleNormalized = normalized(config.eyeMaxAngle, 0.05f, 1.0f);
         float modelScaleNormalized = normalized(config.modelScale, 0.5f, 2.0f);
-        guiGraphics.fill(0, 0, this.width, this.height, 0x28000000);
-        guiGraphics.fill(layout.panel.x, layout.panel.y, layout.panel.x + layout.panel.w, layout.panel.y + layout.panel.h, 0x2A000000);
-        guiGraphics.fill(layout.panel.x + 1, layout.panel.y + 1, layout.panel.x + layout.panel.w - 1, layout.panel.y + layout.panel.h - 1, 0x20000000);
+        TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
+        TranslucentTrayChrome.drawPanel(guiGraphics, layout.panel.x, layout.panel.y, layout.panel.w, layout.panel.h);
 
-        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, 0xFFF1F5FB, false);
-        guiGraphics.drawString(this.font, shorten(modelName, 14), layout.header.x, layout.header.y + 10, 0xC8D5DFEC, false);
+        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
+        guiGraphics.drawString(this.font, shorten(modelName, 14), layout.header.x, layout.header.y + 10, TranslucentTrayChrome.SUBTITLE_TEXT, false);
 
         drawFallbackCard(guiGraphics, layout.eyeCard, Component.translatable("gui.mmdskin.model_settings.eye_tracking").getString());
-        guiGraphics.drawString(this.font, Component.translatable("gui.mmdskin.model_settings.eye_tracking_enabled").getString(), layout.eyeCard.x + 4, layout.eyeCard.y + 13, 0xFFE9F1FA, false);
+        guiGraphics.drawString(this.font, Component.translatable("gui.mmdskin.model_settings.eye_tracking_enabled").getString(), layout.eyeCard.x + 4, layout.eyeCard.y + 13, TranslucentTrayChrome.BODY_TEXT, false);
         drawFallbackSlider(
                 guiGraphics,
                 layout.eyeSlider,
@@ -333,9 +333,11 @@ public class ModelSettingsScreen extends Screen {
         for (int i = 0; i < quickSlotBindings.size() && i < layout.quickSlotButtons.length; i++) {
             ModelSettingsApplicationService.QuickSlotBinding binding = quickSlotBindings.get(i);
             UiRect rect = layout.quickSlotButtons[i];
-            int bg = binding.boundToCurrentModel() ? 0x52FFFFFF : (hoveredTarget == slotHoverTarget(i) ? 0x38FFFFFF : 0x24000000);
+            int bg = binding.boundToCurrentModel()
+                    ? TranslucentTrayChrome.CARD_SELECTED
+                    : TranslucentTrayChrome.cardBackground(false, hoveredTarget == slotHoverTarget(i));
             guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, bg);
-            guiGraphics.drawCenteredString(this.font, buildQuickSlotLabel(binding), rect.centerX(), rect.y + 4, 0xFFF1F6FD);
+            guiGraphics.drawCenteredString(this.font, buildQuickSlotLabel(binding), rect.centerX(), rect.y + 4, TranslucentTrayChrome.TITLE_TEXT);
         }
 
         drawFallbackButton(guiGraphics, layout.saveButton, Component.translatable("gui.mmdskin.model_settings.save").getString(), hoveredTarget == HoverTarget.SAVE);
@@ -345,12 +347,12 @@ public class ModelSettingsScreen extends Screen {
     }
 
     private void drawFallbackCard(GuiGraphics guiGraphics, UiRect rect, String title) {
-        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, 0x22000000);
-        guiGraphics.drawString(this.font, title, rect.x + 4, rect.y + 3, 0xFFE9F1FA, false);
+        TranslucentTrayChrome.fillListArea(guiGraphics, rect.x, rect.y, rect.w, rect.h);
+        guiGraphics.drawString(this.font, title, rect.x + 4, rect.y + 3, TranslucentTrayChrome.BODY_TEXT, false);
     }
 
     private void drawFallbackSlider(GuiGraphics guiGraphics, UiRect rect, String label, float normalized) {
-        guiGraphics.drawString(this.font, label, rect.x, rect.y - 8, 0xC8D5DFEC, false);
+        guiGraphics.drawString(this.font, label, rect.x, rect.y - 8, TranslucentTrayChrome.SUBTITLE_TEXT, false);
         guiGraphics.fill(rect.x, rect.y + 3, rect.x + rect.w, rect.y + 7, 0x28FFFFFF);
         int fillRight = rect.x + Math.round(rect.w * normalized);
         guiGraphics.fill(rect.x, rect.y + 3, fillRight, rect.y + 7, 0x58FFFFFF);
@@ -364,9 +366,7 @@ public class ModelSettingsScreen extends Screen {
     }
 
     private void drawFallbackButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
-        int bg = hovered ? 0x4AFFFFFF : 0x30000000;
-        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, bg);
-        guiGraphics.drawCenteredString(this.font, text, rect.centerX(), rect.y + 4, 0xFFF1F6FD);
+        TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, true);
     }
 
     private void saveAndClose() {

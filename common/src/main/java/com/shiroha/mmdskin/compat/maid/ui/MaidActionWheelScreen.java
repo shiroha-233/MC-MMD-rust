@@ -13,11 +13,7 @@ import java.util.List;
 import java.util.UUID;
 
 public class MaidActionWheelScreen extends AbstractWheelScreen {
-    private static final WheelStyle STYLE = new WheelStyle(
-            0.70f, 0.25f,
-            0xFFD060A0, 0xCCD060A0, 0x60FFFFFF,
-            0xE0301828, 0xFFD060A0, 0xFF000000
-    );
+    private static final WheelStyle STYLE = createTranslucentWheelStyle(0.70f, 0.25f);
 
     private final MaidActionService maidActionService;
     private final List<ActionSlot> actionSlots;

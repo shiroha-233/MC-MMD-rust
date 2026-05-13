@@ -1,5 +1,6 @@
 package com.shiroha.mmdskin.ui.stage;
 
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -17,15 +18,10 @@ public class StageInvitePopup extends Screen {
     private static final int BTN_H = 16;
     private static final int MARGIN = 8;
 
-    private static final int BG = 0xE0101418;
-    private static final int BORDER = 0xFF2A3A4A;
-    private static final int ACCENT = 0xFF60A0D0;
-    private static final int TEXT = 0xFFDDDDDD;
-    private static final int TEXT_DIM = 0xFF8FA3B9;
-    private static final int BTN_ACCEPT = 0xFF40A060;
-    private static final int BTN_ACCEPT_HOVER = 0xFF50C070;
-    private static final int BTN_DECLINE = 0xFF4F5863;
-    private static final int BTN_DECLINE_HOVER = 0xFF65707C;
+    private static final int BTN_ACCEPT = 0x3440A060;
+    private static final int BTN_ACCEPT_HOVER = 0x4850C070;
+    private static final int BTN_DECLINE = 0x304F5863;
+    private static final int BTN_DECLINE_HOVER = 0x4465707C;
 
     private final String inviterName;
     private int px, py;
@@ -69,22 +65,19 @@ public class StageInvitePopup extends Screen {
             return;
         }
 
-        g.fill(px, py, px + POPUP_W, py + POPUP_H, BG);
-        g.fill(px, py, px + POPUP_W, py + 1, BORDER);
-        g.fill(px, py + POPUP_H - 1, px + POPUP_W, py + POPUP_H, BORDER);
-        g.fill(px, py, px + 1, py + POPUP_H, BORDER);
-        g.fill(px + POPUP_W - 1, py, px + POPUP_W, py + POPUP_H, BORDER);
-        g.fill(px + MARGIN, py + 18, px + POPUP_W - MARGIN, py + 19, 0x30FFFFFF);
+        TranslucentTrayChrome.drawOverlay(g, this.width, this.height);
+        TranslucentTrayChrome.drawPanel(g, px, py, POPUP_W, POPUP_H);
+        TranslucentTrayChrome.drawSeparator(g, px + MARGIN, py + 18, POPUP_W - MARGIN * 2);
 
-        g.drawCenteredString(this.font, this.title, px + POPUP_W / 2, py + MARGIN - 1, ACCENT);
+        g.drawCenteredString(this.font, this.title, px + POPUP_W / 2, py + MARGIN - 1, TranslucentTrayChrome.TITLE_TEXT);
 
         Component msg = Component.translatable("message.mmdskin.stage.invite_received", inviterName);
-        g.drawCenteredString(this.font, msg, px + POPUP_W / 2, py + 26, TEXT);
+        g.drawCenteredString(this.font, msg, px + POPUP_W / 2, py + 26, TranslucentTrayChrome.BODY_TEXT);
         g.drawCenteredString(this.font,
                 Component.translatable("gui.mmdskin.stage.invite_prompt"),
                 px + POPUP_W / 2,
                 py + 38,
-                TEXT_DIM);
+                TranslucentTrayChrome.SUBTITLE_TEXT);
 
         hoverAccept = mouseX >= acceptX && mouseX <= acceptX + BTN_W
                    && mouseY >= btnY && mouseY <= btnY + BTN_H;
@@ -94,12 +87,12 @@ public class StageInvitePopup extends Screen {
         g.fill(acceptX, btnY, acceptX + BTN_W, btnY + BTN_H, hoverAccept ? BTN_ACCEPT_HOVER : BTN_ACCEPT);
         g.drawCenteredString(this.font,
             Component.translatable("gui.mmdskin.stage.accept"),
-            acceptX + BTN_W / 2, btnY + 4, 0xFFFFFFFF);
+            acceptX + BTN_W / 2, btnY + 4, TranslucentTrayChrome.TITLE_TEXT);
 
         g.fill(declineX, btnY, declineX + BTN_W, btnY + BTN_H, hoverDecline ? BTN_DECLINE_HOVER : BTN_DECLINE);
         g.drawCenteredString(this.font,
             Component.translatable("gui.mmdskin.stage.decline"),
-            declineX + BTN_W / 2, btnY + 4, 0xFFFFFFFF);
+            declineX + BTN_W / 2, btnY + 4, TranslucentTrayChrome.TITLE_TEXT);
 
         super.render(g, mouseX, mouseY, partialTick);
     }

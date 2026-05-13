@@ -2,6 +2,7 @@
 package com.shiroha.mmdskin.ui.stage;
 
 import com.shiroha.mmdskin.config.StagePack;
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -24,27 +25,22 @@ public class StageSelectScreen extends Screen {
     private static final int SECTION_GAP = 8;
     private static final int BUTTON_HEIGHT = 18;
 
-    private static final int COLOR_BG = 0xC012171D;
-    private static final int COLOR_BORDER = 0xFF314253;
-    private static final int COLOR_ACCENT = 0xFF65A9D8;
-    private static final int COLOR_TEXT = 0xFFEAF2FB;
-    private static final int COLOR_TEXT_DIM = 0xFFA5B4C3;
-    private static final int COLOR_TEXT_MUTED = 0xFF7E8D9D;
-    private static final int COLOR_ROW = 0x16000000;
-    private static final int COLOR_ROW_HOVER = 0x24FFFFFF;
+    private static final int COLOR_ACCENT = TranslucentTrayChrome.ACCENT;
+    private static final int COLOR_TEXT = TranslucentTrayChrome.BODY_TEXT;
+    private static final int COLOR_TEXT_DIM = TranslucentTrayChrome.SUBTITLE_TEXT;
+    private static final int COLOR_TEXT_MUTED = TranslucentTrayChrome.MUTED_TEXT;
+    private static final int COLOR_ROW = TranslucentTrayChrome.CARD_BACKGROUND;
+    private static final int COLOR_ROW_HOVER = TranslucentTrayChrome.CARD_HOVER;
     private static final int COLOR_ROW_SELECTED = 0x2C65A9D8;
-    private static final int COLOR_TOGGLE_ON = 0xFF4BB97C;
-    private static final int COLOR_TOGGLE_OFF = 0xFF53606D;
-    private static final int COLOR_BUTTON = 0xFF40586F;
-    private static final int COLOR_BUTTON_HOVER = 0xFF557492;
-    private static final int COLOR_BUTTON_GO = 0xFF3FA66B;
-    private static final int COLOR_BUTTON_GO_HOVER = 0xFF52C67F;
-    private static final int COLOR_BUTTON_CANCEL = 0xFF5C6671;
-    private static final int COLOR_BUTTON_CANCEL_HOVER = 0xFF6C7782;
-    private static final int COLOR_BUTTON_DISABLED = 0xFF36424D;
-    private static final int COLOR_SCROLL_TRACK = 0x26000000;
-    private static final int COLOR_SCROLL_THUMB = 0xFF65A9D8;
-    private static final int COLOR_SEPARATOR = 0x18FFFFFF;
+    private static final int COLOR_TOGGLE_ON = 0xA04BB97C;
+    private static final int COLOR_TOGGLE_OFF = 0x8053606D;
+    private static final int COLOR_BUTTON = 0x3040586F;
+    private static final int COLOR_BUTTON_HOVER = 0x48557492;
+    private static final int COLOR_BUTTON_GO = 0x343FA66B;
+    private static final int COLOR_BUTTON_GO_HOVER = 0x4852C67F;
+    private static final int COLOR_BUTTON_CANCEL = 0x305C6671;
+    private static final int COLOR_BUTTON_CANCEL_HOVER = 0x446C7782;
+    private static final int COLOR_BUTTON_DISABLED = 0x2436424D;
 
     private final StageWorkbenchFacade facade;
     private final StageSelectState state;
@@ -131,7 +127,7 @@ public class StageSelectScreen extends Screen {
         syncAssignPanel();
         updateHoverState(mouseX, mouseY);
 
-        graphics.fill(0, 0, this.width, this.height, 0x28000000);
+        TranslucentTrayChrome.drawOverlay(graphics, this.width, this.height);
         drawPanel(graphics, leftPanelX, leftPanelY, LEFT_PANEL_WIDTH, leftPanelHeight);
         drawHeader(graphics);
         drawPackList(graphics);
@@ -404,7 +400,7 @@ public class StageSelectScreen extends Screen {
     }
 
     private void drawFooter(GuiGraphics graphics) {
-        graphics.fill(leftPanelX + 10, footerTop - 4, leftPanelX + LEFT_PANEL_WIDTH - 10, footerTop - 3, COLOR_SEPARATOR);
+        TranslucentTrayChrome.drawSeparator(graphics, leftPanelX + 10, footerTop - 4, LEFT_PANEL_WIDTH - 20);
         if (facade.isSessionMember()) {
             drawToggle(graphics, leftPanelX + 10, useHostCameraY, LEFT_PANEL_WIDTH - 20, 14, facade.isUseHostCamera(), hoveredUseHostCamera,
                     Component.translatable("gui.mmdskin.stage.use_host_camera").getString());
@@ -430,7 +426,7 @@ public class StageSelectScreen extends Screen {
     private void drawCameraSlider(GuiGraphics graphics) {
         String label = wb("camera_height.short") + ": " + String.format(Locale.ROOT, "%+.2f", state.cameraHeightOffset());
         graphics.drawString(this.font, label, leftPanelX + 10, cameraSliderLabelY, COLOR_TEXT_DIM, false);
-        graphics.fill(cameraSliderX, cameraSliderTrackY, cameraSliderX + cameraSliderWidth, cameraSliderTrackY + 4, 0x26000000);
+        graphics.fill(cameraSliderX, cameraSliderTrackY, cameraSliderX + cameraSliderWidth, cameraSliderTrackY + 4, TranslucentTrayChrome.LIST_BACKGROUND);
         int thumbX = cameraSliderX + Math.round(((state.cameraHeightOffset() + 2.0f) / 4.0f) * (cameraSliderWidth - 6));
         graphics.fill(thumbX, cameraSliderTrackY - 2, thumbX + 6, cameraSliderTrackY + 6, COLOR_ACCENT);
     }
@@ -466,19 +462,15 @@ public class StageSelectScreen extends Screen {
             color = hovered ? COLOR_BUTTON_HOVER : COLOR_BUTTON;
         }
         graphics.fill(x, y, x + width, y + height, color);
-        graphics.drawCenteredString(this.font, text, x + width / 2, y + 5, enabled && !disabled ? 0xFFFFFFFF : COLOR_TEXT_MUTED);
+        graphics.drawCenteredString(this.font, text, x + width / 2, y + 5, enabled && !disabled ? TranslucentTrayChrome.TITLE_TEXT : COLOR_TEXT_MUTED);
     }
 
     private void drawPanel(GuiGraphics graphics, int x, int y, int width, int height) {
-        graphics.fill(x, y, x + width, y + height, COLOR_BG);
-        graphics.fill(x, y, x + width, y + 1, COLOR_BORDER);
-        graphics.fill(x, y + height - 1, x + width, y + height, COLOR_BORDER);
-        graphics.fill(x, y, x + 1, y + height, COLOR_BORDER);
-        graphics.fill(x + width - 1, y, x + width, y + height, COLOR_BORDER);
+        TranslucentTrayChrome.drawPanel(graphics, x, y, width, height);
     }
 
     private void drawListBackground(GuiGraphics graphics, int x, int y, int width, int height) {
-        graphics.fill(x, y, x + width, y + height, COLOR_ROW);
+        TranslucentTrayChrome.fillListArea(graphics, x, y, width, height);
     }
 
     private void drawSectionLabel(GuiGraphics graphics, String text, int x, int y) {
@@ -491,15 +483,7 @@ public class StageSelectScreen extends Screen {
     }
 
     private void drawScrollbar(GuiGraphics graphics, int x, int top, int bottom, float offset, float maxScroll) {
-        if (maxScroll <= 0.0f) {
-            return;
-        }
-        graphics.fill(x, top, x + 2, bottom, COLOR_SCROLL_TRACK);
-        int barHeight = bottom - top;
-        int thumbHeight = Math.max(12, Math.round(barHeight * ((float) barHeight / (barHeight + maxScroll))));
-        int travel = Math.max(1, barHeight - thumbHeight);
-        int thumbY = top + Math.round((offset / maxScroll) * travel);
-        graphics.fill(x, thumbY, x + 2, thumbY + thumbHeight, COLOR_SCROLL_THUMB);
+        TranslucentTrayChrome.drawScrollbar(graphics, x, top, bottom, offset, maxScroll);
     }
 
     private void reloadStagePacks() {

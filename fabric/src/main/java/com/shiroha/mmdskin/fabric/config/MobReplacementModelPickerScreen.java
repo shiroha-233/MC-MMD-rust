@@ -1,3 +1,4 @@
+/* 文件职责：提供生物替换模型选择界面的半透明渲染与交互。 */
 package com.shiroha.mmdskin.fabric.config;
 
 import com.shiroha.mmdskin.config.UIConstants;
@@ -24,13 +25,18 @@ public class MobReplacementModelPickerScreen extends Screen {
     private static final int ITEM_HEIGHT = 18;
     private static final int ITEM_SPACING = 2;
 
-    private static final int COLOR_PANEL_BG = 0xC0101418;
-    private static final int COLOR_PANEL_BORDER = 0xFF2A3A4A;
-    private static final int COLOR_ACCENT = 0xFF60A0D0;
-    private static final int COLOR_ITEM_HOVER = 0x30FFFFFF;
-    private static final int COLOR_ITEM_SELECTED = 0x3060A0D0;
-    private static final int COLOR_TEXT = 0xFFDDDDDD;
-    private static final int COLOR_TEXT_DIM = 0xFF888888;
+    private static final int COLOR_SCREEN_OVERLAY = 0x28000000;
+    private static final int COLOR_PANEL_BG = 0x2A000000;
+    private static final int COLOR_PANEL_INNER = 0x20000000;
+    private static final int COLOR_LIST_BG = 0x22000000;
+    private static final int COLOR_ITEM_BASE = 0x24000000;
+    private static final int COLOR_ITEM_HOVER = 0x38FFFFFF;
+    private static final int COLOR_ITEM_SELECTED = 0x52FFFFFF;
+    private static final int COLOR_TEXT_TITLE = 0xFFF1F5FB;
+    private static final int COLOR_TEXT = 0xFFE9F1FA;
+    private static final int COLOR_TEXT_DIM = 0xC8D5DFEC;
+    private static final int COLOR_SCROLLBAR_TRACK = 0x20FFFFFF;
+    private static final int COLOR_SCROLLBAR_THUMB = 0x88A8D8FF;
 
     private final Screen parent;
     private final MobReplacementTargets.Target target;
@@ -153,15 +159,11 @@ public class MobReplacementModelPickerScreen extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(guiGraphics);
+        guiGraphics.fill(0, 0, this.width, this.height, COLOR_SCREEN_OVERLAY);
+        renderPanel(guiGraphics);
+        renderWidgetBackplates(guiGraphics, mouseX, mouseY);
 
-        guiGraphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + panelHeight, COLOR_PANEL_BG);
-        guiGraphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + 1, COLOR_PANEL_BORDER);
-        guiGraphics.fill(panelX, panelY, panelX + 1, panelY + panelHeight, COLOR_PANEL_BORDER);
-        guiGraphics.fill(panelX + PANEL_WIDTH - 1, panelY, panelX + PANEL_WIDTH, panelY + panelHeight, COLOR_PANEL_BORDER);
-        guiGraphics.fill(panelX, panelY + panelHeight - 1, panelX + PANEL_WIDTH, panelY + panelHeight, COLOR_PANEL_BORDER);
-
-        guiGraphics.drawCenteredString(this.font, target.displayName(), this.width / 2, panelY + 8, COLOR_ACCENT);
+        guiGraphics.drawCenteredString(this.font, target.displayName(), this.width / 2, panelY + 8, COLOR_TEXT_TITLE);
         guiGraphics.drawCenteredString(
             this.font,
             ModConfigScreen.toModelSelectionComponent(currentValue),
@@ -197,13 +199,10 @@ public class MobReplacementModelPickerScreen extends Screen {
                 hoveredIndex = i;
             }
 
-            if (selected) {
-                guiGraphics.fill(rowX, rowY, rowX + rowWidth, rowY + ITEM_HEIGHT, COLOR_ITEM_SELECTED);
-            } else if (hovered) {
-                guiGraphics.fill(rowX, rowY, rowX + rowWidth, rowY + ITEM_HEIGHT, COLOR_ITEM_HOVER);
-            }
+            int rowColor = selected ? COLOR_ITEM_SELECTED : (hovered ? COLOR_ITEM_HOVER : COLOR_ITEM_BASE);
+            guiGraphics.fill(rowX, rowY, rowX + rowWidth, rowY + ITEM_HEIGHT, rowColor);
 
-            guiGraphics.drawString(this.font, truncate(modelName, 34), rowX + 6, rowY + 5, selected ? COLOR_ACCENT : COLOR_TEXT);
+            guiGraphics.drawString(this.font, truncate(modelName, 34), rowX + 6, rowY + 5, COLOR_TEXT);
         }
 
         guiGraphics.disableScissor();
@@ -216,11 +215,44 @@ public class MobReplacementModelPickerScreen extends Screen {
 
         int barX = panelX + PANEL_WIDTH - 5;
         int barHeight = listBottom - listTop;
-        guiGraphics.fill(barX, listTop, barX + 2, listBottom, 0x20FFFFFF);
+        guiGraphics.fill(barX, listTop, barX + 2, listBottom, COLOR_SCROLLBAR_TRACK);
 
         int thumbHeight = Math.max(18, barHeight * barHeight / (barHeight + maxScroll));
         int thumbY = listTop + (int) ((barHeight - thumbHeight) * ((float) scrollOffset / maxScroll));
-        guiGraphics.fill(barX, thumbY, barX + 2, thumbY + thumbHeight, COLOR_ACCENT);
+        guiGraphics.fill(barX, thumbY, barX + 2, thumbY + thumbHeight, COLOR_SCROLLBAR_THUMB);
+    }
+
+    private void renderPanel(GuiGraphics guiGraphics) {
+        guiGraphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + panelHeight, COLOR_PANEL_BG);
+        guiGraphics.fill(panelX + 1, panelY + 1, panelX + PANEL_WIDTH - 1, panelY + panelHeight - 1, COLOR_PANEL_INNER);
+        guiGraphics.fill(panelX + 6, listTop, panelX + PANEL_WIDTH - 6, listBottom, COLOR_LIST_BG);
+    }
+
+    private void renderWidgetBackplates(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        if (searchBox != null) {
+            boolean hovered = isPointInside(mouseX, mouseY, searchBox.getX(), searchBox.getY(), searchBox.getWidth(), searchBox.getHeight());
+            int color = hovered || searchBox.isFocused() ? 0x30FFFFFF : COLOR_LIST_BG;
+            guiGraphics.fill(searchBox.getX(), searchBox.getY(), searchBox.getX() + searchBox.getWidth(), searchBox.getY() + searchBox.getHeight(), color);
+        }
+
+        renderButtonBackplate(guiGraphics, mouseX, mouseY, panelX + PANEL_WIDTH - 60, panelY + 30, 52, 20, true);
+
+        int buttonY = listBottom + 6;
+        int buttonWidth = (PANEL_WIDTH - 16) / 3;
+        renderButtonBackplate(guiGraphics, mouseX, mouseY, panelX + 4, buttonY, buttonWidth, 20, chooseButton != null && chooseButton.active);
+        renderButtonBackplate(guiGraphics, mouseX, mouseY, panelX + 8 + buttonWidth, buttonY, buttonWidth, 20, true);
+        renderButtonBackplate(guiGraphics, mouseX, mouseY, panelX + 12 + buttonWidth * 2, buttonY, buttonWidth, 20, true);
+    }
+
+    private void renderButtonBackplate(GuiGraphics guiGraphics, int mouseX, int mouseY,
+                                       int x, int y, int width, int height, boolean active) {
+        boolean hovered = isPointInside(mouseX, mouseY, x, y, width, height);
+        int color = active ? (hovered ? 0x4AFFFFFF : 0x30000000) : 0x1A000000;
+        guiGraphics.fill(x, y, x + width, y + height, color);
+    }
+
+    private static boolean isPointInside(int mouseX, int mouseY, int x, int y, int width, int height) {
+        return mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height;
     }
 
     @Override

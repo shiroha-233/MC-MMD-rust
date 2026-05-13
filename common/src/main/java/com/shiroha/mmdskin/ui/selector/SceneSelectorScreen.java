@@ -4,6 +4,7 @@ package com.shiroha.mmdskin.ui.selector;
 import com.shiroha.mmdskin.asset.catalog.ModelCatalogEntry;
 import com.shiroha.mmdskin.scene.client.SceneModelCatalog;
 import com.shiroha.mmdskin.scene.client.SceneModelManager;
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -206,20 +207,19 @@ public class SceneSelectorScreen extends Screen {
         String secondaryText = hasScene
                 ? Component.translatable("gui.mmdskin.scene_selector.cancel").getString()
                 : Component.translatable("gui.mmdskin.refresh").getString();
-        guiGraphics.fill(0, 0, this.width, this.height, 0x28000000);
-        guiGraphics.fill(layout.panel.x, layout.panel.y, layout.panel.x + layout.panel.w, layout.panel.y + layout.panel.h, 0x2A000000);
-        guiGraphics.fill(layout.panel.x + 1, layout.panel.y + 1, layout.panel.x + layout.panel.w - 1, layout.panel.y + layout.panel.h - 1, 0x20000000);
+        TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
+        TranslucentTrayChrome.drawPanel(guiGraphics, layout.panel.x, layout.panel.y, layout.panel.w, layout.panel.h);
 
-        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, 0xFFF1F5FB, false);
-        guiGraphics.drawString(this.font, buildStatusText(), layout.header.x, layout.header.y + 10, 0xC8D5DFEC, false);
+        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
+        guiGraphics.drawString(this.font, buildStatusText(), layout.header.x, layout.header.y + 10, TranslucentTrayChrome.SUBTITLE_TEXT, false);
 
         drawFallbackButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredButton == ButtonTarget.DONE);
         drawFallbackButton(guiGraphics, layout.secondaryButton, secondaryText, hoveredButton == ButtonTarget.SECONDARY);
 
         UiRect list = layout.listBox;
-        guiGraphics.fill(list.x, list.y, list.x + list.w, list.y + list.h, 0x22000000);
+        TranslucentTrayChrome.fillListArea(guiGraphics, list.x, list.y, list.w, list.h);
         if (sceneCards.isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, "No scenes", list.centerX(), list.centerY() - 4, 0xFFDDE8F8);
+            guiGraphics.drawCenteredString(this.font, "No scenes", list.centerX(), list.centerY() - 4, TranslucentTrayChrome.BODY_TEXT);
             return;
         }
 
@@ -235,17 +235,15 @@ public class SceneSelectorScreen extends Screen {
             }
             boolean selected = card.displayName.equals(currentScene);
             boolean hovered = i == hoveredCard;
-            int bg = selected ? 0x52FFFFFF : (hovered ? 0x38FFFFFF : 0x24000000);
+            int bg = TranslucentTrayChrome.cardBackground(selected, hovered);
             guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, bg);
-            guiGraphics.drawString(this.font, shorten(card.displayName, 14), list.x + 7, y + 3, 0xFFE9F1FA, false);
+            guiGraphics.drawString(this.font, shorten(card.displayName, 14), list.x + 7, y + 3, TranslucentTrayChrome.BODY_TEXT, false);
             y += CARD_HEIGHT + CARD_GAP;
         }
     }
 
     private void drawFallbackButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
-        int bg = hovered ? 0x4AFFFFFF : 0x30000000;
-        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, bg);
-        guiGraphics.drawCenteredString(this.font, text, rect.centerX(), rect.y + 4, 0xFFF1F6FD);
+        TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, true);
     }
 
     private void loadAvailableScenes() {

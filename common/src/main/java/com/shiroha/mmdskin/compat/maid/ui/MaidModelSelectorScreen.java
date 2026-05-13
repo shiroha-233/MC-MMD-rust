@@ -3,6 +3,7 @@ package com.shiroha.mmdskin.compat.maid.ui;
 
 import com.shiroha.mmdskin.compat.maid.service.DefaultMaidModelSelectionService;
 import com.shiroha.mmdskin.compat.maid.service.MaidModelSelectionService;
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -118,7 +119,7 @@ public class MaidModelSelectorScreen extends Screen {
     }
 
     private void renderScreen(GuiGraphics guiGraphics) {
-        guiGraphics.fill(0, 0, this.width, this.height, 0x28000000);
+        TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
         drawPanel(guiGraphics, layout.panel);
         drawHeader(guiGraphics);
         drawButtons(guiGraphics);
@@ -126,13 +127,13 @@ public class MaidModelSelectorScreen extends Screen {
     }
 
     private void drawHeader(GuiGraphics guiGraphics) {
-        guiGraphics.drawString(this.font, this.title, layout.header.x, layout.header.y + 1, 0xFFF1F5FB, false);
-        guiGraphics.drawString(this.font, shorten(maidName, 24), layout.header.x, layout.header.y + 11, 0xC8D5DFEC, false);
+        guiGraphics.drawString(this.font, this.title, layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
+        guiGraphics.drawString(this.font, shorten(maidName, 24), layout.header.x, layout.header.y + 11, TranslucentTrayChrome.SUBTITLE_TEXT, false);
         guiGraphics.drawString(this.font,
                 Component.translatable("gui.mmdskin.model_selector.stats",
                         Math.max(0, modelCards.size() - 1),
                         shorten(currentModel, 14)),
-                layout.header.x, layout.header.y + 21, 0xBCD0DCE9, false);
+                layout.header.x, layout.header.y + 21, TranslucentTrayChrome.DETAIL_TEXT, false);
     }
 
     private void drawButtons(GuiGraphics guiGraphics) {
@@ -142,9 +143,9 @@ public class MaidModelSelectorScreen extends Screen {
 
     private void drawModelList(GuiGraphics guiGraphics) {
         UiRect list = layout.listBox;
-        guiGraphics.fill(list.x, list.y, list.x + list.w, list.y + list.h, 0x22000000);
+        TranslucentTrayChrome.fillListArea(guiGraphics, list.x, list.y, list.w, list.h);
         if (modelCards.isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, "No models", list.centerX(), list.centerY() - 4, 0xFFDDE8F8);
+            guiGraphics.drawCenteredString(this.font, "No models", list.centerX(), list.centerY() - 4, TranslucentTrayChrome.BODY_TEXT);
             return;
         }
 
@@ -167,10 +168,10 @@ public class MaidModelSelectorScreen extends Screen {
 
     private void drawModelCard(GuiGraphics guiGraphics, UiRect list, int y, String modelName, boolean hovered) {
         boolean selected = modelName.equals(currentModel);
-        int bg = selected ? 0x52FFFFFF : (hovered ? 0x38FFFFFF : 0x24000000);
+        int bg = TranslucentTrayChrome.cardBackground(selected, hovered);
         guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, bg);
-        guiGraphics.fill(list.x + 4, y, list.x + 6, y + CARD_HEIGHT, selected ? 0x92A8D8FF : 0x44A8D8FF);
-        guiGraphics.drawString(this.font, shorten(modelName, 24), list.x + 10, y + 4, 0xFFE9F1FA, false);
+        guiGraphics.fill(list.x + 4, y, list.x + 6, y + CARD_HEIGHT, selected ? TranslucentTrayChrome.ACCENT_STRIP_ACTIVE : TranslucentTrayChrome.ACCENT_STRIP);
+        guiGraphics.drawString(this.font, shorten(modelName, 24), list.x + 10, y + 4, TranslucentTrayChrome.BODY_TEXT, false);
     }
 
     private void drawScrollBar(GuiGraphics guiGraphics, UiRect list) {
@@ -179,24 +180,21 @@ public class MaidModelSelectorScreen extends Screen {
             return;
         }
         int barX = list.x + list.w - 3;
-        guiGraphics.fill(barX, list.y, barX + 2, list.y + list.h, 0x20FFFFFF);
+        guiGraphics.fill(barX, list.y, barX + 2, list.y + list.h, TranslucentTrayChrome.SCROLL_TRACK);
         float contentHeight = LIST_PADDING * 2.0f + modelCards.size() * CARD_HEIGHT + Math.max(0, modelCards.size() - 1) * CARD_GAP;
         float visibleRatio = list.h / Math.max((float) list.h, contentHeight);
         int thumbHeight = Math.max(12, Math.round(list.h * visibleRatio));
         int travel = Math.max(1, list.h - thumbHeight);
         int thumbY = list.y + Math.round((animatedScroll / maxScroll) * travel);
-        guiGraphics.fill(barX, thumbY, barX + 2, thumbY + thumbHeight, 0x88A8D8FF);
+        guiGraphics.fill(barX, thumbY, barX + 2, thumbY + thumbHeight, TranslucentTrayChrome.SCROLL_THUMB);
     }
 
     private void drawButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
-        int bg = hovered ? 0x4AFFFFFF : 0x30000000;
-        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, bg);
-        guiGraphics.drawCenteredString(this.font, text, rect.centerX(), rect.y + 5, 0xFFF1F6FD);
+        TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, true);
     }
 
     private void drawPanel(GuiGraphics guiGraphics, UiRect rect) {
-        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, 0x2A000000);
-        guiGraphics.fill(rect.x + 1, rect.y + 1, rect.x + rect.w - 1, rect.y + rect.h - 1, 0x20000000);
+        TranslucentTrayChrome.drawPanel(guiGraphics, rect.x, rect.y, rect.w, rect.h);
     }
 
     private void updateLayout() {

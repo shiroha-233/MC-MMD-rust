@@ -14,11 +14,7 @@ import java.util.List;
 
 /** 表情选择轮盘界面。 */
 public class MorphWheelScreen extends AbstractWheelScreen {
-    private static final WheelStyle STYLE = new WheelStyle(
-            0.80f, 0.25f,
-            0xFF60A0D0, 0xCC60A0D0, 0x60FFFFFF,
-            0xE0182030, 0xFF60A0D0, 0x80000000
-    );
+    private static final WheelStyle STYLE = createTranslucentWheelStyle(0.80f, 0.25f);
 
     private final MorphWheelService morphWheelService;
     private final KeyMapping triggerKey;

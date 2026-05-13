@@ -12,11 +12,7 @@ import java.util.List;
 
 /** 动作选择轮盘界面。 */
 public class ActionWheelScreen extends AbstractWheelScreen {
-    private static final WheelStyle STYLE = new WheelStyle(
-            0.80f, 0.25f,
-            0xFF60A0D0, 0xCC60A0D0, 0x60FFFFFF,
-            0xE0182030, 0xFF60A0D0, 0xFF000000
-    );
+    private static final WheelStyle STYLE = createTranslucentWheelStyle(0.80f, 0.25f);
 
     private final ActionWheelService actionWheelService;
     private final List<ActionSlot> actionSlots;

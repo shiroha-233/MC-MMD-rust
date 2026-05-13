@@ -4,6 +4,7 @@ package com.shiroha.mmdskin.ui.stage;
 import com.shiroha.mmdskin.config.StagePack;
 import com.shiroha.mmdskin.stage.client.viewmodel.StageLobbyViewModel;
 import com.shiroha.mmdskin.stage.domain.model.StageMemberState;
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -25,25 +26,20 @@ final class StageAssignPanel {
     private static final int TOGGLE_HEIGHT = 14;
     private static final int INVITE_BUTTON_WIDTH = 70;
 
-    private static final int COLOR_BG = 0xC012171D;
-    private static final int COLOR_BORDER = 0xFF314253;
-    private static final int COLOR_ACCENT = 0xFF65A9D8;
-    private static final int COLOR_TEXT = 0xFFEAF2FB;
-    private static final int COLOR_TEXT_DIM = 0xFFA5B4C3;
-    private static final int COLOR_TEXT_MUTED = 0xFF7E8D9D;
-    private static final int COLOR_ROW = 0x16000000;
-    private static final int COLOR_ROW_HOVER = 0x24FFFFFF;
+    private static final int COLOR_ACCENT = TranslucentTrayChrome.ACCENT;
+    private static final int COLOR_TEXT = TranslucentTrayChrome.BODY_TEXT;
+    private static final int COLOR_TEXT_DIM = TranslucentTrayChrome.SUBTITLE_TEXT;
+    private static final int COLOR_TEXT_MUTED = TranslucentTrayChrome.MUTED_TEXT;
+    private static final int COLOR_ROW = TranslucentTrayChrome.CARD_BACKGROUND;
+    private static final int COLOR_ROW_HOVER = TranslucentTrayChrome.CARD_HOVER;
     private static final int COLOR_GOOD = 0xFF54C284;
     private static final int COLOR_WARN = 0xFFD4A353;
     private static final int COLOR_BAD = 0xFFD66B6B;
     private static final int COLOR_BUSY = 0xFFB06E7B;
-    private static final int COLOR_TOGGLE_ON = 0xFF4BB97C;
-    private static final int COLOR_TOGGLE_OFF = 0xFF53606D;
-    private static final int COLOR_ACTION = 0xFF4A6683;
-    private static final int COLOR_ACTION_HOVER = 0xFF5A7998;
-    private static final int COLOR_SCROLL_TRACK = 0x26000000;
-    private static final int COLOR_SCROLL_THUMB = 0xFF65A9D8;
-    private static final int COLOR_SEPARATOR = 0x18FFFFFF;
+    private static final int COLOR_TOGGLE_ON = 0xA04BB97C;
+    private static final int COLOR_TOGGLE_OFF = 0x8053606D;
+    private static final int COLOR_ACTION = 0x304A6683;
+    private static final int COLOR_ACTION_HOVER = 0x485A7998;
 
     private final Font font;
     private final StageWorkbenchFacade facade;
@@ -110,8 +106,7 @@ final class StageAssignPanel {
         hoveredInviteButton = false;
         hoveredCustomMotionToggle = false;
 
-        graphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + panelHeight, COLOR_BG);
-        drawBorder(graphics, panelX, panelY, PANEL_WIDTH, panelHeight, COLOR_BORDER);
+        TranslucentTrayChrome.drawPanel(graphics, panelX, panelY, PANEL_WIDTH, panelHeight);
         renderHeader(graphics, mouseX, mouseY);
         renderMemberList(graphics, mouseX, mouseY);
         if (facade.isSessionMember()) {
@@ -184,9 +179,9 @@ final class StageAssignPanel {
                     inviteButtonY + BUTTON_HEIGHT,
                     hoveredInviteButton ? COLOR_ACTION_HOVER : COLOR_ACTION
             );
-            graphics.drawCenteredString(font, wb("host.invite_all.short"), inviteButtonX + INVITE_BUTTON_WIDTH / 2, inviteButtonY + 4, 0xFFFFFFFF);
+            graphics.drawCenteredString(font, wb("host.invite_all.short"), inviteButtonX + INVITE_BUTTON_WIDTH / 2, inviteButtonY + 4, TranslucentTrayChrome.TITLE_TEXT);
         }
-        graphics.fill(panelX + PANEL_PADDING, listTop - 6, panelX + PANEL_WIDTH - PANEL_PADDING, listTop - 5, COLOR_SEPARATOR);
+        TranslucentTrayChrome.drawSeparator(graphics, panelX + PANEL_PADDING, listTop - 6, PANEL_WIDTH - PANEL_PADDING * 2);
     }
 
     private void renderMemberList(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -250,7 +245,7 @@ final class StageAssignPanel {
     }
 
     private void renderGuestMotionArea(GuiGraphics graphics, int mouseX, int mouseY) {
-        graphics.fill(panelX + PANEL_PADDING, guestToggleY - 5, panelX + PANEL_WIDTH - PANEL_PADDING, guestToggleY - 4, COLOR_SEPARATOR);
+        TranslucentTrayChrome.drawSeparator(graphics, panelX + PANEL_PADDING, guestToggleY - 5, PANEL_WIDTH - PANEL_PADDING * 2);
         graphics.drawString(font, Component.translatable("gui.mmdskin.stage.local_motion_override"), panelX + PANEL_PADDING, guestToggleY - 14, COLOR_TEXT, false);
 
         int toggleWidth = PANEL_WIDTH - PANEL_PADDING * 2;
@@ -305,26 +300,12 @@ final class StageAssignPanel {
     }
 
     private void drawScrollbar(GuiGraphics graphics, int top, int bottom, float offset, float maxScroll) {
-        if (maxScroll <= 0.0f) {
-            return;
-        }
         int barX = panelX + PANEL_WIDTH - 4;
-        int barHeight = bottom - top;
-        graphics.fill(barX, top, barX + 2, bottom, COLOR_SCROLL_TRACK);
-        int thumbHeight = Math.max(12, (int) (barHeight * (barHeight / (barHeight + maxScroll))));
-        int thumbY = top + (int) ((barHeight - thumbHeight) * (offset / maxScroll));
-        graphics.fill(barX, thumbY, barX + 2, thumbY + thumbHeight, COLOR_SCROLL_THUMB);
+        TranslucentTrayChrome.drawScrollbar(graphics, barX, top, bottom, offset, maxScroll);
     }
 
     private void fillRow(GuiGraphics graphics, int y, int color) {
         graphics.fill(panelX + PANEL_PADDING - 2, y, panelX + PANEL_WIDTH - PANEL_PADDING + 2, y + LIST_ROW_HEIGHT, color);
-    }
-
-    private void drawBorder(GuiGraphics graphics, int x, int y, int width, int height, int color) {
-        graphics.fill(x, y, x + width, y + 1, color);
-        graphics.fill(x, y + height - 1, x + width, y + height, color);
-        graphics.fill(x, y, x + 1, y + height, color);
-        graphics.fill(x + width - 1, y, x + width, y + height, color);
     }
 
     private float maxMemberScroll() {

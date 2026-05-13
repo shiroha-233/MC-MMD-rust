@@ -5,6 +5,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 
 import java.util.Comparator;
 import java.util.List;
@@ -235,7 +236,7 @@ public class MorphWheelConfigScreen extends Screen {
     }
 
     private void renderScreen(GuiGraphics guiGraphics) {
-        guiGraphics.fill(0, 0, this.width, this.height, 0x30000000);
+        TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
         drawPanel(guiGraphics, layout.panel);
         drawHeader(guiGraphics);
         drawColumn(guiGraphics, layout.availableColumn, layout.availableList,
@@ -248,12 +249,12 @@ public class MorphWheelConfigScreen extends Screen {
     }
 
     private void drawHeader(GuiGraphics guiGraphics) {
-        guiGraphics.drawString(this.font, this.title, layout.header.x, layout.header.y + 2, 0xFFF1F5FB, false);
+        guiGraphics.drawString(this.font, this.title, layout.header.x, layout.header.y + 2, TranslucentTrayChrome.TITLE_TEXT, false);
         Component stats = Component.translatable("gui.mmdskin.config.stats", state.availableCount(), state.selectedCount());
-        guiGraphics.drawString(this.font, stats, layout.header.x, layout.header.y + 16, 0xC8D5DFEC, false);
+        guiGraphics.drawString(this.font, stats, layout.header.x, layout.header.y + 16, TranslucentTrayChrome.SUBTITLE_TEXT, false);
         guiGraphics.drawString(this.font,
                 Component.translatable("gui.mmdskin.action_wheel.click_select"),
-                layout.header.x, layout.header.y + 28, 0x9FB6C8D9, false);
+                layout.header.x, layout.header.y + 28, TranslucentTrayChrome.MUTED_TEXT, false);
     }
 
     private void drawColumn(GuiGraphics guiGraphics,
@@ -264,12 +265,12 @@ public class MorphWheelConfigScreen extends Screen {
                             int hoveredIndex,
                             float scrollOffset) {
         drawPanel(guiGraphics, columnRect);
-        guiGraphics.drawString(this.font, title, columnRect.x + 6, columnRect.y + 6, 0xFFF1F5FB, false);
-        guiGraphics.fill(columnRect.x + 6, columnRect.y + 16, columnRect.x + columnRect.w - 6, columnRect.y + 17, 0x22FFFFFF);
-        guiGraphics.fill(listRect.x, listRect.y, listRect.x + listRect.w, listRect.y + listRect.h, 0x18000000);
+        guiGraphics.drawString(this.font, title, columnRect.x + 6, columnRect.y + 6, TranslucentTrayChrome.TITLE_TEXT, false);
+        TranslucentTrayChrome.drawSeparator(guiGraphics, columnRect.x + 6, columnRect.y + 16, columnRect.w - 12);
+        TranslucentTrayChrome.fillListArea(guiGraphics, listRect.x, listRect.y, listRect.w, listRect.h);
 
         if (items.isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, "-", listRect.centerX(), listRect.centerY() - 4, 0xB3C4D6E6);
+            guiGraphics.drawCenteredString(this.font, "-", listRect.centerX(), listRect.centerY() - 4, TranslucentTrayChrome.DIM_TEXT);
             return;
         }
 
@@ -294,10 +295,10 @@ public class MorphWheelConfigScreen extends Screen {
                                MorphWheelConfig.MorphEntry entry, boolean hovered) {
         int x = listRect.x + 4;
         int w = listRect.w - 12;
-        guiGraphics.fill(x, y, x + w, y + CARD_HEIGHT, hovered ? 0x42FFFFFF : 0x26000000);
-        guiGraphics.fill(x, y, x + 2, y + CARD_HEIGHT, hovered ? 0x90A8D8FF : 0x44A8D8FF);
-        guiGraphics.drawString(this.font, buildMorphTitle(entry), x + 8, y + 4, 0xFFE9F1FA, false);
-        guiGraphics.drawString(this.font, buildMorphMeta(entry), x + 8, y + 15, 0xB7CBDCEA, false);
+        guiGraphics.fill(x, y, x + w, y + CARD_HEIGHT, TranslucentTrayChrome.cardBackground(false, hovered));
+        guiGraphics.fill(x, y, x + 2, y + CARD_HEIGHT, hovered ? TranslucentTrayChrome.ACCENT_STRIP_ACTIVE : TranslucentTrayChrome.ACCENT_STRIP);
+        guiGraphics.drawString(this.font, buildMorphTitle(entry), x + 8, y + 4, TranslucentTrayChrome.BODY_TEXT, false);
+        guiGraphics.drawString(this.font, buildMorphMeta(entry), x + 8, y + 15, TranslucentTrayChrome.DETAIL_TEXT, false);
     }
 
     private void drawFooter(GuiGraphics guiGraphics) {
@@ -309,16 +310,11 @@ public class MorphWheelConfigScreen extends Screen {
     }
 
     private void drawButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
-        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, hovered ? 0x4AFFFFFF : 0x26000000);
-        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + 1, 0x20FFFFFF);
-        guiGraphics.drawCenteredString(this.font, text, rect.centerX(), rect.y + 12, 0xFFF1F6FD);
+        TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, true);
     }
 
     private void drawPanel(GuiGraphics guiGraphics, UiRect rect) {
-        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, 0x2A000000);
-        guiGraphics.fill(rect.x + 1, rect.y + 1, rect.x + rect.w - 1, rect.y + rect.h - 1, 0x20000000);
-        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + 1, 0x24FFFFFF);
-        guiGraphics.fill(rect.x, rect.y + rect.h - 1, rect.x + rect.w, rect.y + rect.h, 0x18000000);
+        TranslucentTrayChrome.drawPanel(guiGraphics, rect.x, rect.y, rect.w, rect.h);
     }
 
     private void drawScrollBar(GuiGraphics guiGraphics, UiRect listRect, int itemCount, float scrollOffset) {
@@ -327,12 +323,7 @@ public class MorphWheelConfigScreen extends Screen {
             return;
         }
         int barX = listRect.x + listRect.w - 3;
-        guiGraphics.fill(barX, listRect.y, barX + 2, listRect.y + listRect.h, 0x20FFFFFF);
-        float visibleRatio = (float) listRect.h / (float) Math.max(listRect.h, itemCount * (CARD_HEIGHT + CARD_GAP));
-        int thumbHeight = Math.max(12, Math.round(listRect.h * visibleRatio));
-        int travel = Math.max(1, listRect.h - thumbHeight);
-        int thumbY = listRect.y + Math.round((scrollOffset / maxScroll) * travel);
-        guiGraphics.fill(barX, thumbY, barX + 2, thumbY + thumbHeight, 0x88A8D8FF);
+        TranslucentTrayChrome.drawScrollbar(guiGraphics, barX, listRect.y, listRect.y + listRect.h, scrollOffset, maxScroll);
     }
 
     private void rescan() {

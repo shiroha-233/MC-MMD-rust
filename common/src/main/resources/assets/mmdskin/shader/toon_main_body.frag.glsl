@@ -24,13 +24,10 @@ float saturate(float value) {
     return clamp(value, 0.0, 1.0);
 }
 
-float softBand(float value, float bands, float softness) {
-    value = saturate(value);
-    float scaled = value * bands;
-    float lower = floor(scaled);
-    float fraction = fract(scaled);
-    float blend = smoothstep(0.5 - softness, 0.5 + softness, fraction);
-    return clamp((lower + blend) / bands, 0.0, 1.0);
+vec3 shiftHueTowardCool(vec3 color, float strength) {
+    float luminance = dot(color, vec3(0.299, 0.587, 0.114));
+    vec3 coolTint = vec3(luminance * 0.85, luminance * 0.88, luminance * 1.12);
+    return mix(color, coolTint, strength);
 }
 
 void main() {
@@ -44,35 +41,47 @@ void main() {
     vec3 lightDir = normalize(viewLightDir);
     vec3 viewDir = normalize(-viewPos);
 
-    float diffuse = saturate(dot(normal, lightDir));
+    float NdotL = dot(normal, lightDir);
+    float halfLambert = NdotL * 0.5 + 0.5;
+
     float bands = float(max(ToonLevels, 2));
-    float softness = mix(0.14, 0.05, clamp((float(ToonLevels) - 2.0) / 3.0, 0.0, 1.0));
-    float toonDiffuse = softBand(diffuse * 0.96 + 0.02, bands, softness);
-    float litMask = smoothstep(0.68, 0.90, diffuse);
+    float shadowEdge = 0.5;
+    float edgeSoftness = mix(0.28, 0.12, clamp((bands - 2.0) / 3.0, 0.0, 1.0));
+
+    float toonRamp;
+    if (bands <= 2.0) {
+        toonRamp = smoothstep(shadowEdge - edgeSoftness, shadowEdge + edgeSoftness, halfLambert);
+    } else {
+        float scaled = halfLambert * (bands - 1.0);
+        float step = floor(scaled);
+        float frac = fract(scaled);
+        float blend = smoothstep(0.5 - edgeSoftness, 0.5 + edgeSoftness, frac);
+        toonRamp = saturate((step + blend) / (bands - 1.0));
+    }
+
+    vec3 shadowTint = shiftHueTowardCool(albedo * ShadowColor, 0.35);
+    vec3 litColor = albedo;
+    vec3 baseColor = mix(shadowTint, litColor, toonRamp);
+
+    float ambient = 0.32;
+    float lightFactor = max(LightIntensity, ambient);
+    vec3 finalColor = baseColor * lightFactor;
+    finalColor = max(finalColor, albedo * ambient * 0.6);
 
     vec3 halfDir = normalize(lightDir + viewDir);
-    float specular = pow(saturate(dot(normal, halfDir)), max(SpecularPower, 1.0));
-    float highlightThreshold = mix(0.88, 0.975, clamp(SpecularPower / 128.0, 0.0, 1.0));
-    float specularBand = smoothstep(highlightThreshold - 0.012, highlightThreshold + 0.015, specular);
+    float specAngle = saturate(dot(normal, halfDir));
+    float specular = pow(specAngle, max(SpecularPower, 1.0));
+    float specThreshold = mix(0.75, 0.92, clamp(SpecularPower / 64.0, 0.0, 1.0));
+    float specBand = smoothstep(specThreshold - 0.04, specThreshold + 0.04, specular);
+    float specMask = smoothstep(0.4, 0.7, halfLambert);
+    finalColor += vec3(1.0) * specBand * SpecularIntensity * specMask * 0.4;
 
     float fresnel = 1.0 - saturate(dot(viewDir, normal));
-    float rim = pow(fresnel, max(RimPower, 0.0001));
-    rim = smoothstep(0.82, 0.97, rim) * RimIntensity;
-    rim *= (1.0 - litMask * 0.8);
-
-    vec3 shadowedColor = albedo * ShadowColor;
-    vec3 baseColor = mix(shadowedColor, albedo, toonDiffuse);
-
-    float ambient = 0.16;
-    vec3 finalColor = baseColor * max(LightIntensity, ambient);
-    finalColor = max(finalColor, albedo * ambient);
-
-    float toonSpecular = specularBand * SpecularIntensity * litMask * (1.0 - rim * 0.75);
-    vec3 specularColor = vec3(1.0);
-    vec3 rimColor = mix(vec3(1.0), ShadowColor, 0.55);
-
-    finalColor += specularColor * (toonSpecular * 0.35);
-    finalColor += albedo * rimColor * rim;
+    float rim = pow(fresnel, max(RimPower, 0.5));
+    float rimEdge = smoothstep(0.6, 0.85, rim);
+    float rimMask = mix(1.0, 0.3, toonRamp);
+    vec3 rimColor = mix(albedo, vec3(1.0), 0.5);
+    finalColor += rimColor * rimEdge * RimIntensity * rimMask * 0.5;
 
     fragColor = vec4(finalColor, texColor.a);
     fragData1 = vec4(normal * 0.5 + 0.5, 1.0);

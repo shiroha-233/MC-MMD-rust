@@ -7,6 +7,7 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -28,11 +29,11 @@ public abstract class AbstractWheelScreen extends Screen {
 
     public record WheelEntry(String primaryText, String secondaryText) {}
 
-    private static final int TEXT_PRIMARY = 0xFFF7FBFF;
-    private static final int TEXT_SECONDARY = 0xD6DCE7F5;
-    private static final int TEXT_MUTED = 0xAEB8C7D8;
-    private static final int OUTLINE_DIM = 0x42FFFFFF;
-    private static final int BACKDROP_DIM = 0x46000000;
+    private static final int TEXT_PRIMARY = TranslucentTrayChrome.TITLE_TEXT;
+    private static final int TEXT_SECONDARY = TranslucentTrayChrome.BODY_TEXT;
+    private static final int TEXT_MUTED = TranslucentTrayChrome.SUBTITLE_TEXT;
+    private static final int OUTLINE_DIM = 0x26FFFFFF;
+    private static final int BACKDROP_DIM = TranslucentTrayChrome.OVERLAY;
     private static final float SEGMENT_GAP_DEGREES = 1.8f;
     private static final float CENTER_BUBBLE_SCALE = 0.74f;
 
@@ -53,6 +54,19 @@ public abstract class AbstractWheelScreen extends Screen {
     protected AbstractWheelScreen(Component title, WheelStyle style) {
         super(title);
         this.style = style;
+    }
+
+    protected static WheelStyle createTranslucentWheelStyle(float screenRatio, float innerRatio) {
+        return new WheelStyle(
+                screenRatio,
+                innerRatio,
+                0xFFF2F5F8,
+                0xB8D5DCE3,
+                0x30FFFFFF,
+                0xFF20262D,
+                0xFFDDE3E9,
+                0xD0000000
+        );
     }
 
     protected abstract int getSlotCount();
@@ -105,9 +119,8 @@ public abstract class AbstractWheelScreen extends Screen {
     protected void renderCenterBubble(GuiGraphics guiGraphics, String text, int textColor) {
         float bubbleScale = 0.98f + centerPop * 0.06f;
         int bubbleRadius = Math.max(30, Math.round(innerRadius * CENTER_BUBBLE_SCALE * bubbleScale));
-        fillCircle(guiGraphics, centerX, centerY, bubbleRadius + 3, withAlpha(style.centerBorder(), 148));
-        fillCircle(guiGraphics, centerX, centerY, bubbleRadius, withAlpha(style.centerBg(), 220));
-        drawCircleOutline(guiGraphics, centerX, centerY, bubbleRadius + 1, withAlpha(0xFFFFFF, 42));
+        fillCircle(guiGraphics, centerX, centerY, bubbleRadius + 2, withAlpha(style.centerBorder(), 72));
+        drawCircleOutline(guiGraphics, centerX, centerY, bubbleRadius + 1, withAlpha(0xFFFFFF, 16));
 
         String display = fitText(text, Math.max(88, Math.round(innerRadius * 1.4f)));
         int textWidth = this.font.width(display);
@@ -156,15 +169,15 @@ public abstract class AbstractWheelScreen extends Screen {
             float expandedInner = Math.max(12.0f, ringInner - pop * 2.0f);
 
             int fillColor = i == selectedSlot
-                    ? blendColors(withAlpha(style.lineColor(), 136), withAlpha(0xB6E1FF, 190), 0.42f + pop * 0.36f)
-                    : blendColors(withAlpha(0x0A1320, 132), withAlpha(style.lineColorDim(), 118), 0.18f + openProgress * 0.20f);
+                    ? blendColors(withAlpha(style.centerBg(), 106), withAlpha(0xFFFFFF, 24), 0.12f + pop * 0.16f)
+                    : blendColors(withAlpha(style.centerBg(), 92), withAlpha(style.lineColorDim(), 28), 0.06f + openProgress * 0.08f);
             int edgeColor = i == selectedSlot
-                    ? blendColors(withAlpha(style.highlightColor(), 200), withAlpha(0xFFFFFF, 214), pop * 0.40f)
-                    : withAlpha(style.lineColorDim(), 144);
+                    ? blendColors(withAlpha(style.centerBorder(), 138), withAlpha(0xFFFFFF, 92), pop * 0.20f)
+                    : withAlpha(style.lineColorDim(), 88);
 
             drawAnnularSegment(guiGraphics, centerX, centerY, expandedInner, expandedOuter, start, sweep, fillColor);
             drawAnnularSegmentOutline(guiGraphics, centerX, centerY, expandedInner, expandedOuter, start, sweep, edgeColor, 1.8f);
-            drawSeparator(guiGraphics, centerX, centerY, expandedInner + 4.0f, expandedOuter - 4.0f, start, withAlpha(0xFFFFFF, 44));
+            drawSeparator(guiGraphics, centerX, centerY, expandedInner + 4.0f, expandedOuter - 4.0f, start, withAlpha(0xFFFFFF, 34));
 
             double angle = Math.toRadians(i * segmentAngle + segmentAngle / 2.0 - 90.0);
             float cos = (float) Math.cos(angle);
@@ -185,8 +198,8 @@ public abstract class AbstractWheelScreen extends Screen {
 
     private void renderCenterDecor(GuiGraphics guiGraphics) {
         int haloRadius = Math.max(18, Math.round(innerRadius * 0.86f + openProgress * 4.0f));
-        drawCircleOutline(guiGraphics, centerX, centerY, haloRadius, withAlpha(style.lineColorDim(), 86));
-        drawCircleOutline(guiGraphics, centerX, centerY, Math.max(12, haloRadius - 6), withAlpha(0xFFFFFF, 26));
+        drawCircleOutline(guiGraphics, centerX, centerY, haloRadius, withAlpha(style.lineColorDim(), 42));
+        drawCircleOutline(guiGraphics, centerX, centerY, Math.max(12, haloRadius - 6), withAlpha(0xFFFFFF, 10));
     }
 
     private void renderSingleEntry(GuiGraphics guiGraphics, String text, int centerTextX, int centerTextY, float pop, int maxWidth) {

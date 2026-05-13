@@ -17,11 +17,7 @@ import java.util.UUID;
 
 /** 女仆配置轮盘界面。 */
 public class MaidConfigWheelScreen extends AbstractWheelScreen {
-    private static final WheelStyle STYLE = new WheelStyle(
-            0.45f, 0.35f,
-            0xFFD060A0, 0xCCD060A0, 0x60FFFFFF,
-            0xE0301828, 0xFFD060A0, 0xFF000000
-    );
+    private static final WheelStyle STYLE = createTranslucentWheelStyle(0.45f, 0.35f);
 
     private final List<ConfigSlot> configSlots;
     private final UUID maidUUID;

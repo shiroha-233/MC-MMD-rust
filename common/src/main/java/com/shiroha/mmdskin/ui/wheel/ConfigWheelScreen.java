@@ -19,11 +19,7 @@ import java.util.function.Supplier;
 
 /** 主配置轮盘界面。 */
 public class ConfigWheelScreen extends AbstractWheelScreen {
-    private static final WheelStyle STYLE = new WheelStyle(
-            0.50f, 0.30f,
-            0xFF60A0D0, 0xCC60A0D0, 0x60FFFFFF,
-            0xE0182030, 0xFF60A0D0, 0xFF000000
-    );
+    private static final WheelStyle STYLE = createTranslucentWheelStyle(0.50f, 0.30f);
 
     private final List<ConfigSlot> configSlots;
     private final KeyMapping monitoredKey;

@@ -1,6 +1,7 @@
 package com.shiroha.mmdskin.ui.stage;
 
 import com.shiroha.mmdskin.config.StagePack;
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.network.chat.Component;
 
 /** 文件职责：StageSelectScreen 使用的无状态静态工具方法。 */
@@ -20,11 +21,7 @@ final class StageScreenUtils {
     }
 
     static int brighten(int color) {
-        int a = color >>> 24;
-        int r = Math.min(255, ((color >>> 16) & 0xFF) + 18);
-        int g = Math.min(255, ((color >>> 8) & 0xFF) + 18);
-        int b = Math.min(255, (color & 0xFF) + 18);
-        return (a << 24) | (r << 16) | (g << 8) | b;
+        return TranslucentTrayChrome.brighten(color, 18);
     }
 
     static String motionTag(StagePack.VmdFileInfo info) {

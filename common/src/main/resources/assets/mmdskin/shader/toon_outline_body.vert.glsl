@@ -17,9 +17,10 @@ void main() {
     vec3 transformedNormal = normalize(normalMatrix * Normal);
     vec4 vPos = ModelViewMat * vec4(Position, 1.0);
 
-    float viewDepth = max(-vPos.z, 1.0);
-    float outlineScale = mix(0.85, 1.80, clamp(viewDepth / 20.0, 0.0, 1.0));
-    vPos.xyz += transformedNormal * (OutlineWidth * outlineScale);
+    float viewDepth = max(-vPos.z, 0.5);
+    float outlineScale = mix(1.0, 1.4, clamp((viewDepth - 1.0) / 15.0, 0.0, 1.0));
+    float distanceFade = clamp(1.0 - (viewDepth - 30.0) / 20.0, 0.0, 1.0);
+    vPos.xyz += transformedNormal * (OutlineWidth * outlineScale * distanceFade);
 
     gl_Position = ProjMat * vPos;
     texCoord0 = UV0;

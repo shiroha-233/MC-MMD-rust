@@ -7,6 +7,7 @@ import com.shiroha.mmdskin.model.runtime.ModelRequestKey;
 import com.shiroha.mmdskin.player.runtime.EntityAnimState;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
 import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -34,17 +35,12 @@ public class ModelAnimationScreen extends Screen {
     private static final int ITEM_HEIGHT = 16;
     private static final int ITEM_SPACING = 1;
 
-    private static final int COLOR_PANEL_BG = 0xC0101418;
-    private static final int COLOR_PANEL_BORDER = 0xFF2A3A4A;
-    private static final int COLOR_ACCENT = 0xFF60A0D0;
-    private static final int COLOR_TEXT = 0xFFDDDDDD;
-    private static final int COLOR_TEXT_DIM = 0xFF888888;
-    private static final int COLOR_SEPARATOR = 0x30FFFFFF;
-    private static final int COLOR_ITEM_HOVER = 0x30FFFFFF;
+    private static final int COLOR_TEXT = TranslucentTrayChrome.BODY_TEXT;
+    private static final int COLOR_TEXT_DIM = TranslucentTrayChrome.SUBTITLE_TEXT;
     private static final int COLOR_MAPPED = 0xFF40C080;
     private static final int COLOR_UNMAPPED = 0xFF505560;
-    private static final int COLOR_VMD_ITEM_BG = 0x40203040;
-    private static final int COLOR_VMD_ITEM_HOVER = 0x60305070;
+    private static final int COLOR_VMD_ITEM_BG = TranslucentTrayChrome.CARD_BACKGROUND;
+    private static final int COLOR_VMD_ITEM_HOVER = TranslucentTrayChrome.CARD_HOVER;
 
     private final String modelName;
     private final String modelDir;
@@ -199,9 +195,8 @@ public class ModelAnimationScreen extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-
-        guiGraphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + panelH, COLOR_PANEL_BG);
-        guiGraphics.fill(panelX, panelY, panelX + 1, panelY + panelH, COLOR_PANEL_BORDER);
+        TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
+        TranslucentTrayChrome.drawPanel(guiGraphics, panelX, panelY, PANEL_WIDTH, panelH);
 
         renderHeader(guiGraphics);
 
@@ -218,10 +213,10 @@ public class ModelAnimationScreen extends Screen {
 
     private void renderHeader(GuiGraphics guiGraphics) {
         int cx = panelX + PANEL_WIDTH / 2;
-        guiGraphics.drawCenteredString(this.font, this.title, cx, panelY + 4, COLOR_ACCENT);
+        guiGraphics.drawCenteredString(this.font, this.title, cx, panelY + 4, TranslucentTrayChrome.TITLE_TEXT);
         String info = truncate(modelName, 22);
         guiGraphics.drawCenteredString(this.font, info, cx, panelY + 16, COLOR_TEXT_DIM);
-        guiGraphics.fill(panelX + 8, listTop - 2, panelX + PANEL_WIDTH - 8, listTop - 1, COLOR_SEPARATOR);
+        TranslucentTrayChrome.drawSeparator(guiGraphics, panelX + 8, listTop - 2, PANEL_WIDTH - 16);
     }
 
     private void renderSlotList(GuiGraphics guiGraphics, int mouseX, int mouseY) {
@@ -287,9 +282,7 @@ public class ModelAnimationScreen extends Screen {
                                  boolean isMapped, boolean isExpanded, boolean isHovered,
                                  int x, int y, int w) {
 
-        if (isHovered || isExpanded) {
-            guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, COLOR_ITEM_HOVER);
-        }
+        guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, TranslucentTrayChrome.cardBackground(false, isHovered || isExpanded));
 
         int barColor = isMapped ? COLOR_MAPPED : COLOR_UNMAPPED;
         guiGraphics.fill(x, y + 1, x + 2, y + ITEM_HEIGHT - 1, barColor);
@@ -309,11 +302,7 @@ public class ModelAnimationScreen extends Screen {
     private void renderScrollbar(GuiGraphics guiGraphics) {
         if (maxScroll <= 0) return;
         int barX = panelX + PANEL_WIDTH - 4;
-        int barH = listBottom - listTop;
-        guiGraphics.fill(barX, listTop, barX + 2, listBottom, 0x20FFFFFF);
-        int thumbH = Math.max(16, barH * barH / (barH + maxScroll));
-        int thumbY = listTop + (int)((barH - thumbH) * ((float) scrollOffset / maxScroll));
-        guiGraphics.fill(barX, thumbY, barX + 2, thumbY + thumbH, COLOR_ACCENT);
+        TranslucentTrayChrome.drawScrollbar(guiGraphics, barX, listTop, listBottom, scrollOffset, maxScroll);
     }
 
     private void renderFooterStats(GuiGraphics guiGraphics) {
