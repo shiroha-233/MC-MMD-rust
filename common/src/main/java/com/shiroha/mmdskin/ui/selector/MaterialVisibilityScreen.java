@@ -145,12 +145,12 @@ public class MaterialVisibilityScreen extends Screen {
 
     @Override
     public void onClose() {
-        saveMaterialVisibility();
         super.onClose();
     }
 
     @Override
     public void removed() {
+        saveMaterialVisibility();
         super.removed();
     }
 
