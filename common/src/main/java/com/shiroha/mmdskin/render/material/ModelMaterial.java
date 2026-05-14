@@ -1,5 +1,7 @@
 package com.shiroha.mmdskin.render.material;
 
+import java.util.Locale;
+
 /**
  * MMD 模型材质（统一定义，避免多个渲染器重复定义）。
  */
@@ -8,31 +10,23 @@ public class ModelMaterial {
     public boolean hasAlpha = false;
     public String name = "";
     public String texturePath = "";
-    public boolean outlineEnabled = true;
-
     public boolean ownsTexture = false;
 
-    public void updateOutlinePolicy() {
-        outlineEnabled = shouldDrawOutline(name, texturePath);
+    public boolean isFacialFeature() {
+        return containsFacialToken(name) || containsFacialToken(texturePath);
     }
 
-    private static boolean shouldDrawOutline(String materialName, String texturePath) {
-        return !containsFacialFeatureToken(materialName) && !containsFacialFeatureToken(texturePath);
-    }
-
-    private static boolean containsFacialFeatureToken(String value) {
+    private static boolean containsFacialToken(String value) {
         if (value == null || value.isEmpty()) {
             return false;
         }
-
-        String normalized = value.toLowerCase(java.util.Locale.ROOT);
+        String normalized = value.toLowerCase(Locale.ROOT);
         String[] tokens = {
                 "eye", "eyes", "eyeline", "eyelash", "eyelid", "iris", "pupil", "brow", "eyebrow",
                 "mouth", "lip", "teeth", "tooth", "tongue", "gum", "lash", "highlight", "eyeshadow",
                 "瞳", "目", "眉", "睫", "口", "唇", "牙", "舌", "ハイライト", "まつげ", "くち",
                 "くちびる", "アイ", "アイライン", "アイラッシュ"
         };
-
         for (String token : tokens) {
             if (normalized.contains(token)) {
                 return true;

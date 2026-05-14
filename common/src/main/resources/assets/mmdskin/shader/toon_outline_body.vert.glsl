@@ -18,8 +18,8 @@ void main() {
     vec4 vPos = ModelViewMat * vec4(Position, 1.0);
 
     float viewDepth = max(-vPos.z, 0.5);
-    float outlineScale = mix(1.0, 1.4, clamp((viewDepth - 1.0) / 15.0, 0.0, 1.0));
-    float distanceFade = clamp(1.0 - (viewDepth - 30.0) / 20.0, 0.0, 1.0);
+    float outlineScale = mix(0.8, 1.2, clamp((viewDepth - 1.0) / 12.0, 0.0, 1.0));
+    float distanceFade = clamp(1.0 - (viewDepth - 25.0) / 15.0, 0.0, 1.0);
     vPos.xyz += transformedNormal * (OutlineWidth * outlineScale * distanceFade);
 
     gl_Position = ProjMat * vPos;

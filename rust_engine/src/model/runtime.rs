@@ -1595,7 +1595,8 @@ impl MmdModel {
     /// - offset 12: f32 alpha（基础材质 alpha，Java 侧再叠加 morph）
     /// - offset 16: u8  isVisible (0/1)
     /// - offset 17: u8  bothFace  (0/1)
-    /// - offset 18: u16 padding
+    /// - offset 18: u8  hasEdge   (0/1)
+    /// - offset 19: u8  padding
     ///
     /// 返回写入的子网格数量
     pub fn batch_get_sub_mesh_data(&self, output: &mut [u8]) -> usize {
@@ -1619,11 +1620,9 @@ impl MmdModel {
             } else {
                 0
             };
-            let both_face: u8 = self
-                .materials
-                .get(submesh.material_id as usize)
-                .map(|m| if m.is_double_sided() { 1u8 } else { 0u8 })
-                .unwrap_or(0u8);
+            let mat = self.materials.get(submesh.material_id as usize);
+            let both_face: u8 = mat.map(|m| if m.is_double_sided() { 1u8 } else { 0u8 }).unwrap_or(0u8);
+            let has_edge: u8 = mat.map(|m| if m.has_edge() { 1u8 } else { 0u8 }).unwrap_or(0u8);
 
             unsafe {
                 let p = output.as_mut_ptr().add(i * STRIDE);
@@ -1633,7 +1632,7 @@ impl MmdModel {
                 (p.add(12) as *mut f32).write_unaligned(alpha);
                 *p.add(16) = visible;
                 *p.add(17) = both_face;
-                // padding bytes 18-19 left as-is
+                *p.add(18) = has_edge;
             }
         }
 

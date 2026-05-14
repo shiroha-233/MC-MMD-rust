@@ -123,7 +123,6 @@ final class OpenGlModelFactory {
                         texKeys.add(texFilename);
                     }
                 }
-                mats[i].updateOutlinePolicy();
             }
 
             lightMapMaterial = new ModelMaterial();

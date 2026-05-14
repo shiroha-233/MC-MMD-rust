@@ -3081,7 +3081,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetEyeBonePosition(
 // ============================================================================
 
 /// 批量获取所有子网格的渲染元数据，消除 Java 侧逐子网格 JNI 调用
-/// 每子网格 20 字节：materialID(i32) + beginIndex(i32) + vertexCount(i32) + alpha(f32) + isVisible(u8) + bothFace(u8) + pad(2)
+/// 每子网格 20 字节：materialID(i32) + beginIndex(i32) + vertexCount(i32) + alpha(f32) + isVisible(u8) + bothFace(u8) + hasEdge(u8) + pad(1)
 #[no_mangle]
 pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_BatchGetSubMeshData(
     env: JNIEnv,

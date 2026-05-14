@@ -528,12 +528,10 @@ final class OpenGlModelRenderer {
         if (materialId < 0 || materialId >= target.mats.length) {
             return 0.0f;
         }
-
         ModelMaterial material = target.mats[materialId];
-        if (material == null || !material.outlineEnabled) {
+        if (material != null && material.isFacialFeature()) {
             return 0.0f;
         }
-
         return target.effectiveMaterialAlpha(materialId, baseAlpha);
     }
 }

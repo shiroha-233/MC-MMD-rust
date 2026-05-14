@@ -20,11 +20,20 @@ void main() {
     }
 
     vec3 normal = normalize(viewNormal);
+    vec3 viewDir = normalize(-viewPos);
+    float facing = dot(normal, viewDir);
 
-    vec3 texLum = OutlineColor * dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
-    vec3 finalOutline = mix(OutlineColor, texLum, 0.3);
+    float silhouette = 1.0 - clamp(facing, 0.0, 1.0);
+    float edge = smoothstep(0.08, 0.45, silhouette);
 
-    fragColor = vec4(finalOutline, texColor.a);
+    if (edge < 0.01) {
+        discard;
+    }
+
+    float texLum = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
+    vec3 finalOutline = OutlineColor * mix(1.0, texLum, 0.4);
+
+    fragColor = vec4(finalOutline, texColor.a * edge);
     fragData1 = vec4(normal * 0.5 + 0.5, 1.0);
     fragData2 = vec4(0.0, 0.0, 0.0, 1.0);
     fragData3 = vec4(0.0, 0.0, 0.0, 1.0);

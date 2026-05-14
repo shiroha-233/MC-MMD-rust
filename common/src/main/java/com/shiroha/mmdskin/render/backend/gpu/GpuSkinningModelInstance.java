@@ -300,7 +300,6 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
                         textureKeys.add(texFilename);
                     }
                 }
-                mats[i].updateOutlinePolicy();
             }
 
             lightMapMaterial = new ModelMaterial();
