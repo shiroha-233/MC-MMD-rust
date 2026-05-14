@@ -8,5 +8,5 @@ public interface StagePlaybackBroadcastPort {
     void sendStageWatch(UUID targetUUID, UUID sessionId, StageDescriptor descriptor,
                         float heightOffset, float startFrame);
 
-    void sendRemoteStageStart(StageDescriptor descriptor);
+    void sendRemoteStageStart(UUID sessionId, StageDescriptor descriptor);
 }

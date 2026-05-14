@@ -7,6 +7,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.MmdSkinClient;
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.renderer.compat.IrisCompat;
+import com.shiroha.mmdskin.renderer.performance.RenderPerformanceProfiler;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonShaderCpu;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonRenderHelper;
 import com.shiroha.mmdskin.renderer.runtime.model.AbstractMMDModel;
@@ -47,9 +48,14 @@ final class MMDModelOpenGLRenderer {
         float baseScale = target.modelScaleValue();
         deliverStack.scale(baseScale, baseScale, baseScale);
 
+        long materialMorphTimer = RenderPerformanceProfiler.get().startTimer();
         target.loadMaterialMorphResults();
+        RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_MATERIAL_MORPH_FETCH, materialMorphTimer);
+
+        long subMeshTimer = RenderPerformanceProfiler.get().startTimer();
         target.subMeshDataBuf.clear();
         nativeFunc.BatchGetSubMeshData(modelHandle, target.subMeshDataBuf);
+        RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_SUB_MESH_FETCH, subMeshTimer);
 
         boolean useToon = initializeToonShaderIfNeeded();
         if (useToon) {
@@ -102,7 +108,12 @@ final class MMDModelOpenGLRenderer {
         bindStandardAttributes(target);
         bindCustomShaderAttributes(target);
         bindIrisAttributes(target);
-        drawSubMeshes(target, minecraft);
+        long drawTimer = RenderPerformanceProfiler.get().startTimer();
+        try {
+            drawSubMeshes(target, minecraft);
+        } finally {
+            RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_DRAW, drawTimer);
+        }
         clearStandardRenderState(target);
     }
 
@@ -403,11 +414,15 @@ final class MMDModelOpenGLRenderer {
         RenderSystem.getProjectionMatrix().get(target.projMatBuff);
         GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.indexBufferObject);
 
-        if (MMDModelOpenGL.toonConfig.isOutlineEnabled()) {
-            renderOutlinePass(target);
+        long drawTimer = RenderPerformanceProfiler.get().startTimer();
+        try {
+            if (MMDModelOpenGL.toonConfig.isOutlineEnabled()) {
+                renderOutlinePass(target);
+            }
+            renderToonMainPass(target, minecraft, lightIntensity);
+        } finally {
+            RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_DRAW, drawTimer);
         }
-
-        renderToonMainPass(target, minecraft, lightIntensity);
 
         GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, 0);
         GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, 0);

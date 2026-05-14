@@ -1,28 +1,31 @@
+/* 文件职责：管理表情轮盘可选项与已选项，并支持内建预设和 VPD 发现。 */
 package com.shiroha.mmdskin.ui.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
-import com.shiroha.mmdskin.config.PathConstants;
 import com.shiroha.mmdskin.asset.catalog.MorphInfo;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
-import java.io.*;
+import com.shiroha.mmdskin.config.PathConstants;
+import com.shiroha.mmdskin.expression.BuiltinExpressionRegistry;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-/**
- * 表情轮盘配置管理
- * 管理可用的表情预设和轮盘显示的表情
- */
 public class MorphWheelConfig {
-    private static final Logger logger = LogManager.getLogger();
-    private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    private static final Logger LOGGER = LogManager.getLogger();
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static MorphWheelConfig instance;
 
@@ -30,8 +33,10 @@ public class MorphWheelConfig {
     private List<MorphEntry> displayedMorphs = new ArrayList<>();
 
     public static class MorphEntry {
+        public String entryType;
         public String displayName;
         public String morphName;
+        public String presetId;
         public String source;
         public String modelName;
         public String fileSize;
@@ -39,12 +44,14 @@ public class MorphWheelConfig {
         public String catalogKey;
         public boolean selected;
 
-        public MorphEntry() {}
+        public MorphEntry() {
+        }
 
-        public MorphEntry(String displayName, String morphName, String source,
-                          String modelName, String fileSize) {
+        public MorphEntry(String displayName, String morphName, String source, String modelName, String fileSize) {
+            this.entryType = "FILE";
             this.displayName = displayName;
             this.morphName = morphName;
+            this.presetId = null;
             this.source = source;
             this.modelName = modelName;
             this.fileSize = fileSize;
@@ -55,8 +62,10 @@ public class MorphWheelConfig {
 
         public MorphEntry(String displayName, String morphName, String source,
                           String modelName, String fileSize, String filePath, String catalogKey) {
+            this.entryType = "FILE";
             this.displayName = displayName;
             this.morphName = morphName;
+            this.presetId = null;
             this.source = source;
             this.modelName = modelName;
             this.fileSize = fileSize;
@@ -67,14 +76,33 @@ public class MorphWheelConfig {
 
         public static MorphEntry from(MorphInfo morph) {
             return new MorphEntry(
-                morph.getDisplayName(),
-                morph.getMorphName(),
-                morph.getSource().name(),
-                morph.getModelName(),
-                morph.getFormattedSize(),
-                morph.getFilePath(),
-                morph.getCatalogKey()
+                    morph.getDisplayName(),
+                    morph.getMorphName(),
+                    morph.getSource().name(),
+                    morph.getModelName(),
+                    morph.getFormattedSize(),
+                    morph.getFilePath(),
+                    morph.getCatalogKey()
             );
+        }
+
+        public static MorphEntry fromPreset(String presetId, String displayName) {
+            MorphEntry entry = new MorphEntry();
+            entry.entryType = "PRESET";
+            entry.displayName = displayName;
+            entry.morphName = presetId;
+            entry.presetId = presetId;
+            entry.source = "BUILTIN";
+            entry.modelName = null;
+            entry.fileSize = "-";
+            entry.filePath = null;
+            entry.catalogKey = "preset:" + presetId;
+            entry.selected = false;
+            return entry;
+        }
+
+        public boolean isPreset() {
+            return "PRESET".equalsIgnoreCase(entryType) || (presetId != null && !presetId.isEmpty());
         }
 
         public boolean matches(MorphEntry other) {
@@ -85,8 +113,8 @@ public class MorphWheelConfig {
                 return Objects.equals(catalogKey, other.catalogKey);
             }
             return Objects.equals(morphName, other.morphName)
-                && Objects.equals(source, other.source)
-                && Objects.equals(modelName, other.modelName);
+                    && Objects.equals(source, other.source)
+                    && Objects.equals(modelName, other.modelName);
         }
     }
 
@@ -100,9 +128,9 @@ public class MorphWheelConfig {
 
     public void scanAvailableMorphs() {
         availableMorphs.clear();
+        availableMorphs.addAll(BuiltinExpressionRegistry.createConfigEntries());
 
         List<MorphInfo> morphs = MorphInfo.scanAllMorphs();
-
         for (MorphInfo morph : morphs) {
             availableMorphs.add(MorphEntry.from(morph));
         }
@@ -124,7 +152,6 @@ public class MorphWheelConfig {
             }
         }
         displayedMorphs = normalizedDisplayedMorphs;
-
     }
 
     private MorphEntry findMatchingAvailableMorph(MorphEntry entry) {
@@ -141,11 +168,11 @@ public class MorphWheelConfig {
     }
 
     public List<MorphEntry> getDisplayedMorphs() {
-        return java.util.Collections.unmodifiableList(displayedMorphs);
+        return Collections.unmodifiableList(displayedMorphs);
     }
 
     public void setDisplayedMorphs(List<MorphEntry> morphs) {
-        this.displayedMorphs = new ArrayList<>(morphs);
+        displayedMorphs = new ArrayList<>(morphs);
         for (MorphEntry availableMorph : availableMorphs) {
             availableMorph.selected = displayedMorphs.stream().anyMatch(availableMorph::matches);
         }
@@ -186,9 +213,7 @@ public class MorphWheelConfig {
 
     public void load() {
         File configFile = PathConstants.getMorphWheelConfigFile();
-
         if (!configFile.exists()) {
-
             scanAvailableMorphs();
             selectAll();
             save();
@@ -196,13 +221,13 @@ public class MorphWheelConfig {
         }
 
         try (Reader reader = new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8)) {
-            Type listType = new TypeToken<List<MorphEntry>>(){}.getType();
-            List<MorphEntry> loaded = gson.fromJson(reader, listType);
+            Type listType = new TypeToken<List<MorphEntry>>() {}.getType();
+            List<MorphEntry> loaded = GSON.fromJson(reader, listType);
             if (loaded != null) {
                 displayedMorphs = new ArrayList<>(loaded);
             }
         } catch (Exception e) {
-            logger.error("加载表情配置失败", e);
+            LOGGER.error("加载表情配置失败", e);
         }
 
         scanAvailableMorphs();
@@ -210,13 +235,12 @@ public class MorphWheelConfig {
 
     public void save() {
         File configFile = PathConstants.getMorphWheelConfigFile();
-
         PathConstants.ensureDirectoryExists(configFile.getParentFile());
 
         try (Writer writer = new OutputStreamWriter(new FileOutputStream(configFile), StandardCharsets.UTF_8)) {
-            gson.toJson(displayedMorphs, writer);
+            GSON.toJson(displayedMorphs, writer);
         } catch (Exception e) {
-            logger.error("保存表情配置失败", e);
+            LOGGER.error("保存表情配置失败", e);
         }
     }
 

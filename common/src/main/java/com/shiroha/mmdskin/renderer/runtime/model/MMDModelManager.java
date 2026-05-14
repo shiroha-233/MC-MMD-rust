@@ -151,7 +151,7 @@ public class MMDModelManager {
 
     private static void applyMaterialVisibility(long modelHandle, String modelName) {
         try {
-            ModelConfigData config = ModelConfigManager.getConfig(modelName);
+            ModelConfigData config = ModelConfigManager.getLiveConfig(modelName);
             if (config.hiddenMaterials.isEmpty()) return;
 
             int materialCount = ModelRuntimeBridgeHolder.get().getMaterialCount(modelHandle);

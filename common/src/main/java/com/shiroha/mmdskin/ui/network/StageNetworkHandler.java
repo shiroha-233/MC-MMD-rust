@@ -82,18 +82,25 @@ public final class StageNetworkHandler {
         sendStagePacket(packet);
     }
 
-    public static void sendRemoteStageStart(StageDescriptor descriptor) {
+    public static void sendRemoteStageStart(UUID sessionId, StageDescriptor descriptor) {
         if (descriptor == null || !descriptor.isValid()) {
             LOGGER.warn("[多人舞台] 远端舞台描述无效，无法广播开始");
             return;
         }
         StagePacket packet = new StagePacket(StagePacketType.REMOTE_STAGE_START);
+        if (sessionId != null) {
+            packet.sessionId = sessionId.toString();
+        }
         packet.descriptor = descriptor.copy();
         sendStagePacket(packet);
     }
 
-    public static void sendRemoteStageStop() {
-        sendStagePacket(new StagePacket(StagePacketType.REMOTE_STAGE_STOP));
+    public static void sendRemoteStageStop(UUID sessionId) {
+        StagePacket packet = new StagePacket(StagePacketType.REMOTE_STAGE_STOP);
+        if (sessionId != null) {
+            packet.sessionId = sessionId.toString();
+        }
+        sendStagePacket(packet);
     }
 
     public static void sendStageWatchEnd(UUID targetUUID, UUID sessionId) {

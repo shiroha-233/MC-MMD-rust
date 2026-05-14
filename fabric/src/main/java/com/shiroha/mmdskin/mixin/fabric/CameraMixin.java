@@ -40,8 +40,11 @@ public abstract class CameraMixin {
                 }
             }
         } else {
+            boolean vrEyeCameraActive = FirstPersonManager.isVrEyeCameraActive();
+            boolean eyeCameraActive = FirstPersonManager.isEyeCameraActive();
+            boolean eyeAnchorReady = vrEyeCameraActive || FirstPersonManager.isEyeBoneValid();
 
-            if (FirstPersonManager.isActive() && FirstPersonManager.isEyeBoneValid() && !detached) {
+            if (eyeCameraActive && eyeAnchorReady && !detached) {
 
                 if (entity instanceof LivingEntity living) {
                     boolean ysmActive = YsmCompat.isYsmModelActive(living);
@@ -49,6 +52,13 @@ public abstract class CameraMixin {
                     if (ysmActive && !ysmDisableSelf) {
                         return;
                     }
+                }
+
+                if (vrEyeCameraActive) {
+                    Vec3 vrCameraPos = FirstPersonManager.getVrCameraPosition(entity, partialTick);
+                    FirstPersonManager.setLastCameraPos(vrCameraPos);
+                    this.setPosition(vrCameraPos.x, vrCameraPos.y, vrCameraPos.z);
+                    return;
                 }
 
                 Vec3 boneEyePos = FirstPersonManager.getRotatedEyePosition(entity, partialTick);

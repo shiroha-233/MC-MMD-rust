@@ -1,5 +1,7 @@
+/** 文件职责：接管舞台 FOV、相机 Roll 和第一人称拾取校正。 */
 package com.shiroha.mmdskin.mixin.neoforge;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
 import net.minecraft.client.Camera;
@@ -22,12 +24,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/**
- * GameRenderer Mixin — 舞台模式 FOV 覆盖
- */
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
-
     @Inject(method = "getFov", at = @At("RETURN"), cancellable = true)
     private void onGetFov(Camera camera, float partialTick, boolean useFovSetting, CallbackInfoReturnable<Double> cir) {
         MMDCameraController controller = MMDCameraController.getInstance();
@@ -55,15 +53,13 @@ public abstract class GameRendererMixin {
         double entityRange = player.entityInteractionRange();
         HitResult missHit = player.pick(0.0D, partialTick, false);
         HitResult blockHit = player.pick(blockRange, partialTick, false);
-        HitResult vanillaRayBlockHit = mc.level.clip(
-                new ClipContext(
-                        vanillaEyePos,
-                        vanillaEyePos.add(viewDir.scale(blockRange)),
-                        ClipContext.Block.OUTLINE,
-                        ClipContext.Fluid.NONE,
-                        player
-                )
-        );
+        HitResult vanillaRayBlockHit = mc.level.clip(new ClipContext(
+            vanillaEyePos,
+            vanillaEyePos.add(viewDir.scale(blockRange)),
+            ClipContext.Block.OUTLINE,
+            ClipContext.Fluid.NONE,
+            player
+        ));
         HitResult allowedBlockHit = mmdskin$filterBlockHitByVanillaReach(blockHit, vanillaRayBlockHit);
         HitResult finalHit = allowedBlockHit != null ? allowedBlockHit : missHit;
         mc.crosshairPickEntity = null;
@@ -73,12 +69,12 @@ public abstract class GameRendererMixin {
             AABB searchBox = player.getBoundingBox().expandTowards(viewDir.scale(entityRange)).inflate(1.0D, 1.0D, 1.0D);
             double maxDistanceSqr = mmdskin$getHitDistanceSqr(cameraPos, blockHit, entityRange);
             EntityHitResult entityHit = ProjectileUtil.getEntityHitResult(
-                    player,
-                    cameraPos,
-                    entityEnd,
-                    searchBox,
-                    target -> !target.isSpectator() && target.isPickable(),
-                    maxDistanceSqr
+                player,
+                cameraPos,
+                entityEnd,
+                searchBox,
+                target -> !target.isSpectator() && target.isPickable(),
+                maxDistanceSqr
             );
             EntityHitResult allowedEntityHit = mmdskin$filterEntityHitByVanillaReach(vanillaEyePos, entityHit, entityRange);
             if (allowedEntityHit != null) {
@@ -95,32 +91,25 @@ public abstract class GameRendererMixin {
         }
 
         mc.hitResult = finalHit;
-
     }
 
     private static HitResult mmdskin$filterBlockHitByVanillaReach(HitResult cameraHit, HitResult vanillaHit) {
         if (cameraHit == null || vanillaHit == null) {
             return null;
         }
-
         if (cameraHit.getType() != HitResult.Type.BLOCK || vanillaHit.getType() != HitResult.Type.BLOCK) {
             return null;
         }
-
         BlockHitResult cameraBlockHit = (BlockHitResult) cameraHit;
         BlockHitResult vanillaBlockHit = (BlockHitResult) vanillaHit;
-        return cameraBlockHit.getBlockPos().equals(vanillaBlockHit.getBlockPos())
-                ? cameraHit
-                : null;
+        return cameraBlockHit.getBlockPos().equals(vanillaBlockHit.getBlockPos()) ? cameraHit : null;
     }
 
     private static EntityHitResult mmdskin$filterEntityHitByVanillaReach(Vec3 vanillaEyePos, EntityHitResult hitResult, double maxRange) {
         if (hitResult == null) {
             return null;
         }
-        return vanillaEyePos.distanceToSqr(hitResult.getLocation()) <= maxRange * maxRange + 1.0E-6D
-                ? hitResult
-                : null;
+        return vanillaEyePos.distanceToSqr(hitResult.getLocation()) <= maxRange * maxRange + 1.0E-6D ? hitResult : null;
     }
 
     private static double mmdskin$getHitDistanceSqr(Vec3 cameraPos, HitResult hitResult, double fallbackRange) {
@@ -130,4 +119,3 @@ public abstract class GameRendererMixin {
         return cameraPos.distanceToSqr(hitResult.getLocation());
     }
 }
-

@@ -1,6 +1,7 @@
 package com.shiroha.mmdskin.stage.client.camera;
 
 import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.config.StageConfig;
 import com.shiroha.mmdskin.stage.client.camera.port.StageCameraBroadcastPort;
 import com.shiroha.mmdskin.stage.client.camera.port.StageCameraSessionPort;
 import com.shiroha.mmdskin.stage.client.camera.port.StageCameraUiPort;
@@ -64,7 +65,7 @@ public class MMDCameraController {
 
     private static volatile StageCameraBroadcastPort defaultBroadcastPort = new StageCameraBroadcastPort() {
         @Override
-        public void sendRemoteStageStop() {
+        public void sendRemoteStageStop(UUID sessionId) {
         }
 
         @Override
@@ -206,6 +207,12 @@ public class MMDCameraController {
         }
         
         this.state = StageState.INTRO;
+        this.cameraX = introStartX;
+        this.cameraY = introStartY;
+        this.cameraZ = introStartZ;
+        this.cameraPitch = introStartPitch;
+        this.cameraYaw = introStartYaw;
+        this.cameraRoll = 0.0f;
         this.cameraFov = introStartFov;
     }
 
@@ -254,6 +261,7 @@ public class MMDCameraController {
             nf.SetEyeTrackingEnabled(modelHandle, false);
         }
 
+        audioPlayer.setVolume(StageConfig.getInstance().audioVolume);
         if (audioPath != null && !audioPath.isEmpty()) {
             if (audioPlayer.load(audioPath)) {
                 audioPlayer.play();
@@ -315,10 +323,10 @@ public class MMDCameraController {
 
         if (outroIsGuest) {
             StageAnimSyncHelper.endStageAnim(Minecraft.getInstance().player);
-            broadcastPort.sendRemoteStageStop();
+            broadcastPort.sendRemoteStageStop(sessionPort.getSessionId());
             sessionPort.stopWatchingStageOnly();
         } else {
-            broadcastPort.sendRemoteStageStop();
+            broadcastPort.sendRemoteStageStop(sessionPort.getSessionId());
             sessionPort.notifyMembersStageEnd();
         }
     }
@@ -368,7 +376,7 @@ public class MMDCameraController {
         this.maxFrame = 0.0f;
 
         if (wasPlaying) {
-            broadcastPort.sendRemoteStageStop();
+            broadcastPort.sendRemoteStageStop(sessionPort.getSessionId());
             if (sessionPort.isWatchingStage()) {
                 if (mc.player != null) {
                     StageAnimSyncHelper.endStageAnim(mc.player);
@@ -569,7 +577,7 @@ public class MMDCameraController {
                 } else {
                     lastEscTimeNs = now;
                     if (cinematicMode) {
-                        mc.options.hideGui = false;
+                        mc.options.hideGui = previousHideGui;
                     }
                     if (mc.gui != null) {
                         mc.gui.setOverlayMessage(Component.translatable("gui.mmdskin.stage.esc_hint"), false);
@@ -801,6 +809,7 @@ public class MMDCameraController {
 
     public void loadWatchAudio(String audioPath) {
         if (state != StageState.WATCHING) return;
+        audioPlayer.setVolume(StageConfig.getInstance().audioVolume);
         if (audioPlayer.load(audioPath)) {
             audioPlayer.play();
         } else {
@@ -835,7 +844,7 @@ public class MMDCameraController {
             
         if (mc.player != null) {
             StageAnimSyncHelper.endStageAnim(mc.player);
-            broadcastPort.sendRemoteStageStop();
+            broadcastPort.sendRemoteStageStop(sessionPort.getSessionId());
 
             if (sendLeave && sessionPort.getHostPlayerId() != null) {
                 broadcastPort.sendLeave(sessionPort.getHostPlayerId());

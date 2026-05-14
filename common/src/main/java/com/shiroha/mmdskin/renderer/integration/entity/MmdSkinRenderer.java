@@ -1,7 +1,6 @@
 package com.shiroha.mmdskin.renderer.integration.entity;
 
 import com.shiroha.mmdskin.renderer.integration.player.InventoryRenderHelper;
-
 import com.shiroha.mmdskin.MmdSkin;
 import com.shiroha.mmdskin.renderer.api.RenderContext;
 import com.shiroha.mmdskin.renderer.api.RenderParams;
@@ -39,7 +38,6 @@ public class MmdSkinRenderer<T extends Entity> extends EntityRenderer<T> {
     public void render(T entityIn, float entityYaw, float tickDelta, PoseStack matrixStackIn,
                        MultiBufferSource bufferIn, int packedLightIn) {
         super.render(entityIn, entityYaw, tickDelta, matrixStackIn, bufferIn, packedLightIn);
-
         MMDModelManager.Model model = MMDModelManager.GetModel(modelName, entityIn.getStringUUID());
         if (model == null) return;
 

@@ -1,30 +1,79 @@
+/* 文件职责：提供轮盘界面的共享几何绘制、动画与基础交互。 */
 package com.shiroha.mmdskin.ui.wheel;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.*;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 import org.joml.Matrix4f;
 
-/** 轮盘界面基类。 */
+import java.util.List;
+
 public abstract class AbstractWheelScreen extends Screen {
+    protected static final float CENTER_SAFE_RADIUS_RATIO = 0.72f;
 
     public record WheelStyle(
-            float screenRatio, float innerRatio,
-            int lineColor, int lineColorDim, int highlightColor,
-            int centerBg, int centerBorder, int textShadow
-    ) {}
+            float screenRatio,
+            float innerRatio,
+            int lineColor,
+            int lineColorDim,
+            int highlightColor,
+            int centerBg,
+            int centerBorder,
+            int textShadow
+    ) {
+    }
+
+    public record WheelEntry(String primaryText, String secondaryText) {
+    }
+
+    private static final int TEXT_PRIMARY = TranslucentTrayChrome.TITLE_TEXT;
+    private static final int TEXT_SECONDARY = TranslucentTrayChrome.BODY_TEXT;
+    private static final int TEXT_MUTED = TranslucentTrayChrome.SUBTITLE_TEXT;
+    private static final int OUTLINE_DIM = 0x26FFFFFF;
+    private static final int BACKDROP_DIM = TranslucentTrayChrome.OVERLAY;
+    private static final float SEGMENT_GAP_DEGREES = 1.8f;
+    private static final float CENTER_BUBBLE_SCALE = 0.74f;
 
     protected final WheelStyle style;
-    protected int centerX, centerY;
-    protected int outerRadius, innerRadius;
+    protected int centerX;
+    protected int centerY;
+    protected int outerRadius;
+    protected int innerRadius;
     protected int selectedSlot = -1;
+
+    private float[] slotPop = new float[0];
+    private float[] slotVelocity = new float[0];
+    private float centerPop;
+    private float centerVelocity;
+    private float openProgress;
+    private float openVelocity;
 
     protected AbstractWheelScreen(Component title, WheelStyle style) {
         super(title);
         this.style = style;
+    }
+
+    protected static WheelStyle createTranslucentWheelStyle(float screenRatio, float innerRatio) {
+        return new WheelStyle(
+                screenRatio,
+                innerRatio,
+                0xFFF2F5F8,
+                0xB8D5DCE3,
+                0x30FFFFFF,
+                0xFF20262D,
+                0xFFDDE3E9,
+                0xD0000000
+        );
     }
 
     @Override
@@ -35,7 +84,7 @@ public abstract class AbstractWheelScreen extends Screen {
 
     protected void initWheelLayout() {
         this.centerX = this.width / 2;
-        this.centerY = this.height / 2;
+        this.centerY = this.height / 2 + Math.round(this.height * 0.02f);
         int minDim = Math.min(this.width, this.height);
         this.outerRadius = (int) (minDim * style.screenRatio() / 2);
         this.innerRadius = (int) (this.outerRadius * style.innerRatio());
@@ -43,30 +92,75 @@ public abstract class AbstractWheelScreen extends Screen {
 
     protected void updateSelectedSlot(int mouseX, int mouseY) {
         int count = getSlotCount();
-        if (count <= 0) { selectedSlot = -1; return; }
+        if (count <= 0) {
+            selectedSlot = -1;
+            return;
+        }
 
         int dx = mouseX - centerX;
         int dy = mouseY - centerY;
         double distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance < innerRadius || distance > outerRadius + 50) {
+        double minRadius = innerRadius * CENTER_SAFE_RADIUS_RATIO;
+        if (distance < minRadius || distance > outerRadius + 50.0) {
             selectedSlot = -1;
             return;
         }
 
         double angle = Math.toDegrees(Math.atan2(dy, dx));
-        if (angle < 0) angle += 360;
-        angle = (angle + 90) % 360;
+        if (angle < 0.0) {
+            angle += 360.0;
+        }
+        angle = (angle + 90.0) % 360.0;
 
         double segmentAngle = 360.0 / count;
         selectedSlot = (int) (angle / segmentAngle) % count;
     }
 
-    protected void renderHighlight(GuiGraphics g) {
-        int count = getSlotCount();
-        if (selectedSlot < 0 || count <= 0) return;
+    protected void renderWheelBase(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, List<WheelEntry> entries) {
+        updateSelectedSlot(mouseX, mouseY);
+        updateAnimations(entries.size());
+        renderBackdrop(guiGraphics, mouseX, mouseY, partialTick);
+        if (!entries.isEmpty()) {
+            renderSegmentWheel(guiGraphics, entries);
+        }
+        renderCenterDecor(guiGraphics);
+    }
 
-        Matrix4f matrix = g.pose().last().pose();
+    protected void renderCenterBubble(GuiGraphics guiGraphics, String text, int textColor) {
+        float bubbleScale = 0.98f + centerPop * 0.06f;
+        int bubbleRadius = Math.max(30, Math.round(innerRadius * CENTER_BUBBLE_SCALE * bubbleScale));
+        fillCircle(guiGraphics, centerX, centerY, bubbleRadius + 2, withAlpha(style.centerBorder(), 72));
+        drawCircleOutline(guiGraphics, centerX, centerY, bubbleRadius + 1, withAlpha(0xFFFFFF, 16));
+
+        String display = fitText(text, Math.max(88, Math.round(innerRadius * 1.4f)));
+        int textWidth = this.font.width(display);
+        guiGraphics.drawString(this.font, display, centerX - textWidth / 2 + 1, centerY - 4, style.textShadow(), false);
+        guiGraphics.drawString(this.font, display, centerX - textWidth / 2, centerY - 5, textColor, false);
+    }
+
+    protected void renderEmptyState(GuiGraphics guiGraphics, Component hint) {
+        int width = Math.max(180, this.font.width(hint) + 48);
+        int height = 36;
+        int x = centerX - width / 2;
+        int y = centerY + outerRadius / 2 + 18;
+        fillRoundedRect(guiGraphics, x, y, width, height, 12, withAlpha(style.centerBorder(), 228));
+        fillRoundedRect(guiGraphics, x + 1, y + 1, width - 2, height - 2, 11, withAlpha(style.centerBg(), 196));
+        guiGraphics.drawCenteredString(this.font, hint, centerX, y + 13, TEXT_PRIMARY);
+    }
+
+    protected Button createWheelIconButton(Component label, Button.OnPress onPress) {
+        return Button.builder(label, onPress)
+                .bounds(this.width - 36, this.height - 34, 28, 24)
+                .build();
+    }
+
+    protected void renderHighlight(GuiGraphics guiGraphics) {
+        int count = getSlotCount();
+        if (selectedSlot < 0 || count <= 0) {
+            return;
+        }
+
+        Matrix4f matrix = guiGraphics.pose().last().pose();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
@@ -78,166 +172,460 @@ public abstract class AbstractWheelScreen extends Screen {
     }
 
     protected void drawFilledSegment(Matrix4f matrix, int index, double segmentAngle, int color) {
-        double startAngle = Math.toRadians(index * segmentAngle - 90);
-        double endAngle = Math.toRadians((index + 1) * segmentAngle - 90);
+        double startAngle = Math.toRadians(index * segmentAngle - 90.0);
+        double endAngle = Math.toRadians((index + 1) * segmentAngle - 90.0);
 
-        int r = (color >> 16) & 0xFF;
-        int g = (color >> 8) & 0xFF;
-        int b = color & 0xFF;
-        int a = (color >> 24) & 0xFF;
+        int red = red(color);
+        int green = green(color);
+        int blue = blue(color);
+        int alpha = alpha(color);
 
-        BufferBuilder buf = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
-
+        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
         int steps = 32;
         for (int i = 0; i <= steps; i++) {
             double angle = startAngle + (endAngle - startAngle) * i / steps;
-            float cosA = (float) Math.cos(angle);
-            float sinA = (float) Math.sin(angle);
+            float cos = (float) Math.cos(angle);
+            float sin = (float) Math.sin(angle);
 
-            buf.addVertex(matrix, centerX + cosA * innerRadius, centerY + sinA * innerRadius, 0)
-                    .setColor(r, g, b, a / 2);
-            buf.addVertex(matrix, centerX + cosA * outerRadius, centerY + sinA * outerRadius, 0)
-                    .setColor(r, g, b, a);
+            bufferBuilder.addVertex(matrix, centerX + cos * innerRadius, centerY + sin * innerRadius, 0.0f)
+                    .setColor(red, green, blue, alpha / 2);
+            bufferBuilder.addVertex(matrix, centerX + cos * outerRadius, centerY + sin * outerRadius, 0.0f)
+                    .setColor(red, green, blue, alpha);
         }
-
-        BufferUploader.drawWithShader(buf.buildOrThrow());
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
     }
 
-    protected void renderDividerLines(GuiGraphics g) {
+    protected void renderDividerLines(GuiGraphics guiGraphics) {
         int count = getSlotCount();
-        if (count <= 0) return;
+        if (count <= 0) {
+            return;
+        }
 
-        Matrix4f matrix = g.pose().last().pose();
+        Matrix4f matrix = guiGraphics.pose().last().pose();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
 
         double segmentAngle = 360.0 / count;
         for (int i = 0; i < count; i++) {
-            double angle = Math.toRadians(i * segmentAngle - 90);
-            float cosA = (float) Math.cos(angle);
-            float sinA = (float) Math.sin(angle);
+            double angle = Math.toRadians(i * segmentAngle - 90.0);
+            float cos = (float) Math.cos(angle);
+            float sin = (float) Math.sin(angle);
 
-            float iX = centerX + cosA * innerRadius;
-            float iY = centerY + sinA * innerRadius;
-            float oX = centerX + cosA * outerRadius;
-            float oY = centerY + sinA * outerRadius;
+            float innerX = centerX + cos * innerRadius;
+            float innerY = centerY + sin * innerRadius;
+            float outerX = centerX + cos * outerRadius;
+            float outerY = centerY + sin * outerRadius;
 
-            int lineColor = (i == selectedSlot || i == (selectedSlot + 1) % count)
-                    ? style.lineColor() : style.lineColorDim();
-            drawThickLine(matrix, iX, iY, oX, oY, 3.0f, lineColor);
+            int lineColor = i == selectedSlot || i == (selectedSlot + 1) % count
+                    ? style.lineColor()
+                    : style.lineColorDim();
+            drawThickLine(matrix, innerX, innerY, outerX, outerY, 3.0f, lineColor);
         }
 
         RenderSystem.disableBlend();
     }
 
-    protected void renderOuterRing(GuiGraphics g) {
-        Matrix4f matrix = g.pose().last().pose();
+    protected void renderOuterRing(GuiGraphics guiGraphics) {
+        Matrix4f matrix = guiGraphics.pose().last().pose();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
 
-        int steps = 64;
+        int red = red(style.lineColorDim());
+        int green = green(style.lineColorDim());
+        int blue = blue(style.lineColorDim());
+        int alpha = alpha(style.lineColorDim());
         float thickness = 3.0f;
-        int r = (style.lineColorDim() >> 16) & 0xFF;
-        int gC = (style.lineColorDim() >> 8) & 0xFF;
-        int b = style.lineColorDim() & 0xFF;
-        int a = (style.lineColorDim() >> 24) & 0xFF;
 
-        BufferBuilder buf = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
-
+        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        int steps = 64;
         for (int i = 0; i <= steps; i++) {
             double angle = Math.toRadians(i * 360.0 / steps);
-            float cosA = (float) Math.cos(angle);
-            float sinA = (float) Math.sin(angle);
+            float cos = (float) Math.cos(angle);
+            float sin = (float) Math.sin(angle);
 
-            buf.addVertex(matrix, centerX + cosA * (outerRadius - thickness),
-                    centerY + sinA * (outerRadius - thickness), 0).setColor(r, gC, b, a);
-            buf.addVertex(matrix, centerX + cosA * (outerRadius + thickness),
-                    centerY + sinA * (outerRadius + thickness), 0).setColor(r, gC, b, a);
+            bufferBuilder.addVertex(matrix, centerX + cos * (outerRadius - thickness), centerY + sin * (outerRadius - thickness), 0.0f)
+                    .setColor(red, green, blue, alpha);
+            bufferBuilder.addVertex(matrix, centerX + cos * (outerRadius + thickness), centerY + sin * (outerRadius + thickness), 0.0f)
+                    .setColor(red, green, blue, alpha);
         }
-
-        BufferUploader.drawWithShader(buf.buildOrThrow());
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
         RenderSystem.disableBlend();
     }
 
-    protected void renderCenterCircle(GuiGraphics g, String text, int textColor) {
-        Matrix4f matrix = g.pose().last().pose();
+    protected void renderCenterCircle(GuiGraphics guiGraphics, String text, int textColor) {
+        Matrix4f matrix = guiGraphics.pose().last().pose();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
 
-        int bgR = (style.centerBg() >> 16) & 0xFF;
-        int bgG = (style.centerBg() >> 8) & 0xFF;
-        int bgB = style.centerBg() & 0xFF;
-        int bgA = (style.centerBg() >> 24) & 0xFF;
+        int bgRed = red(style.centerBg());
+        int bgGreen = green(style.centerBg());
+        int bgBlue = blue(style.centerBg());
+        int bgAlpha = alpha(style.centerBg());
 
-        BufferBuilder buf = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
-        buf.addVertex(matrix, centerX, centerY, 0).setColor(bgR, bgG, bgB, bgA);
-
+        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
+        bufferBuilder.addVertex(matrix, centerX, centerY, 0.0f).setColor(bgRed, bgGreen, bgBlue, bgAlpha);
         int steps = 48;
         for (int i = 0; i <= steps; i++) {
             double angle = Math.toRadians(i * 360.0 / steps);
-            buf.addVertex(matrix,
-                    centerX + (float) (Math.cos(angle) * innerRadius),
-                    centerY + (float) (Math.sin(angle) * innerRadius), 0)
-                    .setColor(bgR, bgG, bgB, bgA);
+            bufferBuilder.addVertex(
+                            matrix,
+                            centerX + (float) (Math.cos(angle) * innerRadius),
+                            centerY + (float) (Math.sin(angle) * innerRadius),
+                            0.0f
+                    )
+                    .setColor(bgRed, bgGreen, bgBlue, bgAlpha);
         }
-        BufferUploader.drawWithShader(buf.buildOrThrow());
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
 
+        int borderRed = red(style.centerBorder());
+        int borderGreen = green(style.centerBorder());
+        int borderBlue = blue(style.centerBorder());
+        int borderAlpha = alpha(style.centerBorder());
         float thickness = 3.0f;
-        int bR = (style.centerBorder() >> 16) & 0xFF;
-        int bG = (style.centerBorder() >> 8) & 0xFF;
-        int bB = style.centerBorder() & 0xFF;
-        int bA = (style.centerBorder() >> 24) & 0xFF;
 
-        buf = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
         for (int i = 0; i <= steps; i++) {
             double angle = Math.toRadians(i * 360.0 / steps);
-            float cosA = (float) Math.cos(angle);
-            float sinA = (float) Math.sin(angle);
+            float cos = (float) Math.cos(angle);
+            float sin = (float) Math.sin(angle);
 
-            buf.addVertex(matrix, centerX + cosA * (innerRadius - thickness),
-                    centerY + sinA * (innerRadius - thickness), 0).setColor(bR, bG, bB, bA);
-            buf.addVertex(matrix, centerX + cosA * (innerRadius + thickness),
-                    centerY + sinA * (innerRadius + thickness), 0).setColor(bR, bG, bB, bA);
+            bufferBuilder.addVertex(matrix, centerX + cos * (innerRadius - thickness), centerY + sin * (innerRadius - thickness), 0.0f)
+                    .setColor(borderRed, borderGreen, borderBlue, borderAlpha);
+            bufferBuilder.addVertex(matrix, centerX + cos * (innerRadius + thickness), centerY + sin * (innerRadius + thickness), 0.0f)
+                    .setColor(borderRed, borderGreen, borderBlue, borderAlpha);
         }
-        BufferUploader.drawWithShader(buf.buildOrThrow());
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
         RenderSystem.disableBlend();
 
-        int textWidth = this.font.width(text);
-        g.drawString(this.font, text, centerX - textWidth / 2 + 1, centerY - 3, style.textShadow(), false);
-        g.drawString(this.font, text, centerX - textWidth / 2, centerY - 4, textColor, false);
+        String fittedText = fitText(text, Math.max(24, innerRadius * 2 - 12));
+        int textWidth = this.font.width(fittedText);
+        guiGraphics.drawString(this.font, fittedText, centerX - textWidth / 2 + 1, centerY - 3, style.textShadow(), false);
+        guiGraphics.drawString(this.font, fittedText, centerX - textWidth / 2, centerY - 4, textColor, false);
     }
 
-    protected void drawThickLine(Matrix4f matrix, float x1, float y1, float x2, float y2,
-                                  float thickness, int color) {
+    protected String fitText(String text, int maxWidth) {
+        String value = text == null ? "" : text;
+        if (value.isEmpty() || this.font.width(value) <= maxWidth) {
+            return value;
+        }
+
+        while (value.length() > 1 && this.font.width(value + "..") > maxWidth) {
+            value = value.substring(0, value.length() - 1);
+        }
+        return value.length() < (text == null ? 0 : text.length()) ? value + ".." : value;
+    }
+
+    protected void drawThickLine(Matrix4f matrix, float x1, float y1, float x2, float y2, float thickness, int color) {
         float dx = x2 - x1;
         float dy = y2 - y1;
-        float len = (float) Math.sqrt(dx * dx + dy * dy);
-        if (len < 0.001f) return;
+        float length = (float) Math.sqrt(dx * dx + dy * dy);
+        if (length < 0.001f) {
+            return;
+        }
 
-        float px = -dy / len * thickness * 0.5f;
-        float py = dx / len * thickness * 0.5f;
+        float px = -dy / length * thickness * 0.5f;
+        float py = dx / length * thickness * 0.5f;
+        int red = red(color);
+        int green = green(color);
+        int blue = blue(color);
+        int alpha = alpha(color);
 
-        int r = (color >> 16) & 0xFF;
-        int g = (color >> 8) & 0xFF;
-        int b = color & 0xFF;
-        int a = (color >> 24) & 0xFF;
-
-        BufferBuilder buf = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
-        buf.addVertex(matrix, x1 + px, y1 + py, 0).setColor(r, g, b, a);
-        buf.addVertex(matrix, x1 - px, y1 - py, 0).setColor(r, g, b, a);
-        buf.addVertex(matrix, x2 + px, y2 + py, 0).setColor(r, g, b, a);
-        buf.addVertex(matrix, x2 - px, y2 - py, 0).setColor(r, g, b, a);
-        BufferUploader.drawWithShader(buf.buildOrThrow());
+        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        bufferBuilder.addVertex(matrix, x1 + px, y1 + py, 0.0f).setColor(red, green, blue, alpha);
+        bufferBuilder.addVertex(matrix, x1 - px, y1 - py, 0.0f).setColor(red, green, blue, alpha);
+        bufferBuilder.addVertex(matrix, x2 + px, y2 + py, 0.0f).setColor(red, green, blue, alpha);
+        bufferBuilder.addVertex(matrix, x2 - px, y2 - py, 0.0f).setColor(red, green, blue, alpha);
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
     }
 
-    protected void drawRectOutline(GuiGraphics g, int x, int y, int w, int h, int color) {
-        g.fill(x, y, x + w, y + 1, color);
-        g.fill(x, y + h - 1, x + w, y + h, color);
-        g.fill(x, y, x + 1, y + h, color);
-        g.fill(x + w - 1, y, x + w, y + h, color);
+    protected void drawRectOutline(GuiGraphics guiGraphics, int x, int y, int width, int height, int color) {
+        guiGraphics.fill(x, y, x + width, y + 1, color);
+        guiGraphics.fill(x, y + height - 1, x + width, y + height, color);
+        guiGraphics.fill(x, y, x + 1, y + height, color);
+        guiGraphics.fill(x + width - 1, y, x + width, y + height, color);
+    }
+
+    private void renderBackdrop(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        if (this.minecraft == null || this.minecraft.level == null) {
+            super.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+        }
+        guiGraphics.fill(0, 0, this.width, this.height, BACKDROP_DIM);
+    }
+
+    private void renderSegmentWheel(GuiGraphics guiGraphics, List<WheelEntry> entries) {
+        int count = entries.size();
+        float segmentAngle = 360.0f / count;
+        drawCircleArcOutline(guiGraphics, centerX, centerY, outerRadius + 3.0f, OUTLINE_DIM, 2.1f);
+        drawCircleArcOutline(guiGraphics, centerX, centerY, innerRadius - 2.0f, withAlpha(style.lineColorDim(), 190), 1.8f);
+
+        for (int i = 0; i < count; i++) {
+            WheelEntry entry = entries.get(i);
+            float pop = slotPop[i];
+            float start = i * segmentAngle - 90.0f + SEGMENT_GAP_DEGREES * 0.5f;
+            float sweep = Math.max(8.0f, segmentAngle - SEGMENT_GAP_DEGREES);
+            float expandedOuter = outerRadius + pop * 5.0f + openProgress * 2.5f;
+            float expandedInner = Math.max(12.0f, innerRadius - pop * 2.0f);
+
+            int fillColor = i == selectedSlot
+                    ? blendColors(withAlpha(style.centerBg(), 106), withAlpha(0xFFFFFF, 24), 0.12f + pop * 0.16f)
+                    : blendColors(withAlpha(style.centerBg(), 92), withAlpha(style.lineColorDim(), 28), 0.06f + openProgress * 0.08f);
+            int edgeColor = i == selectedSlot
+                    ? blendColors(withAlpha(style.centerBorder(), 138), withAlpha(0xFFFFFF, 92), pop * 0.20f)
+                    : withAlpha(style.lineColorDim(), 88);
+
+            drawAnnularSegment(guiGraphics, centerX, centerY, expandedInner, expandedOuter, start, sweep, fillColor);
+            drawAnnularSegmentOutline(guiGraphics, centerX, centerY, expandedInner, expandedOuter, start, sweep, edgeColor, 1.8f);
+            drawSeparator(guiGraphics, centerX, centerY, expandedInner + 4.0f, expandedOuter - 4.0f, start, withAlpha(0xFFFFFF, 34));
+
+            double angle = Math.toRadians(i * segmentAngle + segmentAngle / 2.0 - 90.0);
+            float cos = (float) Math.cos(angle);
+            float sin = (float) Math.sin(angle);
+            float textRadius = expandedInner + (expandedOuter - expandedInner) * 0.54f + pop * 2.0f;
+            int textX = Math.round(centerX + cos * textRadius);
+            int textY = Math.round(centerY + sin * textRadius);
+            float halfSweepRadians = (float) Math.toRadians(sweep * 0.5f);
+            int maxTextWidth = Math.round(Mth.clamp(2.0f * textRadius * (float) Math.sin(halfSweepRadians) * 0.90f, 86.0f, 210.0f));
+
+            if (entry.secondaryText() == null || entry.secondaryText().isEmpty()) {
+                renderSingleEntry(guiGraphics, entry.primaryText(), textX, textY, pop, maxTextWidth);
+            } else {
+                renderDualEntry(guiGraphics, entry.primaryText(), entry.secondaryText(), textX, textY, pop, maxTextWidth);
+            }
+        }
+    }
+
+    private void renderCenterDecor(GuiGraphics guiGraphics) {
+        int haloRadius = Math.max(18, Math.round(innerRadius * 0.86f + openProgress * 4.0f));
+        drawCircleOutline(guiGraphics, centerX, centerY, haloRadius, withAlpha(style.lineColorDim(), 42));
+        drawCircleOutline(guiGraphics, centerX, centerY, Math.max(12, haloRadius - 6), withAlpha(0xFFFFFF, 10));
+    }
+
+    private void renderSingleEntry(GuiGraphics guiGraphics, String text, int textX, int textY, float pop, int maxTextWidth) {
+        String display = fitText(text, Math.max(62, maxTextWidth));
+        int width = this.font.width(display);
+        int color = blendColors(TEXT_MUTED, TEXT_PRIMARY, 0.36f + pop * 0.64f);
+        guiGraphics.drawString(this.font, display, textX - width / 2 + 1, textY - 4, style.textShadow(), false);
+        guiGraphics.drawString(this.font, display, textX - width / 2, textY - 5, color, false);
+    }
+
+    private void renderDualEntry(GuiGraphics guiGraphics, String icon, String label, int textX, int textY, float pop, int maxTextWidth) {
+        String displayIcon = icon == null ? "" : icon;
+        int iconWidth = this.font.width(displayIcon);
+        int iconColor = blendColors(TEXT_MUTED, TEXT_PRIMARY, 0.42f + pop * 0.58f);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(textX, textY - 10.0f, 0.0f);
+        guiGraphics.pose().scale(1.0f + pop * 0.08f, 1.0f + pop * 0.08f, 1.0f);
+        guiGraphics.drawString(this.font, displayIcon, -iconWidth / 2 + 1, 0, style.textShadow(), false);
+        guiGraphics.drawString(this.font, displayIcon, -iconWidth / 2, -1, iconColor, false);
+        guiGraphics.pose().popPose();
+
+        String displayLabel = fitText(label, Math.max(56, Math.round(maxTextWidth * 0.76f)));
+        int labelWidth = this.font.width(displayLabel);
+        int labelColor = blendColors(TEXT_MUTED, TEXT_SECONDARY, 0.52f + pop * 0.38f);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(textX, textY + 4.0f, 0.0f);
+        guiGraphics.pose().scale(0.90f + pop * 0.02f, 0.90f + pop * 0.02f, 1.0f);
+        guiGraphics.drawString(this.font, displayLabel, -labelWidth / 2 + 1, 0, style.textShadow(), false);
+        guiGraphics.drawString(this.font, displayLabel, -labelWidth / 2, -1, labelColor, false);
+        guiGraphics.pose().popPose();
+    }
+
+    private void updateAnimations(int count) {
+        ensureAnimationCapacity(count);
+        float openTarget = 1.03f;
+        openVelocity += (openTarget - openProgress) * 0.24f;
+        openVelocity *= 0.74f;
+        openProgress = Mth.clamp(openProgress + openVelocity, 0.0f, 1.22f);
+
+        for (int i = 0; i < count; i++) {
+            float target = i == selectedSlot ? 1.08f : -0.05f;
+            slotVelocity[i] += (target - slotPop[i]) * 0.40f;
+            slotVelocity[i] *= 0.80f;
+            slotPop[i] = Mth.clamp(slotPop[i] + slotVelocity[i], -0.22f, 1.42f);
+        }
+
+        float centerTarget = selectedSlot >= 0 ? 1.06f : -0.04f;
+        centerVelocity += (centerTarget - centerPop) * 0.34f;
+        centerVelocity *= 0.78f;
+        centerPop = Mth.clamp(centerPop + centerVelocity, -0.20f, 1.30f);
+    }
+
+    private void ensureAnimationCapacity(int count) {
+        if (slotPop.length == count) {
+            return;
+        }
+        slotPop = new float[count];
+        slotVelocity = new float[count];
+        centerPop = 0.0f;
+        centerVelocity = 0.0f;
+        openProgress = 0.0f;
+        openVelocity = 0.0f;
+    }
+
+    protected int blendColors(int from, int to, float progress) {
+        float clamped = Mth.clamp(progress, 0.0f, 1.0f);
+        int alpha = Mth.floor(Mth.lerp(clamped, alpha(from), alpha(to)));
+        int red = Mth.floor(Mth.lerp(clamped, red(from), red(to)));
+        int green = Mth.floor(Mth.lerp(clamped, green(from), green(to)));
+        int blue = Mth.floor(Mth.lerp(clamped, blue(from), blue(to)));
+        return alpha << 24 | red << 16 | green << 8 | blue;
+    }
+
+    protected int withAlpha(int color, int alpha) {
+        return Mth.clamp(alpha, 0, 255) << 24 | (color & 0x00FFFFFF);
+    }
+
+    private void fillRoundedRect(GuiGraphics guiGraphics, int x, int y, int width, int height, int radius, int color) {
+        int clampedRadius = Math.min(radius, Math.min(width, height) / 2);
+        for (int row = 0; row < height; row++) {
+            int inset = row < clampedRadius
+                    ? roundedInset(clampedRadius, row)
+                    : row >= height - clampedRadius
+                    ? roundedInset(clampedRadius, height - 1 - row)
+                    : 0;
+            guiGraphics.fill(x + inset, y + row, x + width - inset, y + row + 1, color);
+        }
+    }
+
+    private void fillCircle(GuiGraphics guiGraphics, int cx, int cy, int radius, int color) {
+        if (radius <= 0) {
+            return;
+        }
+        for (int dy = -radius; dy <= radius; dy++) {
+            int span = (int) Math.sqrt(radius * radius - dy * dy);
+            guiGraphics.fill(cx - span, cy + dy, cx + span + 1, cy + dy + 1, color);
+        }
+    }
+
+    private void drawCircleOutline(GuiGraphics guiGraphics, int cx, int cy, int radius, int color) {
+        if (radius <= 1) {
+            return;
+        }
+        for (int dy = -radius; dy <= radius; dy++) {
+            int outer = (int) Math.sqrt(radius * radius - dy * dy);
+            int innerRadius = Math.max(0, radius - 2);
+            int inner = innerRadius == 0 ? 0 : (int) Math.sqrt(Math.max(0, innerRadius * innerRadius - dy * dy));
+            guiGraphics.fill(cx - outer, cy + dy, cx - inner, cy + dy + 1, color);
+            guiGraphics.fill(cx + inner + 1, cy + dy, cx + outer + 1, cy + dy + 1, color);
+        }
+    }
+
+    private void drawCircleArcOutline(GuiGraphics guiGraphics, float cx, float cy, float radius, int color, float width) {
+        drawRing(guiGraphics, cx, cy, Math.max(0.0f, radius - width), radius, 0.0f, 360.0f, color);
+    }
+
+    private void drawSeparator(GuiGraphics guiGraphics, float cx, float cy, float inner, float outer, float angleDegrees, int color) {
+        float radians = (float) Math.toRadians(angleDegrees);
+        float dx = Mth.cos(radians);
+        float dy = Mth.sin(radians);
+        float nx = -dy * 0.9f;
+        float ny = dx * 0.9f;
+        drawQuad(
+                guiGraphics,
+                cx + dx * inner - nx, cy + dy * inner - ny,
+                cx + dx * inner + nx, cy + dy * inner + ny,
+                cx + dx * outer + nx, cy + dy * outer + ny,
+                cx + dx * outer - nx, cy + dy * outer - ny,
+                color
+        );
+    }
+
+    private void drawAnnularSegment(GuiGraphics guiGraphics, float cx, float cy, float inner, float outer, float startDegrees, float sweepDegrees, int color) {
+        drawRing(guiGraphics, cx, cy, inner, outer, startDegrees, sweepDegrees, color);
+    }
+
+    private void drawAnnularSegmentOutline(
+            GuiGraphics guiGraphics,
+            float cx,
+            float cy,
+            float inner,
+            float outer,
+            float startDegrees,
+            float sweepDegrees,
+            int color,
+            float width
+    ) {
+        drawRing(guiGraphics, cx, cy, outer - width, outer, startDegrees, sweepDegrees, color);
+        drawRing(guiGraphics, cx, cy, inner, inner + width, startDegrees, sweepDegrees, color);
+        drawSeparator(guiGraphics, cx, cy, inner, outer, startDegrees, color);
+        drawSeparator(guiGraphics, cx, cy, inner, outer, startDegrees + sweepDegrees, color);
+    }
+
+    private void drawRing(GuiGraphics guiGraphics, float cx, float cy, float inner, float outer, float startDegrees, float sweepDegrees, int color) {
+        int segments = Math.max(12, Math.round(Math.abs(sweepDegrees) / 5.5f));
+        float startRadians = (float) Math.toRadians(startDegrees);
+        float stepRadians = (float) Math.toRadians(sweepDegrees / segments);
+
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        Matrix4f matrix = guiGraphics.pose().last().pose();
+        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        for (int i = 0; i <= segments; i++) {
+            float angle = startRadians + stepRadians * i;
+            float cos = Mth.cos(angle);
+            float sin = Mth.sin(angle);
+            addVertex(bufferBuilder, matrix, cx + cos * outer, cy + sin * outer, color);
+            addVertex(bufferBuilder, matrix, cx + cos * inner, cy + sin * inner, color);
+        }
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
+    }
+
+    private void drawQuad(
+            GuiGraphics guiGraphics,
+            float ax,
+            float ay,
+            float bx,
+            float by,
+            float cx,
+            float cy,
+            float dx,
+            float dy,
+            int color
+    ) {
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        Matrix4f matrix = guiGraphics.pose().last().pose();
+        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        addVertex(bufferBuilder, matrix, ax, ay, color);
+        addVertex(bufferBuilder, matrix, bx, by, color);
+        addVertex(bufferBuilder, matrix, cx, cy, color);
+        addVertex(bufferBuilder, matrix, dx, dy, color);
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
+    }
+
+    private void addVertex(BufferBuilder bufferBuilder, Matrix4f matrix, float x, float y, int color) {
+        bufferBuilder.addVertex(matrix, x, y, 0.0f)
+                .setColor(red(color), green(color), blue(color), alpha(color));
+    }
+
+    private int roundedInset(int radius, int row) {
+        if (radius <= 0) {
+            return 0;
+        }
+        double dy = radius - row - 0.5;
+        double inside = Math.max(0.0, radius * radius - dy * dy);
+        return Math.max(0, radius - (int) Math.floor(Math.sqrt(inside)) - 1);
+    }
+
+    private int alpha(int color) {
+        return color >>> 24;
+    }
+
+    private int red(int color) {
+        return color >> 16 & 0xFF;
+    }
+
+    private int green(int color) {
+        return color >> 8 & 0xFF;
+    }
+
+    private int blue(int color) {
+        return color & 0xFF;
     }
 
     @Override

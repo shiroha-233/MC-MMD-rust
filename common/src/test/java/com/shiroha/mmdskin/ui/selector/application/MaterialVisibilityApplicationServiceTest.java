@@ -53,6 +53,31 @@ class MaterialVisibilityApplicationServiceTest {
         assertEquals(Set.of(1), gateway.savedHiddenMaterials);
     }
 
+    @Test
+    void shouldSkipSaveWhenHiddenMaterialsUnchanged() {
+        FakeMaterialGateway gateway = new FakeMaterialGateway();
+        MaterialVisibilityApplicationService service = new MaterialVisibilityApplicationService(gateway);
+        MaterialScreenContext context = new MaterialScreenContext(9L, "alice", "alice");
+
+        boolean changed = service.saveIfChanged(context, gateway.materials, Set.of(1));
+
+        assertFalse(changed);
+        assertEquals(Set.of(), gateway.savedHiddenMaterials);
+    }
+
+    @Test
+    void shouldSaveWhenHiddenMaterialsChanged() {
+        FakeMaterialGateway gateway = new FakeMaterialGateway();
+        MaterialVisibilityApplicationService service = new MaterialVisibilityApplicationService(gateway);
+        MaterialScreenContext context = new MaterialScreenContext(9L, "alice", "alice");
+        gateway.materials.get(0).setVisible(false);
+
+        boolean changed = service.saveIfChanged(context, gateway.materials, Set.of(1));
+
+        assertTrue(changed);
+        assertEquals(Set.of(0, 1), gateway.savedHiddenMaterials);
+    }
+
     private static final class FakeMaterialGateway implements MaterialVisibilityGateway {
         private final List<MaterialEntryState> materials = List.of(
                 new MaterialEntryState(0, "body", true),
@@ -74,7 +99,7 @@ class MaterialVisibilityApplicationServiceTest {
         }
 
         @Override
-        public List<MaterialEntryState> loadMaterials(long modelHandle) {
+        public List<MaterialEntryState> loadMaterials(MaterialScreenContext context) {
             return materials;
         }
 

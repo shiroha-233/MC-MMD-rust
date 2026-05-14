@@ -1,454 +1,412 @@
+/* 文件职责：渲染并处理舞台会话侧栏，包括房主邀请与成员自定义动作。 */
 package com.shiroha.mmdskin.ui.stage;
 
 import com.shiroha.mmdskin.config.StagePack;
 import com.shiroha.mmdskin.stage.client.viewmodel.StageLobbyViewModel;
 import com.shiroha.mmdskin.stage.domain.model.StageMemberState;
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
-/**
- * 多人舞台房间面板。
- * 房主侧只负责邀请/查看成员，成员侧负责查看房间成员和本地自选动作。
- */
-public class StageAssignPanel {
-
-    private static final int PANEL_WIDTH = 180;
-    private static final int BG = 0xC0101418;
-    private static final int BORDER = 0xFF2A3A4A;
-    private static final int ACCENT = 0xFF60A0D0;
-    private static final int TEXT = 0xFFDDDDDD;
-    private static final int TEXT_DIM = 0xFF888888;
-    private static final int HOVER = 0x30FFFFFF;
-    private static final int CHECKBOX_ON = 0xFF40C080;
-    private static final int CHECKBOX_OFF = 0xFF505560;
+/** 文件职责：渲染并处理舞台房间侧栏，包括 host 邀请与 guest 自选动作。 */
+final class StageAssignPanel {
+    private static final int PANEL_WIDTH = 192;
+    private static final int PANEL_MARGIN = 8;
+    private static final int PANEL_PADDING = 8;
     private static final int HEADER_HEIGHT = 20;
-    private static final int ITEM_HEIGHT = 16;
-    private static final int MARGIN = 4;
-    private static final int MEMBER_SPLIT_HEIGHT = 0x30FFFFFF;
-    private static final int STATE_PENDING_COLOR = 0xFFD0A050;
-    private static final int STATE_DECLINED_COLOR = 0xFFD05050;
-    private static final int STATE_BUSY_COLOR = 0xFFB06060;
+    private static final int BUTTON_HEIGHT = 15;
+    private static final int LIST_ROW_HEIGHT = 16;
+    private static final int ROW_GAP = 2;
+    private static final int TOGGLE_HEIGHT = 13;
+    private static final int INVITE_BUTTON_WIDTH = 66;
 
-    private static final int INVITE_BTN_W = 32;
-    private static final int INVITE_BTN_H = 14;
+    private static final int COLOR_ACCENT = TranslucentTrayChrome.ACCENT;
+    private static final int COLOR_TEXT = TranslucentTrayChrome.BODY_TEXT;
+    private static final int COLOR_TEXT_DIM = TranslucentTrayChrome.SUBTITLE_TEXT;
+    private static final int COLOR_TEXT_MUTED = TranslucentTrayChrome.MUTED_TEXT;
+    private static final int COLOR_ROW = TranslucentTrayChrome.CARD_BACKGROUND;
+    private static final int COLOR_ROW_HOVER = TranslucentTrayChrome.CARD_HOVER;
+    private static final int COLOR_GOOD = 0xFF54C284;
+    private static final int COLOR_WARN = 0xFFD4A353;
+    private static final int COLOR_BAD = 0xFFD66B6B;
+    private static final int COLOR_BUSY = 0xFFB06E7B;
+    private static final int COLOR_TOGGLE_ON = 0xA04BB97C;
+    private static final int COLOR_TOGGLE_OFF = 0x8053606D;
+    private static final int COLOR_ACTION = 0x304A6683;
+    private static final int COLOR_ACTION_HOVER = 0x485A7998;
 
     private final Font font;
-    private final StageLobbyViewModel lobbyViewModel = StageLobbyViewModel.getInstance();
+    private final StageWorkbenchFacade facade;
 
     private int panelX;
     private int panelY;
-    private int panelH;
-    private int memberListTop;
-    private int memberListBottom;
-    private int motionSectionTop;
-    private int motionListTop;
-    private int motionListBottom;
-    private int inviteBtnX;
-    private int inviteBtnY;
+    private int panelHeight;
+    private int listTop;
+    private int listBottom;
+    private int guestToggleY;
+    private int guestMotionTop;
+    private int guestMotionBottom;
+    private int inviteButtonX;
+    private int inviteButtonY;
 
-    private int memberScrollOffset;
-    private int memberMaxScroll;
-    private int motionScrollOffset;
-    private int motionMaxScroll;
-
+    private float memberScroll;
+    private float motionScroll;
     private int hoveredMemberIndex = -1;
     private int hoveredMotionIndex = -1;
-    private boolean hoverInviteBtn;
-    private boolean hoverGuestCustomToggle;
+    private boolean hoveredInviteButton;
+    private boolean hoveredCustomMotionToggle;
 
-    private List<StageLobbyViewModel.HostEntry> hostEntries = new ArrayList<>();
-    private List<StageLobbyViewModel.MemberView> guestMembers = new ArrayList<>();
-    private List<StagePack.VmdFileInfo> motionVmdFiles = new ArrayList<>();
+    private List<StageLobbyViewModel.MemberView> memberViews = List.of();
+    private List<StageLobbyViewModel.HostEntry> hostEntries = List.of();
+    private List<StagePack.VmdFileInfo> motionFiles = List.of();
 
-    public StageAssignPanel(Font font) {
-        this.font = font;
+    StageAssignPanel(Font font, StageWorkbenchFacade facade) {
+        this.font = Objects.requireNonNull(font, "font");
+        this.facade = Objects.requireNonNull(facade, "facade");
     }
 
-    public void layout(int screenWidth, int screenHeight) {
-        this.panelX = screenWidth - PANEL_WIDTH - MARGIN;
-        this.panelY = MARGIN;
-        this.panelH = screenHeight - MARGIN * 2;
-        this.memberListTop = panelY + HEADER_HEIGHT;
+    void layout(int screenWidth, int screenHeight, boolean sessionMember) {
+        this.panelX = screenWidth - PANEL_WIDTH - PANEL_MARGIN;
+        this.panelY = PANEL_MARGIN;
+        this.panelHeight = Math.max(220, screenHeight - PANEL_MARGIN * 2);
+        this.listTop = panelY + HEADER_HEIGHT + 8;
+        this.inviteButtonX = panelX + PANEL_WIDTH - PANEL_PADDING - INVITE_BUTTON_WIDTH;
+        this.inviteButtonY = panelY + 5;
 
-        if (lobbyViewModel.isSessionMember()) {
-            int splitY = panelY + HEADER_HEIGHT + (int) ((panelH - HEADER_HEIGHT) * 0.34f);
-            this.memberListBottom = splitY - 2;
-            this.motionSectionTop = splitY + 6;
-            this.motionListTop = motionSectionTop + 18;
-            this.motionListBottom = panelY + panelH - MARGIN;
+        if (sessionMember) {
+            this.listBottom = panelY + Math.max(94, panelHeight / 2);
+            this.guestToggleY = listBottom + 8;
+            this.guestMotionTop = guestToggleY + TOGGLE_HEIGHT + 7;
+            this.guestMotionBottom = panelY + panelHeight - PANEL_PADDING;
         } else {
-            this.memberListBottom = panelY + panelH - MARGIN;
-            this.motionSectionTop = 0;
-            this.motionListTop = 0;
-            this.motionListBottom = 0;
+            this.listBottom = panelY + panelHeight - PANEL_PADDING;
+            this.guestToggleY = 0;
+            this.guestMotionTop = 0;
+            this.guestMotionBottom = 0;
         }
-
-        this.inviteBtnX = panelX + PANEL_WIDTH - INVITE_BTN_W - 6;
-        this.inviteBtnY = panelY + 3;
-        refreshPlayers();
-        updateMotionScroll();
+        clampScrolls();
     }
 
-    public void setStagePack(StagePack pack) {
-        motionVmdFiles = new ArrayList<>();
-        if (lobbyViewModel.isSessionMember()) {
-            lobbyViewModel.setLocalCustomMotionPack(pack != null ? pack.getName() : null);
-        }
-        if (pack != null) {
-            for (StagePack.VmdFileInfo info : pack.getVmdFiles()) {
-                if (info.hasBones || info.hasMorphs) {
-                    motionVmdFiles.add(info);
-                }
-            }
-        }
-        if (lobbyViewModel.isSessionMember()) {
-            lobbyViewModel.retainLocalCustomMotionFiles(motionVmdFiles.stream().map(info -> info.name).toList());
-        }
-        motionScrollOffset = 0;
-        updateMotionScroll();
+    void sync(List<StagePack.VmdFileInfo> selectedPackMotionFiles) {
+        this.memberViews = List.copyOf(facade.getSessionMembersView());
+        this.hostEntries = List.copyOf(facade.getHostPanelEntries());
+        this.motionFiles = List.copyOf(selectedPackMotionFiles);
+        clampScrolls();
     }
 
-    public void refreshPlayers() {
-        if (lobbyViewModel.isSessionMember()) {
-            guestMembers = lobbyViewModel.getSessionMembersView();
-        } else {
-            hostEntries = lobbyViewModel.getHostPanelEntries();
-        }
-        updateMemberScroll();
-    }
-
-    public void render(GuiGraphics g, int mouseX, int mouseY) {
-        g.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + panelH, BG);
-        g.fill(panelX, panelY, panelX + 1, panelY + panelH, BORDER);
-
-        renderHeader(g, mouseX, mouseY);
-        renderMemberList(g, mouseX, mouseY);
-        if (lobbyViewModel.isSessionMember()) {
-            renderGuestMotionArea(g, mouseX, mouseY);
-        }
-    }
-
-    private void renderHeader(GuiGraphics g, int mouseX, int mouseY) {
-        g.drawCenteredString(font,
-                Component.translatable("gui.mmdskin.stage.session_members"),
-                panelX + PANEL_WIDTH / 2,
-                panelY + 6,
-                ACCENT);
-
-        hoverInviteBtn = !lobbyViewModel.isSessionMember()
-                && mouseX >= inviteBtnX && mouseX <= inviteBtnX + INVITE_BTN_W
-                && mouseY >= inviteBtnY && mouseY <= inviteBtnY + INVITE_BTN_H;
-        if (!lobbyViewModel.isSessionMember()) {
-            int btnColor = hoverInviteBtn ? HOVER : 0x20FFFFFF;
-            g.fill(inviteBtnX, inviteBtnY, inviteBtnX + INVITE_BTN_W, inviteBtnY + INVITE_BTN_H, btnColor);
-            g.drawCenteredString(font, "+", inviteBtnX + INVITE_BTN_W / 2, inviteBtnY + 3, ACCENT);
-        }
-    }
-
-    private void renderMemberList(GuiGraphics g, int mouseX, int mouseY) {
+    void render(GuiGraphics graphics, int mouseX, int mouseY) {
         hoveredMemberIndex = -1;
-        g.enableScissor(panelX, memberListTop, panelX + PANEL_WIDTH, memberListBottom);
-        if (lobbyViewModel.isSessionMember()) {
-            renderGuestMembers(g, mouseX, mouseY);
-        } else {
-            renderHostMembers(g, mouseX, mouseY);
+        hoveredMotionIndex = -1;
+        hoveredInviteButton = false;
+        hoveredCustomMotionToggle = false;
+
+        TranslucentTrayChrome.drawPanel(graphics, panelX, panelY, PANEL_WIDTH, panelHeight);
+        renderHeader(graphics, mouseX, mouseY);
+        renderMemberList(graphics, mouseX, mouseY);
+        if (facade.isSessionMember()) {
+            renderGuestMotionArea(graphics, mouseX, mouseY);
         }
-        g.disableScissor();
-        renderScrollbar(g, memberListTop, memberListBottom, memberScrollOffset, memberMaxScroll);
     }
 
-    private void renderHostMembers(GuiGraphics g, int mouseX, int mouseY) {
-        if (hostEntries.isEmpty()) {
-            g.drawCenteredString(font,
-                    Component.translatable("gui.mmdskin.stage.no_nearby"),
-                    panelX + PANEL_WIDTH / 2,
-                    memberListTop + 4,
-                    TEXT_DIM);
+    boolean mouseClicked(double mouseX, double mouseY) {
+        if (!contains(mouseX, mouseY)) {
+            return false;
+        }
+        if (!facade.isSessionMember() && hoveredInviteButton) {
+            facade.inviteAllNearby();
+            return true;
+        }
+        if (facade.isSessionMember() && hoveredCustomMotionToggle) {
+            facade.toggleLocalCustomMotionEnabled();
+            clampScrolls();
+            return true;
+        }
+        if (!facade.isSessionMember() && hoveredMemberIndex >= 0 && hoveredMemberIndex < hostEntries.size()) {
+            facade.handleHostAction(hostEntries.get(hoveredMemberIndex).uuid());
+            return true;
+        }
+        if (facade.isSessionMember()
+                && facade.isLocalCustomMotionEnabled()
+                && hoveredMotionIndex >= 0
+                && hoveredMotionIndex < motionFiles.size()) {
+            facade.toggleLocalCustomMotion(motionFiles.get(hoveredMotionIndex).name);
+            return true;
+        }
+        return false;
+    }
+
+    boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (!contains(mouseX, mouseY)) {
+            return false;
+        }
+        float step = (float) ((LIST_ROW_HEIGHT + ROW_GAP) * 2.5);
+        if (mouseY >= listTop && mouseY <= listBottom) {
+            memberScroll = Mth.clamp(memberScroll - (float) delta * step, 0.0f, maxMemberScroll());
+            return true;
+        }
+        if (facade.isSessionMember()
+                && facade.isLocalCustomMotionEnabled()
+                && mouseY >= guestMotionTop
+                && mouseY <= guestMotionBottom) {
+            motionScroll = Mth.clamp(motionScroll - (float) delta * step, 0.0f, maxMotionScroll());
+            return true;
+        }
+        return false;
+    }
+
+    private void renderHeader(GuiGraphics graphics, int mouseX, int mouseY) {
+        graphics.drawString(font, StageScreenUtils.wb("session.section"), panelX + PANEL_PADDING, panelY + 8, COLOR_ACCENT, false);
+        if (facade.isSessionMember()) {
+            String stats = StageScreenUtils.wb("guest.members.short", memberViews.size());
+            graphics.drawString(font, stats, panelX + PANEL_WIDTH - PANEL_PADDING - font.width(stats), panelY + 8, COLOR_TEXT_MUTED, false);
+        } else {
+            hoveredInviteButton = isRectHovered(mouseX, mouseY, inviteButtonX, inviteButtonY, INVITE_BUTTON_WIDTH, BUTTON_HEIGHT);
+            graphics.fill(
+                    inviteButtonX,
+                    inviteButtonY,
+                    inviteButtonX + INVITE_BUTTON_WIDTH,
+                    inviteButtonY + BUTTON_HEIGHT,
+                    hoveredInviteButton ? COLOR_ACTION_HOVER : COLOR_ACTION
+            );
+            graphics.drawCenteredString(font, StageScreenUtils.wb("host.invite_all.short"),
+                    inviteButtonX + INVITE_BUTTON_WIDTH / 2, inviteButtonY + 4, TranslucentTrayChrome.TITLE_TEXT);
+        }
+        TranslucentTrayChrome.drawSeparator(graphics, panelX + PANEL_PADDING, listTop - 6, PANEL_WIDTH - PANEL_PADDING * 2);
+    }
+
+    private void renderMemberList(GuiGraphics graphics, int mouseX, int mouseY) {
+        graphics.enableScissor(panelX, listTop, panelX + PANEL_WIDTH, listBottom);
+        if (facade.isSessionMember()) {
+            renderGuestMembers(graphics, mouseX, mouseY);
+        } else {
+            renderHostMembers(graphics, mouseX, mouseY);
+        }
+        graphics.disableScissor();
+        drawScrollbar(graphics, listTop, listBottom, memberScroll, maxMemberScroll());
+    }
+
+    private void renderGuestMembers(GuiGraphics graphics, int mouseX, int mouseY) {
+        if (memberViews.isEmpty()) {
+            graphics.drawCenteredString(font, net.minecraft.network.chat.Component.translatable("gui.mmdskin.stage.waiting_host"),
+                    panelX + PANEL_WIDTH / 2, listTop + 4, COLOR_TEXT_DIM);
             return;
         }
+        for (int i = 0; i < memberViews.size(); i++) {
+            StageLobbyViewModel.MemberView memberView = memberViews.get(i);
+            int y = rowY(listTop, i, memberScroll);
+            if (y + LIST_ROW_HEIGHT < listTop || y > listBottom) {
+                continue;
+            }
+            boolean hovered = isRowHovered(mouseX, mouseY, y, listBottom);
+            if (hovered) {
+                hoveredMemberIndex = i;
+                fillRow(graphics, y, COLOR_ROW_HOVER);
+            } else {
+                fillRow(graphics, y, COLOR_ROW);
+            }
+            String prefix = memberView.host() ? "HOST" : memberView.local() ? "YOU" : "GUEST";
+            graphics.drawString(font, StageScreenUtils.shorten(prefix + " " + memberView.name(), 17), panelX + PANEL_PADDING, y + 4, COLOR_TEXT, false);
+            String state = guestStateText(memberView.state(), memberView.useHostCamera());
+            graphics.drawString(font, StageScreenUtils.shorten(state, 13),
+                    panelX + PANEL_WIDTH - PANEL_PADDING - font.width(StageScreenUtils.shorten(state, 13)),
+                    y + 4, colorForState(memberView.state()), false);
+        }
+    }
 
+    private void renderHostMembers(GuiGraphics graphics, int mouseX, int mouseY) {
+        if (hostEntries.isEmpty()) {
+            graphics.drawCenteredString(font, StageScreenUtils.wb("host.empty.short"), panelX + PANEL_WIDTH / 2, listTop + 4, COLOR_TEXT_DIM);
+            return;
+        }
         for (int i = 0; i < hostEntries.size(); i++) {
             StageLobbyViewModel.HostEntry entry = hostEntries.get(i);
-            int itemY = memberListTop + i * ITEM_HEIGHT - memberScrollOffset;
-            if (itemY + ITEM_HEIGHT < memberListTop || itemY > memberListBottom) {
+            int y = rowY(listTop, i, memberScroll);
+            if (y + LIST_ROW_HEIGHT < listTop || y > listBottom) {
                 continue;
             }
-
-            int itemX = panelX + 4;
-            int itemW = PANEL_WIDTH - 8;
-            boolean hovered = mouseX >= itemX && mouseX <= itemX + itemW
-                    && mouseY >= Math.max(itemY, memberListTop)
-                    && mouseY <= Math.min(itemY + ITEM_HEIGHT, memberListBottom);
+            boolean hovered = isRowHovered(mouseX, mouseY, y, listBottom);
             if (hovered) {
                 hoveredMemberIndex = i;
-                g.fill(itemX, itemY, itemX + itemW, itemY + ITEM_HEIGHT, HOVER);
+                fillRow(graphics, y, COLOR_ROW_HOVER);
+            } else {
+                fillRow(graphics, y, COLOR_ROW);
             }
-
-            g.drawString(font, truncate(entry.name(), 12), itemX + 2, itemY + 4, entry.nearby() ? TEXT : TEXT_DIM, false);
-            renderMemberState(g, itemX + itemW, itemY + 4, entry.state(), entry.useHostCamera());
+            graphics.drawString(font, StageScreenUtils.shorten(entry.name(), 17), panelX + PANEL_PADDING, y + 4,
+                    entry.nearby() ? COLOR_TEXT : COLOR_TEXT_MUTED, false);
+            String action = hostActionText(entry);
+            graphics.drawString(font, StageScreenUtils.shorten(action, 11),
+                    panelX + PANEL_WIDTH - PANEL_PADDING - font.width(StageScreenUtils.shorten(action, 11)),
+                    y + 4, colorForHostEntry(entry), false);
         }
     }
 
-    private void renderGuestMembers(GuiGraphics g, int mouseX, int mouseY) {
-        if (guestMembers.isEmpty()) {
-            g.drawCenteredString(font,
-                    Component.translatable("gui.mmdskin.stage.waiting_host"),
-                    panelX + PANEL_WIDTH / 2,
-                    memberListTop + 4,
-                    TEXT_DIM);
+    private void renderGuestMotionArea(GuiGraphics graphics, int mouseX, int mouseY) {
+        TranslucentTrayChrome.drawSeparator(graphics, panelX + PANEL_PADDING, guestToggleY - 5, PANEL_WIDTH - PANEL_PADDING * 2);
+        graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.mmdskin.stage.local_motion_override"),
+                panelX + PANEL_PADDING, guestToggleY - 14, COLOR_TEXT, false);
+
+        int toggleWidth = PANEL_WIDTH - PANEL_PADDING * 2;
+        hoveredCustomMotionToggle = isRectHovered(mouseX, mouseY, panelX + PANEL_PADDING, guestToggleY, toggleWidth, TOGGLE_HEIGHT);
+        drawToggle(graphics, panelX + PANEL_PADDING, guestToggleY, toggleWidth, TOGGLE_HEIGHT,
+                facade.isLocalCustomMotionEnabled(), hoveredCustomMotionToggle);
+
+        if (!facade.isLocalCustomMotionEnabled()) {
+            graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.mmdskin.stage.local_motion_fallback"),
+                    panelX + PANEL_PADDING, guestMotionTop, COLOR_TEXT_DIM, false);
+            return;
+        }
+        if (motionFiles.isEmpty()) {
+            graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.mmdskin.stage.local_motion_empty"),
+                    panelX + PANEL_PADDING, guestMotionTop, COLOR_TEXT_DIM, false);
             return;
         }
 
-        for (int i = 0; i < guestMembers.size(); i++) {
-            StageLobbyViewModel.MemberView member = guestMembers.get(i);
-            int itemY = memberListTop + i * ITEM_HEIGHT - memberScrollOffset;
-            if (itemY + ITEM_HEIGHT < memberListTop || itemY > memberListBottom) {
+        graphics.enableScissor(panelX, guestMotionTop, panelX + PANEL_WIDTH, guestMotionBottom);
+        for (int i = 0; i < motionFiles.size(); i++) {
+            StagePack.VmdFileInfo info = motionFiles.get(i);
+            int y = rowY(guestMotionTop, i, motionScroll);
+            if (y + LIST_ROW_HEIGHT < guestMotionTop || y > guestMotionBottom) {
                 continue;
             }
-
-            int itemX = panelX + 4;
-            int itemW = PANEL_WIDTH - 8;
-            boolean hovered = mouseX >= itemX && mouseX <= itemX + itemW
-                    && mouseY >= Math.max(itemY, memberListTop)
-                    && mouseY <= Math.min(itemY + ITEM_HEIGHT, memberListBottom);
-            if (hovered) {
-                hoveredMemberIndex = i;
-                g.fill(itemX, itemY, itemX + itemW, itemY + ITEM_HEIGHT, HOVER);
-            }
-
-            String prefix = member.local() ? "*" : member.host() ? "H" : " ";
-            g.drawString(font, truncate(prefix + " " + member.name(), 12), itemX + 2, itemY + 4, TEXT, false);
-            renderMemberState(g, itemX + itemW, itemY + 4, member.state(), member.useHostCamera());
-        }
-    }
-
-    private void renderGuestMotionArea(GuiGraphics g, int mouseX, int mouseY) {
-        g.fill(panelX + 8, motionSectionTop - 4, panelX + PANEL_WIDTH - 8, motionSectionTop - 3, MEMBER_SPLIT_HEIGHT);
-
-        boolean customEnabled = lobbyViewModel.isLocalCustomMotionEnabled();
-        int toggleX = panelX + 6;
-        int toggleY = motionSectionTop;
-        int toggleW = 18;
-        int toggleH = 10;
-
-        g.drawString(font, Component.translatable("gui.mmdskin.stage.local_motion_override"), panelX + 6, motionSectionTop - 12, TEXT, false);
-        hoverGuestCustomToggle = mouseX >= toggleX && mouseX <= toggleX + PANEL_WIDTH - 12
-                && mouseY >= toggleY && mouseY <= toggleY + toggleH;
-        g.fill(toggleX, toggleY, toggleX + toggleW, toggleY + toggleH, customEnabled ? CHECKBOX_ON : CHECKBOX_OFF);
-        int dotX = customEnabled ? toggleX + toggleW - toggleH : toggleX;
-        g.fill(dotX + 1, toggleY + 1, dotX + toggleH - 1, toggleY + toggleH - 1, 0xFFFFFFFF);
-
-        if (!customEnabled) {
-            hoveredMotionIndex = -1;
-            g.drawString(font,
-                    Component.translatable("gui.mmdskin.stage.local_motion_fallback"),
-                    panelX + 28,
-                    motionSectionTop + 1,
-                    TEXT_DIM,
-                    false);
-            return;
-        }
-
-        if (motionVmdFiles.isEmpty()) {
-            hoveredMotionIndex = -1;
-            g.drawString(font,
-                    Component.translatable("gui.mmdskin.stage.local_motion_empty"),
-                    panelX + 28,
-                    motionSectionTop + 1,
-                    TEXT_DIM,
-                    false);
-            return;
-        }
-
-        hoveredMotionIndex = -1;
-        g.enableScissor(panelX, motionListTop, panelX + PANEL_WIDTH, motionListBottom);
-        for (int i = 0; i < motionVmdFiles.size(); i++) {
-            StagePack.VmdFileInfo info = motionVmdFiles.get(i);
-            int itemY = motionListTop + i * ITEM_HEIGHT - motionScrollOffset;
-            if (itemY + ITEM_HEIGHT < motionListTop || itemY > motionListBottom) {
-                continue;
-            }
-
-            int itemX = panelX + 4;
-            int itemW = PANEL_WIDTH - 8;
-            boolean hovered = mouseX >= itemX && mouseX <= itemX + itemW
-                    && mouseY >= Math.max(itemY, motionListTop)
-                    && mouseY <= Math.min(itemY + ITEM_HEIGHT, motionListBottom);
+            boolean hovered = isRowHovered(mouseX, mouseY, y, guestMotionBottom);
             if (hovered) {
                 hoveredMotionIndex = i;
-                g.fill(itemX, itemY, itemX + itemW, itemY + ITEM_HEIGHT, HOVER);
+                fillRow(graphics, y, COLOR_ROW_HOVER);
+            } else {
+                fillRow(graphics, y, COLOR_ROW);
             }
-
-            boolean checked = lobbyViewModel.isLocalCustomMotionSelected(info.name);
-            int cbX = itemX + 2;
-            int cbY = itemY + 3;
-            int cbSize = 8;
-            g.fill(cbX, cbY, cbX + cbSize, cbY + cbSize, checked ? CHECKBOX_ON : CHECKBOX_OFF);
-            if (checked) {
-                g.drawString(font, "✓", cbX + 1, cbY, 0xFFFFFFFF, false);
-            }
-
-            String fileName = info.name.toLowerCase().endsWith(".vmd")
-                    ? info.name.substring(0, info.name.length() - 4)
-                    : info.name;
-            g.drawString(font, truncate(fileName, 14), cbX + cbSize + 4, itemY + 4, TEXT, false);
-
-            String typeTag = info.getTypeTag();
-            int tagW = font.width(typeTag);
-            g.drawString(font, typeTag, itemX + itemW - tagW - 2, itemY + 4, TEXT_DIM, false);
+            drawCheckbox(graphics, panelX + PANEL_PADDING, y + 4, facade.isLocalCustomMotionSelected(info.name));
+            graphics.drawString(font, StageScreenUtils.shorten(StageScreenUtils.stripExtension(info.name), 14), panelX + PANEL_PADDING + 13, y + 4, COLOR_TEXT, false);
+            String tag = StageScreenUtils.motionTag(info);
+            graphics.drawString(font, tag, panelX + PANEL_WIDTH - PANEL_PADDING - font.width(tag), y + 4, COLOR_TEXT_MUTED, false);
         }
-        g.disableScissor();
-        renderScrollbar(g, motionListTop, motionListBottom, motionScrollOffset, motionMaxScroll);
+        graphics.disableScissor();
+        drawScrollbar(graphics, guestMotionTop, guestMotionBottom, motionScroll, maxMotionScroll());
     }
 
-    private void renderMemberState(GuiGraphics g, int rightX, int y,
-                                   StageMemberState state, boolean useHostCamera) {
-        String tag;
-        int color;
-        if (state == null) {
-            tag = "+";
-            color = TEXT_DIM;
-        } else switch (state) {
-            case HOST -> {
-                tag = "H";
-                color = ACCENT;
-            }
-            case INVITED -> {
-                tag = "...";
-                color = STATE_PENDING_COLOR;
-            }
-            case ACCEPTED -> {
-                tag = useHostCamera ? "C" : "✓";
-                color = CHECKBOX_ON;
-            }
-            case READY -> {
-                tag = useHostCamera ? "★C" : "★";
-                color = CHECKBOX_ON;
-            }
-            case DECLINED -> {
-                tag = "✗";
-                color = STATE_DECLINED_COLOR;
-            }
-            case BUSY -> {
-                tag = "!";
-                color = STATE_BUSY_COLOR;
-            }
-            default -> {
-                tag = "+";
-                color = TEXT_DIM;
-            }
-        }
-        int width = font.width(tag);
-        g.drawString(font, tag, rightX - width - 2, y, color, false);
+    private void drawToggle(GuiGraphics graphics, int x, int y, int width, int height, boolean enabled, boolean hovered) {
+        int color = enabled ? COLOR_TOGGLE_ON : COLOR_TOGGLE_OFF;
+        graphics.fill(x, y, x + width, y + height, hovered ? brighten(color) : color);
+        int knob = height - 2;
+        int knobX = enabled ? x + width - knob - 1 : x + 1;
+        graphics.fill(knobX, y + 1, knobX + knob, y + knob + 1, 0xFFF5FAFF);
     }
 
-    private void renderScrollbar(GuiGraphics g, int top, int bottom, int offset, int maxScroll) {
-        if (maxScroll <= 0) {
-            return;
+    private void drawCheckbox(GuiGraphics graphics, int x, int y, boolean checked) {
+        graphics.fill(x, y, x + 8, y + 8, checked ? COLOR_TOGGLE_ON : COLOR_TOGGLE_OFF);
+        if (checked) {
+            graphics.drawString(font, "v", x + 1, y - 1, 0xFFFFFFFF, false);
         }
+    }
+
+    private void drawScrollbar(GuiGraphics graphics, int top, int bottom, float offset, float maxScroll) {
         int barX = panelX + PANEL_WIDTH - 4;
-        int barH = bottom - top;
-        g.fill(barX, top, barX + 2, bottom, 0x20FFFFFF);
-        int thumbH = Math.max(10, barH * barH / (barH + maxScroll));
-        int thumbY = top + (int) ((barH - thumbH) * ((float) offset / maxScroll));
-        g.fill(barX, thumbY, barX + 2, thumbY + thumbH, ACCENT);
+        TranslucentTrayChrome.drawScrollbar(graphics, barX, top, bottom, offset, maxScroll);
     }
 
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0) {
-            return false;
-        }
-
-        if (!lobbyViewModel.isSessionMember() && hoverInviteBtn) {
-            inviteAllNone();
-            return true;
-        }
-
-        if (lobbyViewModel.isSessionMember() && hoverGuestCustomToggle) {
-            lobbyViewModel.setLocalCustomMotionEnabled(!lobbyViewModel.isLocalCustomMotionEnabled());
-            motionScrollOffset = 0;
-            updateMotionScroll();
-            return true;
-        }
-
-        if (hoveredMemberIndex >= 0 && !lobbyViewModel.isSessionMember() && hoveredMemberIndex < hostEntries.size()) {
-            StageLobbyViewModel.HostEntry entry = hostEntries.get(hoveredMemberIndex);
-            StageMemberState state = entry.state();
-            if (state == null || state == StageMemberState.DECLINED || state == StageMemberState.BUSY) {
-                lobbyViewModel.sendInvite(entry.uuid());
-                return true;
-            }
-            if (state == StageMemberState.INVITED) {
-                lobbyViewModel.cancelInvite(entry.uuid());
-                return true;
-            }
-        }
-
-        if (lobbyViewModel.isSessionMember()
-                && lobbyViewModel.isLocalCustomMotionEnabled()
-                && hoveredMotionIndex >= 0
-                && hoveredMotionIndex < motionVmdFiles.size()) {
-            lobbyViewModel.toggleLocalCustomMotion(motionVmdFiles.get(hoveredMotionIndex).name);
-            return true;
-        }
-
-        return false;
+    private void fillRow(GuiGraphics graphics, int y, int color) {
+        graphics.fill(panelX + PANEL_PADDING - 2, y, panelX + PANEL_WIDTH - PANEL_PADDING + 2, y + LIST_ROW_HEIGHT, color);
     }
 
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (!isInside(mouseX, mouseY)) {
-            return false;
-        }
-
-        int scrollAmount = (int) (-delta * ITEM_HEIGHT * 3);
-        if (mouseY <= memberListBottom) {
-            memberScrollOffset = Math.max(0, Math.min(memberMaxScroll, memberScrollOffset + scrollAmount));
-            return true;
-        }
-
-        if (lobbyViewModel.isSessionMember() && lobbyViewModel.isLocalCustomMotionEnabled()) {
-            motionScrollOffset = Math.max(0, Math.min(motionMaxScroll, motionScrollOffset + scrollAmount));
-            return true;
-        }
-        return false;
+    private float maxMemberScroll() {
+        int count = facade.isSessionMember() ? memberViews.size() : hostEntries.size();
+        return Math.max(0.0f, count * (LIST_ROW_HEIGHT + ROW_GAP) - (listBottom - listTop));
     }
 
-    public boolean isInside(double mouseX, double mouseY) {
+    private float maxMotionScroll() {
+        return Math.max(0.0f, motionFiles.size() * (LIST_ROW_HEIGHT + ROW_GAP) - (guestMotionBottom - guestMotionTop));
+    }
+
+    private void clampScrolls() {
+        memberScroll = Mth.clamp(memberScroll, 0.0f, maxMemberScroll());
+        motionScroll = Mth.clamp(motionScroll, 0.0f, maxMotionScroll());
+    }
+
+    private boolean contains(double mouseX, double mouseY) {
         return mouseX >= panelX && mouseX <= panelX + PANEL_WIDTH
-                && mouseY >= panelY && mouseY <= panelY + panelH;
+                && mouseY >= panelY && mouseY <= panelY + panelHeight;
     }
 
-    private void inviteAllNone() {
-        for (StageLobbyViewModel.HostEntry entry : hostEntries) {
-            if (entry.state() == null && entry.nearby()) {
-                lobbyViewModel.sendInvite(entry.uuid());
-            }
+    private int rowY(int top, int index, float scroll) {
+        return top + index * (LIST_ROW_HEIGHT + ROW_GAP) - Math.round(scroll);
+    }
+
+    private boolean isRowHovered(int mouseX, int mouseY, int y, int bottom) {
+        return mouseX >= panelX + PANEL_PADDING - 2
+                && mouseX <= panelX + PANEL_WIDTH - PANEL_PADDING + 2
+                && mouseY >= Math.max(y, panelY)
+                && mouseY <= Math.min(y + LIST_ROW_HEIGHT, bottom);
+    }
+
+    private boolean isRectHovered(int mouseX, int mouseY, int x, int y, int width, int height) {
+        return mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height;
+    }
+
+    private static int colorForState(StageMemberState state) {
+        if (state == null) {
+            return COLOR_TEXT_MUTED;
         }
+        return switch (state) {
+            case HOST -> COLOR_ACCENT;
+            case INVITED -> COLOR_WARN;
+            case ACCEPTED, READY -> COLOR_GOOD;
+            case DECLINED -> COLOR_BAD;
+            case BUSY -> COLOR_BUSY;
+        };
     }
 
-    private void updateMemberScroll() {
-        int size = lobbyViewModel.isSessionMember() ? guestMembers.size() : hostEntries.size();
-        int visibleH = memberListBottom - memberListTop;
-        memberMaxScroll = Math.max(0, size * ITEM_HEIGHT - visibleH);
-        memberScrollOffset = Math.max(0, Math.min(memberMaxScroll, memberScrollOffset));
-    }
-
-    private void updateMotionScroll() {
-        if (!lobbyViewModel.isSessionMember() || !lobbyViewModel.isLocalCustomMotionEnabled()) {
-            motionMaxScroll = 0;
-            motionScrollOffset = 0;
-            return;
+    private static int colorForHostEntry(StageLobbyViewModel.HostEntry entry) {
+        if (entry.state() == null) {
+            return entry.nearby() ? COLOR_ACCENT : COLOR_TEXT_MUTED;
         }
-        int visibleH = motionListBottom - motionListTop;
-        motionMaxScroll = Math.max(0, motionVmdFiles.size() * ITEM_HEIGHT - visibleH);
-        motionScrollOffset = Math.max(0, Math.min(motionMaxScroll, motionScrollOffset));
+        return switch (entry.state()) {
+            case HOST -> COLOR_ACCENT;
+            case INVITED -> COLOR_WARN;
+            case ACCEPTED, READY -> COLOR_GOOD;
+            case DECLINED -> entry.nearby() ? COLOR_ACCENT : COLOR_BAD;
+            case BUSY -> entry.nearby() ? COLOR_ACCENT : COLOR_BUSY;
+        };
     }
 
-    private static String truncate(String s, int max) {
-        return s.length() > max ? s.substring(0, max - 1) + ".." : s;
+    private static String guestStateText(StageMemberState state, boolean useHostCamera) {
+        if (state == null) {
+            return StageScreenUtils.wb("state.unknown");
+        }
+        String text = switch (state) {
+            case HOST -> StageScreenUtils.wb("state.host");
+            case INVITED -> StageScreenUtils.wb("state.invited");
+            case ACCEPTED -> StageScreenUtils.wb("state.accepted");
+            case READY -> StageScreenUtils.wb("state.ready");
+            case DECLINED -> StageScreenUtils.wb("state.declined");
+            case BUSY -> StageScreenUtils.wb("state.busy");
+        };
+        return useHostCamera ? StageScreenUtils.wb("state.with_host_camera", text) : text;
+    }
+
+    private static String hostActionText(StageLobbyViewModel.HostEntry entry) {
+        StageMemberState state = entry.state();
+        if (state == null) {
+            return entry.nearby() ? StageScreenUtils.wb("host.action.invite") : StageScreenUtils.wb("state.offline");
+        }
+        return switch (state) {
+            case HOST -> StageScreenUtils.wb("state.host");
+            case INVITED -> StageScreenUtils.wb("host.action.cancel_invite");
+            case ACCEPTED -> entry.useHostCamera()
+                    ? StageScreenUtils.wb("state.with_host_camera", StageScreenUtils.wb("state.accepted"))
+                    : StageScreenUtils.wb("state.accepted");
+            case READY -> entry.useHostCamera()
+                    ? StageScreenUtils.wb("state.with_host_camera", StageScreenUtils.wb("state.ready"))
+                    : StageScreenUtils.wb("state.ready");
+            case DECLINED -> entry.nearby() ? StageScreenUtils.wb("host.action.invite") : StageScreenUtils.wb("state.declined");
+            case BUSY -> entry.nearby() ? StageScreenUtils.wb("host.action.invite") : StageScreenUtils.wb("state.busy");
+        };
+    }
+
+    private static int brighten(int color) {
+        return TranslucentTrayChrome.brighten(color, 18);
     }
 }

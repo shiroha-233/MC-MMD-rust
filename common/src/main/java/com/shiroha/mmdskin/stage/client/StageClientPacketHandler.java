@@ -3,6 +3,7 @@ package com.shiroha.mmdskin.stage.client;
 import com.shiroha.mmdskin.stage.application.StageSessionService;
 import com.shiroha.mmdskin.stage.client.sync.StageAnimSyncHelper;
 import com.shiroha.mmdskin.stage.domain.model.StageCameraMode;
+import com.shiroha.mmdskin.stage.domain.model.StageRole;
 import com.shiroha.mmdskin.stage.protocol.StagePacket;
 import com.shiroha.mmdskin.stage.protocol.StagePacketCodec;
 import com.shiroha.mmdskin.stage.protocol.StagePacketType;
@@ -11,8 +12,10 @@ import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Objects;
 import java.util.UUID;
 
+/** 文件职责：解析并分发客户端收到的多人舞台协议包。 */
 public final class StageClientPacketHandler {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final StageClientPacketHandler INSTANCE = new StageClientPacketHandler();
@@ -30,7 +33,7 @@ public final class StageClientPacketHandler {
     public void handle(UUID senderUUID, String rawData) {
         StagePacket packet = StagePacketCodec.decode(rawData);
         if (packet == null) {
-            LOGGER.warn("[多人舞台] 收到无法识别的新协议数据包");
+            LOGGER.warn("[多人舞台] 收到无法识别的协议数据包");
             return;
         }
 
@@ -71,7 +74,10 @@ public final class StageClientPacketHandler {
             case PLAYBACK_STOP -> playbackCoordinator.handlePlaybackStop(senderUUID, sessionId);
             case FRAME_SYNC -> playbackCoordinator.handleFrameSync(senderUUID, sessionId, packet.frame);
             case REMOTE_STAGE_START -> {
-                if (senderUUID.equals(localPlayerId) || mc.level == null || packet.descriptor == null || !packet.descriptor.isValid()) {
+                if (!shouldHandleRemoteStagePacket(localPlayerId, senderUUID, sessionId)
+                        || mc.level == null
+                        || packet.descriptor == null
+                        || !packet.descriptor.isValid()) {
                     return;
                 }
                 Player target = mc.level.getPlayerByUUID(senderUUID);
@@ -80,7 +86,7 @@ public final class StageClientPacketHandler {
                 }
             }
             case REMOTE_STAGE_STOP -> {
-                if (senderUUID.equals(localPlayerId)) {
+                if (!shouldHandleRemoteStagePacket(localPlayerId, senderUUID, sessionId)) {
                     return;
                 }
                 Player target = mc.level != null ? mc.level.getPlayerByUUID(senderUUID) : null;
@@ -90,8 +96,16 @@ public final class StageClientPacketHandler {
                     StageAnimSyncHelper.endStageAnim(senderUUID);
                 }
             }
-            default -> LOGGER.warn("[多人舞台] 未处理的数据包类型: {}", packet.type);
+            default -> LOGGER.warn("[多人舞台] 未处理的数据包类型 {}", packet.type);
         }
     }
 
+    boolean shouldHandleRemoteStagePacket(UUID localPlayerId, UUID senderUUID, UUID sessionId) {
+        if (localPlayerId == null || senderUUID == null || senderUUID.equals(localPlayerId)) {
+            return false;
+        }
+        return sessionService.getLocalRole() != StageRole.NONE
+                && sessionId != null
+                && Objects.equals(sessionService.getSessionId(), sessionId);
+    }
 }

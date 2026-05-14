@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+/** 文件职责：管理服务端舞台会话生命周期并路由多人舞台协议。 */
 public final class StageServerSessionService {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final StageServerSessionService INSTANCE = new StageServerSessionService();
@@ -259,14 +260,19 @@ public final class StageServerSessionService {
     }
 
     private void handleRemoteStageStart(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
-        if (packet.descriptor == null || !packet.descriptor.isValid()) {
+        StageServerSession session = requireActiveSessionParticipant(sender.getUuid(), parseUUID(packet.sessionId));
+        if (session == null || packet.descriptor == null || !packet.descriptor.isValid()) {
             return;
         }
-        broadcastRemotePacket(platform, sender.getUuid(), packet);
+        broadcastRemotePacket(platform, sender.getUuid(), session, packet);
     }
 
     private void handleRemoteStageStop(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
-        broadcastRemotePacket(platform, sender.getUuid(), packet);
+        StageServerSession session = requireActiveSessionParticipant(sender.getUuid(), parseUUID(packet.sessionId));
+        if (session == null) {
+            return;
+        }
+        broadcastRemotePacket(platform, sender.getUuid(), session, packet);
     }
 
     private void handleFrameSync(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
@@ -332,6 +338,21 @@ public final class StageServerSessionService {
             return null;
         }
         return sessions.get(sessionId);
+    }
+
+    private StageServerSession requireActiveSessionParticipant(UUID senderUUID, UUID sessionId) {
+        StageServerSession session = requireMemberSession(senderUUID, sessionId);
+        if (session == null) {
+            return null;
+        }
+        StageServerSessionMember member = session.getMembers().get(senderUUID);
+        if (member == null) {
+            return null;
+        }
+        if (senderUUID.equals(session.getHostId())) {
+            return session;
+        }
+        return member.getState().isAcceptedState() ? session : null;
     }
 
     private void broadcastSessionState(StageServerPlatformPort platform, StageServerSession session) {
@@ -400,10 +421,14 @@ public final class StageServerSessionService {
         }
     }
 
-    private void broadcastRemotePacket(StageServerPlatformPort platform, UUID senderUUID, StagePacket packet) {
+    private void broadcastRemotePacket(StageServerPlatformPort platform, UUID senderUUID,
+                                       StageServerSession session, StagePacket packet) {
+        StagePacket resolvedPacket = copyPacket(packet);
+        resolvedPacket.sessionId = session.getSessionId().toString();
         for (StageServerPlayer target : platform.getOnlinePlayers()) {
-            if (!target.getUuid().equals(senderUUID)) {
-                platform.sendPacket(target.getUuid(), senderUUID, packet);
+            UUID targetUUID = target.getUuid();
+            if (!targetUUID.equals(senderUUID)) {
+                platform.sendPacket(targetUUID, senderUUID, resolvedPacket);
             }
         }
     }

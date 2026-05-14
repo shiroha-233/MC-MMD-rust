@@ -1,35 +1,31 @@
+/* 文件职责：加载表情轮盘配置并把预设或 VPD 选择应用到当前玩家模型。 */
 package com.shiroha.mmdskin.ui.wheel.service;
 
-import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.asset.catalog.MorphInfo;
-import com.shiroha.mmdskin.config.UIConstants;
-import com.shiroha.mmdskin.player.model.PlayerModelResolver;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
-import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
+import com.shiroha.mmdskin.expression.ExpressionApplicationService;
+import com.shiroha.mmdskin.expression.ExpressionSelection;
+import com.shiroha.mmdskin.expression.ExpressionSelectionCodec;
+import com.shiroha.mmdskin.player.sync.PlayerMorphSyncService;
 import com.shiroha.mmdskin.ui.config.MorphWheelConfig;
-import com.shiroha.mmdskin.ui.network.MorphWheelNetworkHandler;
-import net.minecraft.client.Minecraft;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import net.minecraft.client.Minecraft;
 
 public class DefaultMorphWheelService implements MorphWheelService {
-    private static final Logger logger = LogManager.getLogger();
-    private static final String RESET_MORPH_NAME = "__reset__";
-
     private final Supplier<List<MorphWheelConfig.MorphEntry>> morphEntriesSupplier;
     private final Function<MorphWheelConfig.MorphEntry, String> fileResolver;
     private final MorphRuntimePort runtimePort;
     private final MorphSyncPort syncPort;
 
     public DefaultMorphWheelService() {
-        this(() -> MorphWheelConfig.getInstance().getDisplayedMorphs(), DefaultMorphWheelService::resolveMorphFilePath,
-                new MinecraftMorphRuntimePort(), MorphWheelNetworkHandler.getInstance());
+        this(
+                () -> MorphWheelConfig.getInstance().getDisplayedMorphs(),
+                DefaultMorphWheelService::resolveMorphFilePath,
+                new MinecraftMorphRuntimePort(),
+                PlayerMorphSyncService.getInstance());
     }
 
     DefaultMorphWheelService(Supplier<List<MorphWheelConfig.MorphEntry>> morphEntriesSupplier,
@@ -46,30 +42,31 @@ public class DefaultMorphWheelService implements MorphWheelService {
     public List<MorphOption> loadMorphs() {
         List<MorphOption> options = new ArrayList<>();
         for (MorphWheelConfig.MorphEntry entry : morphEntriesSupplier.get()) {
-            options.add(new MorphOption(entry.displayName, entry.morphName, fileResolver.apply(entry), false));
+            String filePath = entry.isPreset() ? null : fileResolver.apply(entry);
+            String syncToken = entry.isPreset()
+                    ? ExpressionSelectionCodec.encode(ExpressionSelection.preset(entry.presetId))
+                    : ExpressionSelectionCodec.encode(ExpressionSelection.file(entry.morphName));
+            options.add(new MorphOption(entry.displayName, entry.morphName, filePath, syncToken, false));
         }
-        options.add(new MorphOption(net.minecraft.network.chat.Component.translatable("gui.mmdskin.reset_morph").getString(),
-                RESET_MORPH_NAME, null, true));
+        options.add(new MorphOption(
+                net.minecraft.network.chat.Component.translatable("gui.mmdskin.reset_morph").getString(),
+                ExpressionSelectionCodec.RESET_TOKEN,
+                null,
+                ExpressionSelectionCodec.RESET_TOKEN,
+                true));
         return List.copyOf(options);
     }
 
     @Override
     public void selectMorph(MorphOption option) {
-        if (option == null || option.morphName() == null || option.morphName().isEmpty()) {
+        if (option == null || option.syncToken() == null || option.syncToken().isEmpty()) {
             return;
         }
 
-        boolean applied;
-        if (option.resetAction()) {
-            applied = runtimePort.resetCurrentPlayerMorphs();
-        } else if (option.filePath() == null || option.filePath().isEmpty()) {
-            applied = false;
-        } else {
-            applied = runtimePort.applyCurrentPlayerMorph(option.filePath());
-        }
-
+        ExpressionSelection selection = ExpressionSelectionCodec.decode(option.syncToken());
+        boolean applied = runtimePort.applyCurrentPlayerMorph(selection, option.filePath());
         if (applied) {
-            syncPort.syncMorph(option.morphName());
+            syncPort.syncMorph(option.syncToken());
         }
     }
 
@@ -89,60 +86,21 @@ public class DefaultMorphWheelService implements MorphWheelService {
     }
 
     interface MorphRuntimePort {
-        boolean resetCurrentPlayerMorphs();
-
-        boolean applyCurrentPlayerMorph(String filePath);
+        boolean applyCurrentPlayerMorph(ExpressionSelection selection, String filePath);
     }
 
     private static final class MinecraftMorphRuntimePort implements MorphRuntimePort {
         @Override
-        public boolean resetCurrentPlayerMorphs() {
-            Long modelHandle = resolveModelHandle();
-            if (modelHandle == null) {
-                return false;
-            }
-            NativeFunc.GetInst().ResetAllMorphs(modelHandle);
-            return true;
-        }
-
-        @Override
-        public boolean applyCurrentPlayerMorph(String filePath) {
-            Long modelHandle = resolveModelHandle();
-            if (modelHandle == null) {
+        public boolean applyCurrentPlayerMorph(ExpressionSelection selection, String filePath) {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (selection == null || minecraft.player == null) {
                 return false;
             }
 
-            int result = NativeFunc.GetInst().ApplyVpdMorph(modelHandle, filePath);
-            if (result >= 0) {
-                return true;
-            }
-            if (result == -1) {
-                logger.error("VPD 文件加载失败: {}", filePath);
-            } else if (result == -2) {
-                logger.error("模型不存在, handle={}", modelHandle);
-            }
-            return false;
-        }
-
-        private Long resolveModelHandle() {
-            Minecraft mc = Minecraft.getInstance();
-            if (mc.player == null) {
-                return null;
-            }
-
-            String playerName = mc.player.getName().getString();
-            String selectedModel = ModelSelectorConfig.getInstance().getPlayerModel(playerName);
-            if (selectedModel == null || selectedModel.isEmpty() || UIConstants.DEFAULT_MODEL_NAME.equals(selectedModel)) {
-                logger.warn("当前使用默认渲染，无法应用表情");
-                return null;
-            }
-
-            MMDModelManager.Model model = MMDModelManager.GetModel(selectedModel, PlayerModelResolver.getCacheKey(mc.player));
-            if (model == null || model.model == null) {
-                logger.warn("未找到玩家模型: {}", selectedModel);
-                return null;
-            }
-            return model.model.getModelHandle();
+            ExpressionSelection resolvedSelection = selection.type() == ExpressionSelection.Type.FILE
+                    ? ExpressionSelection.file(filePath)
+                    : selection;
+            return ExpressionApplicationService.apply(minecraft.player, resolvedSelection);
         }
     }
 }

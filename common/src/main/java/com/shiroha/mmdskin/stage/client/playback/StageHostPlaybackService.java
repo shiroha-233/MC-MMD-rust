@@ -55,7 +55,7 @@ public final class StageHostPlaybackService {
         }
 
         @Override
-        public void sendRemoteStageStart(StageDescriptor descriptor) {
+        public void sendRemoteStageStart(UUID sessionId, StageDescriptor descriptor) {
         }
     };
 
@@ -178,7 +178,7 @@ public final class StageHostPlaybackService {
 
         notifyMembers(broadcast, result.sessionDescriptor(), cameraHeightOffset);
         if (result.remoteDescriptor() != null) {
-            broadcast.sendRemoteStageStart(result.remoteDescriptor());
+            broadcast.sendRemoteStageStart(sessionPort.getSessionId(), result.remoteDescriptor());
         }
         return true;
     }

@@ -50,6 +50,7 @@ public abstract class NeoForgePlayerRendererMixin extends LivingEntityRenderer<A
         switch (action) {
             case CANCEL -> ci.cancel();
             case SUPER_RENDER -> {
+                ci.cancel();
                 super.render(player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight);
                 return;
             }

@@ -47,6 +47,7 @@ public abstract class FabricPlayerRendererMixin extends LivingEntityRenderer<Abs
         switch (action) {
             case CANCEL -> ci.cancel();
             case SUPER_RENDER -> {
+                ci.cancel();
                 super.render(player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight);
                 return;
             }

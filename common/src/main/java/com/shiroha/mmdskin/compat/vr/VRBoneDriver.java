@@ -1,21 +1,31 @@
+/* 文件职责：把 VR 追踪数据转换到模型局部空间并驱动原生 IK。 */
 package com.shiroha.mmdskin.compat.vr;
 
-import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.bridge.runtime.NativeModelBridgePorts;
+import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
+import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * VR 骨骼驱动层（SRP：将 VR 追踪数据转换到模型空间并传递给 Rust IK）
+ * 文件职责：把 VR 追踪数据转换到模型局部空间并驱动原生 IK。
  */
-
 public final class VRBoneDriver {
+    static final int TRACKING_POINT_STRIDE = 7;
+    static final int TRACKING_PACKET_LENGTH = TRACKING_POINT_STRIDE * 3;
 
     private static final Logger LOGGER = LogManager.getLogger();
-    private static final float MODEL_SCALE = 0.09f;
+    private static volatile NativeModelPort modelPort = NativeModelBridgePorts.modelPort();
 
-    private VRBoneDriver() {}
+    private VRBoneDriver() {
+    }
+
+    public static void configureRuntimeCollaborators(NativeModelPort modelPort) {
+        VRBoneDriver.modelPort = modelPort != null ? modelPort : NativeModelBridgePorts.modelPort();
+    }
 
     public static boolean isVRPlayer(Player player) {
         try {
@@ -26,84 +36,170 @@ public final class VRBoneDriver {
     }
 
     public static boolean driveModel(long modelHandle, Player player, float tickDelta) {
-        if (modelHandle == 0) return false;
+        if (modelHandle == 0 || player == null) {
+            return false;
+        }
+
         try {
             float[] worldData = VRDataProvider.getRenderTrackingData(player);
-            if (worldData == null) return false;
-
-            float px = (float) Mth.lerp(tickDelta, player.xo, player.getX());
-            float py = (float) Mth.lerp(tickDelta, player.yo, player.getY());
-            float pz = (float) Mth.lerp(tickDelta, player.zo, player.getZ());
-
-            float bodyYaw = Mth.lerp(tickDelta, player.yBodyRotO, player.yBodyRot);
-            float yawRad = bodyYaw * ((float) Math.PI / 180F);
-            float cosY = Mth.cos(yawRad);
-            float sinY = Mth.sin(yawRad);
-
-            float[] localData = new float[21];
-            for (int i = 0; i < 3; i++) {
-                int off = i * 7;
-
-                float dx = worldData[off]     - px;
-                float dy = worldData[off + 1] - py;
-                float dz = worldData[off + 2] - pz;
-
-                float lx =  cosY * dx + sinY * dz;
-                float lz = -sinY * dx + cosY * dz;
-                localData[off]     = lx / MODEL_SCALE;
-                localData[off + 1] = dy / MODEL_SCALE;
-                localData[off + 2] = lz / MODEL_SCALE;
-
-                transformRotation(worldData, off + 3, localData, off + 3, cosY, sinY);
+            if (!hasUsableTrackingData(worldData)) {
+                return false;
             }
 
-            NativeFunc.GetInst().SetVRTrackingData(modelHandle, localData);
+            Vec3 renderOrigin = VRDataProvider.getRenderOrigin(player, tickDelta)
+                    .add(FirstPersonManager.getLocalVrModelRootOffset(player));
+            if (!isFiniteVec3(renderOrigin)) {
+                LOGGER.debug("Skipped VR bone drive because render origin was invalid");
+                return false;
+            }
+
+            float px = (float) renderOrigin.x;
+            float py = (float) renderOrigin.y;
+            float pz = (float) renderOrigin.z;
+            float yawRad = VRDataProvider.getBodyYawRad(player, tickDelta);
+            if (!Float.isFinite(yawRad)) {
+                LOGGER.debug("Skipped VR bone drive because body yaw was invalid");
+                return false;
+            }
+
+            float[] localTracking = new float[TRACKING_PACKET_LENGTH];
+            transformWorldTrackingToPlayerLocal(worldData, px, py, pz, Mth.cos(yawRad), Mth.sin(yawRad), localTracking);
+            if (!hasUsableTrackingData(localTracking)) {
+                LOGGER.debug("Skipped VR bone drive because transformed tracking packet became invalid");
+                return false;
+            }
+
+            modelPort.applyVrTrackingInput(modelHandle, localTracking);
             return true;
         } catch (Exception e) {
-            LOGGER.debug("VR 骨骼驱动异常", e);
+            LOGGER.debug("VR bone driving failed", e);
             return false;
         }
     }
 
-    private static void transformRotation(float[] src, int si,
-                                           float[] dst, int di,
-                                           float cosY, float sinY) {
+    static void transformWorldTrackingToPlayerLocal(float[] worldData,
+                                                    float px,
+                                                    float py,
+                                                    float pz,
+                                                    float cosY,
+                                                    float sinY,
+                                                    float[] localTracking) {
+        for (int i = 0; i < 3; i++) {
+            int off = i * TRACKING_POINT_STRIDE;
 
+            float dx = worldData[off] - px;
+            float dy = worldData[off + 1] - py;
+            float dz = worldData[off + 2] - pz;
+
+            localTracking[off] = cosY * dx + sinY * dz;
+            localTracking[off + 1] = dy;
+            localTracking[off + 2] = -sinY * dx + cosY * dz;
+
+            transformRotation(worldData, off + 3, localTracking, off + 3, cosY, sinY);
+        }
+    }
+
+    static boolean hasUsableTrackingData(float[] trackingData) {
+        if (trackingData == null || trackingData.length < TRACKING_PACKET_LENGTH) {
+            return false;
+        }
+        return isUsableTrackingPoint(trackingData, 0)
+                && (isUsableTrackingPoint(trackingData, TRACKING_POINT_STRIDE)
+                || isUsableTrackingPoint(trackingData, TRACKING_POINT_STRIDE * 2));
+    }
+
+    static void transformRotationToPlayerLocal(float[] src,
+                                               int si,
+                                               float[] dst,
+                                               int di,
+                                               float yawRad) {
+        transformRotation(src, si, dst, di, Mth.cos(yawRad), Mth.sin(yawRad));
+    }
+
+    private static boolean isUsableTrackingPoint(float[] trackingData, int offset) {
+        return isFiniteTrackingSegment(trackingData, offset)
+                && isFiniteQuaternion(trackingData, offset + 3)
+                && quaternionLengthSquared(trackingData, offset + 3) > 1.0e-6f;
+    }
+
+    private static boolean isFiniteTrackingSegment(float[] trackingData, int offset) {
+        for (int i = 0; i < TRACKING_POINT_STRIDE; i++) {
+            if (!Float.isFinite(trackingData[offset + i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isFiniteQuaternion(float[] trackingData, int offset) {
+        return Float.isFinite(trackingData[offset])
+                && Float.isFinite(trackingData[offset + 1])
+                && Float.isFinite(trackingData[offset + 2])
+                && Float.isFinite(trackingData[offset + 3]);
+    }
+
+    private static float quaternionLengthSquared(float[] trackingData, int offset) {
+        float qx = trackingData[offset];
+        float qy = trackingData[offset + 1];
+        float qz = trackingData[offset + 2];
+        float qw = trackingData[offset + 3];
+        return qx * qx + qy * qy + qz * qz + qw * qw;
+    }
+
+    private static boolean isFiniteVec3(Vec3 vec3) {
+        return vec3 != null
+                && Double.isFinite(vec3.x)
+                && Double.isFinite(vec3.y)
+                && Double.isFinite(vec3.z);
+    }
+
+    private static void transformRotation(float[] src, int si, float[] dst, int di, float cosY, float sinY) {
         float cosH = (float) Math.sqrt((1.0f + cosY) * 0.5f);
-        float sinH = (float) Math.sqrt(Math.max(0, (1.0f - cosY) * 0.5f));
-        if (sinY > 0) sinH = -sinH;
+        float sinH = (float) Math.sqrt(Math.max(0.0f, (1.0f - cosY) * 0.5f));
+        if (sinY < 0.0f) {
+            sinH = -sinH;
+        }
 
-        float qx = src[si], qy = src[si + 1], qz = src[si + 2], qw = src[si + 3];
-        dst[di]     = cosH * qx + sinH * qz;
+        float qx = src[si];
+        float qy = src[si + 1];
+        float qz = src[si + 2];
+        float qw = src[si + 3];
+        dst[di] = cosH * qx + sinH * qz;
         dst[di + 1] = cosH * qy + sinH * qw;
         dst[di + 2] = cosH * qz - sinH * qx;
         dst[di + 3] = cosH * qw - sinH * qy;
 
         float len = (float) Math.sqrt(
-            dst[di] * dst[di] + dst[di+1] * dst[di+1] +
-            dst[di+2] * dst[di+2] + dst[di+3] * dst[di+3]);
-        if (len > 1e-6f) {
+                dst[di] * dst[di] + dst[di + 1] * dst[di + 1]
+                        + dst[di + 2] * dst[di + 2] + dst[di + 3] * dst[di + 3]);
+        if (len > 1.0e-6f) {
             float inv = 1.0f / len;
-            dst[di] *= inv; dst[di+1] *= inv;
-            dst[di+2] *= inv; dst[di+3] *= inv;
+            dst[di] *= inv;
+            dst[di + 1] *= inv;
+            dst[di + 2] *= inv;
+            dst[di + 3] *= inv;
         }
     }
 
     public static void setVREnabled(long modelHandle, boolean enabled) {
-        if (modelHandle == 0) return;
+        if (modelHandle == 0) {
+            return;
+        }
         try {
-            NativeFunc.GetInst().SetVREnabled(modelHandle, enabled);
+            modelPort.setVrEnabled(modelHandle, enabled);
         } catch (Exception e) {
-            LOGGER.debug("设置 VR 模式异常", e);
+            LOGGER.debug("Failed to set VR mode", e);
         }
     }
 
     public static void setVRIKParams(long modelHandle, float armIKStrength) {
-        if (modelHandle == 0) return;
+        if (modelHandle == 0 || !Float.isFinite(armIKStrength)) {
+            return;
+        }
         try {
-            NativeFunc.GetInst().SetVRIKParams(modelHandle, armIKStrength);
+            modelPort.setVrIkParams(modelHandle, armIKStrength);
         } catch (Exception e) {
-            LOGGER.debug("设置 VR IK 参数异常", e);
+            LOGGER.debug("Failed to set VR IK params", e);
         }
     }
 }

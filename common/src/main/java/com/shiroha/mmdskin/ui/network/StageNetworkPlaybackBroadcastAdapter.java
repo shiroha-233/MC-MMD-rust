@@ -19,13 +19,13 @@ public final class StageNetworkPlaybackBroadcastAdapter implements StagePlayback
     }
 
     @Override
-    public void sendRemoteStageStart(StageDescriptor descriptor) {
-        StageNetworkHandler.sendRemoteStageStart(descriptor);
+    public void sendRemoteStageStart(UUID sessionId, StageDescriptor descriptor) {
+        StageNetworkHandler.sendRemoteStageStart(sessionId, descriptor);
     }
 
     @Override
-    public void sendRemoteStageStop() {
-        StageNetworkHandler.sendRemoteStageStop();
+    public void sendRemoteStageStop(UUID sessionId) {
+        StageNetworkHandler.sendRemoteStageStop(sessionId);
     }
 
     @Override

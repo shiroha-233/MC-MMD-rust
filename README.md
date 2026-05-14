@@ -1,6 +1,6 @@
 # MC-MMD-rust
 
-在 Minecraft 1.20.1 中实现 MMD（MikuMikuDance）模型渲染和物理模拟的 Mod。
+在 Minecraft 1.21.1 中实现 MMD（MikuMikuDance）模型渲染和物理模拟的 Mod。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -22,7 +22,7 @@
    - 物理模拟（Rapier3D）
    - JNI 绑定用于 Java 交互
 
-2. **Minecraft Mod**（Fabric/Forge）: 基于 Java 的渲染和集成
+2. **Minecraft Mod**（Common/Fabric/NeoForge）: 基于 Java 的渲染和集成
    - OpenGL 模型渲染
    - Compute Shader 蒙皮
    - Iris 光影兼容
@@ -260,7 +260,7 @@ EntityPlayer/
 ### 前置要求
 
 - Rust 1.70+（用于 rust_engine）
-- JDK 17+（用于 Minecraft mod）
+- JDK 21+（用于 Minecraft mod）
 - Gradle 8.x
 
 ### 构建 rust_engine

@@ -1,8 +1,12 @@
+/* 文件职责：为材质显隐界面提供模型上下文解析、材质读取与配置保存实现。 */
 package com.shiroha.mmdskin.ui.selector.adapter;
 
-import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.bridge.runtime.NativeModelBridgePorts;
+import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
+import com.shiroha.mmdskin.bridge.runtime.NativeModelQueryPort;
 import com.shiroha.mmdskin.config.ModelConfigData;
 import com.shiroha.mmdskin.config.ModelConfigManager;
+import com.shiroha.mmdskin.maid.MaidMMDModelManager;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
 import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
@@ -22,6 +26,18 @@ import java.util.UUID;
 
 public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGateway {
     private static final Logger LOGGER = LogManager.getLogger();
+
+    private final NativeModelPort nativeModelPort;
+    private final NativeModelQueryPort nativeModelQueryPort;
+
+    public DefaultMaterialVisibilityGateway() {
+        this(NativeModelBridgePorts.modelPort(), NativeModelBridgePorts.queryPort());
+    }
+
+    DefaultMaterialVisibilityGateway(NativeModelPort nativeModelPort, NativeModelQueryPort nativeModelQueryPort) {
+        this.nativeModelPort = nativeModelPort;
+        this.nativeModelQueryPort = nativeModelQueryPort;
+    }
 
     @Override
     public Optional<MaterialScreenContext> createPlayerContext() {
@@ -48,7 +64,7 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
 
     @Override
     public Optional<MaterialScreenContext> createMaidContext(UUID maidUuid, String maidName) {
-        MMDModelManager.Model model = com.shiroha.mmdskin.maid.MaidMMDModelManager.getModel(maidUuid);
+        MMDModelManager.Model model = MaidMMDModelManager.getModel(maidUuid);
         if (model == null) {
             LOGGER.warn("无法获取女仆模型: {}", maidUuid);
             return Optional.empty();
@@ -61,13 +77,15 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
     }
 
     @Override
-    public List<MaterialEntryState> loadMaterials(long modelHandle) {
+    public List<MaterialEntryState> loadMaterials(MaterialScreenContext context) {
         List<MaterialEntryState> materials = new ArrayList<>();
-        NativeFunc nativeFunc = NativeFunc.GetInst();
-        long materialCount = nativeFunc.GetMaterialCount(modelHandle);
+        Set<Integer> hiddenMaterials = loadHiddenMaterials(context.configModelName());
+        int materialCount = nativeModelPort.getMaterialCount(context.modelHandle());
         for (int i = 0; i < materialCount; i++) {
-            String name = nativeFunc.GetMaterialName(modelHandle, i);
-            boolean visible = nativeFunc.IsMaterialVisible(modelHandle, i);
+            String name = nativeModelQueryPort.getMaterialName(context.modelHandle(), i);
+            boolean visible = context.configModelName() == null || context.configModelName().isEmpty()
+                    ? nativeModelQueryPort.isMaterialVisible(context.modelHandle(), i)
+                    : !hiddenMaterials.contains(i);
             materials.add(new MaterialEntryState(i, name, visible));
         }
         return materials;
@@ -76,7 +94,7 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
     @Override
     public void setAllVisible(long modelHandle, boolean visible) {
         try {
-            NativeFunc.GetInst().SetAllMaterialsVisible(modelHandle, visible);
+            nativeModelPort.setAllMaterialsVisible(modelHandle, visible);
         } catch (Exception e) {
             LOGGER.warn("材质操作失败，模型可能已被释放", e);
         }
@@ -85,7 +103,7 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
     @Override
     public void setMaterialVisible(long modelHandle, int materialIndex, boolean visible) {
         try {
-            NativeFunc.GetInst().SetMaterialVisible(modelHandle, materialIndex, visible);
+            nativeModelPort.setMaterialVisible(modelHandle, materialIndex, visible);
         } catch (Exception e) {
             LOGGER.warn("材质操作失败，模型可能已被释放", e);
         }
@@ -100,6 +118,21 @@ public class DefaultMaterialVisibilityGateway implements MaterialVisibilityGatew
             LOGGER.debug("材质可见性已保存: {} (隐藏 {})", configModelName, hiddenMaterials.size());
         } catch (Exception e) {
             LOGGER.warn("保存材质可见性失败: {}", configModelName, e);
+        }
+    }
+
+    private Set<Integer> loadHiddenMaterials(String configModelName) {
+        if (configModelName == null || configModelName.isEmpty()) {
+            return Set.of();
+        }
+        try {
+            ModelConfigData config = ModelConfigManager.getConfig(configModelName);
+            return config.hiddenMaterials == null || config.hiddenMaterials.isEmpty()
+                    ? Set.of()
+                    : Set.copyOf(config.hiddenMaterials);
+        } catch (Exception e) {
+            LOGGER.warn("读取材质可见性配置失败: {}", configModelName, e);
+            return Set.of();
         }
     }
 }

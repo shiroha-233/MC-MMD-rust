@@ -4,13 +4,15 @@
   "package": "com.shiroha.mmdskin.mixin.fabric",
   "compatibilityLevel": "JAVA_21",
   "refmap": "mmdskin-fabric-refmap.json",
-  "mixins": [
-    "KeyMappingAccessor"
-  ],
+  "mixins": [],
   "client": [
     "FabricPlayerRendererMixin",
+    "MobReplacementLivingEntityRendererMixin",
+    "compat.VivecraftVRArmHelperMixin",
+    "compat.VivecraftVRPlayerRendererMixin",
     "CameraMixin",
     "GameRendererMixin",
+    "KeyMappingAccessor",
     "LevelRendererMixin",
     "ItemInHandRendererMixin",
     "MinecraftMixin",

@@ -1,5 +1,8 @@
+/* 文件职责：初始化客户端侧 MMD 运行时与舞台子系统。 */
 package com.shiroha.mmdskin;
 
+import com.shiroha.mmdskin.api.MmdSkinApi;
+import com.shiroha.mmdskin.bridge.runtime.NativeModelBridgePorts;
 import com.shiroha.mmdskin.renderer.runtime.animation.MMDAnimManager;
 import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
 import com.shiroha.mmdskin.renderer.runtime.texture.MMDTextureManager;
@@ -14,6 +17,10 @@ public class MmdSkinClient {
     public static int usingMMDShader = 0;
 
     public static void initClient() {
+        MmdSkinApi.configureRuntimeCollaborators(
+                NativeModelBridgePorts.modelPort(),
+                NativeModelBridgePorts.queryPort()
+        );
         StageClientBootstrap.initialize();
         MmdClientResourceBootstrap.initialize();
         MMDModelManager.Init();

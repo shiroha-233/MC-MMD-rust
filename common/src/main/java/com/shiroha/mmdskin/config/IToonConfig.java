@@ -6,25 +6,25 @@ package com.shiroha.mmdskin.config;
 
 public interface IToonConfig {
 
-    default boolean isToonRenderingEnabled() { return true; }
+    default boolean isToonRenderingEnabled() { return false; }
 
-    default int getToonLevels() { return 3; }
+    default int getToonLevels() { return 4; }
 
-    default boolean isToonOutlineEnabled() { return false; }
+    default boolean isToonOutlineEnabled() { return true; }
 
-    default float getToonOutlineWidth() { return 0.003f; }
+    default float getToonOutlineWidth() { return 0.0022f; }
 
-    default float getToonRimPower() { return 5.0f; }
-    default float getToonRimIntensity() { return 0.1f; }
+    default float getToonRimPower() { return 5.6f; }
+    default float getToonRimIntensity() { return 0.02f; }
 
-    default float getToonShadowR() { return 0.8f; }
-    default float getToonShadowG() { return 0.8f; }
-    default float getToonShadowB() { return 0.8f; }
+    default float getToonShadowR() { return 0.78f; }
+    default float getToonShadowG() { return 0.84f; }
+    default float getToonShadowB() { return 0.94f; }
 
-    default float getToonSpecularPower() { return 30.0f; }
-    default float getToonSpecularIntensity() { return 0.08f; }
+    default float getToonSpecularPower() { return 96.0f; }
+    default float getToonSpecularIntensity() { return 0.015f; }
 
-    default float getToonOutlineR() { return 0.0f; }
-    default float getToonOutlineG() { return 0.0f; }
-    default float getToonOutlineB() { return 0.0f; }
+    default float getToonOutlineR() { return 0.06f; }
+    default float getToonOutlineG() { return 0.08f; }
+    default float getToonOutlineB() { return 0.12f; }
 }

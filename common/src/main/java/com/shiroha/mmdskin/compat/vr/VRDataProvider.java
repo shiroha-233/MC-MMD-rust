@@ -1,60 +1,53 @@
+/* 文件职责：统一读取 VR 追踪数据并收口到 Vivecraft 兼容链。 */
 package com.shiroha.mmdskin.compat.vr;
 
-import net.blf02.vrapi.api.data.IVRData;
-import net.blf02.vrapi.api.data.IVRPlayer;
-import net.blf02.vrapi.common.VRAPI;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix4f;
-import org.joml.Quaternionf;
 
 /**
- * mc-vr-api 数据适配层（SRP：将 IVRData 转换为 Rust 引擎需要的 float[21]）
+ * 文件职责：向业务层提供与具体 VR 实现解耦的追踪数据读取。
  */
-
 public final class VRDataProvider {
+    private static volatile VrTrackingFacade trackingFacade = VivecraftVrTrackingFacade.INSTANCE;
 
-    private VRDataProvider() {}
+    private VRDataProvider() {
+    }
+
+    static void setTrackingFacadeForTesting(VrTrackingFacade trackingFacade) {
+        VRDataProvider.trackingFacade = trackingFacade != null ? trackingFacade : VivecraftVrTrackingFacade.INSTANCE;
+    }
 
     public static boolean isVRPlayer(Player player) {
-        try {
-            return VRAPI.VRAPIInstance.playerInVR(player);
-        } catch (Exception e) {
-            return false;
-        }
+        return player != null && trackingFacade.isVrPlayer(player);
     }
 
     public static float[] getRenderTrackingData(Player player) {
-        try {
-            if (!VRAPI.VRAPIInstance.playerInVR(player)) return null;
-
-            IVRPlayer vrPlayer = VRAPI.VRAPIInstance.getRenderVRPlayer();
-            if (vrPlayer == null) return null;
-
-            float[] data = new float[21];
-            writeTrackingPoint(vrPlayer.getHMD(), data, 0);
-            writeTrackingPoint(vrPlayer.getController0(), data, 7);
-            writeTrackingPoint(vrPlayer.getController1(), data, 14);
-            return data;
-        } catch (Exception e) {
-            return null;
-        }
+        return trackingFacade.getTrackingData(player);
     }
 
-    private static void writeTrackingPoint(IVRData vrData, float[] out, int offset) {
-        if (vrData == null) return;
+    public static float getBodyYawRad(Player player, float tickDelta) {
+        float vrYaw = trackingFacade.getBodyYawRadians(player);
+        if (!Float.isNaN(vrYaw)) {
+            return vrYaw;
+        }
+        return Mth.rotLerp(tickDelta, player.yBodyRotO, player.yBodyRot) * ((float) Math.PI / 180F);
+    }
 
-        Vec3 pos = vrData.position();
-        out[offset]     = (float) pos.x;
-        out[offset + 1] = (float) pos.y;
-        out[offset + 2] = (float) pos.z;
+    public static float getBodyYawDegrees(Player player, float tickDelta) {
+        return getBodyYawRad(player, tickDelta) * (180F / (float) Math.PI);
+    }
 
-        Matrix4f rotMat = vrData.getRotationMatrix();
-        Quaternionf quat = new Quaternionf();
-        rotMat.getNormalizedRotation(quat);
-        out[offset + 3] = quat.x;
-        out[offset + 4] = quat.y;
-        out[offset + 5] = quat.z;
-        out[offset + 6] = quat.w;
+    public static Vec3 getRenderOrigin(Player player, float tickDelta) {
+        Vec3 renderOrigin = trackingFacade.getLocalPlayerRenderOrigin(tickDelta);
+        if (renderOrigin != null && trackingFacade.isVrPlayer(player)) {
+            return renderOrigin;
+        }
+
+        return new Vec3(
+                Mth.lerp(tickDelta, player.xo, player.getX()),
+                Mth.lerp(tickDelta, player.yo, player.getY()),
+                Mth.lerp(tickDelta, player.zo, player.getZ())
+        );
     }
 }

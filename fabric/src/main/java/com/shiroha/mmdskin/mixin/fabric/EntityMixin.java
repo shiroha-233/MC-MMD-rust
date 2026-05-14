@@ -16,10 +16,23 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class EntityMixin {
     @Inject(method = "getEyePosition(F)Lnet/minecraft/world/phys/Vec3;", at = @At("HEAD"), cancellable = true)
     private void onGetEyePosition(float partialTick, CallbackInfoReturnable<Vec3> cir) {
-        if (FirstPersonManager.isActive() && FirstPersonManager.isEyeBoneValid()) {
+        boolean vrEyeCameraActive = FirstPersonManager.isVrEyeCameraActive();
+        boolean eyeCameraActive = FirstPersonManager.isEyeCameraActive();
+        boolean eyeAnchorReady = vrEyeCameraActive || FirstPersonManager.isEyeBoneValid();
+        if (eyeCameraActive && eyeAnchorReady) {
             Entity entity = (Entity) (Object) this;
             Minecraft mc = Minecraft.getInstance();
             if (mc.player != null && mc.player.getUUID().equals(entity.getUUID())) {
+                if (vrEyeCameraActive) {
+                    net.minecraft.client.Camera camera = mc.gameRenderer.getMainCamera();
+                    if (camera.isInitialized() && camera.getEntity() == entity) {
+                        cir.setReturnValue(camera.getPosition());
+                        return;
+                    }
+                    cir.setReturnValue(FirstPersonManager.getVrCameraPosition(entity, partialTick));
+                    return;
+                }
+
                 if (mc.options.getCameraType().isFirstPerson()) {
                     net.minecraft.client.Camera camera = mc.gameRenderer.getMainCamera();
                     if (camera.isInitialized() && camera.getEntity() == entity) {
@@ -55,7 +68,10 @@ public abstract class EntityMixin {
 
     @Inject(method = "getViewVector(F)Lnet/minecraft/world/phys/Vec3;", at = @At("HEAD"), cancellable = true)
     private void onGetViewVector(float partialTick, CallbackInfoReturnable<Vec3> cir) {
-        if (FirstPersonManager.isActive() && FirstPersonManager.isEyeBoneValid()) {
+        boolean vrEyeCameraActive = FirstPersonManager.isVrEyeCameraActive();
+        boolean eyeCameraActive = FirstPersonManager.isEyeCameraActive();
+        boolean eyeAnchorReady = vrEyeCameraActive || FirstPersonManager.isEyeBoneValid();
+        if (eyeCameraActive && eyeAnchorReady) {
             Entity entity = (Entity) (Object) this;
             Minecraft mc = Minecraft.getInstance();
             if (mc.player != null && mc.player.getUUID().equals(entity.getUUID())) {

@@ -55,6 +55,7 @@ public class ModelSettingsScreen extends Screen {
     private static final int SETTING_EYE_TRACKING = 0;
     private static final int SETTING_EYE_MAX_ANGLE = 1;
     private static final int SETTING_MODEL_SCALE = 2;
+    private static final int SETTING_HELD_ITEM_SCALE = 3;
 
     private int quickSlotSectionY = 0;
 
@@ -160,6 +161,19 @@ public class ModelSettingsScreen extends Screen {
         String scaleLabel = Component.translatable("gui.mmdskin.model_settings.model_scale", String.format("%.2f", config.modelScale)).getString();
         renderSlider(guiGraphics, scaleLabel, config.modelScale, 0.5f, 2.0f,
                      itemX, y, itemW, mouseX, mouseY, SETTING_MODEL_SCALE);
+        y += ITEM_HEIGHT + ITEM_SPACING;
+
+        y += 4;
+        guiGraphics.fill(panelX + 12, y, panelX + PANEL_WIDTH - 12, y + 1, COLOR_SEPARATOR);
+        y += 8;
+
+        guiGraphics.drawString(this.font, Component.translatable("gui.mmdskin.model_settings.held_item_display"), itemX, y, COLOR_TEXT_DIM);
+        y += 12;
+
+        String heldItemScaleLabel = Component.translatable("gui.mmdskin.model_settings.held_item_scale", String.format("%.2f", config.heldItemScale)).getString();
+        renderSlider(guiGraphics, heldItemScaleLabel, config.heldItemScale,
+                     ModelConfigData.MIN_HELD_ITEM_SCALE, ModelConfigData.MAX_HELD_ITEM_SCALE,
+                     itemX, y, itemW, mouseX, mouseY, SETTING_HELD_ITEM_SCALE);
         y += ITEM_HEIGHT + ITEM_SPACING;
 
         y += 4;
@@ -293,6 +307,15 @@ public class ModelSettingsScreen extends Screen {
                 updateSliderValue(mouseX, itemX, itemW);
                 return true;
             }
+            y += ITEM_HEIGHT + ITEM_SPACING;
+
+            y += 4 + 8 + 12;
+
+            if (isInSliderArea(mouseX, mouseY, itemX, y, itemW)) {
+                draggingSlider = SETTING_HELD_ITEM_SCALE;
+                updateSliderValue(mouseX, itemX, itemW);
+                return true;
+            }
 
             if (handleQuickSlotClick(mouseX, mouseY, itemX, itemW)) {
                 return true;
@@ -334,6 +357,10 @@ public class ModelSettingsScreen extends Screen {
                 break;
             case SETTING_MODEL_SCALE:
                 config.modelScale = 0.5f + ratio * (2.0f - 0.5f);
+                break;
+            case SETTING_HELD_ITEM_SCALE:
+                config.heldItemScale = ModelConfigData.MIN_HELD_ITEM_SCALE
+                        + ratio * (ModelConfigData.MAX_HELD_ITEM_SCALE - ModelConfigData.MIN_HELD_ITEM_SCALE);
                 break;
         }
     }

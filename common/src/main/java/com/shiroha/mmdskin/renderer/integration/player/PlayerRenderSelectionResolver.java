@@ -38,6 +38,10 @@ final class PlayerRenderSelectionResolver {
             return PlayerRenderSelection.terminal(PlayerMixinDelegate.RenderAction.FALLTHROUGH);
         }
 
+        if (!PlayerPerformanceGate.allowsMmd(player)) {
+            return PlayerRenderSelection.terminal(PlayerMixinDelegate.RenderAction.FALLTHROUGH);
+        }
+
         return PlayerRenderSelection.render(selectedModel, PlayerModelResolver.getCacheKey(player), isLocalPlayer);
     }
 

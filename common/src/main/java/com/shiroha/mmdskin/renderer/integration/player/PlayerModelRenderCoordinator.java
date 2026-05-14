@@ -2,8 +2,7 @@ package com.shiroha.mmdskin.renderer.integration.player;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.shiroha.mmdskin.compat.vr.VRArmHider;
-import com.shiroha.mmdskin.compat.vr.VRBoneDriver;
+import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.config.ModelConfigManager;
 import com.shiroha.mmdskin.player.animation.AnimationStateManager;
 import com.shiroha.mmdskin.player.animation.PendingAnimSignalCache;
@@ -18,9 +17,13 @@ import com.shiroha.mmdskin.renderer.runtime.bridge.ModelRuntimeBridgeHolder;
 import com.shiroha.mmdskin.renderer.runtime.model.AbstractMMDModel;
 import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
 import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 
+/**
+ * 文件职责：协调本地第一人称与 VR 状态下的玩家模型渲染时序。
+ */
 final class PlayerModelRenderCoordinator {
 
     private PlayerModelRenderCoordinator() {
@@ -38,21 +41,21 @@ final class PlayerModelRenderCoordinator {
         modelData.loadModelProperties(false);
 
         float[] size = ModelPropertyHelper.getModelSize(modelData.properties);
-        boolean isVr = selection.isLocalPlayer() && VRArmHider.isLocalPlayerInVR();
-        syncVrState(model, player, tickDelta, isVr);
+        boolean isVr = selection.isLocalPlayer() && FirstPersonManager.vrRuntime().isLocalPlayerInVr();
+        syncVrState(modelData, player, tickDelta, isVr);
 
         ModelRuntimeBridge runtimeBridge = ModelRuntimeBridgeHolder.get();
-        float combinedScale = size[0] * ModelConfigManager.getConfig(selection.selectedModel()).modelScale;
-        if (!isVr) {
-            runtimeBridge.preRenderFirstPerson(model.getModelHandle(), combinedScale, selection.isLocalPlayer());
-        }
+        float combinedScale = size[0] * ModelConfigManager.getLiveConfig(selection.selectedModel()).modelScale;
+        runtimeBridge.preRenderFirstPerson(model.getModelHandle(), combinedScale, selection.isLocalPlayer());
         boolean isFirstPerson = !isVr && selection.isLocalPlayer() && FirstPersonManager.isActive();
 
-        AnimationStateManager.updateAnimationState(player, modelData);
+        if (!isVr) {
+            AnimationStateManager.updateAnimationState(player, modelData);
+        }
         consumePendingSignals(player, modelData, selection.isLocalPlayer());
 
         RenderParams params = PlayerRenderHelper.calculateRenderParams(player, modelData, tickDelta);
-        boolean needsFirstPersonCleanup = isFirstPerson;
+        boolean needsLocalRenderSync = selection.isLocalPlayer();
 
         matrixStack.pushPose();
         try {
@@ -65,17 +68,17 @@ final class PlayerModelRenderCoordinator {
                 model.render(player, params.bodyYaw, params.bodyPitch, params.translation, tickDelta, matrixStack, packedLight, context);
             }
 
-            if (needsFirstPersonCleanup) {
-                runtimeBridge.postRenderFirstPerson(model.getModelHandle());
-                needsFirstPersonCleanup = false;
+            if (needsLocalRenderSync) {
+                runtimeBridge.postRenderFirstPerson(model.getModelHandle(), player, tickDelta);
+                needsLocalRenderSync = false;
             }
 
             ItemRenderHelper.renderItems(player, modelData, matrixStack, vertexConsumers, packedLight);
             return PlayerMixinDelegate.RenderAction.CANCEL;
         } finally {
             try {
-                if (needsFirstPersonCleanup) {
-                    runtimeBridge.postRenderFirstPerson(model.getModelHandle());
+                if (needsLocalRenderSync) {
+                    runtimeBridge.postRenderFirstPerson(model.getModelHandle(), player, tickDelta);
                 }
             } finally {
                 matrixStack.popPose();
@@ -83,23 +86,42 @@ final class PlayerModelRenderCoordinator {
         }
     }
 
-    private static void syncVrState(IMMDModel model, AbstractClientPlayer player, float tickDelta, boolean isVr) {
+    private static void syncVrState(MMDModelManager.Model modelData,
+                                    AbstractClientPlayer player,
+                                    float tickDelta,
+                                    boolean isVr) {
+        IMMDModel model = modelData.model;
         if (!(model instanceof AbstractMMDModel abstractModel)) {
             return;
         }
 
         if (isVr) {
+            LocalPlayer localPlayer = net.minecraft.client.Minecraft.getInstance().player;
+            if (localPlayer != null && localPlayer.getUUID().equals(player.getUUID())) {
+                FirstPersonManager.vrRuntime().applyMmdRenderState(true);
+            }
             if (!abstractModel.isVrActive()) {
-                VRBoneDriver.setVREnabled(model.getModelHandle(), true);
+                MmdSkinRendererPlayerHelper.suppressDefaultAnimationState(modelData);
+                FirstPersonManager.vrRuntime().setModelVrEnabled(model.getModelHandle(), true);
                 abstractModel.setVrActive(true);
             }
-            VRBoneDriver.driveModel(model.getModelHandle(), player, tickDelta);
+            FirstPersonManager.vrRuntime().updateModelVr(
+                    model.getModelHandle(),
+                    player,
+                    tickDelta,
+                    ConfigManager.getVRArmIKStrength()
+            );
             return;
         }
 
+        LocalPlayer localPlayer = net.minecraft.client.Minecraft.getInstance().player;
+        if (localPlayer != null && localPlayer.getUUID().equals(player.getUUID())) {
+            FirstPersonManager.vrRuntime().applyMmdRenderState(false);
+        }
         if (abstractModel.isVrActive()) {
-            VRBoneDriver.setVREnabled(model.getModelHandle(), false);
+            FirstPersonManager.vrRuntime().setModelVrEnabled(model.getModelHandle(), false);
             abstractModel.setVrActive(false);
+            MmdSkinRendererPlayerHelper.resetModelAnimationState(player, modelData);
         }
     }
 

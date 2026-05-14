@@ -68,6 +68,7 @@ class StageHostPlaybackServiceTest {
         assertEquals("host_pack", broadcast.stageWatchCalls.get(0).descriptor().getPackName());
         assertEquals(List.of("dance.vmd"), broadcast.stageWatchCalls.get(0).descriptor().getMotionFiles());
         assertEquals(1, broadcast.remoteStarts.size());
+        assertEquals(List.of(sessionId), broadcast.remoteStartSessionIds);
         assertEquals("host_pack", broadcast.remoteStarts.get(0).getPackName());
     }
 
@@ -196,6 +197,7 @@ class StageHostPlaybackServiceTest {
 
     private static final class FakeBroadcast implements StagePlaybackBroadcastPort {
         private final List<StageWatchCall> stageWatchCalls = new ArrayList<>();
+        private final List<UUID> remoteStartSessionIds = new ArrayList<>();
         private final List<StageDescriptor> remoteStarts = new ArrayList<>();
 
         @Override
@@ -205,7 +207,8 @@ class StageHostPlaybackServiceTest {
         }
 
         @Override
-        public void sendRemoteStageStart(StageDescriptor descriptor) {
+        public void sendRemoteStageStart(UUID sessionId, StageDescriptor descriptor) {
+            remoteStartSessionIds.add(sessionId);
             remoteStarts.add(descriptor);
         }
     }

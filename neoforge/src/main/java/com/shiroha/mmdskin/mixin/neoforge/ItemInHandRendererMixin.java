@@ -1,8 +1,10 @@
+/** 文件职责：隐藏第一人称原版手臂并在 VR 下接管手持物渲染。 */
 package com.shiroha.mmdskin.mixin.neoforge;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.compat.vr.VRArmHider;
 import com.shiroha.mmdskin.compat.vr.VRHandRenderer;
+import com.shiroha.mmdskin.config.UIConstants;
 import com.shiroha.mmdskin.neoforge.YsmCompat;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
@@ -19,23 +21,33 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * ItemInHandRenderer Mixin — 第一人称手臂隐藏 + VR 手部渲染
- */
 @Mixin(value = ItemInHandRenderer.class, priority = 900)
 public abstract class ItemInHandRendererMixin {
-
     @Inject(
         method = "renderHandsWithItems(FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource$BufferSource;Lnet/minecraft/client/player/LocalPlayer;I)V",
         at = @At("HEAD"),
         cancellable = true
     )
-    private void onRenderHandsWithItems(float partialTick, PoseStack poseStack, BufferSource bufferSource, LocalPlayer player, int packedLight, CallbackInfo ci) {
-        String playerName = player.getName().getString();
-        String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, true);
-        boolean isMmdDefault = selectedModel == null || selectedModel.isEmpty() || selectedModel.equals("默认 (原版渲染)");
-        boolean isMmdActive = !isMmdDefault;
-        boolean isVanilaMmdModel = isMmdActive && (selectedModel.equals("VanilaModel") || selectedModel.equalsIgnoreCase("vanila"));
+    private void onRenderHandsWithItems(float partialTick,
+                                        PoseStack poseStack,
+                                        BufferSource bufferSource,
+                                        LocalPlayer player,
+                                        int packedLight,
+                                        CallbackInfo ci) {
+        if (VRArmHider.shouldHideVRArms()) {
+            ci.cancel();
+            return;
+        }
+
+        String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), player.getName().getString(), true);
+        boolean hasMmdModel = selectedModel != null
+            && !selectedModel.isEmpty()
+            && !UIConstants.DEFAULT_MODEL_NAME.equals(selectedModel);
+        boolean useVanillaModel = hasMmdModel
+            && ("VanilaModel".equals(selectedModel)
+            || "VanillaModel".equals(selectedModel)
+            || "vanila".equalsIgnoreCase(selectedModel)
+            || "vanilla".equalsIgnoreCase(selectedModel));
 
         if (YsmCompat.isYsmModelActive(player)) {
             if (YsmCompat.isDisableSelfHands()) {
@@ -44,34 +56,37 @@ public abstract class ItemInHandRendererMixin {
             return;
         }
 
-        if (FirstPersonManager.shouldRenderFirstPerson() && isMmdActive && !isVanilaMmdModel) {
+        if (FirstPersonManager.shouldRenderFirstPerson() && hasMmdModel && !useVanillaModel) {
             ci.cancel();
         }
     }
 
-    /**
-     * 拦截 Vivecraft VR 方块手臂渲染
-     * MMD 身体（含手臂）已由 PlayerMixinDelegate 在世界空间渲染，
-     * 此处隐藏 Vivecraft 的方块手臂，保留手持物品渲染。
-     */
     @Inject(method = "renderArmWithItem", at = @At("HEAD"), cancellable = true)
-    private void onRenderArmWithItem(AbstractClientPlayer player, float partialTick,
-            float pitch, InteractionHand hand, float swingProgress, ItemStack itemStack,
-            float equippedProgress, PoseStack poseStack, MultiBufferSource buffer,
-            int combinedLight, CallbackInfo ci) {
+    private void onRenderArmWithItem(AbstractClientPlayer player,
+                                     float partialTick,
+                                     float pitch,
+                                     InteractionHand hand,
+                                     float swingProgress,
+                                     ItemStack itemStack,
+                                     float equippedProgress,
+                                     PoseStack poseStack,
+                                     MultiBufferSource buffer,
+                                     int combinedLight,
+                                     CallbackInfo ci) {
         if (VRArmHider.shouldHideVRArms()) {
             VRHandRenderer.renderHandItem(poseStack, buffer, combinedLight, hand);
             ci.cancel();
         }
     }
 
-    /**
-     * 拦截 Vivecraft VR 裸手臂渲染（无物品时）
-     */
     @Inject(method = "renderPlayerArm", at = @At("HEAD"), cancellable = true)
-    private void onRenderPlayerArm(PoseStack poseStack, MultiBufferSource buffer,
-            int combinedLight, float equippedProgress, float swingProgress,
-            HumanoidArm side, CallbackInfo ci) {
+    private void onRenderPlayerArm(PoseStack poseStack,
+                                   MultiBufferSource buffer,
+                                   int combinedLight,
+                                   float equippedProgress,
+                                   float swingProgress,
+                                   HumanoidArm side,
+                                   CallbackInfo ci) {
         if (VRArmHider.shouldHideVRArms()) {
             ci.cancel();
         }

@@ -5,10 +5,12 @@ import com.shiroha.mmdskin.stage.client.playback.StagePlaybackStartRequest;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackRuntimePort;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackSessionPort;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackUiPort;
+import com.shiroha.mmdskin.stage.domain.model.StageDescriptor;
 
 import java.util.Objects;
 import java.util.UUID;
 
+/** 文件职责：协调客户端舞台邀请、开播与远端跟播状态切换。 */
 public final class StagePlaybackCoordinator {
     private static volatile StagePlaybackRuntimePort defaultRuntime = new StagePlaybackRuntimePort() {
         @Override
@@ -55,7 +57,8 @@ public final class StagePlaybackCoordinator {
         }
 
         @Override
-        public void sendRemoteStageStart(com.shiroha.mmdskin.stage.domain.model.StageDescriptor descriptor) {
+        public void sendRemoteStageStart(UUID sessionId,
+                                         com.shiroha.mmdskin.stage.domain.model.StageDescriptor descriptor) {
         }
     };
 
@@ -241,9 +244,6 @@ public final class StagePlaybackCoordinator {
             return;
         }
 
-        ui.markStageSelectionStartedAndClose();
-        runtime.enterStageSelection(false);
-
         StagePlaybackRuntimePort.GuestStartResult result = runtime.startGuestPlayback(
                 hostUUID,
                 request,
@@ -257,13 +257,21 @@ public final class StagePlaybackCoordinator {
         }
 
         sessionPort.onPlaybackStarted(hostUUID, result.sessionDescriptor());
+        ui.markStageSelectionStartedAndClose();
         if (result.remoteDescriptor() != null) {
-            broadcast.sendRemoteStageStart(result.remoteDescriptor());
+            broadcast.sendRemoteStageStart(sessionPort.getSessionId(), result.remoteDescriptor());
         }
 
         float startFrame = request.startFrame() != null ? request.startFrame() : 0.0f;
-        if (startFrame > 0.0f) {
-            runtime.applyInitialFrameSync(startFrame);
+        runtime.applyInitialFrameSync(startFrame);
+    }
+
+    public void requestWatchFromHost(StageDescriptor descriptor, float heightOffset, float startFrame) {
+        UUID sessionId = sessionPort.getSessionId();
+        UUID hostPlayerId = sessionPort.getHostPlayerId();
+        if (sessionId == null || hostPlayerId == null || descriptor == null || !descriptor.isValid()) {
+            return;
         }
+        broadcast.sendStageWatch(hostPlayerId, sessionId, descriptor, heightOffset, startFrame);
     }
 }

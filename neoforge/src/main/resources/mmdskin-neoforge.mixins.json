@@ -7,6 +7,9 @@
   "mixins": [],
   "client": [
     "NeoForgePlayerRendererMixin",
+    "MobReplacementLivingEntityRendererMixin",
+    "compat.VivecraftVRArmHelperMixin",
+    "compat.VivecraftVRPlayerRendererMixin",
     "CameraMixin",
     "GameRendererMixin",
     "LevelRendererMixin",

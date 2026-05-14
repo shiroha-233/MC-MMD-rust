@@ -1,15 +1,11 @@
+/* 文件职责：向运行时提供线程安全的全局配置读取入口。 */
 package com.shiroha.mmdskin.config;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+public final class ConfigManager {
+    private static volatile IConfigProvider provider;
 
-/**
- * 统一配置管理器
- */
-
-public class ConfigManager {
-    private static final Logger logger = LogManager.getLogger();
-    private static IConfigProvider provider;
+    private ConfigManager() {
+    }
 
     public static void init(IConfigProvider configProvider) {
         provider = configProvider;
@@ -39,60 +35,88 @@ public class ConfigManager {
         return provider != null ? provider.getMaxBones() : 2048;
     }
 
+    public static boolean isPerformanceProfilingEnabled() {
+        return provider != null ? provider.isPerformanceProfilingEnabled() : false;
+    }
+
+    public static int getPerformanceLogIntervalSeconds() {
+        return provider != null ? provider.getPerformanceLogIntervalSeconds() : 5;
+    }
+
+    public static int getMaxVisibleModelsPerFrame() {
+        return provider != null ? provider.getMaxVisibleModelsPerFrame() : 10;
+    }
+
+    public static float getAnimationLodMediumDistance() {
+        return provider != null ? provider.getAnimationLodMediumDistance() : 24.0f;
+    }
+
+    public static float getAnimationLodFarDistance() {
+        return provider != null ? provider.getAnimationLodFarDistance() : 48.0f;
+    }
+
+    public static int getAnimationLodMediumUpdateInterval() {
+        return provider != null ? provider.getAnimationLodMediumUpdateInterval() : 2;
+    }
+
+    public static int getAnimationLodFarUpdateInterval() {
+        return provider != null ? provider.getAnimationLodFarUpdateInterval() : 4;
+    }
+
     public static boolean isToonRenderingEnabled() {
-        return provider != null ? provider.isToonRenderingEnabled() : true;
+        return provider != null ? provider.isToonRenderingEnabled() : false;
     }
 
     public static int getToonLevels() {
-        return provider != null ? provider.getToonLevels() : 3;
+        return provider != null ? provider.getToonLevels() : 4;
     }
 
     public static boolean isToonOutlineEnabled() {
-        return provider != null ? provider.isToonOutlineEnabled() : false;
+        return provider != null ? provider.isToonOutlineEnabled() : true;
     }
 
     public static float getToonOutlineWidth() {
-        return provider != null ? provider.getToonOutlineWidth() : 0.003f;
+        return provider != null ? provider.getToonOutlineWidth() : 0.0022f;
     }
 
     public static float getToonRimPower() {
-        return provider != null ? provider.getToonRimPower() : 5.0f;
+        return provider != null ? provider.getToonRimPower() : 5.6f;
     }
 
     public static float getToonRimIntensity() {
-        return provider != null ? provider.getToonRimIntensity() : 0.1f;
+        return provider != null ? provider.getToonRimIntensity() : 0.02f;
     }
 
     public static float getToonShadowR() {
-        return provider != null ? provider.getToonShadowR() : 0.8f;
+        return provider != null ? provider.getToonShadowR() : 0.78f;
     }
 
     public static float getToonShadowG() {
-        return provider != null ? provider.getToonShadowG() : 0.8f;
+        return provider != null ? provider.getToonShadowG() : 0.84f;
     }
 
     public static float getToonShadowB() {
-        return provider != null ? provider.getToonShadowB() : 0.8f;
+        return provider != null ? provider.getToonShadowB() : 0.94f;
     }
 
     public static float getToonSpecularPower() {
-        return provider != null ? provider.getToonSpecularPower() : 30.0f;
+        return provider != null ? provider.getToonSpecularPower() : 96.0f;
     }
 
     public static float getToonSpecularIntensity() {
-        return provider != null ? provider.getToonSpecularIntensity() : 0.08f;
+        return provider != null ? provider.getToonSpecularIntensity() : 0.015f;
     }
 
     public static float getToonOutlineR() {
-        return provider != null ? provider.getToonOutlineR() : 0.0f;
+        return provider != null ? provider.getToonOutlineR() : 0.06f;
     }
 
     public static float getToonOutlineG() {
-        return provider != null ? provider.getToonOutlineG() : 0.0f;
+        return provider != null ? provider.getToonOutlineG() : 0.08f;
     }
 
     public static float getToonOutlineB() {
-        return provider != null ? provider.getToonOutlineB() : 0.0f;
+        return provider != null ? provider.getToonOutlineB() : 0.12f;
     }
 
     public static boolean isPhysicsEnabled() {
@@ -135,6 +159,14 @@ public class ConfigManager {
         return provider != null ? provider.isPhysicsDebugLog() : false;
     }
 
+    public static int getMaxPhysicsModelsPerFrame() {
+        return provider != null ? provider.getMaxPhysicsModelsPerFrame() : 10;
+    }
+
+    public static float getPhysicsLodMaxDistance() {
+        return provider != null ? provider.getPhysicsLodMaxDistance() : 24.0f;
+    }
+
     public static boolean isFirstPersonModelEnabled() {
         return provider != null ? provider.isFirstPersonModelEnabled() : false;
     }
@@ -163,6 +195,11 @@ public class ConfigManager {
         return provider != null ? provider.getVRArmIKStrength() : 1.0f;
     }
 
+    public static String getMobModelReplacement(String entityTypeId) {
+        return provider != null ? provider.getMobModelReplacement(entityTypeId) : "";
+    }
+
     public interface IConfigProvider extends IRenderConfig, IToonConfig, IPhysicsConfig, IVRConfig {
+        String getMobModelReplacement(String entityTypeId);
     }
 }

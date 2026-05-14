@@ -1,9 +1,12 @@
 package com.shiroha.mmdskin.renderer.runtime.model;
 
 import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.renderer.api.IMMDModel;
 import com.shiroha.mmdskin.renderer.api.RenderContext;
 import com.shiroha.mmdskin.renderer.runtime.bridge.ModelRuntimeBridgeHolder;
+import com.shiroha.mmdskin.renderer.integration.player.PlayerPerformanceGate;
+import com.shiroha.mmdskin.renderer.performance.RenderPerformanceProfiler;
 import com.shiroha.mmdskin.renderer.runtime.model.helper.LivingEntityModelStateHelper;
 import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
 import com.mojang.blaze3d.platform.Window;
@@ -49,7 +52,6 @@ public abstract class AbstractMMDModel implements IMMDModel {
     protected List<String> textureKeys;
 
     private volatile boolean vrActive;
-
     public void setVrActive(boolean active) { this.vrActive = active; }
 
     public boolean isVrActive() { return vrActive; }
@@ -70,7 +72,11 @@ public abstract class AbstractMMDModel implements IMMDModel {
                     tickDelta, mat, packedLight, context);
             return;
         }
-        update();
+        boolean shouldUpdate = shouldUpdateForContext(entityIn, context);
+        applyPhysicsState(resolvePhysicsEnabled(entityIn, context, false, shouldUpdate));
+        if (shouldUpdate) {
+            update();
+        }
         doRenderModel(entityIn, entityYaw, entityPitch, entityTrans, mat, packedLight);
     }
 
@@ -143,19 +149,24 @@ public abstract class AbstractMMDModel implements IMMDModel {
                                      Vector3f entityTrans, float tickDelta, PoseStack mat,
                                      int packedLight, RenderContext context) {
         boolean stagePlaying = MMDCameraController.getInstance().isStagePlayingModel(model);
-
-        LivingEntityModelStateHelper.syncModelState(
-                getNf(),
-                model,
-                entityIn,
-                entityYaw,
-                tickDelta,
-                context,
-                getModelName(),
-                stagePlaying,
-                vrActive);
-
-        update();
+        boolean localPlayer = isLocalPlayer(entityIn);
+        boolean shouldUpdate = shouldUpdateForContext(entityIn, context);
+        applyPhysicsState(resolvePhysicsEnabled(entityIn, context, localPlayer, shouldUpdate));
+        if (shouldUpdate) {
+            long syncTimer = RenderPerformanceProfiler.get().startTimer();
+            LivingEntityModelStateHelper.syncModelState(
+                    getNf(),
+                    model,
+                    entityIn,
+                    entityYaw,
+                    tickDelta,
+                    context,
+                    getModelName(),
+                    stagePlaying,
+                    vrActive);
+            RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_LIVING_STATE_SYNC, syncTimer);
+            update();
+        }
         doRenderModel(entityIn, entityYaw, entityPitch, entityTrans, mat, packedLight);
     }
 
@@ -172,7 +183,12 @@ public abstract class AbstractMMDModel implements IMMDModel {
         if (deltaTime <= 0.0f) return;
         if (deltaTime > MAX_DELTA_TIME) deltaTime = MAX_DELTA_TIME;
 
-        onUpdate(deltaTime);
+        long updateTimer = RenderPerformanceProfiler.get().startTimer();
+        try {
+            onUpdate(deltaTime);
+        } finally {
+            RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_NATIVE_MODEL_UPDATE, updateTimer);
+        }
     }
 
     protected void fetchMaterialMorphResults() {
@@ -193,7 +209,7 @@ public abstract class AbstractMMDModel implements IMMDModel {
     }
 
     protected float getModelScale() {
-        return MODEL_SCALE * com.shiroha.mmdskin.config.ModelConfigManager.getConfig(getModelName()).modelScale;
+        return MODEL_SCALE * com.shiroha.mmdskin.config.ModelConfigManager.getLiveConfig(getModelName()).modelScale;
     }
 
     protected void disposeModelHandle() {
@@ -266,5 +282,35 @@ public abstract class AbstractMMDModel implements IMMDModel {
 
     protected boolean isReady() {
         return true;
+    }
+
+    private boolean shouldUpdateForContext(Entity entity, RenderContext context) {
+        if (context == null || !context.isWorldScene()) {
+            return true;
+        }
+        return PlayerPerformanceGate.shouldUpdateAnimation(entity, isLocalPlayer(entity), model);
+    }
+
+    private boolean resolvePhysicsEnabled(Entity entity, RenderContext context, boolean localPlayer, boolean shouldUpdate) {
+        if (context == null || !context.isWorldScene()) {
+            return ConfigManager.isPhysicsEnabled();
+        }
+        return shouldUpdate && PlayerPerformanceGate.shouldEnablePhysics(entity, localPlayer);
+    }
+
+    private void applyPhysicsState(boolean enabled) {
+        try {
+            getNf().SetPhysicsEnabled(model, enabled);
+        } catch (Exception e) {
+            logger.debug("Failed to update physics state for model {}", model, e);
+        }
+    }
+
+    private boolean isLocalPlayer(Entity entity) {
+        if (!(entity instanceof net.minecraft.world.entity.player.Player player)) {
+            return false;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        return minecraft.player != null && minecraft.player.getUUID().equals(player.getUUID());
     }
 }

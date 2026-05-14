@@ -1,52 +1,50 @@
+/* 文件职责：提供女仆模型选择界面与交互状态管理。 */
 package com.shiroha.mmdskin.maid;
 
 import com.shiroha.mmdskin.maid.service.DefaultMaidModelSelectionService;
 import com.shiroha.mmdskin.maid.service.MaidModelSelectionService;
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * 女仆 MMD 模型选择界面 — 简约右侧面板风格
- */
-
 public class MaidModelSelectorScreen extends Screen {
-
-    private static final int PANEL_WIDTH = 140;
-    private static final int PANEL_MARGIN = 4;
+    private static final int WINDOW_MARGIN = 10;
+    private static final int MIN_WINDOW_WIDTH = 228;
+    private static final int MAX_WINDOW_WIDTH = 332;
+    private static final int MIN_WINDOW_HEIGHT = 232;
     private static final int HEADER_HEIGHT = 40;
-    private static final int FOOTER_HEIGHT = 20;
-    private static final int ITEM_HEIGHT = 14;
-    private static final int ITEM_SPACING = 1;
-
-    private static final int COLOR_PANEL_BG = 0xC0181420;
-    private static final int COLOR_PANEL_BORDER = 0xFF4A2A4A;
-    private static final int COLOR_ITEM_HOVER = 0x30FFFFFF;
-    private static final int COLOR_ITEM_SELECTED = 0x30D060A0;
-    private static final int COLOR_ACCENT = 0xFFD060A0;
-    private static final int COLOR_TEXT = 0xFFDDDDDD;
-    private static final int COLOR_TEXT_DIM = 0xFF888888;
-    private static final int COLOR_TEXT_SELECTED = 0xFFD060A0;
-    private static final int COLOR_SEPARATOR = 0x30FFFFFF;
+    private static final int BUTTON_HEIGHT = 18;
+    private static final int BUTTON_GAP = 4;
+    private static final int LIST_PADDING = 5;
+    private static final int CARD_HEIGHT = 16;
+    private static final int CARD_GAP = 4;
 
     private final UUID maidUUID;
     private final int maidEntityId;
     private final String maidName;
     private final MaidModelSelectionService maidModelSelectionService;
-    private final List<ModelCardEntry> modelCards;
+    private final List<String> modelCards = new ArrayList<>();
 
-    private int scrollOffset = 0;
-    private int maxScroll = 0;
     private String currentModel;
-    private int hoveredCardIndex = -1;
+    private boolean pendingClose;
+    private float targetScroll;
+    private float animatedScroll;
+    private int hoveredCard = -1;
+    private ButtonTarget hoveredButton = ButtonTarget.NONE;
+    private Layout layout = Layout.empty();
 
-    private int panelX, panelY, panelH;
-    private int listTop, listBottom;
+    private enum ButtonTarget {
+        NONE,
+        DONE,
+        REFRESH
+    }
 
     public MaidModelSelectorScreen(UUID maidUUID, int maidEntityId, String maidName) {
         this(maidUUID, maidEntityId, maidName, new DefaultMaidModelSelectionService());
@@ -59,165 +57,57 @@ public class MaidModelSelectorScreen extends Screen {
         this.maidEntityId = maidEntityId;
         this.maidName = maidName;
         this.maidModelSelectionService = maidModelSelectionService;
-        this.modelCards = new ArrayList<>();
-        this.currentModel = maidModelSelectionService.getCurrentModel(maidUUID);
-        loadAvailableModels();
-    }
-
-    private void loadAvailableModels() {
-        modelCards.clear();
-
-        for (String modelName : maidModelSelectionService.loadAvailableModels()) {
-            modelCards.add(new ModelCardEntry(modelName));
-        }
+        reloadModelCards();
     }
 
     @Override
     protected void init() {
         super.init();
-
-        panelX = this.width - PANEL_WIDTH - PANEL_MARGIN;
-        panelY = PANEL_MARGIN;
-        panelH = this.height - PANEL_MARGIN * 2;
-
-        listTop = panelY + HEADER_HEIGHT;
-        listBottom = panelY + panelH - FOOTER_HEIGHT;
-
-        int contentHeight = modelCards.size() * (ITEM_HEIGHT + ITEM_SPACING);
-        int visibleHeight = listBottom - listTop;
-        maxScroll = Math.max(0, contentHeight - visibleHeight);
-        scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset));
-
-        int btnY = listBottom + 4;
-        int btnW = (PANEL_WIDTH - 12) / 2;
-
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), btn -> this.onClose())
-            .bounds(panelX + 4, btnY, btnW, 14).build());
-
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.mmdskin.refresh"), btn -> refreshModels())
-            .bounds(panelX + 4 + btnW + 4, btnY, btnW, 14).build());
-    }
-
-    private void refreshModels() {
-        loadAvailableModels();
-        scrollOffset = 0;
-        this.clearWidgets();
-        this.init();
-    }
-
-    private void selectModel(ModelCardEntry card) {
-        this.currentModel = card.displayName;
-        maidModelSelectionService.selectModel(maidUUID, maidEntityId, card.displayName);
+        updateLayout();
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-
-        guiGraphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + panelH, COLOR_PANEL_BG);
-
-        guiGraphics.fill(panelX, panelY, panelX + 1, panelY + panelH, COLOR_PANEL_BORDER);
-
-        renderHeader(guiGraphics);
-
-        renderModelList(guiGraphics, mouseX, mouseY);
-
-        renderScrollbar(guiGraphics);
-
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
-    }
-
-    private void renderHeader(GuiGraphics guiGraphics) {
-        int cx = panelX + PANEL_WIDTH / 2;
-
-        guiGraphics.drawCenteredString(this.font, this.title, cx, panelY + 4, COLOR_ACCENT);
-
-        String maidInfo = truncate(maidName, 16);
-        guiGraphics.drawCenteredString(this.font, maidInfo, cx, panelY + 16, COLOR_TEXT_DIM);
-
-        String info = Component.translatable("gui.mmdskin.model_selector.stats", modelCards.size() - 1, truncate(currentModel, 10)).getString();
-        guiGraphics.drawCenteredString(this.font, info, cx, panelY + 28, COLOR_TEXT_DIM);
-
-        guiGraphics.fill(panelX + 8, listTop - 2, panelX + PANEL_WIDTH - 8, listTop - 1, COLOR_SEPARATOR);
-    }
-
-    private void renderModelList(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        guiGraphics.enableScissor(panelX, listTop, panelX + PANEL_WIDTH, listBottom);
-
-        hoveredCardIndex = -1;
-
-        for (int i = 0; i < modelCards.size(); i++) {
-            ModelCardEntry card = modelCards.get(i);
-            int itemY = listTop + i * (ITEM_HEIGHT + ITEM_SPACING) - scrollOffset;
-
-            if (itemY + ITEM_HEIGHT < listTop || itemY > listBottom) continue;
-
-            int itemX = panelX + 6;
-            int itemW = PANEL_WIDTH - 12;
-            boolean isSelected = card.displayName.equals(currentModel);
-            boolean isHovered = mouseX >= itemX && mouseX <= itemX + itemW
-                             && mouseY >= Math.max(itemY, listTop) && mouseY <= Math.min(itemY + ITEM_HEIGHT, listBottom);
-
-            if (isHovered) {
-                hoveredCardIndex = i;
-            }
-
-            renderItem(guiGraphics, card, itemX, itemY, itemW, isSelected, isHovered);
-        }
-
-        guiGraphics.disableScissor();
-    }
-
-    private void renderItem(GuiGraphics guiGraphics, ModelCardEntry card, int x, int y, int w, boolean isSelected, boolean isHovered) {
-
-        if (isSelected) {
-            guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, COLOR_ITEM_SELECTED);
-
-            guiGraphics.fill(x, y + 1, x + 2, y + ITEM_HEIGHT - 1, COLOR_ACCENT);
-        } else if (isHovered) {
-            guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, COLOR_ITEM_HOVER);
-        }
-
-        int textX = x + 8;
-
-        String displayName = truncate(card.displayName, 16);
-        int nameColor = isSelected ? COLOR_TEXT_SELECTED : COLOR_TEXT;
-        guiGraphics.drawString(this.font, displayName, textX, y + 3, nameColor);
-
-        if (isSelected) {
-            guiGraphics.drawString(this.font, "\u2713", x + w - 10, y + 3, COLOR_ACCENT);
-        }
-    }
-
-    private void renderScrollbar(GuiGraphics guiGraphics) {
-        if (maxScroll <= 0) return;
-
-        int barX = panelX + PANEL_WIDTH - 4;
-        int barH = listBottom - listTop;
-
-        guiGraphics.fill(barX, listTop, barX + 2, listBottom, 0x20FFFFFF);
-
-        int thumbH = Math.max(16, barH * barH / (barH + maxScroll));
-        int thumbY = listTop + (int)((barH - thumbH) * ((float) scrollOffset / maxScroll));
-        guiGraphics.fill(barX, thumbY, barX + 2, thumbY + thumbH, COLOR_ACCENT);
+        updateLayout();
+        updateHoverState(mouseX, mouseY);
+        updateScrollAnimation();
+        renderScreen(guiGraphics);
+        flushPendingActions(Minecraft.getInstance());
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0 && hoveredCardIndex >= 0 && hoveredCardIndex < modelCards.size()) {
-            selectModel(modelCards.get(hoveredCardIndex));
+        if (button != 0) {
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
+        if (!layout.panel.contains(mouseX, mouseY)) {
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
+
+        if (layout.doneButton.contains(mouseX, mouseY)) {
+            pendingClose = true;
             return true;
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        if (layout.refreshButton.contains(mouseX, mouseY)) {
+            reloadModelCards();
+            targetScroll = 0.0f;
+            animatedScroll = 0.0f;
+            return true;
+        }
+        if (layout.listBox.contains(mouseX, mouseY) && hoveredCard >= 0 && hoveredCard < modelCards.size()) {
+            selectModel(modelCards.get(hoveredCard));
+            return true;
+        }
+        return true;
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-
-        if (mouseX >= panelX && mouseX <= panelX + PANEL_WIDTH) {
-            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int)(scrollY * 24)));
-            return true;
+        if (!layout.listBox.contains(mouseX, mouseY)) {
+            return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
         }
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        targetScroll = Mth.clamp(targetScroll - (float) scrollY * 12.0f, 0.0f, maxScroll());
+        return true;
     }
 
     @Override
@@ -234,15 +124,202 @@ public class MaidModelSelectorScreen extends Screen {
         return false;
     }
 
-    private static String truncate(String s, int max) {
-        return s.length() > max ? s.substring(0, max - 2) + ".." : s;
+    private void renderScreen(GuiGraphics guiGraphics) {
+        TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
+        drawPanel(guiGraphics, layout.panel);
+        drawHeader(guiGraphics);
+        drawButtons(guiGraphics);
+        drawModelList(guiGraphics);
     }
 
-    private static class ModelCardEntry {
-        final String displayName;
+    private void drawHeader(GuiGraphics guiGraphics) {
+        guiGraphics.drawString(this.font, this.title, layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
+        guiGraphics.drawString(this.font, shorten(maidName, 24), layout.header.x, layout.header.y + 11, TranslucentTrayChrome.SUBTITLE_TEXT, false);
+        guiGraphics.drawString(this.font,
+                Component.translatable("gui.mmdskin.model_selector.stats",
+                        Math.max(0, modelCards.size() - 1),
+                        shorten(currentModel, 14)),
+                layout.header.x, layout.header.y + 21, TranslucentTrayChrome.DETAIL_TEXT, false);
+    }
 
-        ModelCardEntry(String displayName) {
-            this.displayName = displayName;
+    private void drawButtons(GuiGraphics guiGraphics) {
+        drawButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredButton == ButtonTarget.DONE);
+        drawButton(guiGraphics, layout.refreshButton, Component.translatable("gui.mmdskin.refresh").getString(), hoveredButton == ButtonTarget.REFRESH);
+    }
+
+    private void drawModelList(GuiGraphics guiGraphics) {
+        UiRect list = layout.listBox;
+        TranslucentTrayChrome.fillListArea(guiGraphics, list.x, list.y, list.w, list.h);
+        if (modelCards.isEmpty()) {
+            guiGraphics.drawCenteredString(this.font, "No models", list.centerX(), list.centerY() - 4, TranslucentTrayChrome.BODY_TEXT);
+            return;
+        }
+
+        guiGraphics.enableScissor(list.x, list.y, list.x + list.w, list.y + list.h);
+        int y = Math.round(list.y + LIST_PADDING - animatedScroll);
+        for (int i = 0; i < modelCards.size(); i++) {
+            if (y + CARD_HEIGHT < list.y) {
+                y += CARD_HEIGHT + CARD_GAP;
+                continue;
+            }
+            if (y > list.y + list.h) {
+                break;
+            }
+            drawModelCard(guiGraphics, list, y, modelCards.get(i), i == hoveredCard);
+            y += CARD_HEIGHT + CARD_GAP;
+        }
+        guiGraphics.disableScissor();
+        drawScrollBar(guiGraphics, list);
+    }
+
+    private void drawModelCard(GuiGraphics guiGraphics, UiRect list, int y, String modelName, boolean hovered) {
+        boolean selected = modelName.equals(currentModel);
+        int bg = TranslucentTrayChrome.cardBackground(selected, hovered);
+        guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, bg);
+        guiGraphics.fill(list.x + 4, y, list.x + 6, y + CARD_HEIGHT, selected ? TranslucentTrayChrome.ACCENT_STRIP_ACTIVE : TranslucentTrayChrome.ACCENT_STRIP);
+        guiGraphics.drawString(this.font, shorten(modelName, 24), list.x + 10, y + 4, TranslucentTrayChrome.BODY_TEXT, false);
+    }
+
+    private void drawScrollBar(GuiGraphics guiGraphics, UiRect list) {
+        float maxScroll = maxScroll();
+        if (maxScroll <= 0.0f) {
+            return;
+        }
+        int barX = list.x + list.w - 3;
+        guiGraphics.fill(barX, list.y, barX + 2, list.y + list.h, TranslucentTrayChrome.SCROLL_TRACK);
+        float contentHeight = LIST_PADDING * 2.0f + modelCards.size() * CARD_HEIGHT + Math.max(0, modelCards.size() - 1) * CARD_GAP;
+        float visibleRatio = list.h / Math.max((float) list.h, contentHeight);
+        int thumbHeight = Math.max(12, Math.round(list.h * visibleRatio));
+        int travel = Math.max(1, list.h - thumbHeight);
+        int thumbY = list.y + Math.round((animatedScroll / maxScroll) * travel);
+        guiGraphics.fill(barX, thumbY, barX + 2, thumbY + thumbHeight, TranslucentTrayChrome.SCROLL_THUMB);
+    }
+
+    private void drawButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
+        TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, true);
+    }
+
+    private void drawPanel(GuiGraphics guiGraphics, UiRect rect) {
+        TranslucentTrayChrome.drawPanel(guiGraphics, rect.x, rect.y, rect.w, rect.h);
+    }
+
+    private void updateLayout() {
+        int panelWidth = Mth.clamp(Math.round(this.width * 0.18f), MIN_WINDOW_WIDTH, MAX_WINDOW_WIDTH);
+        int panelHeight = Math.max(MIN_WINDOW_HEIGHT, this.height - WINDOW_MARGIN * 2);
+        int panelX = this.width - panelWidth - WINDOW_MARGIN;
+        int panelY = WINDOW_MARGIN;
+
+        UiRect panel = new UiRect(panelX, panelY, panelWidth, panelHeight);
+        UiRect header = new UiRect(panelX + 8, panelY + 6, panelWidth - 16, HEADER_HEIGHT);
+
+        int buttonY = panel.y + panel.h - BUTTON_HEIGHT - 6;
+        int buttonWidth = (header.w - BUTTON_GAP) / 2;
+        UiRect doneButton = new UiRect(header.x, buttonY, buttonWidth, BUTTON_HEIGHT);
+        UiRect refreshButton = new UiRect(header.x + buttonWidth + BUTTON_GAP, buttonY, buttonWidth, BUTTON_HEIGHT);
+
+        int listY = header.y + header.h + 4;
+        int listHeight = Math.max(72, buttonY - listY - 6);
+        UiRect listBox = new UiRect(header.x, listY, header.w, listHeight);
+        layout = new Layout(panel, header, listBox, doneButton, refreshButton);
+
+        float maxScroll = maxScroll();
+        targetScroll = Mth.clamp(targetScroll, 0.0f, maxScroll);
+        animatedScroll = Mth.clamp(animatedScroll, 0.0f, maxScroll);
+    }
+
+    private void updateHoverState(int mouseX, int mouseY) {
+        hoveredButton = ButtonTarget.NONE;
+        hoveredCard = -1;
+
+        if (layout.doneButton.contains(mouseX, mouseY)) {
+            hoveredButton = ButtonTarget.DONE;
+            return;
+        }
+        if (layout.refreshButton.contains(mouseX, mouseY)) {
+            hoveredButton = ButtonTarget.REFRESH;
+            return;
+        }
+        if (!layout.listBox.contains(mouseX, mouseY) || modelCards.isEmpty()) {
+            return;
+        }
+
+        float localY = (float) mouseY - (layout.listBox.y + LIST_PADDING) + animatedScroll;
+        if (localY < 0.0f) {
+            return;
+        }
+        int index = (int) (localY / (CARD_HEIGHT + CARD_GAP));
+        if (index < 0 || index >= modelCards.size()) {
+            return;
+        }
+        if (localY - index * (CARD_HEIGHT + CARD_GAP) <= CARD_HEIGHT) {
+            hoveredCard = index;
+        }
+    }
+
+    private void updateScrollAnimation() {
+        animatedScroll = Mth.lerp(0.24f, animatedScroll, targetScroll);
+        if (Math.abs(animatedScroll - targetScroll) < 0.25f) {
+            animatedScroll = targetScroll;
+        }
+    }
+
+    private float maxScroll() {
+        float contentHeight = modelCards.isEmpty()
+                ? 0.0f
+                : LIST_PADDING * 2.0f + modelCards.size() * CARD_HEIGHT + Math.max(0, modelCards.size() - 1) * CARD_GAP;
+        return Math.max(0.0f, contentHeight - layout.listBox.h);
+    }
+
+    private void reloadModelCards() {
+        modelCards.clear();
+        modelCards.addAll(maidModelSelectionService.loadAvailableModels());
+        currentModel = maidModelSelectionService.getCurrentModel(maidUUID);
+    }
+
+    private void selectModel(String modelName) {
+        currentModel = modelName;
+        maidModelSelectionService.selectModel(maidUUID, maidEntityId, modelName);
+    }
+
+    private void flushPendingActions(Minecraft minecraft) {
+        if (pendingClose && minecraft.screen == this) {
+            pendingClose = false;
+            minecraft.setScreen(null);
+        }
+    }
+
+    private static String shorten(String value, int maxChars) {
+        if (value == null || value.length() <= maxChars) {
+            return value == null ? "" : value;
+        }
+        if (maxChars <= 3) {
+            return value.substring(0, Math.max(0, maxChars));
+        }
+        return value.substring(0, maxChars - 3) + "...";
+    }
+
+    record UiRect(int x, int y, int w, int h) {
+        static UiRect empty() {
+            return new UiRect(0, 0, 0, 0);
+        }
+
+        boolean contains(double px, double py) {
+            return px >= x && py >= y && px <= x + w && py <= y + h;
+        }
+
+        int centerX() {
+            return x + w / 2;
+        }
+
+        int centerY() {
+            return y + h / 2;
+        }
+    }
+
+    private record Layout(UiRect panel, UiRect header, UiRect listBox, UiRect doneButton, UiRect refreshButton) {
+        static Layout empty() {
+            UiRect empty = UiRect.empty();
+            return new Layout(empty, empty, empty, empty, empty);
         }
     }
 }

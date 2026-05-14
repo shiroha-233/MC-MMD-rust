@@ -25,6 +25,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+/** 文件职责：在 NeoForge 侧维护服务端舞台会话并转发多人舞台协议。 */
 public final class NeoForgeStageSessionRegistry {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final NeoForgeStageSessionRegistry INSTANCE = new NeoForgeStageSessionRegistry();
@@ -318,14 +319,19 @@ public final class NeoForgeStageSessionRegistry {
     }
 
     private void handleRemoteStageStart(MinecraftServer server, ServerPlayer sender, StagePacket packet) {
-        if (packet.descriptor == null || !packet.descriptor.isValid()) {
+        ServerStageSession session = requireMemberSession(sender, parseUUID(packet.sessionId));
+        if (session == null || packet.descriptor == null || !packet.descriptor.isValid()) {
             return;
         }
-        broadcastRemotePacket(server, sender, packet);
+        broadcastRemotePacket(server, sender, session, packet);
     }
 
     private void handleRemoteStageStop(MinecraftServer server, ServerPlayer sender, StagePacket packet) {
-        broadcastRemotePacket(server, sender, packet);
+        ServerStageSession session = requireMemberSession(sender, parseUUID(packet.sessionId));
+        if (session == null) {
+            return;
+        }
+        broadcastRemotePacket(server, sender, session, packet);
     }
 
     private void handleFrameSync(MinecraftServer server, ServerPlayer sender, StagePacket packet) {
@@ -469,10 +475,13 @@ public final class NeoForgeStageSessionRegistry {
         );
     }
 
-    private void broadcastRemotePacket(MinecraftServer server, ServerPlayer sender, StagePacket packet) {
+    private void broadcastRemotePacket(MinecraftServer server, ServerPlayer sender,
+                                       ServerStageSession session, StagePacket packet) {
+        StagePacket resolvedPacket = copyPacket(packet);
+        resolvedPacket.sessionId = session.sessionId.toString();
         for (ServerPlayer target : server.getPlayerList().getPlayers()) {
             if (!target.getUUID().equals(sender.getUUID())) {
-                sendPacket(target, sender.getUUID(), packet);
+                sendPacket(target, sender.getUUID(), resolvedPacket);
             }
         }
     }

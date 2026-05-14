@@ -1,10 +1,10 @@
 package com.shiroha.mmdskin.renderer.integration.player;
 
+import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import com.shiroha.mmdskin.renderer.api.RenderParams;
 import com.shiroha.mmdskin.renderer.integration.ModelPropertyHelper;
 import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager.Model;
 import net.minecraft.client.player.AbstractClientPlayer;
-import net.minecraft.util.Mth;
 import org.joml.Vector3f;
 
 /**
@@ -16,7 +16,8 @@ public final class PlayerRenderHelper {
 
     public static RenderParams calculateRenderParams(AbstractClientPlayer player, Model modelData, float tickDelta) {
         RenderParams params = new RenderParams();
-        params.bodyYaw = Mth.rotLerp(tickDelta, player.yBodyRotO, player.yBodyRot);
+        float vrBodyYaw = FirstPersonManager.vrRuntime().getBodyYawDegrees(player, tickDelta);
+        params.bodyYaw = Float.isFinite(vrBodyYaw) ? vrBodyYaw : player.yBodyRot;
         params.bodyPitch = 0.0f;
         params.translation = new Vector3f(0.0f);
 

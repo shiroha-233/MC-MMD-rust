@@ -1,3 +1,4 @@
+/* 文件职责：定义材质显隐界面访问模型上下文、材质列表与配置持久化的端口。 */
 package com.shiroha.mmdskin.ui.selector.port;
 
 import com.shiroha.mmdskin.ui.selector.application.MaterialVisibilityApplicationService.MaterialEntryState;
@@ -13,7 +14,7 @@ public interface MaterialVisibilityGateway {
 
     Optional<MaterialScreenContext> createMaidContext(UUID maidUuid, String maidName);
 
-    List<MaterialEntryState> loadMaterials(long modelHandle);
+    List<MaterialEntryState> loadMaterials(MaterialScreenContext context);
 
     void setAllVisible(long modelHandle, boolean visible);
 

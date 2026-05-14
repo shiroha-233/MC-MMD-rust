@@ -1,6 +1,8 @@
 package com.shiroha.mmdskin.renderer.integration.player;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.shiroha.mmdskin.config.ModelConfigData;
+import com.shiroha.mmdskin.config.ModelConfigManager;
 import com.shiroha.mmdskin.renderer.runtime.bridge.ModelRuntimeBridge;
 import com.shiroha.mmdskin.renderer.runtime.bridge.ModelRuntimeBridgeHolder;
 import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager.Model;
@@ -10,6 +12,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemDisplayContext;
+import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 
@@ -22,16 +25,23 @@ import java.nio.ByteOrder;
 public class ItemRenderHelper {
 
     private static final float DEG_TO_RAD = (float) Math.PI / 180F;
+    private static final float DEFAULT_HELD_ITEM_SCALE = 1.0f;
 
     public static void renderItems(AbstractClientPlayer player, Model model,
                                    PoseStack matrixStack, MultiBufferSource vertexConsumers, int packedLight) {
-        renderHandItem(player, model, matrixStack, vertexConsumers, packedLight, InteractionHand.MAIN_HAND);
-        renderHandItem(player, model, matrixStack, vertexConsumers, packedLight, InteractionHand.OFF_HAND);
+        float heldItemScale = resolveHeldItemScale(model);
+        renderHandItem(player, model, matrixStack, vertexConsumers, packedLight, InteractionHand.MAIN_HAND, heldItemScale);
+        renderHandItem(player, model, matrixStack, vertexConsumers, packedLight, InteractionHand.OFF_HAND, heldItemScale);
     }
 
     private static void renderHandItem(AbstractClientPlayer player, Model model,
                                          PoseStack matrixStack, MultiBufferSource vertexConsumers,
-                                         int packedLight, InteractionHand hand) {
+                                         int packedLight, InteractionHand hand, float heldItemScale) {
+        ItemStack itemStack = player.getItemInHand(hand);
+        if (itemStack.isEmpty()) {
+            return;
+        }
+
         boolean isMainHand = (hand == InteractionHand.MAIN_HAND);
         ModelRuntimeBridge runtimeBridge = ModelRuntimeBridgeHolder.get();
         long modelHandle = model.model.getModelHandle();
@@ -47,14 +57,15 @@ public class ItemRenderHelper {
 
         applyConfiguredRotation(matrixStack, player, model, hand);
 
-        matrixStack.scale(10.0f, 10.0f, 10.0f);
+        float itemScale = resolveItemScale(heldItemScale);
+        matrixStack.scale(10.0f * itemScale, 10.0f * itemScale, 10.0f * itemScale);
 
         ItemDisplayContext displayCtx = isMainHand
                 ? ItemDisplayContext.THIRD_PERSON_RIGHT_HAND
                 : ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
 
         Minecraft.getInstance().getItemRenderer().renderStatic(
-            player, player.getItemInHand(hand), displayCtx, !isMainHand,
+            player, itemStack, displayCtx, !isMainHand,
             matrixStack, vertexConsumers, player.level(), packedLight, OverlayTexture.NO_OVERLAY, 0
         );
 
@@ -104,6 +115,29 @@ public class ItemRenderHelper {
         } catch (NumberFormatException e) {
             return defaultValue;
         }
+    }
+
+    private static float resolveHeldItemScale(Model model) {
+        if (model.getModelName() != null && !model.getModelName().isBlank()) {
+            ModelConfigData modelConfig = ModelConfigManager.getLiveConfig(model.getModelName());
+            if (Float.isFinite(modelConfig.heldItemScale) && modelConfig.heldItemScale > 0.0f) {
+                return modelConfig.heldItemScale;
+            }
+        }
+        String[] keys = {"heldItemScale", "firstPersonHeldBlockScale", "held_item_scale"};
+        for (String key : keys) {
+            String value = model.properties.getProperty(key);
+            if (value != null) {
+                return parseFloatSafe(value, DEFAULT_HELD_ITEM_SCALE);
+            }
+        }
+        return DEFAULT_HELD_ITEM_SCALE;
+    }
+
+    private static float resolveItemScale(float heldItemScale) {
+        return Float.isFinite(heldItemScale) && heldItemScale > 0.0f
+                ? heldItemScale
+                : DEFAULT_HELD_ITEM_SCALE;
     }
 
     private static String getHandState(AbstractClientPlayer player, InteractionHand hand) {

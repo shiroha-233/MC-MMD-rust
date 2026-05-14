@@ -23,7 +23,7 @@ public final class EyeTrackingHelper {
     public static void updateEyeTracking(NativeFunc nf, long modelHandle,
             LivingEntity entity, float entityYaw, float tickDelta, String modelName) {
 
-        ModelConfigData modelConfig = ModelConfigManager.getConfig(modelName);
+        ModelConfigData modelConfig = ModelConfigManager.getLiveConfig(modelName);
 
         if (!modelConfig.eyeTrackingEnabled) {
             nf.SetEyeTrackingEnabled(modelHandle, false);

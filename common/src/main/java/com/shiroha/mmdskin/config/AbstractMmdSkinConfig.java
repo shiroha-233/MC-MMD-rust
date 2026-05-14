@@ -1,9 +1,8 @@
 package com.shiroha.mmdskin.config;
 
 /**
- * 配置提供者基类（DRY 原则）
+ * 文件职责：把配置数据对象适配为运行时配置读取接口。
  */
-
 public abstract class AbstractMmdSkinConfig implements ConfigManager.IConfigProvider {
     protected ConfigData data;
 
@@ -17,6 +16,13 @@ public abstract class AbstractMmdSkinConfig implements ConfigManager.IConfigProv
     @Override public boolean isGpuSkinningEnabled() { return data.gpuSkinningEnabled; }
     @Override public boolean isGpuMorphEnabled() { return data.gpuMorphEnabled; }
     @Override public int getMaxBones() { return data.maxBones; }
+    @Override public boolean isPerformanceProfilingEnabled() { return data.performanceProfilingEnabled; }
+    @Override public int getPerformanceLogIntervalSeconds() { return data.performanceLogIntervalSeconds; }
+    @Override public int getMaxVisibleModelsPerFrame() { return data.maxVisibleModelsPerFrame; }
+    @Override public float getAnimationLodMediumDistance() { return data.animationLodMediumDistance; }
+    @Override public float getAnimationLodFarDistance() { return data.animationLodFarDistance; }
+    @Override public int getAnimationLodMediumUpdateInterval() { return data.animationLodMediumUpdateInterval; }
+    @Override public int getAnimationLodFarUpdateInterval() { return data.animationLodFarUpdateInterval; }
 
     @Override public boolean isToonRenderingEnabled() { return data.toonRenderingEnabled; }
     @Override public int getToonLevels() { return data.toonLevels; }
@@ -33,6 +39,7 @@ public abstract class AbstractMmdSkinConfig implements ConfigManager.IConfigProv
     @Override public float getToonOutlineG() { return data.toonOutlineG; }
     @Override public float getToonOutlineB() { return data.toonOutlineB; }
 
+    @Override public boolean isPhysicsEnabled() { return data.physicsEnabled; }
     @Override public float getPhysicsGravityY() { return data.physicsGravityY; }
     @Override public float getPhysicsFps() { return data.physicsFps; }
     @Override public int getPhysicsMaxSubstepCount() { return data.physicsMaxSubstepCount; }
@@ -42,13 +49,18 @@ public abstract class AbstractMmdSkinConfig implements ConfigManager.IConfigProv
     @Override public boolean isPhysicsJointsEnabled() { return data.physicsJointsEnabled; }
     @Override public boolean isPhysicsKinematicFilter() { return data.physicsKinematicFilter; }
     @Override public boolean isPhysicsDebugLog() { return data.physicsDebugLog; }
+    @Override public int getMaxPhysicsModelsPerFrame() { return data.maxPhysicsModelsPerFrame; }
+    @Override public float getPhysicsLodMaxDistance() { return data.physicsLodMaxDistance; }
 
     @Override public boolean isFirstPersonModelEnabled() { return data.firstPersonModelEnabled; }
     @Override public float getFirstPersonCameraForwardOffset() { return data.firstPersonCameraForwardOffset; }
     @Override public float getFirstPersonCameraVerticalOffset() { return data.firstPersonCameraVerticalOffset; }
     @Override public boolean isDebugHudEnabled() { return data.debugHudEnabled; }
     @Override public int getTextureCacheBudgetMB() { return data.textureCacheBudgetMB; }
+    @Override public String getMobModelReplacement(String entityTypeId) {
+        return data.mobModelReplacements.getOrDefault(entityTypeId, "");
+    }
 
-    @Override public boolean isVREnabled() { return false; }
+    @Override public boolean isVREnabled() { return data.vrEnabled; }
     @Override public float getVRArmIKStrength() { return data.vrArmIKStrength; }
 }

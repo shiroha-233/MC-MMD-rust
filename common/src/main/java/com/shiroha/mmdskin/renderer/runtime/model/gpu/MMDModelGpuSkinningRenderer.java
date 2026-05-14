@@ -6,6 +6,7 @@ import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.renderer.compat.IrisCompat;
+import com.shiroha.mmdskin.renderer.performance.RenderPerformanceProfiler;
 import com.shiroha.mmdskin.renderer.pipeline.shader.SkinningComputeShader;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonShaderCpu;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonRenderHelper;
@@ -47,17 +48,26 @@ final class MMDModelGpuSkinningRenderer {
         float baseScale = target.modelScaleValue();
         deliverStack.scale(baseScale, baseScale, baseScale);
 
+        long boneTimer = RenderPerformanceProfiler.get().startTimer();
         MMDModelGpuSkinningUploader.uploadBoneMatrices(target);
+        RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_BONE_UPLOAD, boneTimer);
+
+        long morphTimer = RenderPerformanceProfiler.get().startTimer();
         if (target.vertexMorphCount > 0) {
             MMDModelGpuSkinningUploader.uploadMorphData(target);
         }
         if (target.uvMorphCount > 0) {
             MMDModelGpuSkinningUploader.uploadUvMorphData(target);
         }
+        RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_MORPH_UPLOAD, morphTimer);
+
         if (target.materialMorphResultCountValue() > 0) {
+            long materialMorphTimer = RenderPerformanceProfiler.get().startTimer();
             target.loadMaterialMorphResults();
+            RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_MATERIAL_MORPH_FETCH, materialMorphTimer);
         }
 
+        long computeTimer = RenderPerformanceProfiler.get().startTimer();
         MMDModelGpuSkinning.computeShader.dispatch(new SkinningComputeShader.DispatchParams(
                 target.positionBufferObject, target.normalBufferObject,
                 target.boneIndicesBufferObject, target.boneWeightsBufferObject, target.uv0BufferObject,
@@ -67,9 +77,12 @@ final class MMDModelGpuSkinningRenderer {
                 target.uvMorphOffsetsSSBO, target.uvMorphWeightsSSBO, target.uvMorphCount,
                 target.vertexCount
         ));
+        RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_COMPUTE_DISPATCH, computeTimer);
 
+        long subMeshTimer = RenderPerformanceProfiler.get().startTimer();
         target.subMeshDataBuf.clear();
         nativeFunc.BatchGetSubMeshData(modelHandle, target.subMeshDataBuf);
+        RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_SUB_MESH_FETCH, subMeshTimer);
 
         boolean useToon = initializeToonShaderIfNeeded();
 
@@ -224,7 +237,12 @@ final class MMDModelGpuSkinningRenderer {
             GL46C.glVertexAttribPointer(target.I_uv0Location, 2, GL46C.GL_FLOAT, false, 0, 0);
         }
 
-        drawAllSubMeshes(target, minecraft);
+        long drawTimer = RenderPerformanceProfiler.get().startTimer();
+        try {
+            drawAllSubMeshes(target, minecraft);
+        } finally {
+            RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_DRAW, drawTimer);
+        }
     }
 
     private static void renderToon(MMDModelGpuSkinning target, Minecraft minecraft, float lightIntensity) {
@@ -297,7 +315,12 @@ final class MMDModelGpuSkinningRenderer {
         MMDModelGpuSkinning.toonShaderCpu.setModelViewMatrix(target.modelViewMatBuff);
         ToonRenderHelper.setupToonUniforms(MMDModelGpuSkinning.toonShaderCpu, lightIntensity);
 
-        drawAllSubMeshes(target, minecraft);
+        long drawTimer = RenderPerformanceProfiler.get().startTimer();
+        try {
+            drawAllSubMeshes(target, minecraft);
+        } finally {
+            RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_DRAW, drawTimer);
+        }
 
         if (toonPosLoc != -1) GL46C.glDisableVertexAttribArray(toonPosLoc);
         if (toonNorLoc != -1) GL46C.glDisableVertexAttribArray(toonNorLoc);
