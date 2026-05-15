@@ -43,8 +43,9 @@ final class PlayerModelRenderCoordinator {
 
         ModelConfigData modelConfig = ModelConfigManager.getConfig(selection.selectedModel());
         float combinedScale = size[0] * modelConfig.modelScale;
+        long modelHandle = model.getModelHandle();
         if (selection.isLocalPlayer()) {
-            FirstPersonManager.preRender(combinedScale, true);
+            FirstPersonManager.preRender(modelHandle, combinedScale, true);
         }
         boolean isFirstPerson = !isVr && selection.isLocalPlayer() && FirstPersonManager.isActive();
 
@@ -68,7 +69,7 @@ final class PlayerModelRenderCoordinator {
             }
 
             if (needsPostRenderSync) {
-                FirstPersonManager.postRender(player, tickDelta);
+                FirstPersonManager.postRender(modelHandle, player, tickDelta);
                 needsPostRenderSync = false;
             }
 
@@ -83,7 +84,7 @@ final class PlayerModelRenderCoordinator {
         } finally {
             try {
                 if (needsPostRenderSync) {
-                    FirstPersonManager.postRender(player, tickDelta);
+                    FirstPersonManager.postRender(modelHandle, player, tickDelta);
                 }
             } finally {
                 matrixStack.popPose();
