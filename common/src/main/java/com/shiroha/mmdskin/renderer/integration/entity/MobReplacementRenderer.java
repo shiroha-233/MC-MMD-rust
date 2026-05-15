@@ -15,6 +15,7 @@ import org.apache.logging.log4j.Logger;
 
 public final class MobReplacementRenderer {
     private static final Logger LOGGER = LogManager.getLogger();
+    private static final RenderParams REUSABLE_PARAMS = new RenderParams();
 
     private MobReplacementRenderer() {
     }
@@ -34,8 +35,8 @@ public final class MobReplacementRenderer {
             model.loadModelProperties(false);
             float[] size = ModelPropertyHelper.getModelSize(model.properties);
 
-            RenderParams params = new RenderParams();
-            EntityAnimationResolver.resolve(entity, model, entityYaw, tickDelta, params);
+            REUSABLE_PARAMS.reset();
+            EntityAnimationResolver.resolve(entity, model, entityYaw, tickDelta, REUSABLE_PARAMS);
 
             poseStack.pushPose();
             try {
@@ -45,7 +46,7 @@ public final class MobReplacementRenderer {
                 }
                 poseStack.scale(size[0], size[0], size[0]);
                 RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
-                model.model.render(entity, params.bodyYaw, params.bodyPitch, params.translation,
+                model.model.render(entity, REUSABLE_PARAMS.bodyYaw, REUSABLE_PARAMS.bodyPitch, REUSABLE_PARAMS.translation,
                         tickDelta, poseStack, packedLight, RenderContext.WORLD);
                 return true;
             } finally {

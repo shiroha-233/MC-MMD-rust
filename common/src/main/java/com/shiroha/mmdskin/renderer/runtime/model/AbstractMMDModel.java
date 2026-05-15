@@ -25,6 +25,7 @@ import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * MMD 模型抽象基类。
@@ -52,6 +53,8 @@ public abstract class AbstractMMDModel implements IMMDModel {
     protected List<String> textureKeys;
 
     private volatile boolean vrActive;
+    protected final AtomicLong nativeUpdateRevision = new AtomicLong(0L);
+
     public void setVrActive(boolean active) { this.vrActive = active; }
 
     public boolean isVrActive() { return vrActive; }
@@ -186,9 +189,14 @@ public abstract class AbstractMMDModel implements IMMDModel {
         long updateTimer = RenderPerformanceProfiler.get().startTimer();
         try {
             onUpdate(deltaTime);
+            nativeUpdateRevision.incrementAndGet();
         } finally {
             RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_NATIVE_MODEL_UPDATE, updateTimer);
         }
+    }
+
+    protected long getNativeUpdateRevision() {
+        return nativeUpdateRevision.get();
     }
 
     protected void fetchMaterialMorphResults() {
@@ -198,10 +206,15 @@ public abstract class AbstractMMDModel implements IMMDModel {
         materialMorphResultsByteBuffer.rewind();
     }
 
+    private static final int MATERIAL_MORPH_STRIDE_FLOATS = 56;
+    private static final int MATERIAL_MORPH_MUL_ALPHA_OFFSET = 3;
+    private static final int MATERIAL_MORPH_ADD_ALPHA_OFFSET = 28 + 3;
+
     protected float getEffectiveMaterialAlpha(int materialIndex, float baseAlpha) {
-        if (materialMorphResultsByteBuffer == null || materialIndex >= materialMorphResultCount) return baseAlpha;
-        int mulOffset = materialIndex * 56 + 3;
-        int addOffset = materialIndex * 56 + 28 + 3;
+        if (materialMorphResultsByteBuffer == null || materialIndex < 0 || materialIndex >= materialMorphResultCount)
+            return baseAlpha;
+        int mulOffset = materialIndex * MATERIAL_MORPH_STRIDE_FLOATS + MATERIAL_MORPH_MUL_ALPHA_OFFSET;
+        int addOffset = materialIndex * MATERIAL_MORPH_STRIDE_FLOATS + MATERIAL_MORPH_ADD_ALPHA_OFFSET;
         int capacity = materialMorphResultsByteBuffer.capacity() / 4;
         float mulAlpha = (mulOffset < capacity) ? materialMorphResultsByteBuffer.getFloat(mulOffset * 4) : 1.0f;
         float addAlpha = (addOffset < capacity) ? materialMorphResultsByteBuffer.getFloat(addOffset * 4) : 0.0f;

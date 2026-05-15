@@ -108,6 +108,7 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
     ByteBuffer subMeshDataBuf;
 
     PoseStack currentDeliverStack;
+    SkinningComputeShader.DispatchParams cachedDispatchParams;
 
     boolean initialized = false;
 
@@ -117,11 +118,15 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
         NativeFunc nf = getNf();
 
         if (computeShader == null) {
-            computeShader = new SkinningComputeShader();
-            if (!computeShader.init()) {
-                logger.error("蒙皮 Compute Shader 初始化失败，回退到 CPU 蒙皮");
-                computeShader = null;
-                return null;
+            synchronized (MMDModelGpuSkinning.class) {
+                if (computeShader == null) {
+                    SkinningComputeShader shader = new SkinningComputeShader();
+                    if (!shader.init()) {
+                        logger.error("蒙皮 Compute Shader 初始化失败，回退到 CPU 蒙皮");
+                        return null;
+                    }
+                    computeShader = shader;
+                }
             }
         }
 
@@ -149,12 +154,15 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
         NativeFunc nf = getNf();
 
         if (computeShader == null) {
-            computeShader = new SkinningComputeShader();
-            if (!computeShader.init()) {
-                logger.error("蒙皮 Compute Shader 初始化失败，回退到 CPU 蒙皮");
-                computeShader = null;
-
-                return null;
+            synchronized (MMDModelGpuSkinning.class) {
+                if (computeShader == null) {
+                    SkinningComputeShader shader = new SkinningComputeShader();
+                    if (!shader.init()) {
+                        logger.error("蒙皮 Compute Shader 初始化失败，回退到 CPU 蒙皮");
+                        return null;
+                    }
+                    computeShader = shader;
+                }
             }
         }
 
@@ -174,6 +182,7 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
         ByteBuffer matMorphResultsByteBuf = null;
         ByteBuffer subMeshDataBufLocal = null;
         MMDMaterial lightMapMaterial = null;
+        List<String> texKeys = new ArrayList<>();
 
         try {
 
@@ -293,7 +302,6 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv2Vbo);
             GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, vertexCount * 8, GL46C.GL_DYNAMIC_DRAW);
 
-            List<String> texKeys = new ArrayList<>();
             MMDMaterial[] mats = new MMDMaterial[(int) nf.GetMaterialCount(model)];
             for (int i = 0; i < mats.length; ++i) {
                 mats[i] = new MMDMaterial();
@@ -433,6 +441,26 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
             subMeshDataBufLocal = MemoryUtil.memAlloc(result.subMeshCount * 20);
             subMeshDataBufLocal.order(ByteOrder.LITTLE_ENDIAN);
             result.subMeshDataBuf = subMeshDataBufLocal;
+
+            result.cachedDispatchParams = new SkinningComputeShader.DispatchParams(
+                    result.positionBufferObject,
+                    result.normalBufferObject,
+                    result.boneIndicesBufferObject,
+                    result.boneWeightsBufferObject,
+                    result.uv0BufferObject,
+                    result.skinnedPositionsBuffer,
+                    result.skinnedNormalsBuffer,
+                    result.skinnedUvBuffer,
+                    result.boneMatrixSSBO,
+                    result.morphOffsetsSSBO,
+                    result.morphWeightsSSBO,
+                    result.vertexMorphCount,
+                    result.uvMorphOffsetsSSBO,
+                    result.uvMorphWeightsSSBO,
+                    result.uvMorphCount,
+                    result.vertexCount
+            );
+
             result.initialized = true;
 
             nf.SetAutoBlinkEnabled(model, true);
@@ -480,6 +508,7 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
             if (uvMorphWeightsBuf != null) MemoryUtil.memFree(uvMorphWeightsBuf);
             if (matMorphResultsByteBuf != null) MemoryUtil.memFree(matMorphResultsByteBuf);
             if (subMeshDataBufLocal != null) MemoryUtil.memFree(subMeshDataBufLocal);
+            if (!texKeys.isEmpty()) MMDTextureManager.releaseAll(texKeys);
 
             return null;
         }

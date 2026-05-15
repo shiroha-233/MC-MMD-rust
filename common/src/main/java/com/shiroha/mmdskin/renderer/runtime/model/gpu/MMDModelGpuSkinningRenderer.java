@@ -23,6 +23,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL46C;
+import org.lwjgl.system.MemoryUtil;
 
 final class MMDModelGpuSkinningRenderer {
     private static final Logger logger = LogManager.getLogger();
@@ -70,15 +71,7 @@ final class MMDModelGpuSkinningRenderer {
         }
 
         long computeTimer = RenderPerformanceProfiler.get().startTimer();
-        MMDModelGpuSkinning.computeShader.dispatch(new SkinningComputeShader.DispatchParams(
-                target.positionBufferObject, target.normalBufferObject,
-                target.boneIndicesBufferObject, target.boneWeightsBufferObject, target.uv0BufferObject,
-                target.skinnedPositionsBuffer, target.skinnedNormalsBuffer, target.skinnedUvBuffer,
-                target.boneMatrixSSBO,
-                target.morphOffsetsSSBO, target.morphWeightsSSBO, target.vertexMorphCount,
-                target.uvMorphOffsetsSSBO, target.uvMorphWeightsSSBO, target.uvMorphCount,
-                target.vertexCount
-        ));
+        MMDModelGpuSkinning.computeShader.dispatch(target.cachedDispatchParams);
         RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_COMPUTE_DISPATCH, computeTimer);
 
         long subMeshTimer = RenderPerformanceProfiler.get().startTimer();
@@ -128,11 +121,15 @@ final class MMDModelGpuSkinningRenderer {
             return false;
         }
         if (MMDModelGpuSkinning.toonShaderCpu == null) {
-            MMDModelGpuSkinning.toonShaderCpu = new ToonShaderCpu();
-            if (!MMDModelGpuSkinning.toonShaderCpu.init()) {
-                logger.warn("ToonShaderCpu 初始化失败，回退到普通着色");
-                MMDModelGpuSkinning.toonShaderCpu = null;
-                return false;
+            synchronized (MMDModelGpuSkinning.class) {
+                if (MMDModelGpuSkinning.toonShaderCpu == null) {
+                    ToonShaderCpu shader = new ToonShaderCpu();
+                    if (!shader.init()) {
+                        logger.warn("ToonShaderCpu 初始化失败，回退到普通着色");
+                        return false;
+                    }
+                    MMDModelGpuSkinning.toonShaderCpu = shader;
+                }
             }
         }
         return true;
@@ -171,13 +168,15 @@ final class MMDModelGpuSkinningRenderer {
         GL46C.glUseProgram(target.shaderProgram);
         target.updateLocation(target.shaderProgram);
 
-        int blockBrightness = 16 * blockLight;
-        int skyBrightness = irisActive ? (16 * skyLight) : Math.round((15.0f - skyDarken) * (skyLight / 15.0f) * 16);
+        int blockBrightness = LightingHelper.computeBlockBrightness(blockLight);
+        int skyBrightness = LightingHelper.computeSkyBrightness(skyLight, skyDarken, irisActive);
         target.uv2Buffer.clear();
+        long addr = MemoryUtil.memAddress(target.uv2Buffer);
         for (int i = 0; i < target.vertexCount; i++) {
-            target.uv2Buffer.putInt(blockBrightness);
-            target.uv2Buffer.putInt(skyBrightness);
+            MemoryUtil.memPutInt(addr + (long) i * 8, blockBrightness);
+            MemoryUtil.memPutInt(addr + (long) i * 8 + 4, skyBrightness);
         }
+        target.uv2Buffer.position(target.vertexCount * 8);
         target.uv2Buffer.flip();
         GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.uv2BufferObject);
         GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv2Buffer);

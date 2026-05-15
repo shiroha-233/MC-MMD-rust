@@ -78,6 +78,7 @@ public class MMDModelOpenGL extends AbstractMMDModel {
 
     int subMeshCount;
     ByteBuffer subMeshDataBuf;
+    long lastPositionRevision = -1L;
 
     MMDModelOpenGL() {
     }
@@ -189,6 +190,10 @@ public class MMDModelOpenGL extends AbstractMMDModel {
 
     float effectiveMaterialAlpha(int materialIndex, float baseAlpha) {
         return getEffectiveMaterialAlpha(materialIndex, baseAlpha);
+    }
+
+    long nativeUpdateRevisionValue() {
+        return getNativeUpdateRevision();
     }
 
     void releaseBaseResources() {

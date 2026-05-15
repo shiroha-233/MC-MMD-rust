@@ -15,6 +15,14 @@ public final class LightingHelper {
 
     private static final LightData DEFAULT_LIGHT = new LightData(0, 15, 0, 1.0f);
 
+    public static int computeBlockBrightness(int blockLight) {
+        return 16 * blockLight;
+    }
+
+    public static int computeSkyBrightness(int skyLight, float skyDarken, boolean irisActive) {
+        return irisActive ? (16 * skyLight) : Math.round((15.0f - skyDarken) * (skyLight / 15.0f) * 16);
+    }
+
     public static LightData sampleLight(Entity entity, Minecraft mc) {
         if (mc.level == null) return DEFAULT_LIGHT;
         mc.level.updateSkyBrightness();

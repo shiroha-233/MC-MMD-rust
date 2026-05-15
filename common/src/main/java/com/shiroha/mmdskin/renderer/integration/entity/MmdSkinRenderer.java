@@ -29,6 +29,11 @@ public class MmdSkinRenderer<T extends Entity> extends EntityRenderer<T> {
 
     protected final String modelName;
 
+    private final RenderParams reusableParams = new RenderParams();
+    private final Quaternionf reusableQuat = new Quaternionf();
+    private final Vector3f reusableVec = new Vector3f();
+    private final float[] reusableSize = new float[2];
+
     public MmdSkinRenderer(EntityRendererProvider.Context renderManager, String entityName) {
         super(renderManager);
         this.modelName = entityName.replace(':', '.');
@@ -42,10 +47,10 @@ public class MmdSkinRenderer<T extends Entity> extends EntityRenderer<T> {
         if (model == null) return;
 
         model.loadModelProperties(false);
-        float[] size = parseModelSize(model);
+        float[] size = parseModelSize(model, reusableSize);
 
-        RenderParams params = new RenderParams();
-        EntityAnimationResolver.resolve(entityIn, model, entityYaw, tickDelta, params);
+        reusableParams.reset();
+        EntityAnimationResolver.resolve(entityIn, model, entityYaw, tickDelta, reusableParams);
 
         matrixStackIn.pushPose();
 
@@ -58,7 +63,7 @@ public class MmdSkinRenderer<T extends Entity> extends EntityRenderer<T> {
         } else {
             matrixStackIn.scale(size[0], size[0], size[0]);
             RenderSystem.setShader(GameRenderer::getRendertypeEntityCutoutNoCullShader);
-            model.model.render(entityIn, params.bodyYaw, params.bodyPitch, params.translation,
+            model.model.render(entityIn, reusableParams.bodyYaw, reusableParams.bodyPitch, reusableParams.translation,
                              tickDelta, matrixStackIn, packedLightIn, RenderContext.WORLD);
         }
 
@@ -74,19 +79,24 @@ public class MmdSkinRenderer<T extends Entity> extends EntityRenderer<T> {
         matrixStack.scale(20.0f, 20.0f, -20.0f);
         matrixStack.scale(size[1], size[1], size[1]);
 
-        Quaternionf rotation = new Quaternionf().rotateZ((float) Math.PI);
-        rotation.mul(new Quaternionf().rotateX(-entityIn.getXRot() * ((float) Math.PI / 180F)));
-        rotation.mul(new Quaternionf().rotateY(-entityIn.getYRot() * ((float) Math.PI / 180F)));
-        matrixStack.mulPose(rotation);
+        reusableQuat.identity()
+                .rotateZ((float) Math.PI)
+                .rotateX(-entityIn.getXRot() * ((float) Math.PI / 180F))
+                .rotateY(-entityIn.getYRot() * ((float) Math.PI / 180F));
+        matrixStack.mulPose(reusableQuat);
 
         RenderSystem.setShader(GameRenderer::getRendertypeEntityCutoutNoCullShader);
-        model.model.render(entityIn, entityYaw, 0.0f, new Vector3f(0.0f),
+        reusableVec.set(0.0f);
+        model.model.render(entityIn, entityYaw, 0.0f, reusableVec,
                           tickDelta, matrixStack, packedLight, RenderContext.INVENTORY);
         matrixStack.popPose();
     }
 
-    private static float[] parseModelSize(MMDModelManager.Model model) {
-        return ModelPropertyHelper.getModelSize(model.properties);
+    private static float[] parseModelSize(MMDModelManager.Model model, float[] out) {
+        float[] size = ModelPropertyHelper.getModelSize(model.properties);
+        out[0] = size[0];
+        out[1] = size[1];
+        return out;
     }
 
     @Override

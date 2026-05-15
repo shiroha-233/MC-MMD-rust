@@ -15,4 +15,10 @@ public class RenderParams {
         this.bodyPitch = 0.0f;
         this.translation = new Vector3f(0.0f);
     }
+
+    public void reset() {
+        this.bodyYaw = 0.0f;
+        this.bodyPitch = 0.0f;
+        this.translation.set(0.0f);
+    }
 }

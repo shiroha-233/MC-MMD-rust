@@ -23,6 +23,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL46C;
+import org.lwjgl.system.MemoryUtil;
 
 final class MMDModelOpenGLRenderer {
     private static final Logger logger = LogManager.getLogger();
@@ -74,11 +75,15 @@ final class MMDModelOpenGLRenderer {
         }
 
         if (MMDModelOpenGL.toonShaderCpu == null) {
-            MMDModelOpenGL.toonShaderCpu = new ToonShaderCpu();
-            if (!MMDModelOpenGL.toonShaderCpu.init()) {
-                logger.warn("ToonShaderCpu 初始化失败，回退到普通着色");
-                MMDModelOpenGL.toonShaderCpu = null;
-                return false;
+            synchronized (MMDModelOpenGL.class) {
+                if (MMDModelOpenGL.toonShaderCpu == null) {
+                    ToonShaderCpu shader = new ToonShaderCpu();
+                    if (!shader.init()) {
+                        logger.warn("ToonShaderCpu 初始化失败，回退到普通着色");
+                        return false;
+                    }
+                    MMDModelOpenGL.toonShaderCpu = shader;
+                }
             }
         }
 
@@ -142,35 +147,41 @@ final class MMDModelOpenGLRenderer {
 
     private static void uploadDynamicBuffers(MMDModelOpenGL target, int blockLight, int skyLight,
                                              float skyDarken, boolean irisActive) {
-        var nativeFunc = target.nativeFunc();
-        long modelHandle = target.nativeModelHandle();
-        int posAndNorSize = target.vertexCount * 12;
-        long posData = nativeFunc.GetPoss(modelHandle);
-        nativeFunc.CopyDataToByteBuffer(target.posBuffer, posData, posAndNorSize);
-        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.vertexBufferObject);
-        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.posBuffer);
+        long currentRevision = target.nativeUpdateRevisionValue();
+        if (target.lastPositionRevision != currentRevision) {
+            var nativeFunc = target.nativeFunc();
+            long modelHandle = target.nativeModelHandle();
+            int posAndNorSize = target.vertexCount * 12;
+            long posData = nativeFunc.GetPoss(modelHandle);
+            nativeFunc.CopyDataToByteBuffer(target.posBuffer, posData, posAndNorSize);
+            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.vertexBufferObject);
+            GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.posBuffer);
 
-        long normalData = nativeFunc.GetNormals(modelHandle);
-        nativeFunc.CopyDataToByteBuffer(target.norBuffer, normalData, posAndNorSize);
-        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.normalBufferObject);
-        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.norBuffer);
+            long normalData = nativeFunc.GetNormals(modelHandle);
+            nativeFunc.CopyDataToByteBuffer(target.norBuffer, normalData, posAndNorSize);
+            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.normalBufferObject);
+            GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.norBuffer);
 
-        if (target.hasUvMorph) {
-            int uv0Size = target.vertexCount * 8;
-            long uv0Data = nativeFunc.GetUVs(modelHandle);
-            nativeFunc.CopyDataToByteBuffer(target.uv0Buffer, uv0Data, uv0Size);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.texcoordBufferObject);
-            GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv0Buffer);
+            if (target.hasUvMorph) {
+                int uv0Size = target.vertexCount * 8;
+                long uv0Data = nativeFunc.GetUVs(modelHandle);
+                nativeFunc.CopyDataToByteBuffer(target.uv0Buffer, uv0Data, uv0Size);
+                GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.texcoordBufferObject);
+                GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv0Buffer);
+            }
+
+            target.lastPositionRevision = currentRevision;
         }
 
-        int blockBrightness = 16 * blockLight;
-        int skyBrightness = irisActive ? (16 * skyLight)
-                : Math.round((15.0f - skyDarken) * (skyLight / 15.0f) * 16);
+        int blockBrightness = LightingHelper.computeBlockBrightness(blockLight);
+        int skyBrightness = LightingHelper.computeSkyBrightness(skyLight, skyDarken, irisActive);
         target.uv2Buffer.clear();
+        long addr = MemoryUtil.memAddress(target.uv2Buffer);
         for (int i = 0; i < target.vertexCount; i++) {
-            target.uv2Buffer.putInt(blockBrightness);
-            target.uv2Buffer.putInt(skyBrightness);
+            MemoryUtil.memPutInt(addr + (long) i * 8, blockBrightness);
+            MemoryUtil.memPutInt(addr + (long) i * 8 + 4, skyBrightness);
         }
+        target.uv2Buffer.position(target.vertexCount * 8);
         target.uv2Buffer.flip();
         GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.uv2BufferObject);
         GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv2Buffer);
@@ -393,21 +404,27 @@ final class MMDModelOpenGLRenderer {
         var nativeFunc = target.nativeFunc();
         long modelHandle = target.nativeModelHandle();
         int posAndNorSize = target.vertexCount * 12;
-        long posData = nativeFunc.GetPoss(modelHandle);
-        nativeFunc.CopyDataToByteBuffer(target.posBuffer, posData, posAndNorSize);
-        long normalData = nativeFunc.GetNormals(modelHandle);
-        nativeFunc.CopyDataToByteBuffer(target.norBuffer, normalData, posAndNorSize);
 
-        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.vertexBufferObject);
-        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.posBuffer);
-        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.normalBufferObject);
-        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.norBuffer);
-        if (target.hasUvMorph) {
-            int uv0Size = target.vertexCount * 8;
-            long uv0Data = nativeFunc.GetUVs(modelHandle);
-            nativeFunc.CopyDataToByteBuffer(target.uv0Buffer, uv0Data, uv0Size);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.texcoordBufferObject);
-            GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv0Buffer);
+        long currentRevision = target.nativeUpdateRevisionValue();
+        if (target.lastPositionRevision != currentRevision) {
+            long posData = nativeFunc.GetPoss(modelHandle);
+            nativeFunc.CopyDataToByteBuffer(target.posBuffer, posData, posAndNorSize);
+            long normalData = nativeFunc.GetNormals(modelHandle);
+            nativeFunc.CopyDataToByteBuffer(target.norBuffer, normalData, posAndNorSize);
+
+            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.vertexBufferObject);
+            GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.posBuffer);
+            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.normalBufferObject);
+            GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.norBuffer);
+            if (target.hasUvMorph) {
+                int uv0Size = target.vertexCount * 8;
+                long uv0Data = nativeFunc.GetUVs(modelHandle);
+                nativeFunc.CopyDataToByteBuffer(target.uv0Buffer, uv0Data, uv0Size);
+                GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.texcoordBufferObject);
+                GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv0Buffer);
+            }
+
+            target.lastPositionRevision = currentRevision;
         }
 
         target.modelViewMatBuff.clear();
