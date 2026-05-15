@@ -21,6 +21,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL46C;
+import org.lwjgl.system.MemoryUtil;
 
 final class OpenGlModelRenderer {
     private static final Logger logger = LogManager.getLogger();
@@ -82,11 +83,15 @@ final class OpenGlModelRenderer {
         }
 
         if (OpenGlModelInstance.toonShaderCpu == null) {
-            OpenGlModelInstance.toonShaderCpu = new ToonShaderCpu();
-            if (!OpenGlModelInstance.toonShaderCpu.init()) {
-                logger.warn("ToonShaderCpu ?????????????");
-                OpenGlModelInstance.toonShaderCpu = null;
-                return false;
+            synchronized (OpenGlModelInstance.class) {
+                if (OpenGlModelInstance.toonShaderCpu == null) {
+                    ToonShaderCpu shader = new ToonShaderCpu();
+                    if (!shader.init()) {
+                        logger.warn("ToonShaderCpu 初始化失败");
+                        return false;
+                    }
+                    OpenGlModelInstance.toonShaderCpu = shader;
+                }
             }
         }
 
@@ -146,30 +151,35 @@ final class OpenGlModelRenderer {
 
     private static void uploadDynamicBuffers(OpenGlModelInstance target, int blockLight, int skyLight,
                                              float skyDarken, boolean irisActive) {
-        var nativeBackend = target.nativeBackendPort();
-        long modelHandle = target.nativeModelHandle();
-        int posAndNorSize = target.vertexCount * 12;
-        long posData = nativeBackend.getPositionDataAddress(modelHandle);
-        nativeBackend.copyNativeDataToBuffer(target.posBuffer, posData, posAndNorSize);
-        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.vertexBufferObject);
-        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.posBuffer);
+        long currentRevision = target.nativeUpdateRevisionValue();
+        if (target.lastPositionRevision != currentRevision) {
+            var nativeBackend = target.nativeBackendPort();
+            long modelHandle = target.nativeModelHandle();
+            int posAndNorSize = target.vertexCount * 12;
 
-        long normalData = nativeBackend.getNormalDataAddress(modelHandle);
-        nativeBackend.copyNativeDataToBuffer(target.norBuffer, normalData, posAndNorSize);
-        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.normalBufferObject);
-        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.norBuffer);
+            long posData = nativeBackend.getPositionDataAddress(modelHandle);
+            nativeBackend.copyNativeDataToBuffer(target.posBuffer, posData, posAndNorSize);
+            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.vertexBufferObject);
+            GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.posBuffer);
 
-        if (target.hasUvMorph) {
-            int uv0Size = target.vertexCount * 8;
-            long uv0Data = nativeBackend.getUvDataAddress(modelHandle);
-            nativeBackend.copyNativeDataToBuffer(target.uv0Buffer, uv0Data, uv0Size);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.texcoordBufferObject);
-            GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv0Buffer);
+            long normalData = nativeBackend.getNormalDataAddress(modelHandle);
+            nativeBackend.copyNativeDataToBuffer(target.norBuffer, normalData, posAndNorSize);
+            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.normalBufferObject);
+            GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.norBuffer);
+
+            if (target.hasUvMorph) {
+                int uv0Size = target.vertexCount * 8;
+                long uv0Data = nativeBackend.getUvDataAddress(modelHandle);
+                nativeBackend.copyNativeDataToBuffer(target.uv0Buffer, uv0Data, uv0Size);
+                GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.texcoordBufferObject);
+                GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv0Buffer);
+            }
+
+            target.lastPositionRevision = currentRevision;
         }
 
-        int blockBrightness = 16 * blockLight;
-        int skyBrightness = irisActive ? (16 * skyLight)
-                : Math.round((15.0f - skyDarken) * (skyLight / 15.0f) * 16);
+        int blockBrightness = LightingHelper.computeBlockBrightness(blockLight);
+        int skyBrightness = LightingHelper.computeSkyBrightness(skyLight, skyDarken, irisActive);
         uploadLightBufferIfNeeded(target, blockBrightness, skyBrightness);
     }
 
@@ -179,10 +189,12 @@ final class OpenGlModelRenderer {
         }
 
         target.uv2Buffer.clear();
+        long addr = MemoryUtil.memAddress(target.uv2Buffer);
         for (int i = 0; i < target.vertexCount; i++) {
-            target.uv2Buffer.putInt(blockBrightness);
-            target.uv2Buffer.putInt(skyBrightness);
+            MemoryUtil.memPutInt(addr + (long) i * 8, blockBrightness);
+            MemoryUtil.memPutInt(addr + (long) i * 8 + 4, skyBrightness);
         }
+        target.uv2Buffer.position(target.vertexCount * 8);
         target.uv2Buffer.flip();
         GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.uv2BufferObject);
         GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv2Buffer);
@@ -404,24 +416,29 @@ final class OpenGlModelRenderer {
             }
         }
 
-        var nativeBackend = target.nativeBackendPort();
-        long modelHandle = target.nativeModelHandle();
-        int posAndNorSize = target.vertexCount * 12;
-        long posData = nativeBackend.getPositionDataAddress(modelHandle);
-        nativeBackend.copyNativeDataToBuffer(target.posBuffer, posData, posAndNorSize);
-        long normalData = nativeBackend.getNormalDataAddress(modelHandle);
-        nativeBackend.copyNativeDataToBuffer(target.norBuffer, normalData, posAndNorSize);
+        long currentRevision = target.nativeUpdateRevisionValue();
+        if (target.lastPositionRevision != currentRevision) {
+            var nativeBackend = target.nativeBackendPort();
+            long modelHandle = target.nativeModelHandle();
+            int posAndNorSize = target.vertexCount * 12;
+            long posData = nativeBackend.getPositionDataAddress(modelHandle);
+            nativeBackend.copyNativeDataToBuffer(target.posBuffer, posData, posAndNorSize);
+            long normalData = nativeBackend.getNormalDataAddress(modelHandle);
+            nativeBackend.copyNativeDataToBuffer(target.norBuffer, normalData, posAndNorSize);
 
-        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.vertexBufferObject);
-        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.posBuffer);
-        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.normalBufferObject);
-        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.norBuffer);
-        if (target.hasUvMorph) {
-            int uv0Size = target.vertexCount * 8;
-            long uv0Data = nativeBackend.getUvDataAddress(modelHandle);
-            nativeBackend.copyNativeDataToBuffer(target.uv0Buffer, uv0Data, uv0Size);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.texcoordBufferObject);
-            GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv0Buffer);
+            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.vertexBufferObject);
+            GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.posBuffer);
+            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.normalBufferObject);
+            GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.norBuffer);
+            if (target.hasUvMorph) {
+                int uv0Size = target.vertexCount * 8;
+                long uv0Data = nativeBackend.getUvDataAddress(modelHandle);
+                nativeBackend.copyNativeDataToBuffer(target.uv0Buffer, uv0Data, uv0Size);
+                GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.texcoordBufferObject);
+                GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv0Buffer);
+            }
+
+            target.lastPositionRevision = currentRevision;
         }
 
         target.modelViewMatBuff.clear();

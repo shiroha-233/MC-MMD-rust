@@ -32,6 +32,7 @@ public final class SubMeshDrawHelper {
                             TextureResolver textureResolver,
                             AlphaResolver alphaResolver) {
         RenderSystem.activeTexture(GL46C.GL_TEXTURE0);
+        int lastBoundTexture = -1;
 
         for (int i = 0; i < subMeshCount; ++i) {
             int base = i * SUB_MESH_STRIDE;
@@ -53,8 +54,11 @@ public final class SubMeshDrawHelper {
             }
 
             int textureId = textureResolver.resolve(materialId);
-            RenderSystem.setShaderTexture(0, textureId);
-            GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, textureId);
+            if (textureId != lastBoundTexture) {
+                RenderSystem.setShaderTexture(0, textureId);
+                GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, textureId);
+                lastBoundTexture = textureId;
+            }
 
             long startPos = (long) beginIndex * indexElementSize;
             GL46C.glDrawElements(GL46C.GL_TRIANGLES, vertexCount, indexType, startPos);
@@ -68,6 +72,7 @@ public final class SubMeshDrawHelper {
                                    TextureResolver textureResolver,
                                    AlphaResolver alphaResolver) {
         RenderSystem.activeTexture(GL46C.GL_TEXTURE0);
+        int lastBoundTexture = -1;
 
         for (int i = 0; i < subMeshCount; ++i) {
             int base = i * SUB_MESH_STRIDE;
@@ -82,8 +87,11 @@ public final class SubMeshDrawHelper {
             }
 
             int textureId = textureResolver.resolve(materialId);
-            RenderSystem.setShaderTexture(0, textureId);
-            GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, textureId);
+            if (textureId != lastBoundTexture) {
+                RenderSystem.setShaderTexture(0, textureId);
+                GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, textureId);
+                lastBoundTexture = textureId;
+            }
 
             long startPos = (long) beginIndex * indexElementSize;
             GL46C.glDrawElements(GL46C.GL_TRIANGLES, vertexCount, indexType, startPos);

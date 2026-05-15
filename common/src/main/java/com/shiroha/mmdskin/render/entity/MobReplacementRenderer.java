@@ -13,12 +13,11 @@ import net.minecraft.world.entity.LivingEntity;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/**
- * 原版生物的 MMD 替换渲染器。
- */
+/** 原版生物的 MMD 替换渲染器。 */
 public final class MobReplacementRenderer {
 
     private static final Logger LOGGER = LogManager.getLogger();
+    private static final MutableRenderPose REUSABLE_POSE = new MutableRenderPose();
 
     private MobReplacementRenderer() {
     }
@@ -42,8 +41,8 @@ public final class MobReplacementRenderer {
 
             float modelScale = model.renderProperties().modelScale();
 
-            MutableRenderPose params = new MutableRenderPose();
-            EntityAnimationResolver.resolve(entity, model, entityYaw, tickDelta, params);
+            REUSABLE_POSE.reset();
+            EntityAnimationResolver.resolve(entity, model, entityYaw, tickDelta, REUSABLE_POSE);
 
             poseStack.pushPose();
             try {
@@ -55,7 +54,7 @@ public final class MobReplacementRenderer {
 
                 poseStack.scale(modelScale, modelScale, modelScale);
                 RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
-                model.modelInstance().render(entity, params.bodyYaw, params.bodyPitch, params.translation,
+                model.modelInstance().render(entity, REUSABLE_POSE.bodyYaw, REUSABLE_POSE.bodyPitch, REUSABLE_POSE.translation,
                     tickDelta, poseStack, packedLight, RenderScene.WORLD);
                 return true;
             } finally {

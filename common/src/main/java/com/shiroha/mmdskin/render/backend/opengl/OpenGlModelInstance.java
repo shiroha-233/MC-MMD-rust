@@ -89,6 +89,7 @@ public class OpenGlModelInstance extends BaseModelInstance {
     ByteBuffer subMeshDataBuf;
     int lastBlockBrightness = Integer.MIN_VALUE;
     int lastSkyBrightness = Integer.MIN_VALUE;
+    long lastPositionRevision = -1L;
 
     OpenGlModelInstance() {
     }
@@ -203,6 +204,10 @@ public class OpenGlModelInstance extends BaseModelInstance {
 
     long nativeModelHandle() {
         return model;
+    }
+
+    long nativeUpdateRevisionValue() {
+        return getNativeUpdateRevision();
     }
 
     Quaternionf workingQuaternion() {

@@ -24,8 +24,8 @@ final class TextureGpuLoader {
         int size = width * height * (hasAlpha ? 4 : 3);
 
         ByteBuffer buf = MemoryUtil.memAlloc(size);
+        int texId = GL46C.glGenTextures();
         try {
-            int texId = GL46C.glGenTextures();
             GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, texId);
             port.copyTextureData(buf, dataAddr, size);
             buf.rewind();
@@ -33,7 +33,7 @@ final class TextureGpuLoader {
             configureTexture();
             return buildTexture(texId, width, height, hasAlpha);
         } catch (RuntimeException | Error e) {
-            deleteGlTexture(GL46C.glGenTextures());
+            deleteGlTexture(texId);
             throw e;
         } finally {
             MemoryUtil.memFree(buf);

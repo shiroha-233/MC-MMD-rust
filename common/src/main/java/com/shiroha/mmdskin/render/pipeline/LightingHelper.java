@@ -4,10 +4,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.LightLayer;
 
-/**
- * 光照计算工具类。
- */
+/** 光照计算工具类。 */
 public final class LightingHelper {
+
+    private static final int LIGHT_SCALE = 16;
 
     private LightingHelper() {}
 
@@ -30,5 +30,16 @@ public final class LightingHelper {
         lightIntensity = 0.1f + lightIntensity * 0.9f;
 
         return new LightData(blockLight, skyLight, skyDarken, lightIntensity);
+    }
+
+    public static int computeBlockBrightness(int blockLight) {
+        return LIGHT_SCALE * blockLight;
+    }
+
+    public static int computeSkyBrightness(int skyLight, float skyDarken, boolean irisActive) {
+        if (irisActive) {
+            return LIGHT_SCALE * skyLight;
+        }
+        return Math.round((15.0f - skyDarken) * (skyLight / 15.0f) * LIGHT_SCALE);
     }
 }

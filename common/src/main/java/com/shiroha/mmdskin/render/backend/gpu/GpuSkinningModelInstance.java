@@ -108,6 +108,7 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
     int subMeshCount;
     ByteBuffer subMeshDataBuf;
     PoseStack currentDeliverStack;
+    SkinningComputeShader.DispatchParams cachedDispatchParams;
 
     volatile boolean initialized;
     long lastGpuUploadRevision = -1L;
@@ -172,6 +173,7 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
         ByteBuffer matMorphResultsByteBuf = null;
         ByteBuffer subMeshDataBufLocal = null;
         ModelMaterial lightMapMaterial = null;
+        List<String> textureKeys = new ArrayList<>();
 
         try {
             nativeBackend.initGpuSkinningData(model);
@@ -284,7 +286,6 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv2Vbo);
             GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, vertexCount * 8, GL46C.GL_DYNAMIC_DRAW);
 
-            List<String> textureKeys = new ArrayList<>();
             ModelMaterial[] mats = new ModelMaterial[nativeBackend.getMaterialCount(model)];
             for (int i = 0; i < mats.length; ++i) {
                 mats[i] = new ModelMaterial();
@@ -423,6 +424,26 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
             subMeshDataBufLocal = MemoryUtil.memAlloc(result.subMeshCount * 20);
             subMeshDataBufLocal.order(ByteOrder.LITTLE_ENDIAN);
             result.subMeshDataBuf = subMeshDataBufLocal;
+
+            result.cachedDispatchParams = new SkinningComputeShader.DispatchParams(
+                    result.positionBufferObject,
+                    result.normalBufferObject,
+                    result.boneIndicesBufferObject,
+                    result.boneWeightsBufferObject,
+                    result.uv0BufferObject,
+                    result.skinnedPositionsBuffer,
+                    result.skinnedNormalsBuffer,
+                    result.skinnedUvBuffer,
+                    result.boneMatrixSSBO,
+                    result.morphOffsetsSSBO,
+                    result.morphWeightsSSBO,
+                    result.vertexMorphCount,
+                    result.uvMorphOffsetsSSBO,
+                    result.uvMorphWeightsSSBO,
+                    result.uvMorphCount,
+                    result.vertexCount
+            );
+
             result.initialized = true;
 
             nativeBackend.setAutoBlinkEnabled(model, true);
@@ -467,6 +488,7 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
             if (uvMorphWeightsBuf != null) MemoryUtil.memFree(uvMorphWeightsBuf);
             if (matMorphResultsByteBuf != null) MemoryUtil.memFree(matMorphResultsByteBuf);
             if (subMeshDataBufLocal != null) MemoryUtil.memFree(subMeshDataBufLocal);
+            if (!textureKeys.isEmpty()) TextureRepository.releaseAll(textureKeys);
             return null;
         }
     }
@@ -475,14 +497,18 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
         if (computeShader != null) {
             return true;
         }
-
-        computeShader = new SkinningComputeShader();
-        if (!computeShader.init()) {
-            logger.error("Skinning compute shader init failed, falling back to CPU skinning");
-            computeShader = null;
-            return false;
+        synchronized (GpuSkinningModelInstance.class) {
+            if (computeShader != null) {
+                return true;
+            }
+            SkinningComputeShader shader = new SkinningComputeShader();
+            if (!shader.init()) {
+                logger.error("Skinning compute shader init failed, falling back to CPU skinning");
+                return false;
+            }
+            computeShader = shader;
+            return true;
         }
-        return true;
     }
 
     @Override
