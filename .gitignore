@@ -112,6 +112,8 @@ babylon-mmd/
 /vivecraft-1.20.1-1.3.7-forge
 UniVRM/
 shader/
+!common/src/main/java/com/shiroha/mmdskin/render/shader/
+!common/src/main/java/com/shiroha/mmdskin/compat/iris/
 AGENT.md
 /.gradle-clean-home
 !rust_engine/src/bin/
