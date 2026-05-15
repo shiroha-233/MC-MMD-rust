@@ -262,6 +262,7 @@
   "gui.mmdskin.select_all": "All",
   "gui.mmdskin.clear_all": "Clear",
   "gui.mmdskin.model_selector.stats": "%s Models ? %s",
+  "gui.mmdskin.model_selector.search": "Search Models",
   "gui.mmdskin.material_visibility.title": "Material Visibility",
   "gui.mmdskin.material_visibility.show_all": "Show All",
   "gui.mmdskin.material_visibility.hide_all": "Hide All",

@@ -262,6 +262,7 @@
   "gui.mmdskin.select_all": "全選択",
   "gui.mmdskin.clear_all": "クリア",
   "gui.mmdskin.model_selector.stats": "%s モデル · %s",
+  "gui.mmdskin.model_selector.search": "モデル検索",
   "gui.mmdskin.material_visibility.title": "マテリアル表示",
   "gui.mmdskin.material_visibility.show_all": "全表示",
   "gui.mmdskin.material_visibility.hide_all": "全非表示",

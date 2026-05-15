@@ -12,9 +12,11 @@ import java.util.List;
 
 /** 动作轮盘配置界面，提供原生双列可选/已选迁移编辑。 */
 public class ActionWheelConfigScreen extends Screen {
-    private static final int WINDOW_MIN_WIDTH = 660;
-    private static final int WINDOW_MIN_HEIGHT = 380;
+    private static final int WINDOW_MIN_WIDTH = 600;
+    private static final int WINDOW_MIN_HEIGHT = 320;
     private static final int WINDOW_MARGIN = 16;
+    private static final float WINDOW_WIDTH_RATIO = 0.68f;
+    private static final float WINDOW_HEIGHT_RATIO = 0.70f;
     private static final int HEADER_HEIGHT = 40;
     private static final int FOOTER_HEIGHT = 34;
     private static final int COLUMN_GAP = 12;
@@ -150,10 +152,15 @@ public class ActionWheelConfigScreen extends Screen {
     }
 
     private void updateLayout() {
-        int panelWidth = Math.max(WINDOW_MIN_WIDTH, Math.round(this.width * 0.72f));
-        int panelHeight = Math.max(WINDOW_MIN_HEIGHT, Math.round(this.height * 0.76f));
+        int maxPanelWidth = Math.max(1, this.width - WINDOW_MARGIN * 2);
+        int maxPanelHeight = Math.max(1, this.height - WINDOW_MARGIN * 2);
+        int minPanelWidth = Math.min(WINDOW_MIN_WIDTH, maxPanelWidth);
+        int minPanelHeight = Math.min(WINDOW_MIN_HEIGHT, maxPanelHeight);
+
+        int panelWidth = Mth.clamp(Math.round(this.width * WINDOW_WIDTH_RATIO), minPanelWidth, maxPanelWidth);
+        int panelHeight = Mth.clamp(Math.round(this.height * WINDOW_HEIGHT_RATIO), minPanelHeight, maxPanelHeight);
         int panelX = (this.width - panelWidth) / 2;
-        int panelY = Math.max(WINDOW_MARGIN, (this.height - panelHeight) / 2);
+        int panelY = (this.height - panelHeight) / 2;
 
         UiRect panel = new UiRect(panelX, panelY, panelWidth, panelHeight);
         UiRect header = new UiRect(panelX + PANEL_PADDING, panelY + PANEL_PADDING, panelWidth - PANEL_PADDING * 2, HEADER_HEIGHT);
