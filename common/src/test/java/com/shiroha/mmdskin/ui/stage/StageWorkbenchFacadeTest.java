@@ -218,7 +218,7 @@ class StageWorkbenchFacadeTest {
 
     private static final class FakeConfigAccess implements StageWorkbenchFacade.ConfigAccess {
         private StageWorkbenchFacade.WorkbenchPreferences preferences =
-                new StageWorkbenchFacade.WorkbenchPreferences("", true, 0.0f, 1.0f, true, true);
+                new StageWorkbenchFacade.WorkbenchPreferences("", true, 0.0f, 1.0f);
 
         @Override
         public StageWorkbenchFacade.WorkbenchPreferences loadPreferences() {
