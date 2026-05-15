@@ -23,7 +23,8 @@ final class StageAssignPanel {
     private static final int BUTTON_HEIGHT = 15;
     private static final int LIST_ROW_HEIGHT = 16;
     private static final int ROW_GAP = 2;
-    private static final int TOGGLE_HEIGHT = 13;
+    private static final int TOGGLE_HEIGHT = 14;
+    private static final int TOGGLE_TRACK_WIDTH = 28;
     private static final int INVITE_BUTTON_WIDTH = 66;
 
     private static final int COLOR_ACCENT = TranslucentTrayChrome.ACCENT;
@@ -246,11 +247,19 @@ final class StageAssignPanel {
 
     private void renderGuestMotionArea(GuiGraphics graphics, int mouseX, int mouseY) {
         TranslucentTrayChrome.drawSeparator(graphics, panelX + PANEL_PADDING, guestToggleY - 5, PANEL_WIDTH - PANEL_PADDING * 2);
-        graphics.drawString(font, Component.translatable("gui.mmdskin.stage.local_motion_override"), panelX + PANEL_PADDING, guestToggleY - 14, COLOR_TEXT, false);
 
         int toggleWidth = PANEL_WIDTH - PANEL_PADDING * 2;
         hoveredCustomMotionToggle = isRectHovered(mouseX, mouseY, panelX + PANEL_PADDING, guestToggleY, toggleWidth, TOGGLE_HEIGHT);
-        drawToggle(graphics, panelX + PANEL_PADDING, guestToggleY, toggleWidth, TOGGLE_HEIGHT, facade.isLocalCustomMotionEnabled(), hoveredCustomMotionToggle);
+        drawToggle(
+                graphics,
+                panelX + PANEL_PADDING,
+                guestToggleY,
+                toggleWidth,
+                TOGGLE_HEIGHT,
+                facade.isLocalCustomMotionEnabled(),
+                hoveredCustomMotionToggle,
+                Component.translatable("gui.mmdskin.stage.local_motion_override").getString()
+        );
 
         if (!facade.isLocalCustomMotionEnabled()) {
             graphics.drawString(font, Component.translatable("gui.mmdskin.stage.local_motion_fallback"), panelX + PANEL_PADDING, guestMotionTop, COLOR_TEXT_DIM, false);
@@ -284,12 +293,23 @@ final class StageAssignPanel {
         drawScrollbar(graphics, guestMotionTop, guestMotionBottom, motionScroll, maxMotionScroll());
     }
 
-    private void drawToggle(GuiGraphics graphics, int x, int y, int width, int height, boolean enabled, boolean hovered) {
-        int color = enabled ? COLOR_TOGGLE_ON : COLOR_TOGGLE_OFF;
-        graphics.fill(x, y, x + width, y + height, hovered ? brighten(color) : color);
-        int knob = height - 2;
-        int knobX = enabled ? x + width - knob - 1 : x + 1;
-        graphics.fill(knobX, y + 1, knobX + knob, y + knob + 1, 0xFFF5FAFF);
+    private void drawToggle(GuiGraphics graphics, int x, int y, int width, int height,
+                            boolean enabled, boolean hovered, String label) {
+        if (hovered) {
+            graphics.fill(x, y, x + width, y + height, 0x12000000);
+        }
+        int labelY = y + Math.max(0, (height - font.lineHeight) / 2);
+        graphics.drawString(font, label, x, labelY, COLOR_TEXT, false);
+
+        int trackHeight = Math.max(10, height - 2);
+        int trackX = x + width - TOGGLE_TRACK_WIDTH;
+        int trackY = y + Math.max(0, (height - trackHeight) / 2);
+        int trackColor = enabled ? COLOR_TOGGLE_ON : COLOR_TOGGLE_OFF;
+        graphics.fill(trackX, trackY, trackX + TOGGLE_TRACK_WIDTH, trackY + trackHeight, hovered ? brighten(trackColor) : trackColor);
+        int knobSize = Math.max(8, trackHeight - 4);
+        int knobX = enabled ? trackX + TOGGLE_TRACK_WIDTH - knobSize - 2 : trackX + 2;
+        int knobY = trackY + (trackHeight - knobSize) / 2;
+        graphics.fill(knobX, knobY, knobX + knobSize, knobY + knobSize, 0xFFF5FAFF);
     }
 
     private void drawCheckbox(GuiGraphics graphics, int x, int y, boolean checked) {
