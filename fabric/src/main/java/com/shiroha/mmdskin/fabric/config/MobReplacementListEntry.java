@@ -3,6 +3,7 @@ package com.shiroha.mmdskin.fabric.config;
 
 import com.shiroha.mmdskin.config.UIConstants;
 import com.shiroha.mmdskin.fabric.render.MobReplacementTargets;
+import com.shiroha.mmdskin.ui.selector.MobReplacementPickerScreen;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -52,7 +53,13 @@ final class MobReplacementListEntry extends AbstractConfigListEntry<String> {
         if (parent == null) {
             return;
         }
-        Minecraft.getInstance().setScreen(new MobReplacementModelPickerScreen(parent, target, value, this::setValue));
+        Minecraft.getInstance().setScreen(new MobReplacementPickerScreen(
+            parent,
+            target.displayName(),
+            value,
+            ModConfigScreen::createModelSelections,
+            this::setValue
+        ));
     }
 
     private void setValue(String value) {

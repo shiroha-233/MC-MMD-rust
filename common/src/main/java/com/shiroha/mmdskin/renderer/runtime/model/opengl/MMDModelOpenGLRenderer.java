@@ -1,3 +1,4 @@
+/* 文件职责：执行 CPU/OpenGL 模型的 Toon/普通渲染流程。 */
 package com.shiroha.mmdskin.renderer.runtime.model.opengl;
 
 import com.mojang.blaze3d.platform.GlStateManager;
@@ -417,10 +418,10 @@ final class MMDModelOpenGLRenderer {
 
         long drawTimer = RenderPerformanceProfiler.get().startTimer();
         try {
+            renderToonMainPass(target, minecraft, lightIntensity);
             if (MMDModelOpenGL.toonConfig.isOutlineEnabled()) {
                 renderOutlinePass(target);
             }
-            renderToonMainPass(target, minecraft, lightIntensity);
         } finally {
             RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_DRAW, drawTimer);
         }
@@ -437,6 +438,11 @@ final class MMDModelOpenGLRenderer {
         MMDModelOpenGL.toonShaderCpu.useOutline();
         int posLoc = MMDModelOpenGL.toonShaderCpu.getOutlinePositionLocation();
         int norLoc = MMDModelOpenGL.toonShaderCpu.getOutlineNormalLocation();
+        int outlineUvLoc = MMDModelOpenGL.toonShaderCpu.getOutlineUv0Location();
+        int missingTextureId = Minecraft.getInstance()
+                .getTextureManager()
+                .getTexture(TextureManager.INTENTIONAL_MISSING_TEXTURE)
+                .getId();
 
         if (posLoc != -1) {
             GL46C.glEnableVertexAttribArray(posLoc);
@@ -451,8 +457,15 @@ final class MMDModelOpenGLRenderer {
 
         MMDModelOpenGL.toonShaderCpu.setOutlineProjectionMatrix(target.projMatBuff);
         MMDModelOpenGL.toonShaderCpu.setOutlineModelViewMatrix(target.modelViewMatBuff);
+        if (outlineUvLoc != -1) {
+            GL46C.glEnableVertexAttribArray(outlineUvLoc);
+            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.texcoordBufferObject);
+            GL46C.glVertexAttribPointer(outlineUvLoc, 2, GL46C.GL_FLOAT, false, 0, 0);
+        }
+
         ToonRenderHelper.setupOutlineUniforms(MMDModelOpenGL.toonShaderCpu);
 
+        RenderSystem.depthMask(false);
         GL46C.glCullFace(GL46C.GL_FRONT);
         RenderSystem.enableCull();
         SubMeshDrawHelper.drawOutline(
@@ -460,6 +473,7 @@ final class MMDModelOpenGLRenderer {
                 target.subMeshCount,
                 target.indexElementSize,
                 target.indexType,
+                materialId -> target.mats[materialId].tex == 0 ? missingTextureId : target.mats[materialId].tex,
                 (materialId, baseAlpha) -> {
                     MMDMaterial material = target.mats[materialId];
                     if (material != null && material.isFacialFeature()) {
@@ -468,9 +482,11 @@ final class MMDModelOpenGLRenderer {
                     return target.effectiveMaterialAlpha(materialId, baseAlpha);
                 });
         GL46C.glCullFace(GL46C.GL_BACK);
+        RenderSystem.depthMask(true);
 
         if (posLoc != -1) GL46C.glDisableVertexAttribArray(posLoc);
         if (norLoc != -1) GL46C.glDisableVertexAttribArray(norLoc);
+        if (outlineUvLoc != -1) GL46C.glDisableVertexAttribArray(outlineUvLoc);
     }
 
     private static void renderToonMainPass(MMDModelOpenGL target, Minecraft minecraft, float lightIntensity) {
@@ -497,7 +513,7 @@ final class MMDModelOpenGLRenderer {
 
         MMDModelOpenGL.toonShaderCpu.setProjectionMatrix(target.projMatBuff);
         MMDModelOpenGL.toonShaderCpu.setModelViewMatrix(target.modelViewMatBuff);
-        ToonRenderHelper.setupToonUniforms(MMDModelOpenGL.toonShaderCpu, lightIntensity);
+        ToonRenderHelper.setupToonUniforms(MMDModelOpenGL.toonShaderCpu, lightIntensity, target.light0Direction);
 
         drawSubMeshes(target, minecraft);
 

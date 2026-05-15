@@ -182,6 +182,7 @@
   "gui.mmdskin.select_all": "全选",
   "gui.mmdskin.clear_all": "清空",
   "gui.mmdskin.model_selector.stats": "%s 模型 · %s",
+  "gui.mmdskin.model_selector.search": "搜索模型",
   "gui.mmdskin.material_visibility.title": "材质可见性",
   "gui.mmdskin.material_visibility.show_all": "全显",
   "gui.mmdskin.material_visibility.hide_all": "全隐",

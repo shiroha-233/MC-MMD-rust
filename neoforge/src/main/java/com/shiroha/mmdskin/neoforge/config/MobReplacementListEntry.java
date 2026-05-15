@@ -2,6 +2,7 @@
 package com.shiroha.mmdskin.neoforge.config;
 
 import com.shiroha.mmdskin.config.UIConstants;
+import com.shiroha.mmdskin.ui.selector.MobReplacementPickerScreen;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -56,7 +57,13 @@ final class MobReplacementListEntry extends AbstractConfigListEntry<String> {
         if (parent == null) {
             return;
         }
-        Minecraft.getInstance().setScreen(new MobReplacementModelPickerScreen(parent, entityType, getFieldName(), value, this::setValue));
+        Minecraft.getInstance().setScreen(new MobReplacementPickerScreen(
+                parent,
+                getFieldName(),
+                value,
+                ModConfigScreen::createModelSelections,
+                this::setValue
+        ));
     }
 
     private void setValue(String value) {

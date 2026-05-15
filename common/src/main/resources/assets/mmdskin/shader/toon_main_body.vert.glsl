@@ -1,3 +1,4 @@
+/* 文件职责：输出 Toon 主通道所需的位置、法线和光照方向。 */
 #version 330 core
 
 layout(location = 0) in vec3 Position;
@@ -6,10 +7,12 @@ layout(location = 2) in vec2 UV0;
 
 uniform mat4 ProjMat;
 uniform mat4 ModelViewMat;
+uniform vec3 LightDir;
 
 out vec2 texCoord0;
 out vec3 viewNormal;
 out vec3 viewPos;
+out vec3 viewLightDir;
 
 void main() {
     // Position 和 Normal 已经是蒙皮后的数据（由 Rust 引擎计算）
@@ -18,8 +21,10 @@ void main() {
     mat3 normalMatrix = mat3(ModelViewMat);
     vec3 transformedNormal = normalMatrix * Normal;
 
-    gl_Position = ProjMat * viewPosition;
-    texCoord0 = UV0;
     viewNormal = normalize(transformedNormal);
     viewPos = viewPosition.xyz;
+    viewLightDir = normalize(normalMatrix * normalize(LightDir));
+    texCoord0 = UV0;
+
+    gl_Position = ProjMat * viewPosition;
 }

@@ -1,3 +1,4 @@
+/* 文件职责：统一管理子网格绘制与描边绘制的索引提交逻辑。 */
 package com.shiroha.mmdskin.renderer.runtime.model.shared;
 
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -65,7 +66,9 @@ public final class SubMeshDrawHelper {
                                    int subMeshCount,
                                    int indexElementSize,
                                    int indexType,
+                                   TextureResolver textureResolver,
                                    AlphaResolver alphaResolver) {
+        RenderSystem.activeTexture(GL46C.GL_TEXTURE0);
         for (int i = 0; i < subMeshCount; ++i) {
             int base = i * SUB_MESH_STRIDE;
             int materialId = subMeshDataBuf.getInt(base);
@@ -77,6 +80,10 @@ public final class SubMeshDrawHelper {
             if (!visible || alphaResolver.resolve(materialId, alpha) < 0.001f) {
                 continue;
             }
+
+            int textureId = textureResolver.resolve(materialId);
+            RenderSystem.setShaderTexture(0, textureId);
+            GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, textureId);
 
             long startPos = (long) beginIndex * indexElementSize;
             GL46C.glDrawElements(GL46C.GL_TRIANGLES, vertexCount, indexType, startPos);
