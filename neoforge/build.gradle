@@ -116,10 +116,10 @@ repositories {
 
 tasks.named('processResources', ProcessResources).configure {
     def replaceProperties = [
-        minecraft_version: '1.21.1',
-        minecraft_version_range: '[1.21.1,1.22)',
+        minecraft_version: '1.21.11',
+        minecraft_version_range: '[1.21.11,1.22)',
         neoforge_version: project.neoforge_version,
-        neoforge_version_range: '[21.1,)',
+        neoforge_version_range: '[21.11,)',
         loader_version_range: '[4,)',
         mod_id: 'mmdskin',
         mod_name: '3D Skin Layers',

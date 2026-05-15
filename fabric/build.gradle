@@ -62,11 +62,6 @@ repositories {
 		url "https://maven.irisshaders.dev"
 		name "Iris Shaders"
 	}
-	// Cardinal Components API v3 (Ladysnake)
-	maven {
-		url "https://maven.ladysnake.org/releases"
-		name "Ladysnake"
-	}
 }
 
 dependencies {
@@ -96,26 +91,8 @@ dependencies {
 	}
 	include("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}")
 	
-	// Cardinal Components API v3 - Touhou Little Maid Orihime 的传递依赖
-	modCompileOnly "org.ladysnake.cardinal-components-api:cardinal-components-base:${rootProject.cardinal_components_version}"
-	modCompileOnly "org.ladysnake.cardinal-components-api:cardinal-components-entity:${rootProject.cardinal_components_version}"
-	modLocalRuntime "org.ladysnake.cardinal-components-api:cardinal-components-base:${rootProject.cardinal_components_version}"
-	modLocalRuntime "org.ladysnake.cardinal-components-api:cardinal-components-entity:${rootProject.cardinal_components_version}"
-	
-	// Nashorn 脚本引擎 - Java 21 不再内置，Touhou Little Maid JS 动画需要
-	runtimeOnly "org.openjdk.nashorn:nashorn-core:15.4"
-	
-	// NightConfig - Forge Config API Port 的传递依赖，dev 环境需要显式声明
-	runtimeOnly "com.electronwill.night-config:core:3.8.1"
-	runtimeOnly "com.electronwill.night-config:toml:3.8.1"
-	
 	// mc-vr-api - Vivecraft VR API（软依赖，运行时可选）
 
-	// TouhouLittleMaid Orihime (Fabric 移植版) - 可选依赖，用于联动
-	modCompileOnly "maven.modrinth:touhoulittlemaid-orihime:${rootProject.touhou_little_maid_fabric_version}"
-	modLocalRuntime "maven.modrinth:touhoulittlemaid-orihime:${rootProject.touhou_little_maid_fabric_version}"
-	modLocalRuntime "maven.modrinth:forge-config-api-port:${rootProject.forge_config_api_port_version}"
-	
 }
 
 processResources {
