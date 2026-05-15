@@ -1,3 +1,4 @@
+// 负责公共模块的通用依赖与测试配置。
  architectury {
     common("fabric", "forge")
 }
@@ -11,8 +12,8 @@ dependencies {
 
     // ImGui workbench（舞台编辑工作台）
     
-    // JLayer - MP3 解码器（舞台模式音频播放）
-    implementation("javazoom:jlayer:1.0.1")
+    // JLayer 仅用于编译期 API；运行时由平台侧统一阴影打包并重定位。
+    compileOnly("javazoom:jlayer:1.0.1") { transitive = false }
     
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")

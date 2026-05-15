@@ -1,3 +1,4 @@
+// 负责 Forge 平台的依赖装配、阴影打包与重映射发布。
 plugins {
 	id 'com.gradleup.shadow' version '8.3.6'
 }
@@ -39,6 +40,7 @@ loom {
 configurations {
     common
     shadowCommon // Don't use shadow from the shadow plugin since it conflicts with Loom.
+    shadowBundle
     compileClasspath.extendsFrom common
     runtimeClasspath.extendsFrom common
     developmentForge.extendsFrom common
@@ -47,8 +49,9 @@ configurations {
 shadowJar {
     exclude "architectury.common.json"
     exclude "fabric.mod.json"
-    configurations = [project.configurations.shadowCommon]
+    configurations = [project.configurations.shadowCommon, project.configurations.shadowBundle]
     archiveClassifier.set("dev-shadow")
+    relocate "javazoom", "com.shiroha.mmdskin.shadow.javazoom"
     
     // 包含 common 模块的资源（原生库、默认动画等）
     from(project(":common").sourceSets.main.resources)
@@ -113,11 +116,9 @@ dependencies {
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionForge")) { transitive false }
 
-    // JLayer - MP3 解码器（舞台模式音频播放）
-    // common 配置使其在 dev 运行时可用（developmentForge extends common）
-    // include 配置使其以 Jar-in-Jar 内嵌到 mod JAR
+    // JLayer 在 dev 运行时保持可见，但发布物改为私有化阴影打包。
     common("javazoom:jlayer:1.0.1") { transitive = false }
-    include("javazoom:jlayer:1.0.1")
+    shadowBundle("javazoom:jlayer:1.0.1") { transitive = false }
 
     // Skiko / Skia（轮盘 UI 平滑渲染）
 
