@@ -143,33 +143,14 @@ public final class FirstPersonManager {
     }
 
     public static Vec3 getRotatedEyePosition(Entity entity, float partialTick) {
-        if (isVrEyeCameraActive() && entity instanceof Player player) {
-            Vec3 headRenderPos = vrRuntimePort.getWorldRenderHeadPosition(player);
-            if (headRenderPos != null) {
-                return headRenderPos;
-            }
-        }
-
         float[] eyeOffset = new float[3];
         getEyeWorldOffset(eyeOffset);
-        Vec3 renderOrigin = entity instanceof Player player
-                ? fallbackRenderOrigin(player, partialTick)
-                : new Vec3(
-                        Mth.lerp(partialTick, entity.xo, entity.getX()),
-                        Mth.lerp(partialTick, entity.yo, entity.getY()),
-                        Mth.lerp(partialTick, entity.zo, entity.getZ())
-                );
-        if (entity instanceof Player player) {
-            renderOrigin = renderOrigin.add(getLocalVrModelRootOffset(player));
-        }
+        Vec3 renderOrigin = getVanillaRenderOrigin(entity, partialTick);
 
-        float bodyYaw = entity instanceof Player player
-                ? fallbackBodyYawDegrees(player, partialTick)
-                : entity instanceof LivingEntity livingEntity
+        float bodyYaw = entity instanceof LivingEntity livingEntity
                 ? Mth.rotLerp(partialTick, livingEntity.yBodyRotO, livingEntity.yBodyRot)
                 : Mth.rotLerp(partialTick, entity.yRotO, entity.getYRot());
-        float yawRad = (float) Math.toRadians(bodyYaw);
-        return resolveWorldEyePosition(renderOrigin, yawRad, eyeOffset[0], eyeOffset[1], eyeOffset[2]);
+        return resolveDesktopEyePosition(renderOrigin, bodyYaw, eyeOffset[0], eyeOffset[1], eyeOffset[2]);
     }
 
     public static Vec3 getVrCameraPosition(Entity entity, float partialTick) {
@@ -178,7 +159,7 @@ public final class FirstPersonManager {
         }
 
         Vec3 headRenderPos = vrRuntimePort.getWorldRenderHeadPosition(player);
-        return resolveVrCameraPosition(headRenderPos, getRotatedEyePosition(entity, partialTick));
+        return resolveVrCameraPosition(headRenderPos, getVrRotatedEyePosition(player, partialTick));
     }
 
     public static Vec3 getVanillaEyePosition(LivingEntity entity, float partialTick) {
@@ -189,7 +170,7 @@ public final class FirstPersonManager {
     }
 
     public static boolean shouldUseVanillaReachValidation(LivingEntity entity) {
-        if (!isEyeCameraActive() || !isEyeBoneValid()) {
+        if (!isActive() || !isEyeBoneValid()) {
             return false;
         }
 
@@ -289,8 +270,38 @@ public final class FirstPersonManager {
         return resolveWorldEyePosition(renderOrigin, yawRad, eyeOffset[0], eyeOffset[1], eyeOffset[2]);
     }
 
+    private static Vec3 getVrRotatedEyePosition(Player player, float partialTick) {
+        float[] eyeOffset = new float[3];
+        getEyeWorldOffset(eyeOffset);
+        Vec3 renderOrigin = fallbackRenderOrigin(player, partialTick).add(getLocalVrModelRootOffset(player));
+        float yawRad = (float) Math.toRadians(fallbackBodyYawDegrees(player, partialTick));
+        return resolveWorldEyePosition(renderOrigin, yawRad, eyeOffset[0], eyeOffset[1], eyeOffset[2]);
+    }
+
+    private static Vec3 getVanillaRenderOrigin(Entity entity, float partialTick) {
+        return new Vec3(
+                Mth.lerp(partialTick, entity.xo, entity.getX()),
+                Mth.lerp(partialTick, entity.yo, entity.getY()),
+                Mth.lerp(partialTick, entity.zo, entity.getZ())
+        );
+    }
+
     static Vec3 resolveVrCameraPosition(Vec3 headRenderPos, Vec3 fallbackEyePos) {
         return headRenderPos != null ? headRenderPos : fallbackEyePos;
+    }
+
+    static Vec3 resolveDesktopEyePosition(Vec3 renderOrigin,
+                                          float bodyYawDegrees,
+                                          float eyeOffsetX,
+                                          float eyeOffsetY,
+                                          float eyeOffsetZ) {
+        return resolveWorldEyePosition(
+                renderOrigin,
+                (float) Math.toRadians(bodyYawDegrees),
+                eyeOffsetX,
+                eyeOffsetY,
+                eyeOffsetZ
+        );
     }
 
     static Vec3 resolveWorldEyePosition(Vec3 renderOrigin,
