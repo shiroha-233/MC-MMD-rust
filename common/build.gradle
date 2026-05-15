@@ -1,3 +1,4 @@
+// 负责公共模块的通用依赖与测试配置。
  architectury {
     common("fabric", "neoforge")
 }
@@ -7,8 +8,8 @@ dependencies {
     modImplementation("dev.architectury:architectury:${project.architectury_version}")
     compileOnly("net.fabricmc:fabric-loader:${project.loader_version}")
     
-    // JLayer - MP3 解码器（舞台模式音频播放）
-    implementation("javazoom:jlayer:1.0.1")
+    // JLayer 仅用于编译期 API；运行时由平台侧统一阴影打包并重定位。
+    compileOnly("javazoom:jlayer:1.0.1") { transitive = false }
     
     // mc-vr-api - Vivecraft VR API（软依赖，运行时可选）
 

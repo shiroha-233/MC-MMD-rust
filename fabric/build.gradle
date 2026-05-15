@@ -1,3 +1,4 @@
+// 负责 Fabric 平台的依赖装配、阴影打包与重映射发布。
 plugins {
 	id 'com.gradleup.shadow' version '8.3.6'
 }
@@ -37,6 +38,7 @@ loom {
 configurations {
 	common
 	shadowCommon // Don't use shadow from the shadow plugin since it conflicts with Loom.
+	shadowBundle
 	compileClasspath.extendsFrom common
 	runtimeClasspath.extendsFrom common
 	developmentFabric.extendsFrom common
@@ -72,9 +74,9 @@ dependencies {
 	common(project(path: ":common", configuration: "namedElements")) { transitive = false }
 	shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive = false }
 	
-	// JLayer - MP3 解码器（舞台模式音频播放，Fabric jar-in-jar 打包）
-	implementation("javazoom:jlayer:1.0.1")
-	include("javazoom:jlayer:1.0.1")
+	// JLayer 运行时由平台包私有化，避免与其他模组的 JPMS 模块导出冲突。
+	common("javazoom:jlayer:1.0.1") { transitive = false }
+	shadowBundle("javazoom:jlayer:1.0.1") { transitive = false }
 	
 	// Fabric Loader
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
@@ -126,8 +128,9 @@ processResources {
 
 shadowJar {
     exclude "architectury.common.json"
-    configurations = [project.configurations.shadowCommon]
+    configurations = [project.configurations.shadowCommon, project.configurations.shadowBundle]
     archiveClassifier.set("dev-shadow")
+    relocate "javazoom", "com.shiroha.mmdskin.shadow.javazoom"
     
     // 排除不需要的文件
     exclude 'META-INF/versions/**'
