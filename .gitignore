@@ -108,6 +108,8 @@ babylon-mmd/
 CLAUDE.md
 UniVRM/
 shader/
+!common/src/main/java/com/shiroha/mmdskin/render/shader/
+!common/src/main/java/com/shiroha/mmdskin/compat/iris/
 AGENT.md
 /docs
 /.gradle-clean-home
