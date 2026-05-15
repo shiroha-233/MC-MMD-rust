@@ -12,6 +12,7 @@ import com.shiroha.mmdskin.renderer.pipeline.shader.ToonShaderCpu;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonRenderHelper;
 import com.shiroha.mmdskin.renderer.runtime.model.AbstractMMDModel;
 import com.shiroha.mmdskin.renderer.runtime.model.helper.LightingHelper;
+import com.shiroha.mmdskin.renderer.runtime.model.shared.MMDMaterial;
 import com.shiroha.mmdskin.renderer.runtime.model.shared.SubMeshDrawHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
@@ -459,7 +460,13 @@ final class MMDModelOpenGLRenderer {
                 target.subMeshCount,
                 target.indexElementSize,
                 target.indexType,
-                target::effectiveMaterialAlpha);
+                (materialId, baseAlpha) -> {
+                    MMDMaterial material = target.mats[materialId];
+                    if (material != null && material.isFacialFeature()) {
+                        return 0.0f;
+                    }
+                    return target.effectiveMaterialAlpha(materialId, baseAlpha);
+                });
         GL46C.glCullFace(GL46C.GL_BACK);
 
         if (posLoc != -1) GL46C.glDisableVertexAttribArray(posLoc);
