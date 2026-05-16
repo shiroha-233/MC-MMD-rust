@@ -15,7 +15,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.server.level.ServerPlayer;
@@ -31,7 +31,7 @@ import org.apache.logging.log4j.Logger;
 public record MmdSkinNetworkPack(int opCode, UUID playerUUID, String animId, int arg0, byte[] binaryData) implements CustomPacketPayload {
     private static final Logger logger = LogManager.getLogger();
 
-    public static final Type<MmdSkinNetworkPack> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MmdSkin.MOD_ID, "network_pack"));
+    public static final Type<MmdSkinNetworkPack> TYPE = new Type<>(Identifier.fromNamespaceAndPath(MmdSkin.MOD_ID, "network_pack"));
 
     public static final StreamCodec<FriendlyByteBuf, MmdSkinNetworkPack> STREAM_CODEC = StreamCodec.of(
         MmdSkinNetworkPack::encode,
@@ -111,7 +111,8 @@ public record MmdSkinNetworkPack(int opCode, UUID playerUUID, String animId, int
 
         // REQUEST_ALL_MODELS：回传所有已注册模型给请求者
         if (pack.opCode == NetworkOpCode.REQUEST_ALL_MODELS) {
-            for (ServerPlayer player : sender.getServer().getPlayerList().getPlayers()) {
+            // TODO_1.21.11: API 变更 ServerPlayer.getServer 改为 level().getServer
+            for (ServerPlayer player : sender.level().getServer().getPlayerList().getPlayers()) {
                 String modelName = player.getData(MmdSkinAttachments.PLAYER_MMD_MODEL.get());
                 if (modelName != null && !modelName.isEmpty()) {
                     PacketDistributor.sendToPlayer(sender,
@@ -122,7 +123,7 @@ public record MmdSkinNetworkPack(int opCode, UUID playerUUID, String animId, int
         }
 
         if (pack.opCode == NetworkOpCode.STAGE_MULTI) {
-            NeoForgeStageSessionRegistry.getInstance().handlePacket(sender.getServer(), sender, pack.animId);
+            NeoForgeStageSessionRegistry.getInstance().handlePacket(sender.level().getServer(), sender, pack.animId);
             return;
         }
 
@@ -142,7 +143,7 @@ public record MmdSkinNetworkPack(int opCode, UUID playerUUID, String animId, int
         // 用真实 UUID 重建后转发
         MmdSkinNetworkPack corrected = new MmdSkinNetworkPack(
                 pack.opCode, realUUID, pack.animId, pack.arg0, pack.binaryData);
-        for (ServerPlayer player : sender.getServer().getPlayerList().getPlayers()) {
+        for (ServerPlayer player : sender.level().getServer().getPlayerList().getPlayers()) {
             if (!player.equals(sender)) {
                 PacketDistributor.sendToPlayer(player, corrected);
             }

@@ -8,11 +8,10 @@ import com.shiroha.mmdskin.renderer.pipeline.shader.ToonShaderCpu;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonConfig;
 import com.shiroha.mmdskin.renderer.runtime.model.AbstractMMDModel;
 import com.shiroha.mmdskin.renderer.runtime.model.shared.MMDMaterial;
-import com.mojang.blaze3d.platform.GlStateManager;
-import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.vertex.PoseStack;
 
-import net.minecraft.client.renderer.ShaderInstance;
+import com.shiroha.mmdskin.renderer.compat.ShaderInstanceStub;
 import net.minecraft.world.entity.Entity;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -188,7 +187,7 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
 
             nf.InitGpuSkinningData(model);
 
-            BufferUploader.reset();
+            /* BufferUploader.reset() removed in 1.21.11 */
 
             int vertexCount = (int) nf.GetVertexCount(model);
             int boneCount = nf.GetBoneCount(model);
@@ -534,21 +533,22 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
         if (program == cachedShaderProgram) return;
         cachedShaderProgram = program;
 
-        positionLocation = GlStateManager._glGetAttribLocation(program, "Position");
-        normalLocation = GlStateManager._glGetAttribLocation(program, "Normal");
-        uv0Location = GlStateManager._glGetAttribLocation(program, "UV0");
-        uv1Location = GlStateManager._glGetAttribLocation(program, "UV1");
-        uv2Location = GlStateManager._glGetAttribLocation(program, "UV2");
-        colorLocation = GlStateManager._glGetAttribLocation(program, "Color");
+        // TODO_1.21.11: 渲染管线重写 - GlStateManager._glGetAttribLocation 已删除，改用 GL46C
+        positionLocation = GL46C.glGetAttribLocation(program, "Position");
+        normalLocation = GL46C.glGetAttribLocation(program, "Normal");
+        uv0Location = GL46C.glGetAttribLocation(program, "UV0");
+        uv1Location = GL46C.glGetAttribLocation(program, "UV1");
+        uv2Location = GL46C.glGetAttribLocation(program, "UV2");
+        colorLocation = GL46C.glGetAttribLocation(program, "Color");
 
-        I_positionLocation = GlStateManager._glGetAttribLocation(program, "iris_Position");
-        I_normalLocation = GlStateManager._glGetAttribLocation(program, "iris_Normal");
-        I_uv0Location = GlStateManager._glGetAttribLocation(program, "iris_UV0");
-        I_uv2Location = GlStateManager._glGetAttribLocation(program, "iris_UV2");
-        I_colorLocation = GlStateManager._glGetAttribLocation(program, "iris_Color");
+        I_positionLocation = GL46C.glGetAttribLocation(program, "iris_Position");
+        I_normalLocation = GL46C.glGetAttribLocation(program, "iris_Normal");
+        I_uv0Location = GL46C.glGetAttribLocation(program, "iris_UV0");
+        I_uv2Location = GL46C.glGetAttribLocation(program, "iris_UV2");
+        I_colorLocation = GL46C.glGetAttribLocation(program, "iris_Color");
     }
 
-    void setUniforms(ShaderInstance shader, PoseStack deliverStack) {
+    void setUniforms(ShaderInstanceStub shader, PoseStack deliverStack) {
         setupShaderUniforms(shader, deliverStack, light0Direction, light1Direction, lightMapMaterial.tex);
     }
 

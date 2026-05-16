@@ -1,7 +1,6 @@
 package com.shiroha.mmdskin.renderer.runtime.model.opengl;
 
 import com.shiroha.mmdskin.NativeFunc;
-import com.mojang.blaze3d.vertex.BufferUploader;
 import com.shiroha.mmdskin.renderer.runtime.texture.MMDTextureManager;
 import com.shiroha.mmdskin.renderer.runtime.model.shared.MMDMaterial;
 import org.apache.logging.log4j.LogManager;
@@ -51,7 +50,7 @@ final class MMDModelOpenGLFactory {
         }
 
         NativeFunc nf = NativeFunc.GetInst();
-        BufferUploader.reset();
+        /* BufferUploader.reset() removed in 1.21.11 */
 
         int vertexArrayObject = 0;
         int indexBufferObject = 0;

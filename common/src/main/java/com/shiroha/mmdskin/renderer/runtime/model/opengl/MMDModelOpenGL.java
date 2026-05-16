@@ -6,15 +6,16 @@ import com.shiroha.mmdskin.renderer.pipeline.shader.ToonShaderCpu;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonConfig;
 import com.shiroha.mmdskin.renderer.runtime.model.AbstractMMDModel;
 import com.shiroha.mmdskin.renderer.runtime.model.shared.MMDMaterial;
-import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.vertex.PoseStack;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.util.List;
-import net.minecraft.client.renderer.ShaderInstance;
+import com.shiroha.mmdskin.renderer.compat.ShaderInstanceStub;
 import net.minecraft.world.entity.Entity;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
+import org.lwjgl.opengl.GL46C;
 
 /**
  * MMD模型OpenGL渲染实现。
@@ -132,39 +133,40 @@ public class MMDModelOpenGL extends AbstractMMDModel {
     void updateLocation(int shaderProgram){
         if (shaderProgram == cachedShaderProgram) return;
         cachedShaderProgram = shaderProgram;
-        positionLocation = GlStateManager._glGetAttribLocation(shaderProgram, "Position");
-        normalLocation = GlStateManager._glGetAttribLocation(shaderProgram, "Normal");
-        uv0Location = GlStateManager._glGetAttribLocation(shaderProgram, "UV0");
-        uv1Location = GlStateManager._glGetAttribLocation(shaderProgram, "UV1");
-        uv2Location = GlStateManager._glGetAttribLocation(shaderProgram, "UV2");
-        colorLocation = GlStateManager._glGetAttribLocation(shaderProgram, "Color");
-        projMatLocation = GlStateManager._glGetUniformLocation(shaderProgram, "ProjMat");
-        modelViewLocation = GlStateManager._glGetUniformLocation(shaderProgram, "ModelViewMat");
-        sampler0Location = GlStateManager._glGetUniformLocation(shaderProgram, "Sampler0");
-        sampler1Location = GlStateManager._glGetUniformLocation(shaderProgram, "Sampler1");
-        sampler2Location = GlStateManager._glGetUniformLocation(shaderProgram, "Sampler2");
-        light0Location = GlStateManager._glGetUniformLocation(shaderProgram, "Light0_Direction");
-        light1Location = GlStateManager._glGetUniformLocation(shaderProgram, "Light1_Direction");
+        // TODO_1.21.11: 渲染管线重写 - GlStateManager._glGetAttribLocation/_glGetUniformLocation 已删除，改用 GL46C 直调
+        positionLocation = GL46C.glGetAttribLocation(shaderProgram, "Position");
+        normalLocation = GL46C.glGetAttribLocation(shaderProgram, "Normal");
+        uv0Location = GL46C.glGetAttribLocation(shaderProgram, "UV0");
+        uv1Location = GL46C.glGetAttribLocation(shaderProgram, "UV1");
+        uv2Location = GL46C.glGetAttribLocation(shaderProgram, "UV2");
+        colorLocation = GL46C.glGetAttribLocation(shaderProgram, "Color");
+        projMatLocation = GL46C.glGetUniformLocation(shaderProgram, "ProjMat");
+        modelViewLocation = GL46C.glGetUniformLocation(shaderProgram, "ModelViewMat");
+        sampler0Location = GL46C.glGetUniformLocation(shaderProgram, "Sampler0");
+        sampler1Location = GL46C.glGetUniformLocation(shaderProgram, "Sampler1");
+        sampler2Location = GL46C.glGetUniformLocation(shaderProgram, "Sampler2");
+        light0Location = GL46C.glGetUniformLocation(shaderProgram, "Light0_Direction");
+        light1Location = GL46C.glGetUniformLocation(shaderProgram, "Light1_Direction");
 
-        K_positionLocation = GlStateManager._glGetAttribLocation(shaderProgram, "K_Position");
-        K_normalLocation = GlStateManager._glGetAttribLocation(shaderProgram, "K_Normal");
-        K_uv0Location = GlStateManager._glGetAttribLocation(shaderProgram, "K_UV0");
-        K_uv2Location = GlStateManager._glGetAttribLocation(shaderProgram, "K_UV2");
-        K_projMatLocation = GlStateManager._glGetUniformLocation(shaderProgram, "K_ProjMat");
-        K_modelViewLocation = GlStateManager._glGetUniformLocation(shaderProgram, "K_ModelViewMat");
-        K_sampler0Location = GlStateManager._glGetUniformLocation(shaderProgram, "K_Sampler0");
-        K_sampler2Location = GlStateManager._glGetUniformLocation(shaderProgram, "K_Sampler2");
-        KAIMyLocationV = GlStateManager._glGetUniformLocation(shaderProgram, "MMDShaderV");
-        KAIMyLocationF = GlStateManager._glGetUniformLocation(shaderProgram, "MMDShaderF");
+        K_positionLocation = GL46C.glGetAttribLocation(shaderProgram, "K_Position");
+        K_normalLocation = GL46C.glGetAttribLocation(shaderProgram, "K_Normal");
+        K_uv0Location = GL46C.glGetAttribLocation(shaderProgram, "K_UV0");
+        K_uv2Location = GL46C.glGetAttribLocation(shaderProgram, "K_UV2");
+        K_projMatLocation = GL46C.glGetUniformLocation(shaderProgram, "K_ProjMat");
+        K_modelViewLocation = GL46C.glGetUniformLocation(shaderProgram, "K_ModelViewMat");
+        K_sampler0Location = GL46C.glGetUniformLocation(shaderProgram, "K_Sampler0");
+        K_sampler2Location = GL46C.glGetUniformLocation(shaderProgram, "K_Sampler2");
+        KAIMyLocationV = GL46C.glGetUniformLocation(shaderProgram, "MMDShaderV");
+        KAIMyLocationF = GL46C.glGetUniformLocation(shaderProgram, "MMDShaderF");
 
-        I_positionLocation = GlStateManager._glGetAttribLocation(shaderProgram, "iris_Position");
-        I_normalLocation = GlStateManager._glGetAttribLocation(shaderProgram, "iris_Normal");
-        I_uv0Location = GlStateManager._glGetAttribLocation(shaderProgram, "iris_UV0");
-        I_uv2Location = GlStateManager._glGetAttribLocation(shaderProgram, "iris_UV2");
-        I_colorLocation = GlStateManager._glGetAttribLocation(shaderProgram, "iris_Color");
+        I_positionLocation = GL46C.glGetAttribLocation(shaderProgram, "iris_Position");
+        I_normalLocation = GL46C.glGetAttribLocation(shaderProgram, "iris_Normal");
+        I_uv0Location = GL46C.glGetAttribLocation(shaderProgram, "iris_UV0");
+        I_uv2Location = GL46C.glGetAttribLocation(shaderProgram, "iris_UV2");
+        I_colorLocation = GL46C.glGetAttribLocation(shaderProgram, "iris_Color");
     }
 
-    public void setUniforms(ShaderInstance shader, PoseStack deliverStack) {
+    public void setUniforms(ShaderInstanceStub shader, PoseStack deliverStack) {
         setupShaderUniforms(shader, deliverStack, light0Direction, light1Direction, lightMapMaterial.tex);
     }
 

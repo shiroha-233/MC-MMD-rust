@@ -5,7 +5,7 @@ import java.util.Comparator;
 import java.util.List;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 
@@ -30,12 +30,12 @@ public final class MobReplacementTargets {
         if (entityType == EntityType.PLAYER) {
             return false;
         }
-        ResourceLocation entityTypeId = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
+        Identifier entityTypeId = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
         return entityTypeId != null
             && "minecraft".equals(entityTypeId.getNamespace())
             && entityType.getCategory() != MobCategory.MISC;
     }
 
-    public record Target(ResourceLocation entityTypeId, EntityType<?> entityType, Component displayName) {
+    public record Target(Identifier entityTypeId, EntityType<?> entityType, Component displayName) {
     }
 }

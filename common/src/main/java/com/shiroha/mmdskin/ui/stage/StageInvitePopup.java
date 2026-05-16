@@ -1,9 +1,12 @@
+/* 文件职责：舞台邀请弹窗（轻量Screen，不暂停游戏）。 */
 package com.shiroha.mmdskin.ui.stage;
 
 import com.shiroha.mmdskin.stage.client.viewmodel.StageLobbyViewModel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.UUID;
@@ -108,8 +111,9 @@ public class StageInvitePopup extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        // TODO_1.21.11: 渲染管线重写
+        if (event.button() == 0) {
             if (hoverAccept) {
                 lobbyViewModel.acceptInvite();
                 StagePlaybackUiAdapter.INSTANCE.openStageSelection();
@@ -121,17 +125,18 @@ public class StageInvitePopup extends Screen {
                 return true;
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) {
+    public boolean keyPressed(KeyEvent event) {
+        // TODO_1.21.11: 渲染管线重写
+        if (event.key() == 256) {
             lobbyViewModel.declineInvite();
             this.onClose();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override

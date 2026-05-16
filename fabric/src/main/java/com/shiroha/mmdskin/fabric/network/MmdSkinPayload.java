@@ -3,7 +3,7 @@ package com.shiroha.mmdskin.fabric.network;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.util.UUID;
 
@@ -14,7 +14,7 @@ import java.util.UUID;
 public record MmdSkinPayload(int opCode, UUID playerUUID, int intArg, int entityId, String stringArg, byte[] binaryData) implements CustomPacketPayload {
     
     public static final CustomPacketPayload.Type<MmdSkinPayload> TYPE = 
-        new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("mmdskin", "network"));
+        new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("mmdskin", "network"));
     
     public static final StreamCodec<FriendlyByteBuf, MmdSkinPayload> CODEC = StreamCodec.of(
         MmdSkinPayload::write,

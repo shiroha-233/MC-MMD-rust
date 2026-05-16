@@ -1,9 +1,5 @@
 package com.shiroha.mmdskin.neoforge.maid;
 
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.shiroha.mmdskin.maid.MaidMMDModelManager;
-import com.shiroha.mmdskin.maid.MaidMMDRenderer;
-import net.minecraft.world.entity.LivingEntity;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.client.event.RenderLivingEvent;
@@ -14,16 +10,15 @@ import org.slf4j.LoggerFactory;
 
 /**
  * 女仆渲染事件处理器
- * 
- * 使用 NeoForge 事件系统替代 Mixin，实现对 TouhouLittleMaid 女仆的 MMD 模型渲染。
- * 这种方式不需要编译时依赖 TouhouLittleMaid 模组。
+ * TODO_1.21.11: RenderLivingEvent 重构为三参数泛型 (T,S,M)，且不再暴露 LivingEntity / MultiBufferSource / packedLight；
+ * 改用 RenderState + SubmitNodeCollector 后需重写 Maid 模型注入流程，暂时保留事件订阅占位以确保编译。
  */
 @OnlyIn(Dist.CLIENT)
 public class MaidRenderEventHandler {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(MaidRenderEventHandler.class);
     private static boolean touhouLittleMaidLoaded = false;
-    
+
     static {
         try {
             Class.forName("com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid");
@@ -32,54 +27,19 @@ public class MaidRenderEventHandler {
             touhouLittleMaidLoaded = false;
         }
     }
-    
+
     /**
      * 在实体渲染前检查是否需要使用 MMD 模型渲染
      */
     @SubscribeEvent(priority = EventPriority.HIGH)
-    public void onRenderLivingPre(RenderLivingEvent.Pre<?, ?> event) {
+    public void onRenderLivingPre(RenderLivingEvent.Pre<?, ?, ?> event) {
+        // TODO_1.21.11: 渲染管线重写 — RenderLivingEvent 已 RenderState 化，无法直接获取 entity/MultiBufferSource/packedLight
         if (!touhouLittleMaidLoaded) {
             return;
         }
-        
-        LivingEntity entity = event.getEntity();
-        String className = entity.getClass().getName();
-        
-        // 检查是否是女仆实体
-        if (!className.contains("EntityMaid") && !className.contains("touhoulittlemaid")) {
-            return;
-        }
-        
-        // 检查是否有绑定的 MMD 模型
-        if (!MaidMMDModelManager.hasMMDModel(entity.getUUID())) {
-            return;
-        }
-        
-        // 使用 MMD 模型渲染
-        PoseStack poseStack = event.getPoseStack();
-        float partialTicks = event.getPartialTick();
-        int packedLight = event.getPackedLight();
-        
-        poseStack.pushPose();
-        poseStack.translate(0, 0.01, 0); // 轻微抬高避免 Z-fighting
-        
-        boolean rendered = MaidMMDRenderer.render(
-            entity,
-            entity.getUUID(),
-            entity.getYRot(),
-            partialTicks,
-            poseStack,
-            packedLight
-        );
-        
-        poseStack.popPose();
-        
-        if (rendered) {
-            // 成功渲染 MMD 模型，取消原版渲染
-            event.setCanceled(true);
-        }
+        // 原 MMD 模型注入逻辑暂时停用，待新管线适配完成后恢复
     }
-    
+
     /**
      * 检查 TouhouLittleMaid 是否已加载
      */

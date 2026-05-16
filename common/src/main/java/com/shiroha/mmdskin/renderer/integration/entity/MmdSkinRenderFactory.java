@@ -1,3 +1,4 @@
+/* 文件职责：MMD 自定义实体渲染器工厂。 */
 package com.shiroha.mmdskin.renderer.integration.entity;
 
 import net.minecraft.client.renderer.entity.EntityRenderer;
@@ -12,7 +13,7 @@ public class MmdSkinRenderFactory<T extends Entity> implements EntityRendererPro
     }
 
     @Override
-    public EntityRenderer<T> create(Context manager) {
+    public EntityRenderer<T, ?> create(Context manager) {
         return new MmdSkinRenderer<>(manager, entityName);
     }
 }

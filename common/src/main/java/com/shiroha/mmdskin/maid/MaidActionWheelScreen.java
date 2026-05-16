@@ -6,6 +6,7 @@ import com.shiroha.mmdskin.maid.service.MaidActionService;
 import com.shiroha.mmdskin.ui.wheel.AbstractWheelScreen;
 import com.shiroha.mmdskin.ui.wheel.service.ActionOption;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -80,14 +81,15 @@ public class MaidActionWheelScreen extends AbstractWheelScreen {
     }
 
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+    public boolean mouseReleased(MouseButtonEvent event) {
+        int button = event.button();
         if (button == 0 && selectedSlot >= 0 && selectedSlot < actionSlots.size()) {
             ActionSlot slot = actionSlots.get(selectedSlot);
             executeAction(slot);
             this.onClose();
             return true;
         }
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(event);
     }
 
     private void executeAction(ActionSlot slot) {

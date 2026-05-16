@@ -64,10 +64,11 @@ public class ItemRenderHelper {
                 ? ItemDisplayContext.THIRD_PERSON_RIGHT_HAND
                 : ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
 
-        Minecraft.getInstance().getItemRenderer().renderStatic(
-            player, itemStack, displayCtx, !isMainHand,
-            matrixStack, vertexConsumers, player.level(), packedLight, OverlayTexture.NO_OVERLAY, 0
-        );
+        // TODO_1.21.11: 渲染管线重写 - ItemRenderer.renderStatic 已被移除，需改用新的 ItemStackRenderState API
+        // Minecraft.getInstance().getItemRenderer().renderStatic(
+        //     player, itemStack, displayCtx, !isMainHand,
+        //     matrixStack, vertexConsumers, player.level(), packedLight, OverlayTexture.NO_OVERLAY, 0
+        // );
 
         matrixStack.popPose();
     }

@@ -1,13 +1,12 @@
 /* 文件职责：执行 CPU/OpenGL 模型的 Toon/普通渲染流程。 */
 package com.shiroha.mmdskin.renderer.runtime.model.opengl;
 
-import com.mojang.blaze3d.platform.GlStateManager;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.MmdSkinClient;
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.renderer.compat.IrisCompat;
+import com.shiroha.mmdskin.renderer.compat.RenderSystemCompat;
 import com.shiroha.mmdskin.renderer.performance.RenderPerformanceProfiler;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonShaderCpu;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonRenderHelper;
@@ -16,7 +15,7 @@ import com.shiroha.mmdskin.renderer.runtime.model.helper.LightingHelper;
 import com.shiroha.mmdskin.renderer.runtime.model.shared.MMDMaterial;
 import com.shiroha.mmdskin.renderer.runtime.model.shared.SubMeshDrawHelper;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.ShaderInstance;
+import com.shiroha.mmdskin.renderer.compat.ShaderInstanceStub;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.world.entity.Entity;
 import org.apache.logging.log4j.LogManager;
@@ -94,21 +93,23 @@ final class MMDModelOpenGLRenderer {
                                        LightingHelper.LightData light, PoseStack deliverStack) {
         boolean irisActive = IrisCompat.isIrisShaderActive();
         float colorFactor = irisActive ? 1.0f : light.intensity();
-        RenderSystem.setShaderColor(colorFactor, colorFactor, colorFactor, 1.0f);
+        // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShaderColor 已删除
+        RenderSystemCompat.setShaderColor(colorFactor, colorFactor, colorFactor, 1.0f);
 
         if (!bindActiveShader(target, deliverStack)) {
-            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+            RenderSystemCompat.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
             return;
         }
 
         target.updateLocation(target.shaderProgram);
 
-        BufferUploader.reset();
+        /* BufferUploader.reset() removed in 1.21.11 */
         GL46C.glBindVertexArray(target.vertexArrayObject);
-        RenderSystem.enableBlend();
-        RenderSystem.enableDepthTest();
-        RenderSystem.blendEquation(GL46C.GL_FUNC_ADD);
-        RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+        GlStateManager._enableBlend();
+        GlStateManager._enableDepthTest();
+        GL46C.glBlendEquation(GL46C.GL_FUNC_ADD);
+        // TODO_1.21.11: 渲染管线重写 - RenderSystem.blendFunc 已删除
+        RenderSystemCompat.blendFuncSrcAlphaOneMinusSrcAlpha();
 
         uploadDynamicBuffers(target, light.blockLight(), light.skyLight(), light.skyDarken(), irisActive);
         uploadMatrixUniforms(target, deliverStack);
@@ -126,7 +127,8 @@ final class MMDModelOpenGLRenderer {
 
     private static boolean bindActiveShader(MMDModelOpenGL target, PoseStack deliverStack) {
         if (MmdSkinClient.usingMMDShader == 0) {
-            ShaderInstance mcShader = RenderSystem.getShader();
+            // TODO_1.21.11: 渲染管线重写 - RenderSystem.getShader 已删除
+            ShaderInstanceStub mcShader = null;
             if (mcShader == null) {
                 return false;
             }
@@ -191,14 +193,15 @@ final class MMDModelOpenGLRenderer {
         target.modelViewMatBuff.clear();
         target.projMatBuff.clear();
         AbstractMMDModel.computeModelViewMatrix(deliverStack).get(target.modelViewMatBuff);
-        RenderSystem.getProjectionMatrix().get(target.projMatBuff);
+        RenderSystemCompat.getProjectionMatrix().get(target.projMatBuff);
 
         if (MmdSkinClient.usingMMDShader != 1) {
             return;
         }
 
-        RenderSystem.glUniformMatrix4(target.modelViewLocation, false, target.modelViewMatBuff);
-        RenderSystem.glUniformMatrix4(target.projMatLocation, false, target.projMatBuff);
+        // TODO_1.21.11: 渲染管线重写 - RenderSystem.glUniformMatrix4 / glUniform3 改用 GL46C
+        GL46C.glUniformMatrix4fv(target.modelViewLocation, false, target.modelViewMatBuff);
+        GL46C.glUniformMatrix4fv(target.projMatLocation, false, target.projMatBuff);
 
         if (target.light0Location != -1) {
             target.light0Buff.clear();
@@ -206,7 +209,7 @@ final class MMDModelOpenGLRenderer {
             target.light0Buff.put(target.light0Direction.y);
             target.light0Buff.put(target.light0Direction.z);
             target.light0Buff.flip();
-            RenderSystem.glUniform3(target.light0Location, target.light0Buff);
+            GL46C.glUniform3fv(target.light0Location, target.light0Buff);
         }
         if (target.light1Location != -1) {
             target.light1Buff.clear();
@@ -214,19 +217,20 @@ final class MMDModelOpenGLRenderer {
             target.light1Buff.put(target.light1Direction.y);
             target.light1Buff.put(target.light1Direction.z);
             target.light1Buff.flip();
-            RenderSystem.glUniform3(target.light1Location, target.light1Buff);
+            GL46C.glUniform3fv(target.light1Location, target.light1Buff);
         }
         if (target.sampler0Location != -1) {
             GL46C.glUniform1i(target.sampler0Location, 0);
         }
         if (target.sampler1Location != -1) {
-            RenderSystem.activeTexture(GL46C.GL_TEXTURE1);
-            RenderSystem.bindTexture(target.lightMapMaterial.tex);
+            GlStateManager._activeTexture(GL46C.GL_TEXTURE1);
+            // TODO_1.21.11: GlStateManager._bindTexture 已删除，改用 GL46C
+            GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, target.lightMapMaterial.tex);
             GL46C.glUniform1i(target.sampler1Location, 1);
         }
         if (target.sampler2Location != -1) {
-            RenderSystem.activeTexture(GL46C.GL_TEXTURE2);
-            RenderSystem.bindTexture(target.lightMapMaterial.tex);
+            GlStateManager._activeTexture(GL46C.GL_TEXTURE2);
+            GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, target.lightMapMaterial.tex);
             GL46C.glUniform1i(target.sampler2Location, 2);
         }
     }
@@ -289,18 +293,20 @@ final class MMDModelOpenGLRenderer {
         }
         if (target.K_projMatLocation != -1) {
             target.projMatBuff.position(0);
-            RenderSystem.glUniformMatrix4(target.K_projMatLocation, false, target.projMatBuff);
+            // TODO_1.21.11: 渲染管线重写 - RenderSystem.glUniformMatrix4 已删除
+            GL46C.glUniformMatrix4fv(target.K_projMatLocation, false, target.projMatBuff);
         }
         if (target.K_modelViewLocation != -1) {
             target.modelViewMatBuff.position(0);
-            RenderSystem.glUniformMatrix4(target.K_modelViewLocation, false, target.modelViewMatBuff);
+            GL46C.glUniformMatrix4fv(target.K_modelViewLocation, false, target.modelViewMatBuff);
         }
         if (target.K_sampler0Location != -1) {
             GL46C.glUniform1i(target.K_sampler0Location, 0);
         }
         if (target.K_sampler2Location != -1) {
-            RenderSystem.activeTexture(GL46C.GL_TEXTURE2);
-            RenderSystem.bindTexture(target.lightMapMaterial.tex);
+            GlStateManager._activeTexture(GL46C.GL_TEXTURE2);
+            // TODO_1.21.11: GlStateManager._bindTexture 已删除
+            GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, target.lightMapMaterial.tex);
             GL46C.glUniform1i(target.K_sampler2Location, 2);
         }
         if (target.KAIMyLocationV != -1) {
@@ -340,9 +346,8 @@ final class MMDModelOpenGLRenderer {
     }
 
     private static void drawSubMeshes(MMDModelOpenGL target, Minecraft minecraft) {
-        int missingTextureId = minecraft.getTextureManager()
-                .getTexture(TextureManager.INTENTIONAL_MISSING_TEXTURE)
-                .getId();
+        // TODO_1.21.11: AbstractTexture.getId() 已删除，先用 0 占位
+        int missingTextureId = 0;
         SubMeshDrawHelper.draw(
                 target.subMeshDataBuf,
                 target.subMeshCount,
@@ -375,26 +380,25 @@ final class MMDModelOpenGLRenderer {
         GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, 0);
         GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, 0);
         GL46C.glBindVertexArray(0);
-        RenderSystem.activeTexture(GL46C.GL_TEXTURE0);
+        GlStateManager._activeTexture(GL46C.GL_TEXTURE0);
 
-        ShaderInstance currentShader = RenderSystem.getShader();
-        if (currentShader != null) {
-            currentShader.clear();
-        }
-        BufferUploader.reset();
-        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        // TODO_1.21.11: 渲染管线重写 - RenderSystem.getShader / setShaderColor 已删除
+        /* BufferUploader.reset() removed in 1.21.11 */
+        RenderSystemCompat.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
     private static void renderToon(MMDModelOpenGL target, Minecraft minecraft, float lightIntensity, PoseStack deliverStack) {
-        BufferUploader.reset();
+        /* BufferUploader.reset() removed in 1.21.11 */
         GL46C.glBindVertexArray(target.vertexArrayObject);
-        RenderSystem.enableBlend();
-        RenderSystem.enableDepthTest();
-        RenderSystem.blendEquation(GL46C.GL_FUNC_ADD);
-        RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+        GlStateManager._enableBlend();
+        GlStateManager._enableDepthTest();
+        GL46C.glBlendEquation(GL46C.GL_FUNC_ADD);
+        // TODO_1.21.11: 渲染管线重写 - RenderSystem.blendFunc 已删除
+        RenderSystemCompat.blendFuncSrcAlphaOneMinusSrcAlpha();
 
         if (IrisCompat.isIrisShaderActive()) {
-            ShaderInstance irisShader = RenderSystem.getShader();
+            // TODO_1.21.11: 渲染管线重写 - RenderSystem.getShader 已删除
+            ShaderInstanceStub irisShader = null;
             if (irisShader != null) {
                 target.setUniforms(irisShader, deliverStack);
                 irisShader.apply();
@@ -430,7 +434,7 @@ final class MMDModelOpenGLRenderer {
         target.modelViewMatBuff.clear();
         target.projMatBuff.clear();
         AbstractMMDModel.computeModelViewMatrix(deliverStack).get(target.modelViewMatBuff);
-        RenderSystem.getProjectionMatrix().get(target.projMatBuff);
+        RenderSystemCompat.getProjectionMatrix().get(target.projMatBuff);
         GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.indexBufferObject);
 
         long drawTimer = RenderPerformanceProfiler.get().startTimer();
@@ -447,8 +451,8 @@ final class MMDModelOpenGLRenderer {
         GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, 0);
         GL46C.glBindVertexArray(0);
         GL46C.glUseProgram(0);
-        RenderSystem.activeTexture(GL46C.GL_TEXTURE0);
-        BufferUploader.reset();
+        GlStateManager._activeTexture(GL46C.GL_TEXTURE0);
+        /* BufferUploader.reset() removed in 1.21.11 */
     }
 
     private static void renderOutlinePass(MMDModelOpenGL target) {
@@ -456,10 +460,8 @@ final class MMDModelOpenGLRenderer {
         int posLoc = MMDModelOpenGL.toonShaderCpu.getOutlinePositionLocation();
         int norLoc = MMDModelOpenGL.toonShaderCpu.getOutlineNormalLocation();
         int outlineUvLoc = MMDModelOpenGL.toonShaderCpu.getOutlineUv0Location();
-        int missingTextureId = Minecraft.getInstance()
-                .getTextureManager()
-                .getTexture(TextureManager.INTENTIONAL_MISSING_TEXTURE)
-                .getId();
+        // TODO_1.21.11: AbstractTexture.getId() 已删除，先用 0 占位
+        int missingTextureId = 0;
 
         if (posLoc != -1) {
             GL46C.glEnableVertexAttribArray(posLoc);
@@ -482,9 +484,9 @@ final class MMDModelOpenGLRenderer {
 
         ToonRenderHelper.setupOutlineUniforms(MMDModelOpenGL.toonShaderCpu);
 
-        RenderSystem.depthMask(false);
+        GlStateManager._depthMask(false);
         GL46C.glCullFace(GL46C.GL_FRONT);
-        RenderSystem.enableCull();
+        GlStateManager._enableCull();
         SubMeshDrawHelper.drawOutline(
                 target.subMeshDataBuf,
                 target.subMeshCount,
@@ -499,7 +501,7 @@ final class MMDModelOpenGLRenderer {
                     return target.effectiveMaterialAlpha(materialId, baseAlpha);
                 });
         GL46C.glCullFace(GL46C.GL_BACK);
-        RenderSystem.depthMask(true);
+        GlStateManager._depthMask(true);
 
         if (posLoc != -1) GL46C.glDisableVertexAttribArray(posLoc);
         if (norLoc != -1) GL46C.glDisableVertexAttribArray(norLoc);

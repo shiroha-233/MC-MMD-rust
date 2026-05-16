@@ -80,7 +80,7 @@ public class MaidConfigWheelScreen extends AbstractWheelScreen {
             if (monitoredKey.isDown()) {
                 isDown = true;
             } else {
-                long window = Minecraft.getInstance().getWindow().getWindow();
+                long window = Minecraft.getInstance().getWindow().handle();
                 InputConstants.Key key = KeyMappingUtil.getBoundKey(monitoredKey);
                 isDown = key != null
                         && key.getType() == InputConstants.Type.KEYSYM

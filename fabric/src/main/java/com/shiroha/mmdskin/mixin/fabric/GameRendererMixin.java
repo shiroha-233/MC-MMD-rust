@@ -42,7 +42,7 @@ public abstract class GameRendererMixin {
             return;
         }
 
-        Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
+        Vec3 cameraPos = mc.gameRenderer.getMainCamera().position();
         Vec3 viewDir = player.getViewVector(partialTick);
         if (viewDir.lengthSqr() < 1.0E-6) {
             return;

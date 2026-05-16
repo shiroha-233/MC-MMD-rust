@@ -105,7 +105,7 @@ public final class NeoForgeStageSessionRegistry {
 
         session.members.put(targetUUID, new ServerStageMember(
                 targetUUID,
-                target.getGameProfile().getName(),
+                target.getGameProfile().name(), // TODO_1.21.11: API 变更 GameProfile 现在是 record
                 StageMemberState.INVITED,
                 StageCameraMode.HOST_CAMERA
         ));
@@ -147,7 +147,7 @@ public final class NeoForgeStageSessionRegistry {
 
         ServerStageMember member = session.members.get(sender.getUUID());
         if (member == null) {
-            member = new ServerStageMember(sender.getUUID(), sender.getGameProfile().getName(),
+            member = new ServerStageMember(sender.getUUID(), sender.getGameProfile().name(),
                     StageMemberState.INVITED, StageCameraMode.HOST_CAMERA);
             session.members.put(sender.getUUID(), member);
         }
@@ -371,7 +371,7 @@ public final class NeoForgeStageSessionRegistry {
         playerSessions.put(senderUUID, sessionId);
         session.members.put(senderUUID, new ServerStageMember(
                 senderUUID,
-                sender.getGameProfile().getName(),
+                sender.getGameProfile().name(),
                 StageMemberState.HOST,
                 StageCameraMode.HOST_CAMERA
         ));

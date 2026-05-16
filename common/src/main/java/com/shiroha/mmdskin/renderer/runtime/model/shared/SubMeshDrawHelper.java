@@ -1,7 +1,7 @@
 /* 文件职责：统一管理子网格绘制与描边绘制的索引提交逻辑。 */
 package com.shiroha.mmdskin.renderer.runtime.model.shared;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.opengl.GlStateManager;
 import org.lwjgl.opengl.GL46C;
 
 import java.nio.ByteBuffer;
@@ -32,7 +32,8 @@ public final class SubMeshDrawHelper {
                             int indexType,
                             TextureResolver textureResolver,
                             AlphaResolver alphaResolver) {
-        RenderSystem.activeTexture(GL46C.GL_TEXTURE0);
+        // TODO_1.21.11: 渲染管线重写 - RenderSystem.activeTexture 已删除
+        GlStateManager._activeTexture(GL46C.GL_TEXTURE0);
 
         for (int i = 0; i < subMeshCount; ++i) {
             int base = i * SUB_MESH_STRIDE;
@@ -47,14 +48,15 @@ public final class SubMeshDrawHelper {
                 continue;
             }
 
+            // TODO_1.21.11: 渲染管线重写 - RenderSystem 剔除控制已删除，使用 GL 直调
             if (bothFace) {
-                RenderSystem.disableCull();
+                GL46C.glDisable(GL46C.GL_CULL_FACE);
             } else {
-                RenderSystem.enableCull();
+                GL46C.glEnable(GL46C.GL_CULL_FACE);
             }
 
             int textureId = textureResolver.resolve(materialId);
-            RenderSystem.setShaderTexture(0, textureId);
+            // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShaderTexture 已删除
             GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, textureId);
 
             long startPos = (long) beginIndex * indexElementSize;
@@ -68,7 +70,8 @@ public final class SubMeshDrawHelper {
                                    int indexType,
                                    TextureResolver textureResolver,
                                    AlphaResolver alphaResolver) {
-        RenderSystem.activeTexture(GL46C.GL_TEXTURE0);
+        // TODO_1.21.11: 渲染管线重写 - RenderSystem.activeTexture 已删除
+        GlStateManager._activeTexture(GL46C.GL_TEXTURE0);
         for (int i = 0; i < subMeshCount; ++i) {
             int base = i * SUB_MESH_STRIDE;
             int materialId = subMeshDataBuf.getInt(base);
@@ -82,7 +85,7 @@ public final class SubMeshDrawHelper {
             }
 
             int textureId = textureResolver.resolve(materialId);
-            RenderSystem.setShaderTexture(0, textureId);
+            // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShaderTexture 已删除
             GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, textureId);
 
             long startPos = (long) beginIndex * indexElementSize;

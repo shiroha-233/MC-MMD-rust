@@ -4,7 +4,7 @@ import com.shiroha.mmdskin.asset.catalog.ModelInfo;
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.config.UIConstants;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 
@@ -23,7 +23,7 @@ public final class MobReplacementService {
             return null;
         }
 
-        ResourceLocation entityTypeId = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
+        Identifier entityTypeId = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
         if (entityTypeId == null) {
             return null;
         }

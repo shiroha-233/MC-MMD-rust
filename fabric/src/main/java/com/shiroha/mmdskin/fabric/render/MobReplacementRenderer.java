@@ -1,14 +1,12 @@
 /* 文件职责：负责 Fabric 侧原版生物的 MMD 替换渲染。 */
 package com.shiroha.mmdskin.fabric.render;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.renderer.api.RenderContext;
 import com.shiroha.mmdskin.renderer.api.RenderParams;
 import com.shiroha.mmdskin.renderer.integration.entity.EntityAnimationResolver;
 import com.shiroha.mmdskin.renderer.integration.ModelPropertyHelper;
 import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
-import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.world.entity.LivingEntity;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -44,7 +42,7 @@ public final class MobReplacementRenderer {
                     poseStack.scale(0.5F, 0.5F, 0.5F);
                 }
                 poseStack.scale(size[0], size[0], size[0]);
-                RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
+                // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShader 已被移除
                 model.model.render(entity, params.bodyYaw, params.bodyPitch, params.translation,
                     tickDelta, poseStack, packedLight, RenderContext.WORLD);
                 return true;

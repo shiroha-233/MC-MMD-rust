@@ -7,7 +7,7 @@ import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
 import com.shiroha.mmdskin.renderer.integration.entity.MobReplacementService;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
@@ -148,7 +148,7 @@ public final class MmdSkinApi {
     }
 
     public static String getConfiguredMobModelReplacement(net.minecraft.world.entity.EntityType<?> entityType) {
-        ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
+        Identifier id = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
         return id == null ? "" : ConfigManager.getMobModelReplacement(id.toString());
     }
 

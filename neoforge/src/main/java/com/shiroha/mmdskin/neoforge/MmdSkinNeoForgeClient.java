@@ -17,7 +17,7 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
-@EventBusSubscriber(value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD, modid = MmdSkin.MOD_ID)
+@EventBusSubscriber(value = Dist.CLIENT, modid = MmdSkin.MOD_ID) // TODO_1.21.11: API 变更 EventBusSubscriber 不再有 bus 选项
 public final class MmdSkinNeoForgeClient {
     @SubscribeEvent
     public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {

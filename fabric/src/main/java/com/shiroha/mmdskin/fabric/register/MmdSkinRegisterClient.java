@@ -30,14 +30,16 @@ public final class MmdSkinRegisterClient {
         "key.mmdskin.config_wheel",
         InputConstants.Type.KEYSYM,
         GLFW.GLFW_KEY_LEFT_ALT,
-        "key.categories.mmdskin"
+        // TODO_1.21.11: 自定义 KeyMapping.Category 待迁移
+        KeyMapping.Category.MISC
     );
 
     static final KeyMapping KEY_MAID_CONFIG_WHEEL = new KeyMapping(
         "key.mmdskin.maid_config_wheel",
         InputConstants.Type.KEYSYM,
         GLFW.GLFW_KEY_B,
-        "key.categories.mmdskin"
+        // TODO_1.21.11: 自定义 KeyMapping.Category 待迁移
+        KeyMapping.Category.MISC
     );
 
     static final KeyMapping[] KEY_QUICK_MODELS = new KeyMapping[4];
@@ -52,7 +54,8 @@ public final class MmdSkinRegisterClient {
                 "key.mmdskin.quick_model_" + (i + 1),
                 InputConstants.Type.KEYSYM,
                 InputConstants.UNKNOWN.getValue(),
-                "key.categories.mmdskin"
+                // TODO_1.21.11: 自定义 KeyMapping.Category 待迁移
+                KeyMapping.Category.MISC
             );
         }
     }

@@ -1,22 +1,17 @@
+/* 文件职责：女仆 MMD 模型渲染器，负责将 MMD 模型渲染到女仆实体上。 */
 package com.shiroha.mmdskin.maid;
 
 import com.shiroha.mmdskin.renderer.runtime.animation.MMDAnimManager;
 import com.shiroha.mmdskin.player.runtime.EntityAnimState;
 import com.shiroha.mmdskin.renderer.api.RenderContext;
 import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.world.entity.LivingEntity;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.joml.Vector3f;
 
 import java.util.UUID;
-
-/**
- * 女仆 MMD 模型渲染器
- */
 
 public class MaidMMDRenderer {
     private static final Logger logger = LogManager.getLogger();
@@ -49,7 +44,7 @@ public class MaidMMDRenderer {
                 entity.xRotO = originalXRotO * modelSize;
             }
 
-            RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
+            // TODO_1.21.11: 渲染管线重写，旧的 RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader) 已失效
             modelData.model.render(entity, entityYaw, entityPitch, entityTrans, partialTicks, poseStack, packedLight, RenderContext.WORLD);
 
             if (modelSize != 1.0f && modelSize > 0.0f) {

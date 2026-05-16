@@ -1,9 +1,9 @@
+/* 文件职责：封装 Toon 渲染参数与 OpenGL 状态切换。 */
 package com.shiroha.mmdskin.render.shader;
 
-import com.mojang.blaze3d.platform.GlStateManager;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.opengl.GlStateManager;
 import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.renderer.compat.RenderSystemCompat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.TextureManager;
 import org.joml.Vector3f;
@@ -59,12 +59,13 @@ public class ToonRenderHelper {
     }
 
     public static void prepareRenderState(int vao) {
-        BufferUploader.reset();
+        /* BufferUploader.reset() removed in 1.21.11 */
         GL46C.glBindVertexArray(vao);
-        RenderSystem.enableBlend();
-        RenderSystem.enableDepthTest();
-        RenderSystem.blendEquation(GL46C.GL_FUNC_ADD);
-        RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+        GlStateManager._enableBlend();
+        GlStateManager._enableDepthTest();
+        GL46C.glBlendEquation(GL46C.GL_FUNC_ADD);
+        // TODO_1.21.11: 渲染管线重写 - RenderSystem.blendFunc / GlStateManager.SourceFactor 已删除
+        RenderSystemCompat.blendFuncSrcAlphaOneMinusSrcAlpha();
     }
 
     public static void restoreRenderState() {
@@ -72,8 +73,8 @@ public class ToonRenderHelper {
         GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, 0);
         GL46C.glBindVertexArray(0);
         GL46C.glUseProgram(0);
-        RenderSystem.activeTexture(GL46C.GL_TEXTURE0);
-        BufferUploader.reset();
+        GlStateManager._activeTexture(GL46C.GL_TEXTURE0);
+        /* BufferUploader.reset() removed in 1.21.11 */
     }
 
     public static boolean isOutlineEnabled() {
@@ -82,7 +83,7 @@ public class ToonRenderHelper {
 
     public static void setupOutlineCulling() {
         GL46C.glCullFace(GL46C.GL_FRONT);
-        RenderSystem.enableCull();
+        GlStateManager._enableCull();
     }
 
     public static void restoreNormalCulling() {
@@ -109,7 +110,7 @@ public class ToonRenderHelper {
     public static void drawSubMeshesMain(Minecraft mc, NativeFunc nf, long model,
                                          int indexElementSize, int indexType,
                                          MaterialProvider materialProvider) {
-        RenderSystem.activeTexture(GL46C.GL_TEXTURE0);
+        GlStateManager._activeTexture(GL46C.GL_TEXTURE0);
         long subMeshCount = nf.GetSubMeshCount(model);
 
         for (long i = 0; i < subMeshCount; ++i) {
@@ -120,16 +121,17 @@ public class ToonRenderHelper {
             if (alpha == 0.0f) continue;
 
             if (nf.GetMaterialBothFace(model, materialID)) {
-                RenderSystem.disableCull();
+                GlStateManager._disableCull();
             } else {
-                RenderSystem.enableCull();
+                GlStateManager._enableCull();
             }
 
             int texId = materialProvider.getTextureId(materialID);
             if (texId == 0) {
-                texId = mc.getTextureManager().getTexture(TextureManager.INTENTIONAL_MISSING_TEXTURE).getId();
+                // TODO_1.21.11: AbstractTexture.getId() 已删除，先用 0 占位
+                texId = 0;
             }
-            RenderSystem.setShaderTexture(0, texId);
+            // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShaderTexture 已删除
             GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, texId);
 
             long startPos = (long) nf.GetSubMeshBeginIndex(model, i) * indexElementSize;

@@ -1,17 +1,12 @@
 /* 文件职责：提供轮盘界面的共享几何绘制、动画与基础交互。 */
 package com.shiroha.mmdskin.ui.wheel;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.BufferUploader;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.Tesselator;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.shiroha.mmdskin.renderer.compat.RenderSystemCompat;
 import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import org.joml.Matrix4f;
@@ -159,40 +154,16 @@ public abstract class AbstractWheelScreen extends Screen {
         if (selectedSlot < 0 || count <= 0) {
             return;
         }
-
-        Matrix4f matrix = guiGraphics.pose().last().pose();
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-
+        // TODO_1.21.11: 渲染管线重写 - guiGraphics.pose().last() / RenderSystem.setShader 已删除
+        RenderSystemCompat.enableBlend();
+        RenderSystemCompat.defaultBlendFunc();
         double segmentAngle = 360.0 / count;
-        drawFilledSegment(matrix, selectedSlot, segmentAngle, style.highlightColor());
-
-        RenderSystem.disableBlend();
+        // TODO_1.21.11: 渲染管线重写 - drawFilledSegment(matrix, selectedSlot, segmentAngle, style.highlightColor());
+        RenderSystemCompat.disableBlend();
     }
 
     protected void drawFilledSegment(Matrix4f matrix, int index, double segmentAngle, int color) {
-        double startAngle = Math.toRadians(index * segmentAngle - 90.0);
-        double endAngle = Math.toRadians((index + 1) * segmentAngle - 90.0);
-
-        int red = red(color);
-        int green = green(color);
-        int blue = blue(color);
-        int alpha = alpha(color);
-
-        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
-        int steps = 32;
-        for (int i = 0; i <= steps; i++) {
-            double angle = startAngle + (endAngle - startAngle) * i / steps;
-            float cos = (float) Math.cos(angle);
-            float sin = (float) Math.sin(angle);
-
-            bufferBuilder.addVertex(matrix, centerX + cos * innerRadius, centerY + sin * innerRadius, 0.0f)
-                    .setColor(red, green, blue, alpha / 2);
-            bufferBuilder.addVertex(matrix, centerX + cos * outerRadius, centerY + sin * outerRadius, 0.0f)
-                    .setColor(red, green, blue, alpha);
-        }
-        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
+        // TODO_1.21.11: 渲染管线重写 - BufferBuilder/BufferUploader/Tesselator + POSITION_COLOR shader 已删除
     }
 
     protected void renderDividerLines(GuiGraphics guiGraphics) {
@@ -200,105 +171,27 @@ public abstract class AbstractWheelScreen extends Screen {
         if (count <= 0) {
             return;
         }
-
-        Matrix4f matrix = guiGraphics.pose().last().pose();
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-
-        double segmentAngle = 360.0 / count;
-        for (int i = 0; i < count; i++) {
-            double angle = Math.toRadians(i * segmentAngle - 90.0);
-            float cos = (float) Math.cos(angle);
-            float sin = (float) Math.sin(angle);
-
-            float innerX = centerX + cos * innerRadius;
-            float innerY = centerY + sin * innerRadius;
-            float outerX = centerX + cos * outerRadius;
-            float outerY = centerY + sin * outerRadius;
-
-            int lineColor = i == selectedSlot || i == (selectedSlot + 1) % count
-                    ? style.lineColor()
-                    : style.lineColorDim();
-            drawThickLine(matrix, innerX, innerY, outerX, outerY, 3.0f, lineColor);
-        }
-
-        RenderSystem.disableBlend();
+        // TODO_1.21.11: 渲染管线重写 - guiGraphics.pose().last() / RenderSystem.setShader 已删除
+        RenderSystemCompat.enableBlend();
+        RenderSystemCompat.defaultBlendFunc();
+        // TODO_1.21.11: 渲染管线重写 - 分隔线绘制依赖 BufferBuilder/BufferUploader，需迁移到 1.21.11 新管线
+        RenderSystemCompat.disableBlend();
     }
 
     protected void renderOuterRing(GuiGraphics guiGraphics) {
-        Matrix4f matrix = guiGraphics.pose().last().pose();
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-
-        int red = red(style.lineColorDim());
-        int green = green(style.lineColorDim());
-        int blue = blue(style.lineColorDim());
-        int alpha = alpha(style.lineColorDim());
-        float thickness = 3.0f;
-
-        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
-        int steps = 64;
-        for (int i = 0; i <= steps; i++) {
-            double angle = Math.toRadians(i * 360.0 / steps);
-            float cos = (float) Math.cos(angle);
-            float sin = (float) Math.sin(angle);
-
-            bufferBuilder.addVertex(matrix, centerX + cos * (outerRadius - thickness), centerY + sin * (outerRadius - thickness), 0.0f)
-                    .setColor(red, green, blue, alpha);
-            bufferBuilder.addVertex(matrix, centerX + cos * (outerRadius + thickness), centerY + sin * (outerRadius + thickness), 0.0f)
-                    .setColor(red, green, blue, alpha);
-        }
-        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
-        RenderSystem.disableBlend();
+        // TODO_1.21.11: 渲染管线重写 - guiGraphics.pose().last() / RenderSystem.setShader 已删除
+        RenderSystemCompat.enableBlend();
+        RenderSystemCompat.defaultBlendFunc();
+        // TODO_1.21.11: 渲染管线重写 - 外环 TRIANGLE_STRIP 依赖 BufferBuilder/BufferUploader，需迁移到 1.21.11 新管线
+        RenderSystemCompat.disableBlend();
     }
 
     protected void renderCenterCircle(GuiGraphics guiGraphics, String text, int textColor) {
-        Matrix4f matrix = guiGraphics.pose().last().pose();
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-
-        int bgRed = red(style.centerBg());
-        int bgGreen = green(style.centerBg());
-        int bgBlue = blue(style.centerBg());
-        int bgAlpha = alpha(style.centerBg());
-
-        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
-        bufferBuilder.addVertex(matrix, centerX, centerY, 0.0f).setColor(bgRed, bgGreen, bgBlue, bgAlpha);
-        int steps = 48;
-        for (int i = 0; i <= steps; i++) {
-            double angle = Math.toRadians(i * 360.0 / steps);
-            bufferBuilder.addVertex(
-                            matrix,
-                            centerX + (float) (Math.cos(angle) * innerRadius),
-                            centerY + (float) (Math.sin(angle) * innerRadius),
-                            0.0f
-                    )
-                    .setColor(bgRed, bgGreen, bgBlue, bgAlpha);
-        }
-        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
-
-        int borderRed = red(style.centerBorder());
-        int borderGreen = green(style.centerBorder());
-        int borderBlue = blue(style.centerBorder());
-        int borderAlpha = alpha(style.centerBorder());
-        float thickness = 3.0f;
-
-        bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
-        for (int i = 0; i <= steps; i++) {
-            double angle = Math.toRadians(i * 360.0 / steps);
-            float cos = (float) Math.cos(angle);
-            float sin = (float) Math.sin(angle);
-
-            bufferBuilder.addVertex(matrix, centerX + cos * (innerRadius - thickness), centerY + sin * (innerRadius - thickness), 0.0f)
-                    .setColor(borderRed, borderGreen, borderBlue, borderAlpha);
-            bufferBuilder.addVertex(matrix, centerX + cos * (innerRadius + thickness), centerY + sin * (innerRadius + thickness), 0.0f)
-                    .setColor(borderRed, borderGreen, borderBlue, borderAlpha);
-        }
-        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
-        RenderSystem.disableBlend();
+        // TODO_1.21.11: 渲染管线重写 - guiGraphics.pose().last() / RenderSystem.setShader 已删除
+        RenderSystemCompat.enableBlend();
+        RenderSystemCompat.defaultBlendFunc();
+        // TODO_1.21.11: 渲染管线重写 - 中心圆 TRIANGLE_FAN/TRIANGLE_STRIP 依赖 BufferBuilder/BufferUploader，需迁移到 1.21.11 新管线
+        RenderSystemCompat.disableBlend();
 
         String fittedText = fitText(text, Math.max(24, innerRadius * 2 - 12));
         int textWidth = this.font.width(fittedText);
@@ -319,26 +212,7 @@ public abstract class AbstractWheelScreen extends Screen {
     }
 
     protected void drawThickLine(Matrix4f matrix, float x1, float y1, float x2, float y2, float thickness, int color) {
-        float dx = x2 - x1;
-        float dy = y2 - y1;
-        float length = (float) Math.sqrt(dx * dx + dy * dy);
-        if (length < 0.001f) {
-            return;
-        }
-
-        float px = -dy / length * thickness * 0.5f;
-        float py = dx / length * thickness * 0.5f;
-        int red = red(color);
-        int green = green(color);
-        int blue = blue(color);
-        int alpha = alpha(color);
-
-        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
-        bufferBuilder.addVertex(matrix, x1 + px, y1 + py, 0.0f).setColor(red, green, blue, alpha);
-        bufferBuilder.addVertex(matrix, x1 - px, y1 - py, 0.0f).setColor(red, green, blue, alpha);
-        bufferBuilder.addVertex(matrix, x2 + px, y2 + py, 0.0f).setColor(red, green, blue, alpha);
-        bufferBuilder.addVertex(matrix, x2 - px, y2 - py, 0.0f).setColor(red, green, blue, alpha);
-        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
+        // TODO_1.21.11: 渲染管线重写 - BufferBuilder/BufferUploader/POSITION_COLOR shader 已删除
     }
 
     protected void drawRectOutline(GuiGraphics guiGraphics, int x, int y, int width, int height, int color) {
@@ -415,22 +289,16 @@ public abstract class AbstractWheelScreen extends Screen {
         String displayIcon = icon == null ? "" : icon;
         int iconWidth = this.font.width(displayIcon);
         int iconColor = blendColors(TEXT_MUTED, TEXT_PRIMARY, 0.42f + pop * 0.58f);
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(textX, textY - 10.0f, 0.0f);
-        guiGraphics.pose().scale(1.0f + pop * 0.08f, 1.0f + pop * 0.08f, 1.0f);
-        guiGraphics.drawString(this.font, displayIcon, -iconWidth / 2 + 1, 0, style.textShadow(), false);
-        guiGraphics.drawString(this.font, displayIcon, -iconWidth / 2, -1, iconColor, false);
-        guiGraphics.pose().popPose();
+        // TODO_1.21.11: 渲染管线重写 - pose().pushPose()/popPose()/translate(x,y,z)/scale(x,y,z) 已删除，暂直接绘制不做矩阵变换
+        guiGraphics.drawString(this.font, displayIcon, textX - iconWidth / 2 + 1, textY - 10, style.textShadow(), false);
+        guiGraphics.drawString(this.font, displayIcon, textX - iconWidth / 2, textY - 11, iconColor, false);
 
         String displayLabel = fitText(label, Math.max(56, Math.round(maxTextWidth * 0.76f)));
         int labelWidth = this.font.width(displayLabel);
         int labelColor = blendColors(TEXT_MUTED, TEXT_SECONDARY, 0.52f + pop * 0.38f);
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(textX, textY + 4.0f, 0.0f);
-        guiGraphics.pose().scale(0.90f + pop * 0.02f, 0.90f + pop * 0.02f, 1.0f);
-        guiGraphics.drawString(this.font, displayLabel, -labelWidth / 2 + 1, 0, style.textShadow(), false);
-        guiGraphics.drawString(this.font, displayLabel, -labelWidth / 2, -1, labelColor, false);
-        guiGraphics.pose().popPose();
+        // TODO_1.21.11: 渲染管线重写 - pose().pushPose()/popPose()/translate(x,y,z)/scale(x,y,z) 已删除，暂直接绘制不做矩阵变换
+        guiGraphics.drawString(this.font, displayLabel, textX - labelWidth / 2 + 1, textY + 4, style.textShadow(), false);
+        guiGraphics.drawString(this.font, displayLabel, textX - labelWidth / 2, textY + 3, labelColor, false);
     }
 
     private void updateAnimations(int count) {
@@ -555,23 +423,11 @@ public abstract class AbstractWheelScreen extends Screen {
     }
 
     private void drawRing(GuiGraphics guiGraphics, float cx, float cy, float inner, float outer, float startDegrees, float sweepDegrees, int color) {
-        int segments = Math.max(12, Math.round(Math.abs(sweepDegrees) / 5.5f));
-        float startRadians = (float) Math.toRadians(startDegrees);
-        float stepRadians = (float) Math.toRadians(sweepDegrees / segments);
-
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        Matrix4f matrix = guiGraphics.pose().last().pose();
-        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
-        for (int i = 0; i <= segments; i++) {
-            float angle = startRadians + stepRadians * i;
-            float cos = Mth.cos(angle);
-            float sin = Mth.sin(angle);
-            addVertex(bufferBuilder, matrix, cx + cos * outer, cy + sin * outer, color);
-            addVertex(bufferBuilder, matrix, cx + cos * inner, cy + sin * inner, color);
-        }
-        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
+        // TODO_1.21.11: 渲染管线重写 - guiGraphics.pose().last() / BufferBuilder / BufferUploader / RenderSystem.setShader 已删除
+        RenderSystemCompat.enableBlend();
+        RenderSystemCompat.defaultBlendFunc();
+        // TODO_1.21.11: 渲染管线重写 - 环形 TRIANGLE_STRIP 依赖 BufferBuilder/BufferUploader，需迁移到 1.21.11 新管线
+        RenderSystemCompat.disableBlend();
     }
 
     private void drawQuad(
@@ -586,21 +442,11 @@ public abstract class AbstractWheelScreen extends Screen {
             float dy,
             int color
     ) {
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        Matrix4f matrix = guiGraphics.pose().last().pose();
-        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
-        addVertex(bufferBuilder, matrix, ax, ay, color);
-        addVertex(bufferBuilder, matrix, bx, by, color);
-        addVertex(bufferBuilder, matrix, cx, cy, color);
-        addVertex(bufferBuilder, matrix, dx, dy, color);
-        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
-    }
-
-    private void addVertex(BufferBuilder bufferBuilder, Matrix4f matrix, float x, float y, int color) {
-        bufferBuilder.addVertex(matrix, x, y, 0.0f)
-                .setColor(red(color), green(color), blue(color), alpha(color));
+        // TODO_1.21.11: 渲染管线重写 - guiGraphics.pose().last() / BufferBuilder / BufferUploader / RenderSystem.setShader 已删除
+        RenderSystemCompat.enableBlend();
+        RenderSystemCompat.defaultBlendFunc();
+        // TODO_1.21.11: 渲染管线重写 - QUADS 依赖 BufferBuilder/BufferUploader，需迁移到 1.21.11 新管线
+        RenderSystemCompat.disableBlend();
     }
 
     private int roundedInset(int radius, int row) {
@@ -634,11 +480,11 @@ public abstract class AbstractWheelScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) {
+    public boolean keyPressed(KeyEvent event) {
+        if (event.key() == 256) {
             this.onClose();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 }

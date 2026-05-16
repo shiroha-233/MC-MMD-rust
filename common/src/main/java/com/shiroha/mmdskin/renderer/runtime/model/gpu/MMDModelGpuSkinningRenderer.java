@@ -1,12 +1,11 @@
 /* 文件职责：执行 GPU skinning 模型的 Toon/普通渲染流程。 */
 package com.shiroha.mmdskin.renderer.runtime.model.gpu;
 
-import com.mojang.blaze3d.platform.GlStateManager;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.renderer.compat.IrisCompat;
+import com.shiroha.mmdskin.renderer.compat.RenderSystemCompat;
 import com.shiroha.mmdskin.renderer.performance.RenderPerformanceProfiler;
 import com.shiroha.mmdskin.renderer.pipeline.shader.SkinningComputeShader;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonShaderCpu;
@@ -16,7 +15,7 @@ import com.shiroha.mmdskin.renderer.runtime.model.helper.LightingHelper;
 import com.shiroha.mmdskin.renderer.runtime.model.shared.MMDMaterial;
 import com.shiroha.mmdskin.renderer.runtime.model.shared.SubMeshDrawHelper;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.ShaderInstance;
+import com.shiroha.mmdskin.renderer.compat.ShaderInstanceStub;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.world.entity.Entity;
 import org.apache.logging.log4j.LogManager;
@@ -81,17 +80,18 @@ final class MMDModelGpuSkinningRenderer {
 
         boolean useToon = initializeToonShaderIfNeeded();
 
-        BufferUploader.reset();
+        /* BufferUploader.reset() removed in 1.21.11 */
         GL46C.glBindVertexArray(target.vertexArrayObject);
-        RenderSystem.enableBlend();
-        RenderSystem.enableDepthTest();
-        RenderSystem.blendEquation(GL46C.GL_FUNC_ADD);
-        RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+        GlStateManager._enableBlend();
+        GlStateManager._enableDepthTest();
+        GL46C.glBlendEquation(GL46C.GL_FUNC_ADD);
+        // TODO_1.21.11: 渲染管线重写 - RenderSystem.blendFunc 已删除
+        RenderSystemCompat.blendFuncSrcAlphaOneMinusSrcAlpha();
 
         target.modelViewMatBuff.clear();
         target.projMatBuff.clear();
         AbstractMMDModel.computeModelViewMatrix(deliverStack).get(target.modelViewMatBuff);
-        RenderSystem.getProjectionMatrix().get(target.projMatBuff);
+        RenderSystemCompat.getProjectionMatrix().get(target.projMatBuff);
 
         GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.indexBufferObject);
         target.currentDeliverStack = deliverStack;
@@ -106,14 +106,10 @@ final class MMDModelGpuSkinningRenderer {
         GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, 0);
         GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, 0);
         GL46C.glBindVertexArray(0);
-        RenderSystem.activeTexture(GL46C.GL_TEXTURE0);
+        GlStateManager._activeTexture(GL46C.GL_TEXTURE0);
 
-        ShaderInstance currentShader = RenderSystem.getShader();
-        if (currentShader != null) {
-            currentShader.clear();
-        }
-        BufferUploader.reset();
-        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        // TODO_1.21.11: 渲染管线重写 - RenderSystem.getShader / setShaderColor 已删除
+        /* BufferUploader.reset() removed in 1.21.11 */
     }
 
     private static boolean initializeToonShaderIfNeeded() {
@@ -151,7 +147,8 @@ final class MMDModelGpuSkinningRenderer {
 
     private static void renderNormal(MMDModelGpuSkinning target, Minecraft minecraft,
                                      float lightIntensity, int blockLight, int skyLight, float skyDarken) {
-        ShaderInstance shader = RenderSystem.getShader();
+        // TODO_1.21.11: 渲染管线重写 - RenderSystem.getShader 已删除
+        ShaderInstanceStub shader = null;
         if (shader == null) {
             logger.error("[GPU蒙皮] RenderSystem.getShader() 返回 null，跳过渲染");
             return;
@@ -160,7 +157,8 @@ final class MMDModelGpuSkinningRenderer {
 
         boolean irisActive = IrisCompat.isIrisShaderActive();
         float colorFactor = irisActive ? 1.0f : lightIntensity;
-        RenderSystem.setShaderColor(colorFactor, colorFactor, colorFactor, 1.0f);
+        // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShaderColor 已删除
+        RenderSystemCompat.setShaderColor(colorFactor, colorFactor, colorFactor, 1.0f);
 
         target.setUniforms(shader, target.currentDeliverStack);
         shader.apply();
@@ -249,16 +247,16 @@ final class MMDModelGpuSkinningRenderer {
     private static void renderToon(MMDModelGpuSkinning target, Minecraft minecraft, float lightIntensity) {
         boolean irisActive = IrisCompat.isIrisShaderActive();
         if (irisActive) {
-            ShaderInstance irisShader = RenderSystem.getShader();
+            // TODO_1.21.11: 渲染管线重写 - RenderSystem.getShader 已删除
+            ShaderInstanceStub irisShader = null;
             if (irisShader != null) {
                 target.setUniforms(irisShader, target.currentDeliverStack);
                 irisShader.apply();
             }
         }
 
-        int missingTextureId = minecraft.getTextureManager()
-                .getTexture(TextureManager.INTENTIONAL_MISSING_TEXTURE)
-                .getId();
+        // TODO_1.21.11: AbstractTexture.getId() 已删除，先用 0 占位
+        int missingTextureId = 0;
 
         MMDModelGpuSkinning.toonShaderCpu.useMain();
         int toonPosLoc = MMDModelGpuSkinning.toonShaderCpu.getPositionLocation();
@@ -326,9 +324,9 @@ final class MMDModelGpuSkinningRenderer {
 
             ToonRenderHelper.setupOutlineUniforms(MMDModelGpuSkinning.toonShaderCpu);
 
-            RenderSystem.depthMask(false);
+            GlStateManager._depthMask(false);
             GL46C.glCullFace(GL46C.GL_FRONT);
-            RenderSystem.enableCull();
+            GlStateManager._enableCull();
             SubMeshDrawHelper.drawOutline(
                     target.subMeshDataBuf,
                     target.subMeshCount,
@@ -343,7 +341,7 @@ final class MMDModelGpuSkinningRenderer {
                         return target.effectiveMaterialAlpha(materialId, baseAlpha);
                     });
             GL46C.glCullFace(GL46C.GL_BACK);
-            RenderSystem.depthMask(true);
+            GlStateManager._depthMask(true);
             if (posLoc != -1) GL46C.glDisableVertexAttribArray(posLoc);
             if (norLoc != -1) GL46C.glDisableVertexAttribArray(norLoc);
             if (outlineUvLoc != -1) GL46C.glDisableVertexAttribArray(outlineUvLoc);
@@ -353,9 +351,8 @@ final class MMDModelGpuSkinningRenderer {
     }
 
     private static void drawAllSubMeshes(MMDModelGpuSkinning target, Minecraft minecraft) {
-        int missingTextureId = minecraft.getTextureManager()
-                .getTexture(TextureManager.INTENTIONAL_MISSING_TEXTURE)
-                .getId();
+        // TODO_1.21.11: AbstractTexture.getId() 已删除，先用 0 占位
+        int missingTextureId = 0;
         SubMeshDrawHelper.draw(
                 target.subMeshDataBuf,
                 target.subMeshCount,

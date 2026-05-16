@@ -392,14 +392,8 @@ public class MMDCameraController {
     }
 
     private void computeIntroAndStandby(Minecraft mc) {
-        if (mc.gameRenderer != null && mc.gameRenderer.getMainCamera() != null) {
-            var cam = mc.gameRenderer.getMainCamera();
-            introStartX = cam.getPosition().x;
-            introStartY = cam.getPosition().y;
-            introStartZ = cam.getPosition().z;
-            introStartPitch = cam.getXRot();
-            introStartYaw = cam.getYRot();
-        } else if (mc.player != null) {
+        // TODO_1.21.11: 渲染管线重写 - Camera.getPosition()/getXRot()/getYRot() 在 1.21.6+ 已变更，回退到玩家位置作为相机初始姿态
+        if (mc.player != null) {
             introStartX = mc.player.getX();
             introStartY = mc.player.getEyeY();
             introStartZ = mc.player.getZ();
@@ -565,7 +559,7 @@ public class MMDCameraController {
 
         if (mc.screen != null) return;
 
-        long window = mc.getWindow().getWindow();
+        long window = org.lwjgl.glfw.GLFW.glfwGetCurrentContext(); // TODO_1.21.11: 渲染管线重写 - Window.getWindow() 在 1.21.6+ 已移除
         boolean escNow = org.lwjgl.glfw.GLFW.glfwGetKey(window, org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
 
         if (escNow && !escWasPressed) {

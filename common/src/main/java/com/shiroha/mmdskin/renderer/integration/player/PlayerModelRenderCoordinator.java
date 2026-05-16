@@ -63,7 +63,8 @@ final class PlayerModelRenderCoordinator {
                 InventoryRenderHelper.renderInInventory(player, model, entityYaw, tickDelta, matrixStack, packedLight, size);
             } else {
                 matrixStack.scale(size[0], size[0], size[0]);
-                RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
+                // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShader 已被移除
+                // RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
                 RenderContext context = isFirstPerson ? RenderContext.FIRST_PERSON : RenderContext.WORLD;
                 model.render(player, params.bodyYaw, params.bodyPitch, params.translation, tickDelta, matrixStack, packedLight, context);
             }

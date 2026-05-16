@@ -45,7 +45,8 @@ public final class MobReplacementRenderer {
                     poseStack.scale(0.5F, 0.5F, 0.5F);
                 }
                 poseStack.scale(size[0], size[0], size[0]);
-                RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
+                // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShader 已被移除
+                // RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
                 model.model.render(entity, REUSABLE_PARAMS.bodyYaw, REUSABLE_PARAMS.bodyPitch, REUSABLE_PARAMS.translation,
                         tickDelta, poseStack, packedLight, RenderContext.WORLD);
                 return true;

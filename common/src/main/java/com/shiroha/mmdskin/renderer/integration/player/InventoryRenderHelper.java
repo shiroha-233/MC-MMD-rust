@@ -32,7 +32,8 @@ public class InventoryRenderHelper {
         Quaternionf rotation = calculateRotation(player);
         matrixStack.mulPose(rotation);
 
-        RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
+        // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShader 已被移除
+        // RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
         model.render(player, entityYaw, 0.0f, new Vector3f(0.0f), tickDelta, matrixStack, packedLight, RenderContext.INVENTORY);
 
         matrixStack.popPose();

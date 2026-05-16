@@ -6,6 +6,8 @@ import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 
@@ -151,15 +153,19 @@ public class StageSelectScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        // TODO_1.21.11: 渲染管线重写
+        double mouseX = event.x();
+        double mouseY = event.y();
+        int button = event.button();
         if (button != 0) {
-            return super.mouseClicked(mouseX, mouseY, button);
+            return super.mouseClicked(event, doubleClick);
         }
         if (assignPanel != null && assignPanel.mouseClicked(mouseX, mouseY)) {
             return true;
         }
         if (!containsLeftPanel(mouseX, mouseY)) {
-            return super.mouseClicked(mouseX, mouseY, button);
+            return super.mouseClicked(event, doubleClick);
         }
         if (hoveredRefresh) {
             reloadStagePacks();
@@ -217,7 +223,10 @@ public class StageSelectScreen extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        // TODO_1.21.11: 渲染管线重写
+        double mouseX = event.x();
+        int button = event.button();
         if (button == 0 && draggingCameraHeight) {
             updateCameraHeight(mouseX);
             return true;
@@ -226,17 +235,18 @@ public class StageSelectScreen extends Screen {
             updateAudioVolume(mouseX);
             return true;
         }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        return super.mouseDragged(event, dragX, dragY);
     }
 
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0 && (draggingCameraHeight || draggingAudioVolume)) {
+    public boolean mouseReleased(MouseButtonEvent event) {
+        // TODO_1.21.11: 渲染管线重写
+        if (event.button() == 0 && (draggingCameraHeight || draggingAudioVolume)) {
             draggingCameraHeight = false;
             draggingAudioVolume = false;
             return true;
         }
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(event);
     }
 
     @Override
@@ -260,12 +270,13 @@ public class StageSelectScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) {
+    public boolean keyPressed(KeyEvent event) {
+        // TODO_1.21.11: 渲染管线重写
+        if (event.key() == 256) {
             onClose();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override

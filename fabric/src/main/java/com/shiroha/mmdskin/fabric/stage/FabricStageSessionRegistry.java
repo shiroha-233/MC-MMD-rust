@@ -34,7 +34,7 @@ public final class FabricStageSessionRegistry {
     }
 
     private StageServerPlayer toStageServerPlayer(ServerPlayer player) {
-        return new StageServerPlayer(player.getUUID(), player.getGameProfile().getName());
+        return new StageServerPlayer(player.getUUID(), player.getGameProfile().name());
     }
 
     private static final class FabricPlatformPort implements StageServerPlatformPort {
@@ -50,13 +50,13 @@ public final class FabricStageSessionRegistry {
             if (player == null) {
                 return null;
             }
-            return new StageServerPlayer(player.getUUID(), player.getGameProfile().getName());
+            return new StageServerPlayer(player.getUUID(), player.getGameProfile().name());
         }
 
         @Override
         public List<StageServerPlayer> getOnlinePlayers() {
             return server.getPlayerList().getPlayers().stream()
-                    .map(player -> new StageServerPlayer(player.getUUID(), player.getGameProfile().getName()))
+                    .map(player -> new StageServerPlayer(player.getUUID(), player.getGameProfile().name()))
                     .toList();
         }
 

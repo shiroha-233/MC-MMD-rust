@@ -25,8 +25,8 @@ public abstract class EntityMixin {
             if (mc.player != null && mc.player.getUUID().equals(entity.getUUID())) {
                 if (vrEyeCameraActive) {
                     net.minecraft.client.Camera camera = mc.gameRenderer.getMainCamera();
-                    if (camera.isInitialized() && camera.getEntity() == entity) {
-                        cir.setReturnValue(camera.getPosition());
+                    if (camera.isInitialized() && camera.entity() == entity) {
+                        cir.setReturnValue(camera.position());
                         return;
                     }
                     cir.setReturnValue(FirstPersonManager.getVrCameraPosition(entity, partialTick));
@@ -35,8 +35,8 @@ public abstract class EntityMixin {
 
                 if (mc.options.getCameraType().isFirstPerson()) {
                     net.minecraft.client.Camera camera = mc.gameRenderer.getMainCamera();
-                    if (camera.isInitialized() && camera.getEntity() == entity) {
-                        cir.setReturnValue(camera.getPosition());
+                    if (camera.isInitialized() && camera.entity() == entity) {
+                        cir.setReturnValue(camera.position());
                         return;
                     }
 
@@ -77,9 +77,9 @@ public abstract class EntityMixin {
             if (mc.player != null && mc.player.getUUID().equals(entity.getUUID())) {
                 if (mc.options.getCameraType().isFirstPerson()) {
                     net.minecraft.client.Camera camera = mc.gameRenderer.getMainCamera();
-                    if (camera.isInitialized() && camera.getEntity() == entity) {
-                        float originalYaw = camera.getYRot();
-                        float originalPitch = camera.getXRot();
+                    if (camera.isInitialized() && camera.entity() == entity) {
+                        float originalYaw = camera.yRot();
+                        float originalPitch = camera.xRot();
                         float pitchRad = originalPitch * ((float) Math.PI / 180F);
                         float yawRad = -originalYaw * ((float) Math.PI / 180F);
                         float cosYaw = Mth.cos(yawRad);

@@ -28,7 +28,8 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+// TODO_1.21.11: API 变更 sendToServer 改用 ClientPacketDistributor
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 final class NeoForgeClientRuntimeHooks {
     private final KeyMapping keyConfigWheel;
@@ -97,7 +98,7 @@ final class NeoForgeClientRuntimeHooks {
             && !selectedModel.equals(UIConstants.DEFAULT_MODEL_NAME)) {
             PlayerModelSyncManager.broadcastLocalModelSelection(minecraft.player.getUUID(), selectedModel);
         }
-        PacketDistributor.sendToServer(MmdSkinNetworkPack.withAnimId(NetworkOpCode.REQUEST_ALL_MODELS, minecraft.player.getUUID(), ""));
+        ClientPacketDistributor.sendToServer(MmdSkinNetworkPack.withAnimId(NetworkOpCode.REQUEST_ALL_MODELS, minecraft.player.getUUID(), ""));
     }
 
     @SubscribeEvent

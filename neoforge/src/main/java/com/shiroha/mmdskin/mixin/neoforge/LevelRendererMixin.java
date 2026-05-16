@@ -40,7 +40,8 @@ public abstract class LevelRendererMixin {
             return camera.isDetached();
         }
 
-        Entity entity = camera.getEntity();
+        // TODO_1.21.11: Camera API 改名 getXxx -> xxx
+        Entity entity = camera.entity();
         if (!(entity instanceof AbstractClientPlayer player)) {
             return camera.isDetached();
         }
@@ -61,11 +62,13 @@ public abstract class LevelRendererMixin {
         if (FirstPersonManager.shouldRenderFirstPerson() && isMmdActive && !isVanilaMmdModel) {
             if (YsmCompat.isYsmModelActive(player)) {
                 if (YsmCompat.isDisableSelfModel()) {
-                    return camera.getXRot() >= 0;
+                    // TODO_1.21.11: Camera.getXRot -> xRot
+                    return camera.xRot() >= 0;
                 }
                 return false;
             }
-            return camera.getXRot() >= 0;
+            // TODO_1.21.11: Camera.getXRot -> xRot
+            return camera.xRot() >= 0;
         }
 
         return camera.isDetached();

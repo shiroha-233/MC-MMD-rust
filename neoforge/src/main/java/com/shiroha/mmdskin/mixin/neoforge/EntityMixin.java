@@ -30,9 +30,10 @@ public abstract class EntityMixin {
         }
 
         if (vrEyeCameraActive) {
+            // TODO_1.21.11: Camera API 改名 getXxx -> xxx
             net.minecraft.client.Camera camera = minecraft.gameRenderer.getMainCamera();
-            if (camera.isInitialized() && camera.getEntity() == entity) {
-                cir.setReturnValue(camera.getPosition());
+            if (camera.isInitialized() && camera.entity() == entity) {
+                cir.setReturnValue(camera.position());
                 return;
             }
             cir.setReturnValue(FirstPersonManager.getVrCameraPosition(entity, partialTick));
@@ -40,9 +41,10 @@ public abstract class EntityMixin {
         }
 
         if (minecraft.options.getCameraType().isFirstPerson()) {
+            // TODO_1.21.11: Camera API 改名 getXxx -> xxx
             net.minecraft.client.Camera camera = minecraft.gameRenderer.getMainCamera();
-            if (camera.isInitialized() && camera.getEntity() == entity) {
-                cir.setReturnValue(camera.getPosition());
+            if (camera.isInitialized() && camera.entity() == entity) {
+                cir.setReturnValue(camera.position());
                 return;
             }
 
@@ -89,13 +91,14 @@ public abstract class EntityMixin {
             return;
         }
 
+        // TODO_1.21.11: Camera API 改名 getXxx -> xxx
         net.minecraft.client.Camera camera = minecraft.gameRenderer.getMainCamera();
-        if (!camera.isInitialized() || camera.getEntity() != entity) {
+        if (!camera.isInitialized() || camera.entity() != entity) {
             return;
         }
 
-        float originalYaw = camera.getYRot();
-        float originalPitch = camera.getXRot();
+        float originalYaw = camera.yRot();
+        float originalPitch = camera.xRot();
         float pitchRad = originalPitch * ((float) Math.PI / 180F);
         float yawRad = -originalYaw * ((float) Math.PI / 180F);
         float cosYaw = Mth.cos(yawRad);
