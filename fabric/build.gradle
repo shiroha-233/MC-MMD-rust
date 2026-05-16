@@ -131,13 +131,16 @@ shadowJar {
     configurations = [project.configurations.shadowCommon, project.configurations.shadowBundle]
     archiveClassifier.set("dev-shadow")
     relocate "javazoom", "com.shiroha.mmdskin.shadow.javazoom"
-    
+
+    // 包含 common 模块的资源（原生库、默认动画等）
+    from(project(":common").sourceSets.main.resources)
+
     // 排除不需要的文件
     exclude 'META-INF/versions/**'
-    
+
     // 强制更新 META-INF/services 里的类名
     mergeServiceFiles()
-    
+
     // 排除 module-info.class 避免 JPMS 冲突
     exclude 'module-info.class'
 }

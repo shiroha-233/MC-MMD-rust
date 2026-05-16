@@ -96,3 +96,81 @@ subprojects {
 		}
 	}
 }
+
+// ============================================================================
+// Rust 原生引擎编译 & 打包进 JAR
+// ============================================================================
+
+def rustEngineDir = file('rust_engine')
+def nativesResourceDir = file('common/src/main/resources/natives')
+
+/**
+ * 编译 Rust 原生引擎
+ */
+task buildRustEngine {
+	doLast {
+		def cargo = findCargo()
+		logger.lifecycle("[Rust] 使用 cargo: ${cargo}")
+		logger.lifecycle("[Rust] 工作目录: ${rustEngineDir.absolutePath}")
+		def proc = new ProcessBuilder(cargo, 'build', '--release')
+				.directory(rustEngineDir)
+				.redirectErrorStream(true)
+				.start()
+		proc.inputStream.eachLine { line -> logger.lifecycle("[cargo] ${line}") }
+		def exitCode = proc.waitFor()
+		if (exitCode != 0) {
+			throw new GradleException("cargo build --release 失败，退出码: ${exitCode}")
+		}
+		logger.lifecycle("[Rust] 编译完成")
+	}
+}
+
+/**
+ * 将编译产物复制到 common 模块的 resources/natives 目录
+ */
+task copyRustNatives(type: Copy) {
+	dependsOn buildRustEngine
+
+	def osName = System.getProperty('os.name').toLowerCase()
+	def releaseDir = new File(rustEngineDir, 'target/release')
+
+	if (osName.contains('windows')) {
+		from(releaseDir) { include 'mmd_engine.dll' }
+		into new File(nativesResourceDir, 'windows-x64')
+		logger.lifecycle('[Rust] 目标平台: windows-x64')
+	} else if (osName.contains('mac')) {
+		from(releaseDir) { include 'libmmd_engine.dylib' }
+		into new File(nativesResourceDir, 'macos-x64')
+		logger.lifecycle('[Rust] 目标平台: macos-x64')
+	} else if (osName.contains('linux')) {
+		from(releaseDir) { include 'libmmd_engine.so' }
+		into new File(nativesResourceDir, 'linux-x64')
+		logger.lifecycle('[Rust] 目标平台: linux-x64')
+	} else {
+		logger.warn('[Rust] 未知平台，跳过原生库复制: ' + osName)
+	}
+}
+
+// 确保 common 模块处理资源前已完成 Rust 编译和复制
+project(':common').tasks.named('processResources').configure { dependsOn copyRustNatives }
+project(':common').tasks.named('sourcesJar').configure { dependsOn copyRustNatives }
+
+/**
+ * 查找系统上的 cargo 可执行文件
+ */
+static String findCargo() {
+    def isWin = System.getProperty('os.name').toLowerCase().contains('windows')
+    def exeSuffix = isWin ? '.exe' : ''
+    // 1. 环境变量 CARGO_HOME
+    def cargoHome = System.getenv('CARGO_HOME')
+    if (cargoHome) {
+        def exe = new File(cargoHome, "bin/cargo${exeSuffix}")
+        if (exe.exists()) return exe.absolutePath
+    }
+    // 2. ~/.cargo/bin
+    def home = System.getProperty('user.home')
+    def dotCargo = new File(home, ".cargo/bin/cargo${exeSuffix}")
+    if (dotCargo.exists()) return dotCargo.absolutePath
+    // 3. 直接依赖 PATH
+    return 'cargo'
+}

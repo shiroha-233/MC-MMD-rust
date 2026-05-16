@@ -13,6 +13,7 @@ use crate::texture::load_texture;
 
 use super::{
     register_animation, register_model, register_texture, ANIMATIONS, FBX_CACHE, MODELS, TEXTURES,
+    TEXTURE_PATH_INDEX,
 };
 
 const VERSION: &str = "v1.0.5";
@@ -1562,7 +1563,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetLayerLoop(
 // 纹理相关函数
 // ============================================================================
 
-/// 加载纹理
+/// 加载纹理（带路径去重缓存）
 #[no_mangle]
 pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_LoadTexture(
     mut env: JNIEnv,
@@ -1574,8 +1575,28 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_LoadTexture(
         Err(_) => return 0,
     };
 
+    // 检查路径缓存：如果已加载过同一文件，直接返回已有句柄
+    {
+        let path_index = TEXTURE_PATH_INDEX.read().unwrap();
+        if let Some(&existing_id) = path_index.get(&filename_str) {
+            // 确认句柄仍然有效
+            let textures = TEXTURES.read().unwrap();
+            if textures.contains_key(&existing_id) {
+                return existing_id;
+            }
+        }
+    }
+
     match load_texture(&filename_str) {
-        Ok(texture) => register_texture(texture),
+        Ok(texture) => {
+            let id = register_texture(texture);
+            // 登记路径到句柄的映射
+            if id != 0 {
+                let mut path_index = TEXTURE_PATH_INDEX.write().unwrap();
+                path_index.insert(filename_str, id);
+            }
+            id
+        }
         Err(e) => {
             log::error!("Failed to load texture: {}", e);
             0
@@ -3326,8 +3347,6 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetVRIKParams(
     }
 }
 
-/// 设置舞台模式腿部 IK 是否启用。
-#[no_mangle]
 /// 设置 VR 手部渲染模式（0=全身, 1=仅左手, 2=仅右手）
 #[no_mangle]
 pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetVRHandMode(
