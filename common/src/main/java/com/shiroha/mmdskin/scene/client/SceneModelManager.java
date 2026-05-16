@@ -117,8 +117,6 @@ public final class SceneModelManager {
         matrixStack.pushPose();
         matrixStack.translate(offsetX, offsetY, offsetZ);
 
-        // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShader / GameRenderer::getRendertypeEntityTranslucentShader 在 1.21.6+ 已移除
-        // RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
         sceneModel.render(mc.player, placeYaw, 0.0f, new Vector3f(0, 0, 0), tickDelta,
                 matrixStack, packedLight, RenderContext.WORLD);
 

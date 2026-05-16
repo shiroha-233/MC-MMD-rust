@@ -482,8 +482,11 @@ jobs:
           mv artifacts/native-android-amd64/libmmd_engine.so "artifacts/native-android-amd64/libmmd_engine-android-amd64_${GITHUB_REF_NAME}.so"
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          overwrite_files: true
           files: |
             artifacts/mmdskin-fabric-*/*.jar
             artifacts/mmdskin-neoforge-*/*.jar

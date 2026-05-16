@@ -13,7 +13,6 @@ import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import com.shiroha.mmdskin.renderer.compat.RenderSystemCompat;
-import com.shiroha.mmdskin.renderer.compat.ShaderInstanceStub;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import org.joml.Matrix4f;
@@ -244,24 +243,6 @@ public abstract class AbstractMMDModel implements IMMDModel {
             MemoryUtil.memFree(materialMorphResultsByteBuffer);
             materialMorphResultsByteBuffer = null;
         }
-    }
-
-    protected static void setupShaderUniforms(ShaderInstanceStub shader, PoseStack deliverStack,
-                                                Vector3f light0Dir, Vector3f light1Dir, int lightMapTex) {
-        // TODO_1.21.11: 渲染管线重写 - ShaderInstance/RenderSystem 状态方法已删除
-        if (shader.MODEL_VIEW_MATRIX != null)
-            shader.MODEL_VIEW_MATRIX.set(computeModelViewMatrix(deliverStack));
-        if (shader.PROJECTION_MATRIX != null)
-            shader.PROJECTION_MATRIX.set(RenderSystemCompat.getProjectionMatrix());
-        // TODO_1.21.11: COLOR_MODULATOR / LIGHT*_DIRECTION / FOG_* / GAME_TIME / SCREEN_SIZE / LINE_WIDTH 字段已变为 Object 占位
-        // 原有 shader.COLOR_MODULATOR.set(...) 等调用均移除
-        if (shader.TEXTURE_MATRIX != null)
-            shader.TEXTURE_MATRIX.set(new Matrix4f());
-
-        shader.setSampler("Sampler1", lightMapTex);
-        shader.setSampler("Sampler2", lightMapTex);
-
-        // TODO_1.21.11: RenderSystem.setShaderTexture 已删除
     }
 
     public static Matrix4f computeModelViewMatrix(PoseStack deliverStack) {

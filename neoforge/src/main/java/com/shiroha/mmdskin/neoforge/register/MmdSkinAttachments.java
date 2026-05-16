@@ -14,7 +14,6 @@ import net.neoforged.neoforge.registries.NeoForgeRegistries;
 public class MmdSkinAttachments {
     public static final DeferredRegister<AttachmentType<?>> ATTACHMENT_TYPES = DeferredRegister.create(NeoForgeRegistries.ATTACHMENT_TYPES, "mmdskin");
 
-    // TODO_1.21.11: API 变更 AttachmentType.Builder.serialize 现在接受 MapCodec
     private static final com.mojang.serialization.MapCodec<String> STRING_MAP_CODEC =
         RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("value").forGetter(s -> s)

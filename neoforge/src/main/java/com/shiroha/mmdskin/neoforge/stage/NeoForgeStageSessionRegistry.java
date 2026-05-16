@@ -105,7 +105,7 @@ public final class NeoForgeStageSessionRegistry {
 
         session.members.put(targetUUID, new ServerStageMember(
                 targetUUID,
-                target.getGameProfile().name(), // TODO_1.21.11: API 变更 GameProfile 现在是 record
+                target.getGameProfile().name(),
                 StageMemberState.INVITED,
                 StageCameraMode.HOST_CAMERA
         ));

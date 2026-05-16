@@ -1,3 +1,4 @@
+/* 文件职责：玩家渲染 Mixin 委托，将拦截到的渲染调用分发到 MMD 协调器。 */
 package com.shiroha.mmdskin.renderer.integration.player;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -5,12 +6,9 @@ import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
 import com.shiroha.mmdskin.scene.client.SceneModelManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.util.Mth;
 
-/**
- * 玩家渲染 Mixin 委托。
- */
 public final class PlayerMixinDelegate {
 
     private PlayerMixinDelegate() {}
@@ -23,7 +21,7 @@ public final class PlayerMixinDelegate {
 
     public static RenderAction handleRender(
             AbstractClientPlayer player, float entityYaw, float tickDelta,
-            PoseStack matrixStack, MultiBufferSource vertexConsumers, int packedLight,
+            PoseStack matrixStack, SubmitNodeCollector collector, int packedLight,
             boolean isYsmActive) {
         PlayerRenderSelection selection = PlayerRenderSelectionResolver.resolve(player, isYsmActive);
         if (selection.hasTerminalAction()) {
@@ -45,7 +43,7 @@ public final class PlayerMixinDelegate {
                 entityYaw,
                 tickDelta,
                 matrixStack,
-                vertexConsumers,
+                collector,
                 packedLight,
                 modelData);
     }
@@ -64,3 +62,4 @@ public final class PlayerMixinDelegate {
         sceneMgr.renderScene(matrixStack, tickDelta, packedLight, renderX, renderY, renderZ);
     }
 }
+

@@ -28,7 +28,6 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-// TODO_1.21.11: API 变更 sendToServer 改用 ClientPacketDistributor
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 final class NeoForgeClientRuntimeHooks {

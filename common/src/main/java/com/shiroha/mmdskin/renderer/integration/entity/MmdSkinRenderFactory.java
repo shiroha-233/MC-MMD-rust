@@ -13,7 +13,7 @@ public class MmdSkinRenderFactory<T extends Entity> implements EntityRendererPro
     }
 
     @Override
-    public EntityRenderer<T, ?> create(Context manager) {
+    public EntityRenderer<T, MmdSkinRenderState> create(Context manager) {
         return new MmdSkinRenderer<>(manager, entityName);
     }
 }

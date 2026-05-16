@@ -32,7 +32,6 @@ public final class SubMeshDrawHelper {
                             int indexType,
                             TextureResolver textureResolver,
                             AlphaResolver alphaResolver) {
-        // TODO_1.21.11: 渲染管线重写 - RenderSystem.activeTexture 已删除
         GlStateManager._activeTexture(GL46C.GL_TEXTURE0);
 
         for (int i = 0; i < subMeshCount; ++i) {
@@ -48,7 +47,6 @@ public final class SubMeshDrawHelper {
                 continue;
             }
 
-            // TODO_1.21.11: 渲染管线重写 - RenderSystem 剔除控制已删除，使用 GL 直调
             if (bothFace) {
                 GL46C.glDisable(GL46C.GL_CULL_FACE);
             } else {
@@ -56,7 +54,6 @@ public final class SubMeshDrawHelper {
             }
 
             int textureId = textureResolver.resolve(materialId);
-            // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShaderTexture 已删除
             GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, textureId);
 
             long startPos = (long) beginIndex * indexElementSize;
@@ -70,7 +67,6 @@ public final class SubMeshDrawHelper {
                                    int indexType,
                                    TextureResolver textureResolver,
                                    AlphaResolver alphaResolver) {
-        // TODO_1.21.11: 渲染管线重写 - RenderSystem.activeTexture 已删除
         GlStateManager._activeTexture(GL46C.GL_TEXTURE0);
         for (int i = 0; i < subMeshCount; ++i) {
             int base = i * SUB_MESH_STRIDE;
@@ -85,7 +81,6 @@ public final class SubMeshDrawHelper {
             }
 
             int textureId = textureResolver.resolve(materialId);
-            // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShaderTexture 已删除
             GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, textureId);
 
             long startPos = (long) beginIndex * indexElementSize;

@@ -111,7 +111,6 @@ public record MmdSkinNetworkPack(int opCode, UUID playerUUID, String animId, int
 
         // REQUEST_ALL_MODELS：回传所有已注册模型给请求者
         if (pack.opCode == NetworkOpCode.REQUEST_ALL_MODELS) {
-            // TODO_1.21.11: API 变更 ServerPlayer.getServer 改为 level().getServer
             for (ServerPlayer player : sender.level().getServer().getPlayerList().getPlayers()) {
                 String modelName = player.getData(MmdSkinAttachments.PLAYER_MMD_MODEL.get());
                 if (modelName != null && !modelName.isEmpty()) {

@@ -42,7 +42,6 @@ public abstract class GameRendererMixin {
             return;
         }
 
-        // TODO_1.21.11: Camera.getPosition -> position()
         Vec3 cameraPos = mc.gameRenderer.getMainCamera().position();
         Vec3 viewDir = player.getViewVector(partialTick);
         if (viewDir.lengthSqr() < 1.0E-6) {

@@ -5,7 +5,6 @@ import com.shiroha.mmdskin.MmdSkin;
 import com.shiroha.mmdskin.MmdSkinClient;
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.neoforge.config.MmdSkinConfig;
-import com.shiroha.mmdskin.neoforge.maid.MaidRenderEventHandler;
 import com.shiroha.mmdskin.neoforge.maid.MaidSyncEventHandler;
 import com.shiroha.mmdskin.neoforge.register.MmdSkinRegisterClient;
 import com.shiroha.mmdskin.renderer.runtime.model.opengl.MMDModelOpenGL;
@@ -17,7 +16,7 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
-@EventBusSubscriber(value = Dist.CLIENT, modid = MmdSkin.MOD_ID) // TODO_1.21.11: API 变更 EventBusSubscriber 不再有 bus 选项
+@EventBusSubscriber(value = Dist.CLIENT, modid = MmdSkin.MOD_ID)
 public final class MmdSkinNeoForgeClient {
     @SubscribeEvent
     public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
@@ -35,7 +34,6 @@ public final class MmdSkinNeoForgeClient {
         MmdSkinClient.initClient();
         MmdSkinRegisterClient.Register();
         MMDModelOpenGL.isMMDShaderEnabled = ConfigManager.isMMDShaderEnabled();
-        NeoForge.EVENT_BUS.register(new MaidRenderEventHandler());
         NeoForge.EVENT_BUS.register(MaidSyncEventHandler.class);
     }
 }

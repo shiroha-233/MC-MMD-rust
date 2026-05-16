@@ -9,7 +9,7 @@ import net.minecraft.client.Camera;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -25,8 +25,8 @@ public abstract class CameraMixin {
     @Shadow
     protected abstract void setRotation(float yaw, float pitch);
 
-    @Inject(method = "setup(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/world/entity/Entity;ZZF)V", at = @At("TAIL"))
-    private void onSetup(BlockGetter level, Entity entity, boolean detached, boolean mirrored, float partialTick, CallbackInfo ci) {
+    @Inject(method = "setup(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/Entity;ZZF)V", at = @At("TAIL"))
+    private void onSetup(Level level, Entity entity, boolean detached, boolean mirrored, float partialTick, CallbackInfo ci) {
         MMDCameraController controller = MMDCameraController.getInstance();
         if (controller.isActive()) {
             controller.checkEscapeKey();

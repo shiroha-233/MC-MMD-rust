@@ -14,7 +14,6 @@ import org.joml.Vector3f;
 
 public class MmdSkinClient {
     public static final Logger logger = LogManager.getLogger();
-    public static int usingMMDShader = 0;
 
     public static void initClient() {
         MmdSkinApi.configureRuntimeCollaborators(

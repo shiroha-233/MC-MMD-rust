@@ -34,7 +34,6 @@ public class MmdSkinRegisterCommon {
     }
 
     private static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
-        // TODO_1.21.11: API 变更 ServerPlayer.getServer 改为 level().getServer
         if (event.getEntity() instanceof ServerPlayer player && player.level().getServer() != null) {
             NeoForgeStageSessionRegistry.getInstance().onPlayerDisconnect(player.level().getServer(), player);
         }

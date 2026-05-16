@@ -71,7 +71,6 @@ public class ActionWheelConfigScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        // TODO_1.21.11: 渲染管线重写
         double mouseX = event.x();
         double mouseY = event.y();
         int button = event.button();
@@ -130,7 +129,6 @@ public class ActionWheelConfigScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        // TODO_1.21.11: 渲染管线重写
         if (event.key() == 256) {
             this.onClose();
             return true;

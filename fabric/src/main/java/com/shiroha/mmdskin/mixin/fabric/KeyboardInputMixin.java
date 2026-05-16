@@ -1,20 +1,24 @@
+// 文件职责：Fabric 端 KeyboardInput Mixin，舞台模式下清零移动输入
 package com.shiroha.mmdskin.mixin.fabric;
 
+import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
+import net.minecraft.client.player.ClientInput;
 import net.minecraft.client.player.KeyboardInput;
+import net.minecraft.world.entity.player.Input;
+import net.minecraft.world.phys.Vec2;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * KeyboardInput Mixin — 舞台模式下清零移动输入
- */
 @Mixin(KeyboardInput.class)
-public abstract class KeyboardInputMixin {
+public abstract class KeyboardInputMixin extends ClientInput {
 
-    // TODO_1.21.11: Mixin 目标已变 - ClientInput 字段重构为 keyPresses(Input record) 与 moveVector，需要新方案重写舞台输入屏蔽
-    @Inject(method = "tick", at = @At("TAIL"), require = 0)
+    @Inject(method = "tick()V", at = @At("TAIL"))
     private void onStageTick(CallbackInfo ci) {
-        // 原逻辑：在 stage 模式下清空移动/跳跃/潜行字段。1.21.11 字段已不存在，待重写为替换 keyPresses 记录。
+        if (MMDCameraController.getInstance().shouldBlockInput()) {
+            this.keyPresses = Input.EMPTY;
+            this.moveVector = Vec2.ZERO;
+        }
     }
 }

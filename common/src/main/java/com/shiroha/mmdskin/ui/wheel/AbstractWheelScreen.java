@@ -1,7 +1,6 @@
 /* 文件职责：提供轮盘界面的共享几何绘制、动画与基础交互。 */
 package com.shiroha.mmdskin.ui.wheel;
 
-import com.shiroha.mmdskin.renderer.compat.RenderSystemCompat;
 import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -9,7 +8,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
-import org.joml.Matrix4f;
 
 import java.util.List;
 
@@ -154,16 +152,14 @@ public abstract class AbstractWheelScreen extends Screen {
         if (selectedSlot < 0 || count <= 0) {
             return;
         }
-        // TODO_1.21.11: 渲染管线重写 - guiGraphics.pose().last() / RenderSystem.setShader 已删除
-        RenderSystemCompat.enableBlend();
-        RenderSystemCompat.defaultBlendFunc();
         double segmentAngle = 360.0 / count;
-        // TODO_1.21.11: 渲染管线重写 - drawFilledSegment(matrix, selectedSlot, segmentAngle, style.highlightColor());
-        RenderSystemCompat.disableBlend();
+        drawFilledSegment(guiGraphics, selectedSlot, segmentAngle, style.highlightColor());
     }
 
-    protected void drawFilledSegment(Matrix4f matrix, int index, double segmentAngle, int color) {
-        // TODO_1.21.11: 渲染管线重写 - BufferBuilder/BufferUploader/Tesselator + POSITION_COLOR shader 已删除
+    protected void drawFilledSegment(GuiGraphics guiGraphics, int index, double segmentAngle, int color) {
+        float start = (float) (index * segmentAngle - 90.0 + SEGMENT_GAP_DEGREES * 0.5);
+        float sweep = (float) Math.max(0.0, segmentAngle - SEGMENT_GAP_DEGREES);
+        drawRing(guiGraphics, centerX, centerY, innerRadius, outerRadius, start, sweep, color);
     }
 
     protected void renderDividerLines(GuiGraphics guiGraphics) {
@@ -171,27 +167,30 @@ public abstract class AbstractWheelScreen extends Screen {
         if (count <= 0) {
             return;
         }
-        // TODO_1.21.11: 渲染管线重写 - guiGraphics.pose().last() / RenderSystem.setShader 已删除
-        RenderSystemCompat.enableBlend();
-        RenderSystemCompat.defaultBlendFunc();
-        // TODO_1.21.11: 渲染管线重写 - 分隔线绘制依赖 BufferBuilder/BufferUploader，需迁移到 1.21.11 新管线
-        RenderSystemCompat.disableBlend();
+        double segmentAngle = 360.0 / count;
+        for (int i = 0; i < count; i++) {
+            double radians = Math.toRadians(i * segmentAngle - 90.0);
+            float cos = (float) Math.cos(radians);
+            float sin = (float) Math.sin(radians);
+            drawThickLine(
+                    guiGraphics,
+                    centerX + cos * innerRadius,
+                    centerY + sin * innerRadius,
+                    centerX + cos * outerRadius,
+                    centerY + sin * outerRadius,
+                    1.4f,
+                    style.lineColorDim()
+            );
+        }
     }
 
     protected void renderOuterRing(GuiGraphics guiGraphics) {
-        // TODO_1.21.11: 渲染管线重写 - guiGraphics.pose().last() / RenderSystem.setShader 已删除
-        RenderSystemCompat.enableBlend();
-        RenderSystemCompat.defaultBlendFunc();
-        // TODO_1.21.11: 渲染管线重写 - 外环 TRIANGLE_STRIP 依赖 BufferBuilder/BufferUploader，需迁移到 1.21.11 新管线
-        RenderSystemCompat.disableBlend();
+        drawRing(guiGraphics, centerX, centerY, outerRadius - 1.5f, outerRadius, 0.0f, 360.0f, style.lineColor());
     }
 
     protected void renderCenterCircle(GuiGraphics guiGraphics, String text, int textColor) {
-        // TODO_1.21.11: 渲染管线重写 - guiGraphics.pose().last() / RenderSystem.setShader 已删除
-        RenderSystemCompat.enableBlend();
-        RenderSystemCompat.defaultBlendFunc();
-        // TODO_1.21.11: 渲染管线重写 - 中心圆 TRIANGLE_FAN/TRIANGLE_STRIP 依赖 BufferBuilder/BufferUploader，需迁移到 1.21.11 新管线
-        RenderSystemCompat.disableBlend();
+        fillCircle(guiGraphics, centerX, centerY, innerRadius, style.centerBg());
+        drawCircleOutline(guiGraphics, centerX, centerY, innerRadius, style.centerBorder());
 
         String fittedText = fitText(text, Math.max(24, innerRadius * 2 - 12));
         int textWidth = this.font.width(fittedText);
@@ -211,8 +210,24 @@ public abstract class AbstractWheelScreen extends Screen {
         return value.length() < (text == null ? 0 : text.length()) ? value + ".." : value;
     }
 
-    protected void drawThickLine(Matrix4f matrix, float x1, float y1, float x2, float y2, float thickness, int color) {
-        // TODO_1.21.11: 渲染管线重写 - BufferBuilder/BufferUploader/POSITION_COLOR shader 已删除
+    protected void drawThickLine(GuiGraphics guiGraphics, float x1, float y1, float x2, float y2, float thickness, int color) {
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        float length = (float) Math.sqrt(dx * dx + dy * dy);
+        if (length < 0.001f) {
+            return;
+        }
+        float half = thickness * 0.5f;
+        float nx = -dy / length * half;
+        float ny = dx / length * half;
+        drawQuad(
+                guiGraphics,
+                x1 - nx, y1 - ny,
+                x1 + nx, y1 + ny,
+                x2 + nx, y2 + ny,
+                x2 - nx, y2 - ny,
+                color
+        );
     }
 
     protected void drawRectOutline(GuiGraphics guiGraphics, int x, int y, int width, int height, int color) {
@@ -289,14 +304,12 @@ public abstract class AbstractWheelScreen extends Screen {
         String displayIcon = icon == null ? "" : icon;
         int iconWidth = this.font.width(displayIcon);
         int iconColor = blendColors(TEXT_MUTED, TEXT_PRIMARY, 0.42f + pop * 0.58f);
-        // TODO_1.21.11: 渲染管线重写 - pose().pushPose()/popPose()/translate(x,y,z)/scale(x,y,z) 已删除，暂直接绘制不做矩阵变换
         guiGraphics.drawString(this.font, displayIcon, textX - iconWidth / 2 + 1, textY - 10, style.textShadow(), false);
         guiGraphics.drawString(this.font, displayIcon, textX - iconWidth / 2, textY - 11, iconColor, false);
 
         String displayLabel = fitText(label, Math.max(56, Math.round(maxTextWidth * 0.76f)));
         int labelWidth = this.font.width(displayLabel);
         int labelColor = blendColors(TEXT_MUTED, TEXT_SECONDARY, 0.52f + pop * 0.38f);
-        // TODO_1.21.11: 渲染管线重写 - pose().pushPose()/popPose()/translate(x,y,z)/scale(x,y,z) 已删除，暂直接绘制不做矩阵变换
         guiGraphics.drawString(this.font, displayLabel, textX - labelWidth / 2 + 1, textY + 4, style.textShadow(), false);
         guiGraphics.drawString(this.font, displayLabel, textX - labelWidth / 2, textY + 3, labelColor, false);
     }
@@ -423,11 +436,64 @@ public abstract class AbstractWheelScreen extends Screen {
     }
 
     private void drawRing(GuiGraphics guiGraphics, float cx, float cy, float inner, float outer, float startDegrees, float sweepDegrees, int color) {
-        // TODO_1.21.11: 渲染管线重写 - guiGraphics.pose().last() / BufferBuilder / BufferUploader / RenderSystem.setShader 已删除
-        RenderSystemCompat.enableBlend();
-        RenderSystemCompat.defaultBlendFunc();
-        // TODO_1.21.11: 渲染管线重写 - 环形 TRIANGLE_STRIP 依赖 BufferBuilder/BufferUploader，需迁移到 1.21.11 新管线
-        RenderSystemCompat.disableBlend();
+        if (outer <= 0.0f || sweepDegrees <= 0.0f) {
+            return;
+        }
+        float innerRadius = Math.max(0.0f, inner);
+        if (innerRadius >= outer) {
+            return;
+        }
+        float outerSq = outer * outer;
+        float innerSq = innerRadius * innerRadius;
+        boolean fullCircle = sweepDegrees >= 360.0f;
+        float normStart = ((startDegrees % 360.0f) + 360.0f) % 360.0f;
+        float endDeg = normStart + Math.min(sweepDegrees, 360.0f);
+
+        int yStart = (int) Math.floor(cy - outer);
+        int yEnd = (int) Math.ceil(cy + outer);
+
+        for (int y = yStart; y <= yEnd; y++) {
+            float dy = y + 0.5f - cy;
+            float dySq = dy * dy;
+            if (dySq > outerSq) {
+                continue;
+            }
+            int xStart = (int) Math.floor(cx - outer);
+            int xEnd = (int) Math.ceil(cx + outer);
+            int spanStart = -1;
+            for (int x = xStart; x <= xEnd; x++) {
+                float dx = x + 0.5f - cx;
+                float distSq = dx * dx + dySq;
+                boolean inRing = distSq >= innerSq && distSq <= outerSq;
+                boolean inside = false;
+                if (inRing) {
+                    if (fullCircle) {
+                        inside = true;
+                    } else {
+                        float ang = (float) Math.toDegrees(Math.atan2(dy, dx));
+                        if (ang < 0.0f) {
+                            ang += 360.0f;
+                        }
+                        if (ang >= normStart && ang <= endDeg) {
+                            inside = true;
+                        } else if (endDeg > 360.0f && ang + 360.0f <= endDeg) {
+                            inside = true;
+                        }
+                    }
+                }
+                if (inside) {
+                    if (spanStart < 0) {
+                        spanStart = x;
+                    }
+                } else if (spanStart >= 0) {
+                    guiGraphics.fill(spanStart, y, x, y + 1, color);
+                    spanStart = -1;
+                }
+            }
+            if (spanStart >= 0) {
+                guiGraphics.fill(spanStart, y, xEnd + 1, y + 1, color);
+            }
+        }
     }
 
     private void drawQuad(
@@ -442,11 +508,42 @@ public abstract class AbstractWheelScreen extends Screen {
             float dy,
             int color
     ) {
-        // TODO_1.21.11: 渲染管线重写 - guiGraphics.pose().last() / BufferBuilder / BufferUploader / RenderSystem.setShader 已删除
-        RenderSystemCompat.enableBlend();
-        RenderSystemCompat.defaultBlendFunc();
-        // TODO_1.21.11: 渲染管线重写 - QUADS 依赖 BufferBuilder/BufferUploader，需迁移到 1.21.11 新管线
-        RenderSystemCompat.disableBlend();
+        float[] xs = {ax, bx, cx, dx};
+        float[] ys = {ay, by, cy, dy};
+        float minY = Math.min(Math.min(ay, by), Math.min(cy, dy));
+        float maxY = Math.max(Math.max(ay, by), Math.max(cy, dy));
+        int yStart = (int) Math.floor(minY);
+        int yEnd = (int) Math.ceil(maxY);
+
+        for (int y = yStart; y <= yEnd; y++) {
+            float yc = y + 0.5f;
+            float spanMin = Float.POSITIVE_INFINITY;
+            float spanMax = Float.NEGATIVE_INFINITY;
+            for (int i = 0; i < 4; i++) {
+                int j = (i + 1) % 4;
+                float yi = ys[i];
+                float yj = ys[j];
+                boolean crosses = (yi <= yc && yj > yc) || (yj <= yc && yi > yc);
+                if (!crosses) {
+                    continue;
+                }
+                float t = (yc - yi) / (yj - yi);
+                float x = xs[i] + t * (xs[j] - xs[i]);
+                if (x < spanMin) {
+                    spanMin = x;
+                }
+                if (x > spanMax) {
+                    spanMax = x;
+                }
+            }
+            if (spanMin <= spanMax) {
+                int x1 = (int) Math.floor(spanMin);
+                int x2 = (int) Math.ceil(spanMax);
+                if (x2 > x1) {
+                    guiGraphics.fill(x1, y, x2, y + 1, color);
+                }
+            }
+        }
     }
 
     private int roundedInset(int radius, int row) {

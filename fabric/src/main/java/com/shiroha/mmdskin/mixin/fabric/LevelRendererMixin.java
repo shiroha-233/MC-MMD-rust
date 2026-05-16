@@ -1,3 +1,4 @@
+/* 文件职责：在 1.21.11 渲染流程下，于 LevelRenderer 中决定本地玩家是否强制渲染（第一人称/VR 场景）。 */
 package com.shiroha.mmdskin.mixin.fabric;
 
 import com.shiroha.mmdskin.compat.vr.VRArmHider;
@@ -16,16 +17,30 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** LevelRenderer Mixin，用于在 MMD 第一人称与 VR 场景下决定本地玩家是否强制渲染。 */
 @Mixin(LevelRenderer.class)
 public abstract class LevelRendererMixin {
-    @Inject(method = "renderLevel", at = @At("HEAD"))
+
+    private static final String LEVEL_RENDER_DESC =
+        "renderLevel("
+        + "Lcom/mojang/blaze3d/resource/GraphicsResourceAllocator;"
+        + "Lnet/minecraft/client/DeltaTracker;"
+        + "Z"
+        + "Lnet/minecraft/client/Camera;"
+        + "Lorg/joml/Matrix4f;"
+        + "Lorg/joml/Matrix4f;"
+        + "Lorg/joml/Matrix4f;"
+        + "Lcom/mojang/blaze3d/buffers/GpuBufferSlice;"
+        + "Lorg/joml/Vector4f;"
+        + "Z"
+        + ")V";
+
+    @Inject(method = LEVEL_RENDER_DESC, at = @At("HEAD"))
     private void mmdskin$beginRenderFrame(CallbackInfo ci) {
         PlayerPerformanceGate.beginRenderFrame();
     }
 
     @Redirect(
-        method = "renderLevel",
+        method = "extractVisibleEntities",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;isDetached()Z", ordinal = 0)
     )
     private boolean onCameraIsDetached(Camera camera) {
@@ -54,14 +69,12 @@ public abstract class LevelRendererMixin {
         }
 
         if (FirstPersonManager.shouldRenderFirstPerson() && isMmdActive && !isVanilaMmdModel) {
-
             if (YsmCompat.isYsmModelActive(player)) {
                 if (YsmCompat.isDisableSelfModel()) {
                     return camera.xRot() >= 0;
                 }
                 return false;
             }
-
             return camera.xRot() >= 0;
         }
 

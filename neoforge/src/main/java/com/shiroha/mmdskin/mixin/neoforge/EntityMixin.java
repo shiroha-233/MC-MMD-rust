@@ -30,7 +30,6 @@ public abstract class EntityMixin {
         }
 
         if (vrEyeCameraActive) {
-            // TODO_1.21.11: Camera API 改名 getXxx -> xxx
             net.minecraft.client.Camera camera = minecraft.gameRenderer.getMainCamera();
             if (camera.isInitialized() && camera.entity() == entity) {
                 cir.setReturnValue(camera.position());
@@ -41,7 +40,6 @@ public abstract class EntityMixin {
         }
 
         if (minecraft.options.getCameraType().isFirstPerson()) {
-            // TODO_1.21.11: Camera API 改名 getXxx -> xxx
             net.minecraft.client.Camera camera = minecraft.gameRenderer.getMainCamera();
             if (camera.isInitialized() && camera.entity() == entity) {
                 cir.setReturnValue(camera.position());
@@ -91,7 +89,6 @@ public abstract class EntityMixin {
             return;
         }
 
-        // TODO_1.21.11: Camera API 改名 getXxx -> xxx
         net.minecraft.client.Camera camera = minecraft.gameRenderer.getMainCamera();
         if (!camera.isInitialized() || camera.entity() != entity) {
             return;

@@ -11,7 +11,6 @@ import com.shiroha.mmdskin.renderer.runtime.model.shared.MMDMaterial;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.vertex.PoseStack;
 
-import com.shiroha.mmdskin.renderer.compat.ShaderInstanceStub;
 import net.minecraft.world.entity.Entity;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -533,7 +532,6 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
         if (program == cachedShaderProgram) return;
         cachedShaderProgram = program;
 
-        // TODO_1.21.11: 渲染管线重写 - GlStateManager._glGetAttribLocation 已删除，改用 GL46C
         positionLocation = GL46C.glGetAttribLocation(program, "Position");
         normalLocation = GL46C.glGetAttribLocation(program, "Normal");
         uv0Location = GL46C.glGetAttribLocation(program, "UV0");
@@ -546,10 +544,6 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
         I_uv0Location = GL46C.glGetAttribLocation(program, "iris_UV0");
         I_uv2Location = GL46C.glGetAttribLocation(program, "iris_UV2");
         I_colorLocation = GL46C.glGetAttribLocation(program, "iris_Color");
-    }
-
-    void setUniforms(ShaderInstanceStub shader, PoseStack deliverStack) {
-        setupShaderUniforms(shader, deliverStack, light0Direction, light1Direction, lightMapMaterial.tex);
     }
 
     NativeFunc nativeFunc() {

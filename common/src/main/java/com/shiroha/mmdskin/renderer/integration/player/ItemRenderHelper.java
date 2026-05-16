@@ -1,3 +1,4 @@
+/* 文件职责：玩家手部物品渲染辅助，对接 1.21.11 ItemStackRenderState 提交管线。 */
 package com.shiroha.mmdskin.renderer.integration.player;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -8,34 +9,37 @@ import com.shiroha.mmdskin.renderer.runtime.bridge.ModelRuntimeBridgeHolder;
 import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager.Model;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.item.ItemModelResolver;
+import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-/**
- * 物品渲染辅助类。
- */
 public class ItemRenderHelper {
 
     private static final float DEG_TO_RAD = (float) Math.PI / 180F;
     private static final float DEFAULT_HELD_ITEM_SCALE = 1.0f;
 
     public static void renderItems(AbstractClientPlayer player, Model model,
-                                   PoseStack matrixStack, MultiBufferSource vertexConsumers, int packedLight) {
+                                   PoseStack matrixStack, SubmitNodeCollector collector, int packedLight) {
+        if (collector == null) {
+            return;
+        }
         float heldItemScale = resolveHeldItemScale(model);
-        renderHandItem(player, model, matrixStack, vertexConsumers, packedLight, InteractionHand.MAIN_HAND, heldItemScale);
-        renderHandItem(player, model, matrixStack, vertexConsumers, packedLight, InteractionHand.OFF_HAND, heldItemScale);
+        renderHandItem(player, model, matrixStack, collector, packedLight, InteractionHand.MAIN_HAND, heldItemScale);
+        renderHandItem(player, model, matrixStack, collector, packedLight, InteractionHand.OFF_HAND, heldItemScale);
     }
 
     private static void renderHandItem(AbstractClientPlayer player, Model model,
-                                         PoseStack matrixStack, MultiBufferSource vertexConsumers,
+                                         PoseStack matrixStack, SubmitNodeCollector collector,
                                          int packedLight, InteractionHand hand, float heldItemScale) {
         ItemStack itemStack = player.getItemInHand(hand);
         if (itemStack.isEmpty()) {
@@ -64,11 +68,12 @@ public class ItemRenderHelper {
                 ? ItemDisplayContext.THIRD_PERSON_RIGHT_HAND
                 : ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
 
-        // TODO_1.21.11: 渲染管线重写 - ItemRenderer.renderStatic 已被移除，需改用新的 ItemStackRenderState API
-        // Minecraft.getInstance().getItemRenderer().renderStatic(
-        //     player, itemStack, displayCtx, !isMainHand,
-        //     matrixStack, vertexConsumers, player.level(), packedLight, OverlayTexture.NO_OVERLAY, 0
-        // );
+        Minecraft mc = Minecraft.getInstance();
+        ItemModelResolver resolver = mc.getItemModelResolver();
+        Level level = player.level();
+        ItemStackRenderState state = new ItemStackRenderState();
+        resolver.updateForTopItem(state, itemStack, displayCtx, level, player, player.getId() + displayCtx.ordinal());
+        state.submit(matrixStack, collector, packedLight, OverlayTexture.NO_OVERLAY, 0);
 
         matrixStack.popPose();
     }

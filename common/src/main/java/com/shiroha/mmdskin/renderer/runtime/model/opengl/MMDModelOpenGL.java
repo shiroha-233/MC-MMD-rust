@@ -11,7 +11,6 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.util.List;
-import com.shiroha.mmdskin.renderer.compat.ShaderInstanceStub;
 import net.minecraft.world.entity.Entity;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -133,7 +132,6 @@ public class MMDModelOpenGL extends AbstractMMDModel {
     void updateLocation(int shaderProgram){
         if (shaderProgram == cachedShaderProgram) return;
         cachedShaderProgram = shaderProgram;
-        // TODO_1.21.11: 渲染管线重写 - GlStateManager._glGetAttribLocation/_glGetUniformLocation 已删除，改用 GL46C 直调
         positionLocation = GL46C.glGetAttribLocation(shaderProgram, "Position");
         normalLocation = GL46C.glGetAttribLocation(shaderProgram, "Normal");
         uv0Location = GL46C.glGetAttribLocation(shaderProgram, "UV0");
@@ -164,10 +162,6 @@ public class MMDModelOpenGL extends AbstractMMDModel {
         I_uv0Location = GL46C.glGetAttribLocation(shaderProgram, "iris_UV0");
         I_uv2Location = GL46C.glGetAttribLocation(shaderProgram, "iris_UV2");
         I_colorLocation = GL46C.glGetAttribLocation(shaderProgram, "iris_Color");
-    }
-
-    public void setUniforms(ShaderInstanceStub shader, PoseStack deliverStack) {
-        setupShaderUniforms(shader, deliverStack, light0Direction, light1Direction, lightMapMaterial.tex);
     }
 
     NativeFunc nativeFunc() {

@@ -77,7 +77,6 @@ public class ActionWheelScreen extends AbstractWheelScreen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        // TODO_1.21.11: 渲染管线重写
         if (event.button() == 0 && selectedSlot >= 0 && selectedSlot < actionSlots.size()) {
             ActionSlot slot = actionSlots.get(selectedSlot);
             executeAction(slot);

@@ -1,4 +1,4 @@
-/** 文件职责：隐藏第一人称原版手臂并在 VR 下接管手持物渲染。 */
+/* 文件职责：隐藏第一人称原版手臂并在 VR 下接管手持物渲染（适配 1.21.11 SubmitNodeCollector 渲染管线）。 */
 package com.shiroha.mmdskin.mixin.neoforge;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -11,8 +11,7 @@ import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.ItemInHandRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.MultiBufferSource.BufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemStack;
@@ -23,14 +22,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(value = ItemInHandRenderer.class, priority = 900)
 public abstract class ItemInHandRendererMixin {
+
     @Inject(
-        method = "renderHandsWithItems(FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource$BufferSource;Lnet/minecraft/client/player/LocalPlayer;I)V",
+        method = "renderHandsWithItems(FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/player/LocalPlayer;I)V",
         at = @At("HEAD"),
         cancellable = true
     )
     private void onRenderHandsWithItems(float partialTick,
                                         PoseStack poseStack,
-                                        BufferSource bufferSource,
+                                        SubmitNodeCollector collector,
                                         LocalPlayer player,
                                         int packedLight,
                                         CallbackInfo ci) {
@@ -61,7 +61,11 @@ public abstract class ItemInHandRendererMixin {
         }
     }
 
-    @Inject(method = "renderArmWithItem", at = @At("HEAD"), cancellable = true)
+    @Inject(
+        method = "renderArmWithItem(Lnet/minecraft/client/player/AbstractClientPlayer;FFLnet/minecraft/world/InteractionHand;FLnet/minecraft/world/item/ItemStack;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;I)V",
+        at = @At("HEAD"),
+        cancellable = true
+    )
     private void onRenderArmWithItem(AbstractClientPlayer player,
                                      float partialTick,
                                      float pitch,
@@ -70,18 +74,22 @@ public abstract class ItemInHandRendererMixin {
                                      ItemStack itemStack,
                                      float equippedProgress,
                                      PoseStack poseStack,
-                                     MultiBufferSource buffer,
+                                     SubmitNodeCollector collector,
                                      int combinedLight,
                                      CallbackInfo ci) {
         if (VRArmHider.shouldHideVRArms()) {
-            VRHandRenderer.renderHandItem(poseStack, buffer, combinedLight, hand);
+            VRHandRenderer.renderHandItem(poseStack, collector, combinedLight, hand);
             ci.cancel();
         }
     }
 
-    @Inject(method = "renderPlayerArm", at = @At("HEAD"), cancellable = true)
+    @Inject(
+        method = "renderPlayerArm(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;IFFLnet/minecraft/world/entity/HumanoidArm;)V",
+        at = @At("HEAD"),
+        cancellable = true
+    )
     private void onRenderPlayerArm(PoseStack poseStack,
-                                   MultiBufferSource buffer,
+                                   SubmitNodeCollector collector,
                                    int combinedLight,
                                    float equippedProgress,
                                    float swingProgress,

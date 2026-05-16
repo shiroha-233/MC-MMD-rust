@@ -42,7 +42,6 @@ public final class MobReplacementRenderer {
                     poseStack.scale(0.5F, 0.5F, 0.5F);
                 }
                 poseStack.scale(size[0], size[0], size[0]);
-                // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShader 已被移除
                 model.model.render(entity, params.bodyYaw, params.bodyPitch, params.translation,
                     tickDelta, poseStack, packedLight, RenderContext.WORLD);
                 return true;

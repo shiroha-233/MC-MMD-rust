@@ -30,7 +30,6 @@ public final class MmdSkinRegisterClient {
         "key.mmdskin.config_wheel",
         InputConstants.Type.KEYSYM,
         GLFW.GLFW_KEY_LEFT_ALT,
-        // TODO_1.21.11: 自定义 KeyMapping.Category 待迁移
         KeyMapping.Category.MISC
     );
 
@@ -38,7 +37,6 @@ public final class MmdSkinRegisterClient {
         "key.mmdskin.maid_config_wheel",
         InputConstants.Type.KEYSYM,
         GLFW.GLFW_KEY_B,
-        // TODO_1.21.11: 自定义 KeyMapping.Category 待迁移
         KeyMapping.Category.MISC
     );
 
@@ -54,7 +52,6 @@ public final class MmdSkinRegisterClient {
                 "key.mmdskin.quick_model_" + (i + 1),
                 InputConstants.Type.KEYSYM,
                 InputConstants.UNKNOWN.getValue(),
-                // TODO_1.21.11: 自定义 KeyMapping.Category 待迁移
                 KeyMapping.Category.MISC
             );
         }

@@ -14,7 +14,6 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
-// TODO_1.21.11: API 变更 KeyConflictContext 不再用于构造器
 import net.neoforged.neoforge.common.NeoForge;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -27,14 +26,14 @@ public final class MmdSkinRegisterClient {
         "key.mmdskin.config_wheel",
         InputConstants.Type.KEYSYM,
         GLFW.GLFW_KEY_LEFT_ALT,
-        KeyMapping.Category.MISC // TODO_1.21.11: API 变更 KeyMapping 改用 Category, KeyConflictContext 需通过 IKeyMappingExtension 设置
+        KeyMapping.Category.MISC
     );
 
     public static final KeyMapping KEY_MAID_CONFIG_WHEEL = new KeyMapping(
         "key.mmdskin.maid_config_wheel",
         InputConstants.Type.KEYSYM,
         GLFW.GLFW_KEY_B,
-        KeyMapping.Category.MISC // TODO_1.21.11: API 变更
+        KeyMapping.Category.MISC
     );
 
     public static final KeyMapping[] KEY_QUICK_MODELS = new KeyMapping[4];
@@ -49,7 +48,7 @@ public final class MmdSkinRegisterClient {
                 "key.mmdskin.quick_model_" + (i + 1),
                 InputConstants.Type.KEYSYM,
                 InputConstants.UNKNOWN.getValue(),
-                KeyMapping.Category.MISC // TODO_1.21.11: API 变更
+                KeyMapping.Category.MISC
             );
         }
     }

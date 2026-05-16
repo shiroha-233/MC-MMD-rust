@@ -20,7 +20,7 @@ public class ConfigData {
 
     public boolean openGLEnableLighting = true;
     public int modelPoolMaxCount = 20;
-    public boolean mmdShaderEnabled = false;
+    public boolean mmdShaderEnabled = true;
 
     public boolean gpuSkinningEnabled = false;
     public boolean gpuMorphEnabled = false;
@@ -33,7 +33,7 @@ public class ConfigData {
     public int animationLodMediumUpdateInterval = 2;
     public int animationLodFarUpdateInterval = 4;
 
-    public boolean toonRenderingEnabled = false;
+    public boolean toonRenderingEnabled = true;
     public int toonLevels = 4;
     public float toonRimPower = 5.6f;
     public float toonRimIntensity = 0.02f;

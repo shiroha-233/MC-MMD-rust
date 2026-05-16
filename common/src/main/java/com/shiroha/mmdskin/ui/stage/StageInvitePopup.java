@@ -112,7 +112,6 @@ public class StageInvitePopup extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        // TODO_1.21.11: 渲染管线重写
         if (event.button() == 0) {
             if (hoverAccept) {
                 lobbyViewModel.acceptInvite();
@@ -130,7 +129,6 @@ public class StageInvitePopup extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        // TODO_1.21.11: 渲染管线重写
         if (event.key() == 256) {
             lobbyViewModel.declineInvite();
             this.onClose();

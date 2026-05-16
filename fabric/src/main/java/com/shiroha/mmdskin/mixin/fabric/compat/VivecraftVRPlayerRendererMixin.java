@@ -9,7 +9,7 @@ import com.shiroha.mmdskin.renderer.integration.player.PlayerMixinDelegate;
 import com.shiroha.mmdskin.renderer.integration.player.PlayerMixinDelegate.RenderAction;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(targets = "org.vivecraft.client.render.VRPlayerRenderer", remap = false)
 public abstract class VivecraftVRPlayerRendererMixin {
     @Inject(
-        method = "render(Lnet/minecraft/client/player/AbstractClientPlayer;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V",
+        method = "render(Lnet/minecraft/client/player/AbstractClientPlayer;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;I)V",
         at = @At("HEAD"),
         cancellable = true,
         remap = false
@@ -29,7 +29,7 @@ public abstract class VivecraftVRPlayerRendererMixin {
                                                            float entityYaw,
                                                            float tickDelta,
                                                            PoseStack matrixStack,
-                                                           MultiBufferSource vertexConsumers,
+                                                           SubmitNodeCollector collector,
                                                            int packedLight,
                                                            CallbackInfo ci) {
         Minecraft minecraft = Minecraft.getInstance();
@@ -45,7 +45,7 @@ public abstract class VivecraftVRPlayerRendererMixin {
             entityYaw,
             tickDelta,
             matrixStack,
-            vertexConsumers,
+            collector,
             packedLight,
             YsmCompat.isYsmActive(player)
         );
@@ -57,3 +57,4 @@ public abstract class VivecraftVRPlayerRendererMixin {
         }
     }
 }
+

@@ -1,3 +1,4 @@
+/* 文件职责：接管 Fabric 客户端舞台相机与第一人称/VR 眼位相机定位。 */
 package com.shiroha.mmdskin.mixin.fabric;
 
 import com.shiroha.mmdskin.config.ConfigManager;
@@ -8,7 +9,7 @@ import net.minecraft.client.Camera;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -16,7 +17,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** 相机 Mixin，用于接管舞台模式与第一人称 MMD 相机位置。 */
 @Mixin(Camera.class)
 public abstract class CameraMixin {
 
@@ -26,8 +26,8 @@ public abstract class CameraMixin {
     @Shadow
     protected abstract void setRotation(float yaw, float pitch);
 
-    @Inject(method = "setup", at = @At("TAIL"))
-    private void onSetup(BlockGetter level, Entity entity, boolean detached, boolean mirrored, float partialTick, CallbackInfo ci) {
+    @Inject(method = "setup(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/Entity;ZZF)V", at = @At("TAIL"))
+    private void onSetup(Level level, Entity entity, boolean detached, boolean mirrored, float partialTick, CallbackInfo ci) {
 
         MMDCameraController controller = MMDCameraController.getInstance();
         if (controller.isActive()) {

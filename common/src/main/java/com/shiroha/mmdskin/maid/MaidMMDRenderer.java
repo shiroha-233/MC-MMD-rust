@@ -44,7 +44,6 @@ public class MaidMMDRenderer {
                 entity.xRotO = originalXRotO * modelSize;
             }
 
-            // TODO_1.21.11: 渲染管线重写，旧的 RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader) 已失效
             modelData.model.render(entity, entityYaw, entityPitch, entityTrans, partialTicks, poseStack, packedLight, RenderContext.WORLD);
 
             if (modelSize != 1.0f && modelSize > 0.0f) {

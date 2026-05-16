@@ -64,7 +64,6 @@ public class ToonRenderHelper {
         GlStateManager._enableBlend();
         GlStateManager._enableDepthTest();
         GL46C.glBlendEquation(GL46C.GL_FUNC_ADD);
-        // TODO_1.21.11: 渲染管线重写 - RenderSystem.blendFunc / GlStateManager.SourceFactor 已删除
         RenderSystemCompat.blendFuncSrcAlphaOneMinusSrcAlpha();
     }
 
@@ -127,11 +126,6 @@ public class ToonRenderHelper {
             }
 
             int texId = materialProvider.getTextureId(materialID);
-            if (texId == 0) {
-                // TODO_1.21.11: AbstractTexture.getId() 已删除，先用 0 占位
-                texId = 0;
-            }
-            // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShaderTexture 已删除
             GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, texId);
 
             long startPos = (long) nf.GetSubMeshBeginIndex(model, i) * indexElementSize;

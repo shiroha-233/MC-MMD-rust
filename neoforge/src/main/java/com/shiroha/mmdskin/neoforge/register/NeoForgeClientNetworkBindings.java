@@ -13,7 +13,6 @@ import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import com.shiroha.mmdskin.ui.network.StageNetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-// TODO_1.21.11: API 变更 sendToServer 迁移至 ClientPacketDistributor
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 final class NeoForgeClientNetworkBindings {

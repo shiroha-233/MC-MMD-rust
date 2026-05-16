@@ -19,7 +19,7 @@ import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 
 /**
  * 文件职责：协调本地第一人称与 VR 状态下的玩家模型渲染时序。
@@ -34,7 +34,7 @@ final class PlayerModelRenderCoordinator {
                                                    float entityYaw,
                                                    float tickDelta,
                                                    PoseStack matrixStack,
-                                                   MultiBufferSource vertexConsumers,
+                                                   SubmitNodeCollector collector,
                                                    int packedLight,
                                                    MMDModelManager.Model modelData) {
         IMMDModel model = modelData.model;
@@ -63,8 +63,6 @@ final class PlayerModelRenderCoordinator {
                 InventoryRenderHelper.renderInInventory(player, model, entityYaw, tickDelta, matrixStack, packedLight, size);
             } else {
                 matrixStack.scale(size[0], size[0], size[0]);
-                // TODO_1.21.11: 渲染管线重写 - RenderSystem.setShader 已被移除
-                // RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
                 RenderContext context = isFirstPerson ? RenderContext.FIRST_PERSON : RenderContext.WORLD;
                 model.render(player, params.bodyYaw, params.bodyPitch, params.translation, tickDelta, matrixStack, packedLight, context);
             }
@@ -74,7 +72,7 @@ final class PlayerModelRenderCoordinator {
                 needsLocalRenderSync = false;
             }
 
-            ItemRenderHelper.renderItems(player, modelData, matrixStack, vertexConsumers, packedLight);
+            ItemRenderHelper.renderItems(player, modelData, matrixStack, collector, packedLight);
             return PlayerMixinDelegate.RenderAction.CANCEL;
         } finally {
             try {
