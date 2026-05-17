@@ -1,3 +1,4 @@
+/* 文件职责：管理模型动画句柄缓存与动画文件解析，并保持 native 访问按需触发。*/
 package com.shiroha.mmdskin.renderer.runtime.animation;
 
 import com.shiroha.mmdskin.NativeFunc;
@@ -24,7 +25,7 @@ public class MMDAnimManager {
     private static final String[] ANIM_EXTENSIONS = {".vmd", ".fbx"};
 
     public static void Init() {
-        nf = NativeFunc.GetInst();
+        nf = null;
         animModel = new ConcurrentHashMap<>();
         warnedAnimations = ConcurrentHashMap.newKeySet();
 
@@ -39,6 +40,15 @@ public class MMDAnimManager {
         PathConstants.ensureDirectoryExists(PathConstants.getCustomAnimDir());
     }
 
+    private static NativeFunc nativeFunc() {
+        NativeFunc local = nf;
+        if (local == null) {
+            local = NativeFunc.GetInst();
+            nf = local;
+        }
+        return local;
+    }
+
     public static void AddModel(IMMDModel model) {
         animModel.put(model, new ConcurrentHashMap<>());
     }
@@ -50,7 +60,7 @@ public class MMDAnimManager {
         if (sub != null) {
             for (Long handle : sub.values()) {
                 if (handle != null) {
-                    nf.DeleteAnimation(handle);
+                    nativeFunc().DeleteAnimation(handle);
                 }
             }
         }
@@ -105,7 +115,7 @@ public class MMDAnimManager {
         for (String ext : ANIM_EXTENSIONS) {
             File file = new File(dir, animName + ext);
             if (file.exists()) {
-                return nf.LoadAnimation(model.getModelHandle(), file.getAbsolutePath());
+                return nativeFunc().LoadAnimation(model.getModelHandle(), file.getAbsolutePath());
             }
         }
 
@@ -114,7 +124,7 @@ public class MMDAnimManager {
             File[] fbxFiles = dirFile.listFiles((d, name) -> name.toLowerCase().endsWith(".fbx"));
             if (fbxFiles != null) {
                 for (File fbx : fbxFiles) {
-                    long handle = nf.LoadAnimation(model.getModelHandle(), fbx.getAbsolutePath() + "#" + animName);
+                    long handle = nativeFunc().LoadAnimation(model.getModelHandle(), fbx.getAbsolutePath() + "#" + animName);
                     if (handle != 0) return handle;
                 }
             }
@@ -132,12 +142,12 @@ public class MMDAnimManager {
         File animsDir = PathConstants.getModelAnimsDirByPath(modelDir);
         File target = new File(animsDir, mappedFile);
         if (target.exists()) {
-            return nf.LoadAnimation(model.getModelHandle(), target.getAbsolutePath());
+            return nativeFunc().LoadAnimation(model.getModelHandle(), target.getAbsolutePath());
         }
 
         target = new File(modelDir, mappedFile);
         if (target.exists()) {
-            return nf.LoadAnimation(model.getModelHandle(), target.getAbsolutePath());
+            return nativeFunc().LoadAnimation(model.getModelHandle(), target.getAbsolutePath());
         }
 
         logger.warn("Mapped animation file not found: {} -> {} (slot: {})", modelDir, mappedFile, animName);
@@ -148,7 +158,7 @@ public class MMDAnimManager {
         Map<String, Long> sub = animModel.get(model);
         if (sub != null) {
             for (Long handle : sub.values()) {
-                nf.DeleteAnimation(handle);
+                nativeFunc().DeleteAnimation(handle);
             }
             sub.clear();
         }

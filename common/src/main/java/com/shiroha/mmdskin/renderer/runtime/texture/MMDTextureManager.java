@@ -1,3 +1,4 @@
+/* 文件职责：管理纹理解码、上传与可回收缓存，并保持 native 访问按需触发。*/
 package com.shiroha.mmdskin.renderer.runtime.texture;
 
 import com.shiroha.mmdskin.NativeFunc;
@@ -31,9 +32,18 @@ public class MMDTextureManager {
     private static final long TEXTURE_TTL_MS = 60_000;
 
     public static void Init() {
-        nf = NativeFunc.GetInst();
+        nf = null;
         textures = new ConcurrentHashMap<>();
         pendingRelease.clear();
+    }
+
+    private static NativeFunc nativeFunc() {
+        NativeFunc local = nf;
+        if (local == null) {
+            local = NativeFunc.GetInst();
+            nf = local;
+        }
+        return local;
     }
 
     public static void preloadTexture(String filename) {
@@ -45,7 +55,7 @@ public class MMDTextureManager {
             return;
         }
 
-        NativeFunc localNf = NativeFunc.GetInst();
+        NativeFunc localNf = nativeFunc();
         long nfTex = localNf.LoadTexture(filename);
         if (nfTex == 0) {
             return;
@@ -109,21 +119,22 @@ public class MMDTextureManager {
             return result;
         }
 
-        long nfTex = nf.LoadTexture(filename);
+        NativeFunc localNf = nativeFunc();
+        long nfTex = localNf.LoadTexture(filename);
         if (nfTex == 0) {
             return null;
         }
-        int x = nf.GetTextureX(nfTex);
-        int y = nf.GetTextureY(nfTex);
-        long texData = nf.GetTextureData(nfTex);
-        boolean hasAlpha = nf.TextureHasAlpha(nfTex);
+        int x = localNf.GetTextureX(nfTex);
+        int y = localNf.GetTextureY(nfTex);
+        long texData = localNf.GetTextureData(nfTex);
+        boolean hasAlpha = localNf.TextureHasAlpha(nfTex);
 
         int tex = GL46C.glGenTextures();
         GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, tex);
         int texSize = x * y * (hasAlpha ? 4 : 3);
         ByteBuffer texBuffer = MemoryUtil.memAlloc(texSize);
         try {
-            nf.CopyDataToByteBuffer(texBuffer, texData, texSize);
+            localNf.CopyDataToByteBuffer(texBuffer, texData, texSize);
             texBuffer.rewind();
             if (hasAlpha) {
                 GL46C.glPixelStorei(GL46C.GL_UNPACK_ALIGNMENT, 4);
@@ -135,7 +146,7 @@ public class MMDTextureManager {
         } finally {
             MemoryUtil.memFree(texBuffer);
         }
-        nf.DeleteTexture(nfTex);
+        localNf.DeleteTexture(nfTex);
 
         GL46C.glTexParameteri(GL46C.GL_TEXTURE_2D, GL46C.GL_TEXTURE_MAX_LEVEL, 0);
         GL46C.glTexParameteri(GL46C.GL_TEXTURE_2D, GL46C.GL_TEXTURE_MIN_FILTER, GL46C.GL_LINEAR);
