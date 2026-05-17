@@ -118,19 +118,24 @@ public class PhysicsComputeShader {
 
     /** 创建物理状态 SSBO（ping-pong 双缓冲） */
     public static int[] createStateBuffers(int bindingCount) {
-        // StateData: vec4 position + vec4 velocity + vec4 prevPosition + vec4 pad + mat4 rotation = 128 bytes
         long bufferSize = (long) bindingCount * 128;
         int[] buffers = new int[2];
-        for (int i = 0; i < 2; i++) {
-            buffers[i] = GL46C.glGenBuffers();
-            GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, buffers[i]);
-            GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, bufferSize, GL46C.GL_DYNAMIC_COPY);
-            // 零初始化
-            ByteBuffer zeros = ByteBuffer.allocateDirect((int) bufferSize);
-            GL46C.glBufferSubData(GL46C.GL_COPY_WRITE_BUFFER, 0, zeros);
+        try {
+            for (int i = 0; i < 2; i++) {
+                buffers[i] = GL46C.glGenBuffers();
+                GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, buffers[i]);
+                GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, bufferSize, GL46C.GL_DYNAMIC_COPY);
+                ByteBuffer zeros = ByteBuffer.allocateDirect((int) bufferSize);
+                GL46C.glBufferSubData(GL46C.GL_COPY_WRITE_BUFFER, 0, zeros);
+            }
+            GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
+            return buffers;
+        } catch (Exception e) {
+            for (int i = 0; i < 2; i++) {
+                if (buffers[i] != 0) GL46C.glDeleteBuffers(buffers[i]);
+            }
+            throw e;
         }
-        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
-        return buffers;
     }
 
     /** 创建 Bindings SSBO */

@@ -101,17 +101,24 @@ public class SkinningComputeShader {
 
     public static int[] createOutputBuffers(int vertexCount) {
         long bufferSize = (long) vertexCount * 3 * 4;
+        int posBuffer = 0;
+        int norBuffer = 0;
+        try {
+            posBuffer = GL46C.glGenBuffers();
+            GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, posBuffer);
+            GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, bufferSize, GL46C.GL_DYNAMIC_COPY);
 
-        int posBuffer = GL46C.glGenBuffers();
-        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, posBuffer);
-        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, bufferSize, GL46C.GL_DYNAMIC_COPY);
+            norBuffer = GL46C.glGenBuffers();
+            GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, norBuffer);
+            GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, bufferSize, GL46C.GL_DYNAMIC_COPY);
 
-        int norBuffer = GL46C.glGenBuffers();
-        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, norBuffer);
-        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, bufferSize, GL46C.GL_DYNAMIC_COPY);
-
-        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
-        return new int[]{posBuffer, norBuffer};
+            GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
+            return new int[]{posBuffer, norBuffer};
+        } catch (Exception e) {
+            if (posBuffer != 0) GL46C.glDeleteBuffers(posBuffer);
+            if (norBuffer != 0) GL46C.glDeleteBuffers(norBuffer);
+            throw e;
+        }
     }
 
     public void dispatch(DispatchParams p) {
@@ -190,21 +197,37 @@ public class SkinningComputeShader {
     }
 
     public static int[] createMorphBuffers(int morphCount) {
-        int offsetsSSBO = GL46C.glGenBuffers();
-        int weightsSSBO = GL46C.glGenBuffers();
-        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, weightsSSBO);
-        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, (long) morphCount * 4, GL46C.GL_DYNAMIC_DRAW);
-        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
-        return new int[]{offsetsSSBO, weightsSSBO};
+        int offsetsSSBO = 0;
+        int weightsSSBO = 0;
+        try {
+            offsetsSSBO = GL46C.glGenBuffers();
+            weightsSSBO = GL46C.glGenBuffers();
+            GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, weightsSSBO);
+            GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, (long) morphCount * 4, GL46C.GL_DYNAMIC_DRAW);
+            GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
+            return new int[]{offsetsSSBO, weightsSSBO};
+        } catch (Exception e) {
+            if (offsetsSSBO != 0) GL46C.glDeleteBuffers(offsetsSSBO);
+            if (weightsSSBO != 0) GL46C.glDeleteBuffers(weightsSSBO);
+            throw e;
+        }
     }
 
     public static int[] createUvMorphBuffers(int uvMorphCount) {
-        int offsetsSSBO = GL46C.glGenBuffers();
-        int weightsSSBO = GL46C.glGenBuffers();
-        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, weightsSSBO);
-        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, (long) uvMorphCount * 4, GL46C.GL_DYNAMIC_DRAW);
-        GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
-        return new int[]{offsetsSSBO, weightsSSBO};
+        int offsetsSSBO = 0;
+        int weightsSSBO = 0;
+        try {
+            offsetsSSBO = GL46C.glGenBuffers();
+            weightsSSBO = GL46C.glGenBuffers();
+            GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, weightsSSBO);
+            GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, (long) uvMorphCount * 4, GL46C.GL_DYNAMIC_DRAW);
+            GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
+            return new int[]{offsetsSSBO, weightsSSBO};
+        } catch (Exception e) {
+            if (offsetsSSBO != 0) GL46C.glDeleteBuffers(offsetsSSBO);
+            if (weightsSSBO != 0) GL46C.glDeleteBuffers(weightsSSBO);
+            throw e;
+        }
     }
 
     public static int createSkinnedUvBuffer(int vertexCount) {
