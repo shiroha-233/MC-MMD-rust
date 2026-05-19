@@ -103,51 +103,90 @@ subprojects {
 
 def rustEngineDir = file('rust_engine')
 def nativesResourceDir = file('common/src/main/resources/natives')
+def rustReleaseDir = new File(rustEngineDir, 'target/release')
+def rustNativeTargets = [
+		'windows-x64': [releaseFileName: 'mmd_engine.dll',            resourceFileName: 'mmd_engine.dll',            cargoOutputFileName: 'mmd_engine.dll'],
+		'linux-x64'  : [releaseFileName: 'libmmd_engine.so',          resourceFileName: 'libmmd_engine.so',          cargoOutputFileName: 'libmmd_engine.so'],
+		'linux-arm64': [releaseFileName: 'libmmd_engine-arm64.so',    resourceFileName: 'libmmd_engine-arm64.so',    cargoOutputFileName: 'libmmd_engine.so'],
+		'macos-x64'  : [releaseFileName: 'libmmd_engine.dylib',       resourceFileName: 'libmmd_engine.dylib',       cargoOutputFileName: 'libmmd_engine.dylib'],
+		'macos-arm64': [releaseFileName: 'libmmd_engine-arm64.dylib', resourceFileName: 'libmmd_engine-arm64.dylib', cargoOutputFileName: 'libmmd_engine.dylib']
+]
 
 /**
  * 编译 Rust 原生引擎
  */
 task buildRustEngine {
 	doLast {
-		def cargo = findCargo()
-		logger.lifecycle("[Rust] 使用 cargo: ${cargo}")
-		logger.lifecycle("[Rust] 工作目录: ${rustEngineDir.absolutePath}")
-		def proc = new ProcessBuilder(cargo, 'build', '--release')
-				.directory(rustEngineDir)
-				.redirectErrorStream(true)
-				.start()
-		proc.inputStream.eachLine { line -> logger.lifecycle("[cargo] ${line}") }
-		def exitCode = proc.waitFor()
-		if (exitCode != 0) {
-			throw new GradleException("cargo build --release 失败，退出码: ${exitCode}")
+		def hostPlatform = resolveHostRustPlatform()
+		if (hostPlatform == null || !rustNativeTargets.containsKey(hostPlatform)) {
+			throw new GradleException("当前宿主平台不支持一键构建 Rust native: ${System.getProperty('os.name')} / ${System.getProperty('os.arch')}")
 		}
-		logger.lifecycle("[Rust] 编译完成")
+		buildRustRelease(rustEngineDir, rustReleaseDir, hostPlatform, rustNativeTargets[hostPlatform], logger)
 	}
 }
 
 /**
- * 将编译产物复制到 common 模块的 resources/natives 目录
+ * 从 rust_engine/target/release 批量收集多平台 native；缺失宿主平台时回退到本机构建产物
  */
-task copyRustNatives(type: Copy) {
-	dependsOn buildRustEngine
+task copyRustNatives {
+	doLast {
+		def nativeArtifactsToCopy = [:]
+		logger.lifecycle("[Rust] 自动收集 native 目录: ${rustReleaseDir.absolutePath}")
 
-	def osName = System.getProperty('os.name').toLowerCase()
-	def releaseDir = new File(rustEngineDir, 'target/release')
+		if (rustReleaseDir.exists()) {
+			rustNativeTargets.each { platform, definition ->
+				def candidate = new File(rustReleaseDir, definition.releaseFileName)
+				if (candidate.exists()) {
+					nativeArtifactsToCopy[platform] = candidate
+					logger.lifecycle("[Rust] 已命中 release native: ${platform} <- ${candidate.absolutePath}")
+				} else {
+					logger.lifecycle("[Rust] 未找到 release native，跳过: ${candidate.absolutePath}")
+				}
+			}
+		} else {
+			logger.lifecycle("[Rust] release native 目录不存在，跳过批量收集: ${rustReleaseDir.absolutePath}")
+		}
 
-	if (osName.contains('windows')) {
-		from(releaseDir) { include 'mmd_engine.dll' }
-		into new File(nativesResourceDir, 'windows-x64')
-		logger.lifecycle('[Rust] 目标平台: windows-x64')
-	} else if (osName.contains('mac')) {
-		from(releaseDir) { include 'libmmd_engine.dylib' }
-		into new File(nativesResourceDir, 'macos-x64')
-		logger.lifecycle('[Rust] 目标平台: macos-x64')
-	} else if (osName.contains('linux')) {
-		from(releaseDir) { include 'libmmd_engine.so' }
-		into new File(nativesResourceDir, 'linux-x64')
-		logger.lifecycle('[Rust] 目标平台: linux-x64')
-	} else {
-		logger.warn('[Rust] 未知平台，跳过原生库复制: ' + osName)
+		def hostPlatform = resolveHostRustPlatform()
+		if (hostPlatform == null) {
+			logger.warn('[Rust] 无法识别宿主平台架构，跳过本机构建回退')
+		} else if (nativeArtifactsToCopy.containsKey(hostPlatform)) {
+			logger.lifecycle("[Rust] 宿主平台 ${hostPlatform} 已由 target/release 提供，无需本机构建回退")
+		} else {
+			logger.lifecycle("[Rust] 宿主平台 ${hostPlatform} 未在 target/release 命中，执行本机构建回退")
+			try {
+				buildRustRelease(rustEngineDir, rustReleaseDir, hostPlatform, rustNativeTargets[hostPlatform], logger)
+			} catch (GradleException ex) {
+				if (nativeArtifactsToCopy.isEmpty()) {
+					throw ex
+				}
+				logger.warn("[Rust] 宿主平台本机构建回退失败，保留已复制的 release natives: ${ex.message}")
+			}
+
+			def hostArtifact = new File(rustReleaseDir, rustNativeTargets[hostPlatform].releaseFileName)
+
+			if (hostArtifact.exists()) {
+				nativeArtifactsToCopy[hostPlatform] = hostArtifact
+				logger.lifecycle("[Rust] 已复制宿主平台 native: ${hostPlatform} <- ${hostArtifact.absolutePath}")
+			} else {
+				logger.warn("[Rust] 未找到宿主平台 native，跳过复制: ${hostArtifact.absolutePath}")
+			}
+		}
+
+		if (nativeArtifactsToCopy.isEmpty()) {
+			logger.warn('[Rust] 未复制任何原生库；最终 JAR 将不包含新增 Rust natives')
+		} else {
+			clearManagedRustNativeDirs(project, nativesResourceDir, rustNativeTargets.keySet())
+			nativeArtifactsToCopy.each { platform, sourceFile ->
+				copyRustNativeArtifact(
+						project,
+						sourceFile,
+						new File(nativesResourceDir, platform),
+						rustNativeTargets[platform].resourceFileName
+				)
+			}
+			logger.lifecycle("[Rust] 已收集 native 平台: ${nativeArtifactsToCopy.keySet().toList().sort().join(', ')}")
+		}
 	}
 }
 
@@ -159,18 +198,95 @@ project(':common').tasks.named('sourcesJar').configure { dependsOn copyRustNativ
  * 查找系统上的 cargo 可执行文件
  */
 static String findCargo() {
-    def isWin = System.getProperty('os.name').toLowerCase().contains('windows')
-    def exeSuffix = isWin ? '.exe' : ''
-    // 1. 环境变量 CARGO_HOME
-    def cargoHome = System.getenv('CARGO_HOME')
-    if (cargoHome) {
-        def exe = new File(cargoHome, "bin/cargo${exeSuffix}")
-        if (exe.exists()) return exe.absolutePath
-    }
-    // 2. ~/.cargo/bin
-    def home = System.getProperty('user.home')
-    def dotCargo = new File(home, ".cargo/bin/cargo${exeSuffix}")
-    if (dotCargo.exists()) return dotCargo.absolutePath
-    // 3. 直接依赖 PATH
-    return 'cargo'
+	def isWin = System.getProperty('os.name').toLowerCase().contains('windows')
+	def exeSuffix = isWin ? '.exe' : ''
+	// 1. 环境变量 CARGO_HOME
+	def cargoHome = System.getenv('CARGO_HOME')
+	if (cargoHome) {
+		def exe = new File(cargoHome, "bin/cargo${exeSuffix}")
+		if (exe.exists()) return exe.absolutePath
+	}
+	// 2. ~/.cargo/bin
+	def home = System.getProperty('user.home')
+	def dotCargo = new File(home, ".cargo/bin/cargo${exeSuffix}")
+	if (dotCargo.exists()) return dotCargo.absolutePath
+	// 3. 直接依赖 PATH
+	return 'cargo'
+}
+
+static void buildRustRelease(File rustEngineDir, File rustReleaseDir, String hostPlatform, Map targetDefinition, def logger) {
+	def cargo = findCargo()
+	logger.lifecycle("[Rust] 使用 cargo: ${cargo}")
+	logger.lifecycle("[Rust] 工作目录: ${rustEngineDir.absolutePath}")
+	def proc = new ProcessBuilder(cargo, 'build', '--release')
+			.directory(rustEngineDir)
+			.redirectErrorStream(true)
+			.start()
+	proc.inputStream.eachLine { line -> logger.lifecycle("[cargo] ${line}") }
+	def exitCode = proc.waitFor()
+	if (exitCode != 0) {
+		throw new GradleException("cargo build --release 失败，退出码: ${exitCode}")
+	}
+	ensureReleaseArtifactAlias(rustReleaseDir, hostPlatform, targetDefinition, logger)
+	logger.lifecycle('[Rust] 编译完成')
+}
+
+static void ensureReleaseArtifactAlias(File rustReleaseDir, String hostPlatform, Map targetDefinition, def logger) {
+	def cargoOutputFileName = targetDefinition.cargoOutputFileName ?: targetDefinition.releaseFileName
+	def releaseFileName = targetDefinition.releaseFileName
+	if (cargoOutputFileName == releaseFileName) {
+		return
+	}
+	def sourceFile = new File(rustReleaseDir, cargoOutputFileName)
+	def aliasedFile = new File(rustReleaseDir, releaseFileName)
+	if (!sourceFile.exists()) {
+		logger.warn("[Rust] 宿主平台 ${hostPlatform} 的 cargo 原始产物不存在，无法生成别名文件: ${sourceFile.absolutePath}")
+		return
+	}
+	java.nio.file.Files.copy(
+			sourceFile.toPath(),
+			aliasedFile.toPath(),
+			java.nio.file.StandardCopyOption.REPLACE_EXISTING
+	)
+	logger.lifecycle("[Rust] 已生成架构区分文件: ${aliasedFile.absolutePath}")
+}
+
+static void clearManagedRustNativeDirs(def project, File nativesResourceDir, Collection<String> platforms) {
+	platforms.each { platform ->
+		project.delete(new File(nativesResourceDir, platform))
+	}
+	nativesResourceDir.mkdirs()
+}
+
+static void copyRustNativeArtifact(def project, File sourceFile, File destinationDir, String destinationFileName) {
+	destinationDir.mkdirs()
+	project.copy {
+		from(sourceFile)
+		into(destinationDir)
+		rename { destinationFileName }
+	}
+}
+
+static String resolveHostRustPlatform() {
+	def osName = System.getProperty('os.name').toLowerCase()
+	def osArch = System.getProperty('os.arch').toLowerCase()
+	def isX64 = ['amd64', 'x86_64', 'x64'].any { osArch.contains(it) }
+	def isArm64 = ['aarch64', 'arm64'].any { osArch.contains(it) }
+
+	if (osName.contains('windows')) {
+		return isX64 ? 'windows-x64' : null
+	}
+	if (osName.contains('mac')) {
+		if (isArm64) {
+			return 'macos-arm64'
+		}
+		return isX64 ? 'macos-x64' : null
+	}
+	if (osName.contains('linux')) {
+		if (isArm64) {
+			return 'linux-arm64'
+		}
+		return isX64 ? 'linux-x64' : null
+	}
+	return null
 }

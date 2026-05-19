@@ -103,23 +103,29 @@ public final class NativeLibraryLoader {
 
         if (isMacOS) {
             String archDir = isArm64 ? "macos-arm64" : "macos-x64";
+            String fileName = isArm64 ? "libmmd_engine-arm64.dylib" : "libmmd_engine.dylib";
             logger.info("macOS Env Detected! Arch: " + archDir);
-            return List.of(new NativeLibrarySpec("/natives/" + archDir + "/libmmd_engine.dylib", "libmmd_engine.dylib"));
+            return List.of(new NativeLibrarySpec("/natives/" + archDir + "/" + fileName, fileName));
         }
 
         if (isLinux) {
             String archDir;
+            String fileName;
             if (isArm64) {
                 archDir = "linux-arm64";
+                fileName = "libmmd_engine-arm64.so";
             } else if (isLoongArch64) {
                 archDir = "linux-loongarch64";
+                fileName = "libmmd_engine.so";
             } else if (isRiscv64) {
                 archDir = "linux-riscv64";
+                fileName = "libmmd_engine.so";
             } else {
                 archDir = "linux-x64";
+                fileName = "libmmd_engine.so";
             }
             logger.info("Linux Env Detected! Arch: " + archDir);
-            return List.of(new NativeLibrarySpec("/natives/" + archDir + "/libmmd_engine.so", "libmmd_engine.so"));
+            return List.of(new NativeLibrarySpec("/natives/" + archDir + "/" + fileName, fileName));
         }
 
         String osName = System.getProperty("os.name");

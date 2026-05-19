@@ -4,6 +4,10 @@ use crate::animation::{AnimationLayerManager, VmdAnimation};
 use crate::morph::MorphManager;
 use crate::physics::MMDPhysics;
 use crate::skeleton::BoneManager;
+use crate::skinning::soa::{
+    build_skinning_buckets, fill_skinning_rotation_cache, skinning_buckets_to_raw,
+    skinning_buckets_to_raw_cached_rotations, SkinVertexBone, SkinningBuckets,
+};
 use crate::vr::{VrDebugState, VrIkSolver, VrTrackingFrame};
 use crate::vrm_runtime::{
     pmx_controller_hand_tracking_calibration, resolve_java_tracking_frame_for_model,
@@ -80,6 +84,9 @@ pub struct MmdModel {
     pub update_positions_raw: Vec<f32>,
     pub update_normals_raw: Vec<f32>,
     pub update_uvs_raw: Vec<f32>,
+    uv_morphs_active: bool,
+    vertex_morphs_active: bool,
+    uv_buffers_dirty: bool,
 
     // 子系统
     pub bone_manager: BoneManager,
@@ -140,6 +147,16 @@ pub struct MmdModel {
     original_positions: Vec<f32>,
     /// 原始法线（未蒙皮，用于 GPU 蒙皮）
     original_normals: Vec<f32>,
+
+    // CPU 蒙皮权重分桶（首次 update 时从 weights 构建，后续复用）
+    /// 按权重类型拆分后的专用热路径输入，避免每顶点共享统一分发分支
+    bone_buckets: Option<SkinningBuckets>,
+    /// 是否包含 SDEF 顶点；仅在需要时构建旋转缓存。测试会临时改写它以复用 uncached SDEF 对照路径。
+    has_sdef_bone_data: bool,
+    /// 按骨骼矩阵提取的旋转缓存，供 SDEF 复用
+    bone_rotations: Vec<Quat>,
+    /// 旧紧凑骨骼数据，仅保留给一致性/基准测试的 legacy 路径
+    bone_data: Option<Vec<SkinVertexBone>>,
 
     // GPU Morph 数据缓冲区
     /// 顶点 Morph 偏移数据（密集格式：morph_count * vertex_count * 3）
@@ -242,6 +259,9 @@ impl MmdModel {
             update_positions_raw: Vec::new(),
             update_normals_raw: Vec::new(),
             update_uvs_raw: Vec::new(),
+            uv_morphs_active: false,
+            vertex_morphs_active: false,
+            uv_buffers_dirty: true,
             bone_manager: BoneManager::new(),
             morph_manager: MorphManager::new(),
             animation_layer_manager: AnimationLayerManager::new(4), // 默认4层
@@ -276,6 +296,10 @@ impl MmdModel {
             bone_weights: Vec::new(),
             original_positions: Vec::new(),
             original_normals: Vec::new(),
+            bone_buckets: None,
+            has_sdef_bone_data: false,
+            bone_rotations: Vec::new(),
+            bone_data: None,
             gpu_morph_offsets: Vec::new(),
             gpu_morph_weights: Vec::new(),
             vertex_morph_indices: Vec::new(),
@@ -875,24 +899,36 @@ impl MmdModel {
 
     /// 更新 Morph 动画
     pub fn update_morph_animation(&mut self) {
-        // 先将 update_positions 重置为原始顶点位置（因为 apply_morphs 是累加操作）
-        for (i, vertex) in self.vertices.iter().enumerate() {
-            if i < self.update_positions.len() {
-                self.update_positions[i] = vertex.position;
-            }
-        }
-        // 应用所有 Morph 变形（顶点/骨骼/材质/UV/Group）
-        self.morph_manager
-            .apply_morphs(&mut self.bone_manager, &mut self.update_positions);
+        self.compute_and_cache_effective_weights();
 
-        // 将 UV Morph 偏移应用到 UV 缓冲区
-        let uv_deltas = self.morph_manager.get_uv_morph_deltas();
-        if !uv_deltas.is_empty() {
-            for (i, vertex) in self.vertices.iter().enumerate() {
-                if i < self.update_uvs.len() && i < uv_deltas.len() {
-                    self.update_uvs[i] = vertex.uv + uv_deltas[i];
-                }
-            }
+        let has_active_vertex_morphs = self.morph_manager.has_active_vertex_morphs();
+        if has_active_vertex_morphs
+            || self.vertex_morphs_active
+            || self.update_positions.len() != self.vertices.len()
+        {
+            self.reset_update_positions_to_base();
+        }
+
+        // 线性应用已展开的叶子 Morph（顶点/骨骼/材质/UV）。
+        self.morph_manager
+            .apply_prepared_morphs(&mut self.bone_manager, &mut self.update_positions);
+
+        // UV 仅在有效 Morph 存在或刚从激活态恢复时标记脏；实际同步在 update() 中按需完成。
+        let has_active_uv_morphs = self.morph_manager.has_active_uv_morphs();
+        self.uv_buffers_dirty = has_active_uv_morphs || self.uv_morphs_active;
+        self.uv_morphs_active = has_active_uv_morphs;
+        self.vertex_morphs_active = has_active_vertex_morphs;
+    }
+
+    #[inline]
+    fn reset_update_positions_to_base(&mut self) {
+        if self.update_positions.len() != self.vertices.len() {
+            self.update_positions = self.vertices.iter().map(|vertex| vertex.position).collect();
+            return;
+        }
+
+        for (position, vertex) in self.update_positions.iter_mut().zip(self.vertices.iter()) {
+            *position = vertex.position;
         }
     }
 
@@ -901,8 +937,29 @@ impl MmdModel {
         self.bone_manager.update_transforms(after_physics);
     }
 
-    /// 更新顶点（蒙皮计算）- 使用 rayon 并行加速
+    #[inline]
+    fn ensure_skinning_buckets(&mut self) {
+        if self.bone_buckets.is_none() {
+            let buckets = build_skinning_buckets(&self.weights);
+            self.has_sdef_bone_data = buckets.has_sdef();
+            self.bone_buckets = Some(buckets);
+        }
+    }
+
+    #[inline]
+    fn ensure_legacy_bone_data(&mut self) {
+        if self.bone_data.is_none() {
+            self.bone_data = Some(crate::skinning::build_bone_data(&self.weights));
+        }
+    }
+
+    /// 更新顶点（蒙皮计算）- 按权重类型分桶并走专用并行内核
+    ///
+    /// `update_positions` 在这里仅作为 Morph 后的结构化输入工作缓冲使用；
+    /// 最终给渲染/JNI 消费的结果只写入 raw 缓冲，避免每顶点重复写回结构化终态。
     pub fn update(&mut self) {
+        self.ensure_skinning_buckets();
+
         let bone_matrices = self.bone_manager.get_skinning_matrices();
         let vertex_count = self.vertices.len();
         let raw_len = vertex_count * 3;
@@ -915,63 +972,75 @@ impl MmdModel {
         }
         if self.update_uvs_raw.len() != self.update_uvs.len() * 2 {
             self.update_uvs_raw.resize(self.update_uvs.len() * 2, 0.0);
+            self.uv_buffers_dirty = true;
         }
 
-        // UV 拷贝（并行）
-        self.update_uvs_raw
-            .par_chunks_mut(2)
-            .zip(self.update_uvs.par_iter())
-            .for_each(|(chunk, uv)| {
-                chunk[0] = uv.x;
-                chunk[1] = uv.y;
-            });
+        if self.uv_buffers_dirty {
+            let vertices = &self.vertices;
+            let update_uvs = &mut self.update_uvs;
+            let update_uvs_raw = &mut self.update_uvs_raw;
 
-        // 并行蒙皮计算
-        let vertices = &self.vertices;
-        let weights = &self.weights;
+            if self.uv_morphs_active {
+                let uv_deltas = self.morph_manager.get_uv_morph_deltas();
+                update_uvs
+                    .par_iter_mut()
+                    .zip(update_uvs_raw.par_chunks_mut(2))
+                    .zip(vertices.par_iter())
+                    .zip(uv_deltas.par_iter())
+                    .for_each(|(((uv_out, chunk), vertex), delta)| {
+                        let uv = vertex.uv + *delta;
+                        *uv_out = uv;
+                        chunk[0] = uv.x;
+                        chunk[1] = uv.y;
+                    });
+            } else {
+                update_uvs
+                    .par_iter_mut()
+                    .zip(update_uvs_raw.par_chunks_mut(2))
+                    .zip(vertices.par_iter())
+                    .for_each(|((uv_out, chunk), vertex)| {
+                        let uv = vertex.uv;
+                        *uv_out = uv;
+                        chunk[0] = uv.x;
+                        chunk[1] = uv.y;
+                    });
+            }
 
-        // 将输出切片分块，每个顶点对应 3 个 f32
-        let pos_raw = &mut self.update_positions_raw;
-        let norm_raw = &mut self.update_normals_raw;
-        let positions = &mut self.update_positions;
-        let normals = &mut self.update_normals;
+            self.uv_buffers_dirty = false;
+        }
 
-        // 并行计算所有顶点（使用已应用 Morph 的 update_positions）
-        positions
-            .par_iter_mut()
-            .zip(normals.par_iter_mut())
-            .zip(pos_raw.par_chunks_mut(3))
-            .zip(norm_raw.par_chunks_mut(3))
-            .zip(vertices.par_iter())
-            .zip(weights.par_iter())
-            .for_each(
-                |(((((pos_out, norm_out), pos_chunk), norm_chunk), vertex), weight)| {
-                    // 使用 pos_out（即 update_positions，已应用 Morph）作为蒙皮输入
-                    let morph_position = *pos_out;
-                    let (pos, norm) = compute_vertex_skinning(
-                        morph_position, // 使用已应用 Morph 的位置
-                        vertex.normal,
-                        weight,
-                        &bone_matrices,
-                    );
+        let buckets = self.bone_buckets.as_ref().unwrap();
+        let morph_positions = self.update_positions.as_slice();
+        let vertices = self.vertices.as_slice();
 
-                    *pos_out = pos;
-                    *norm_out = norm;
+        debug_assert_eq!(buckets.vertex_count(), vertex_count);
 
-                    pos_chunk[0] = pos.x;
-                    pos_chunk[1] = pos.y;
-                    pos_chunk[2] = pos.z;
-                    norm_chunk[0] = norm.x;
-                    norm_chunk[1] = norm.y;
-                    norm_chunk[2] = norm.z;
-                },
+        if self.has_sdef_bone_data {
+            fill_skinning_rotation_cache(bone_matrices, &mut self.bone_rotations);
+            skinning_buckets_to_raw_cached_rotations(
+                buckets,
+                morph_positions,
+                vertices,
+                bone_matrices,
+                &self.bone_rotations,
+                self.update_positions_raw.as_mut_slice(),
+                self.update_normals_raw.as_mut_slice(),
             );
+        } else {
+            skinning_buckets_to_raw(
+                buckets,
+                morph_positions,
+                vertices,
+                bone_matrices,
+                self.update_positions_raw.as_mut_slice(),
+                self.update_normals_raw.as_mut_slice(),
+            );
+        }
 
-        // 调试日志（只在首次执行）
         if !self.debug_logged {
             self.debug_logged = true;
             log::info!(
-                "MMD Debug: vertex_count={}, pos_raw_len={}, uv_raw_len={} (rayon并行蒙皮)",
+                "MMD Debug: vertex_count={}, pos_raw_len={}, uv_raw_len={} (权重分桶+专用内核)",
                 vertex_count,
                 self.update_positions_raw.len(),
                 self.update_uvs_raw.len(),
@@ -1852,13 +1921,7 @@ impl MmdModel {
     /// 计算并缓存所有 Morph 的有效权重（递归展开 Group/Flip）
     fn compute_and_cache_effective_weights(&mut self) {
         let morph_count = self.morph_manager.morph_count();
-        if morph_count == 0 {
-            return;
-        }
         self.effective_weights_buf.resize(morph_count, 0.0);
-        for w in self.effective_weights_buf.iter_mut() {
-            *w = 0.0;
-        }
         self.morph_manager
             .compute_effective_weights_into(&mut self.effective_weights_buf);
     }
@@ -2239,7 +2302,6 @@ impl MmdModel {
         self.update_morph_animation();
 
         if !cpu_skinning {
-            self.compute_and_cache_effective_weights();
             self.sync_gpu_morph_weights_from_cache();
             self.sync_gpu_uv_morph_weights_from_cache();
         }
@@ -2833,9 +2895,147 @@ fn normalized_material_visibility(source: &[bool], material_count: usize) -> Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::morph::{Morph, MorphType, UvMorphOffset, VertexMorphOffset};
+    use crate::skinning::soa::{
+        build_skinning_buckets, fill_skinning_rotation_cache, skin_vertex_with_bone_cached_rotations,
+        skinning_buckets_to_raw, skinning_buckets_to_raw_cached_rotations,
+    };
+    use crate::skinning::{build_bone_data, skin_vertex_with_bone};
     use crate::skeleton::BoneLink;
     use crate::vr::{VrTrackedPose, XR_TO_MODEL_SCALE};
     use crate::vrm_runtime::{ArmIkHandCalibration, BodyTrackingCalibration};
+    use std::hint::black_box;
+    use std::time::{Duration, Instant};
+
+    const PROFILE_VERTEX_COUNT: usize = 120_000;
+    const PROFILE_BONE_COUNT: usize = 128;
+    const PROFILE_FULL_ITERS: usize = 24;
+    const PROFILE_MICRO_ITERS: usize = 48;
+    const PROFILE_AB_ITERS: usize = 40;
+    const PROFILE_AB_SAMPLES: usize = 10;
+    const PROFILE_MORPH_STRIDE: usize = 20;
+
+    #[derive(Clone, Copy, Debug)]
+    enum ProfileWeightKind {
+        Bdef1,
+        Bdef2,
+        Bdef4Sparse,
+        Bdef4QdefDense,
+        Sdef,
+        Mixed,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum ProfileMorphKind {
+        None,
+        VertexActive,
+        UvActive,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum ProfileUpdateVariant {
+        CurrentRawOnly,
+        CurrentRawOnlyUncachedSdef,
+        LegacyDualWriteback,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum ProfileSkinningVariant {
+        Uncached,
+        CachedSdefRotations,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct BenchResult {
+        label: &'static str,
+        ms_per_iter: f64,
+        ns_per_vertex: f64,
+        checksum: u64,
+    }
+
+    impl BenchResult {
+        fn print(self) {
+            println!(
+                "{:<34} {:>9.3} ms/frame {:>9.2} ns/vertex checksum=0x{:08x}",
+                self.label,
+                self.ms_per_iter,
+                self.ns_per_vertex,
+                self.checksum,
+            );
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct BenchStats {
+        mean: f64,
+        median: f64,
+        min: f64,
+        max: f64,
+    }
+
+    impl BenchStats {
+        fn from_values(values: &[f64]) -> Self {
+            assert!(!values.is_empty(), "bench stats requires at least one value");
+
+            let mut sorted = values.to_vec();
+            sorted.sort_by(|a, b| a.total_cmp(b));
+
+            let mean = values.iter().sum::<f64>() / values.len() as f64;
+            let mid = sorted.len() / 2;
+            let median = if sorted.len() % 2 == 0 {
+                (sorted[mid - 1] + sorted[mid]) * 0.5
+            } else {
+                sorted[mid]
+            };
+
+            Self {
+                mean,
+                median,
+                min: sorted[0],
+                max: *sorted.last().unwrap(),
+            }
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    struct AbSummary {
+        label: &'static str,
+        iterations: usize,
+        samples: usize,
+        current_ms: BenchStats,
+        legacy_ms: BenchStats,
+        delta_pct: BenchStats,
+        current_win_count: usize,
+    }
+
+    impl AbSummary {
+        fn print(&self) {
+            println!(
+                "{} summary: samples={}, iterations={}, current mean/p50/range={:.3}/{:.3}/{:.3}..{:.3} ms legacy mean/p50/range={:.3}/{:.3}/{:.3}..{:.3} ms",
+                self.label,
+                self.samples,
+                self.iterations,
+                self.current_ms.mean,
+                self.current_ms.median,
+                self.current_ms.min,
+                self.current_ms.max,
+                self.legacy_ms.mean,
+                self.legacy_ms.median,
+                self.legacy_ms.min,
+                self.legacy_ms.max,
+            );
+            println!(
+                "{} delta(current vs legacy): mean={:+.2}% p50={:+.2}% range={:+.2}%..{:+.2}% current_wins={}/{}",
+                self.label,
+                self.delta_pct.mean,
+                self.delta_pct.median,
+                self.delta_pct.min,
+                self.delta_pct.max,
+                self.current_win_count,
+                self.samples,
+            );
+        }
+    }
 
     #[test]
     fn set_first_person_mode_should_restore_user_material_visibility() {
@@ -2937,6 +3137,1235 @@ mod tests {
         );
     }
 
+    #[test]
+    fn legacy_dual_writeback_should_match_current_raw_outputs() {
+        let mut current = make_profile_model(
+            4_096,
+            PROFILE_BONE_COUNT,
+            ProfileWeightKind::Mixed,
+            ProfileMorphKind::VertexActive,
+        );
+        let mut legacy = make_profile_model(
+            4_096,
+            PROFILE_BONE_COUNT,
+            ProfileWeightKind::Mixed,
+            ProfileMorphKind::VertexActive,
+        );
+
+        current.update_morph_animation();
+        legacy.update_morph_animation();
+
+        current.update();
+        legacy_update_dual_writeback(&mut legacy);
+
+        assert_eq!(current.update_positions_raw, legacy.update_positions_raw);
+        assert_eq!(current.update_normals_raw, legacy.update_normals_raw);
+        assert_eq!(current.update_uvs_raw, legacy.update_uvs_raw);
+    }
+
+    #[test]
+    fn update_morph_animation_should_restore_base_positions_after_vertex_morph_deactivation() {
+        let mut model = make_profile_model(
+            256,
+            PROFILE_BONE_COUNT,
+            ProfileWeightKind::Mixed,
+            ProfileMorphKind::VertexActive,
+        );
+        let base_positions: Vec<Vec3> = model.vertices.iter().map(|vertex| vertex.position).collect();
+
+        model.update_morph_animation();
+        assert_ne!(model.update_positions, base_positions);
+        assert!(model.vertex_morphs_active);
+        assert!(model.morph_manager.has_active_vertex_morphs());
+
+        let morph_idx = model
+            .morph_manager
+            .find_morph_by_name("profile_vertex")
+            .expect("profile vertex morph should exist");
+        model.morph_manager.set_morph_weight(morph_idx, 0.0);
+
+        model.update_morph_animation();
+
+        assert_eq!(model.update_positions, base_positions);
+        assert!(!model.vertex_morphs_active);
+        assert!(!model.morph_manager.has_active_vertex_morphs());
+    }
+
+    #[test]
+    fn update_morph_animation_should_leave_positions_at_base_for_uv_only_morphs() {
+        let mut model = make_profile_model(
+            256,
+            PROFILE_BONE_COUNT,
+            ProfileWeightKind::Mixed,
+            ProfileMorphKind::UvActive,
+        );
+        let base_positions: Vec<Vec3> = model.vertices.iter().map(|vertex| vertex.position).collect();
+
+        model.update_morph_animation();
+
+        assert_eq!(model.update_positions, base_positions);
+        assert!(!model.vertex_morphs_active);
+        assert!(!model.morph_manager.has_active_vertex_morphs());
+        assert!(model.uv_morphs_active);
+    }
+
+    #[test]
+    fn sdef_rotation_cache_should_match_uncached_skinning() {
+        let model = make_profile_model(
+            4_096,
+            PROFILE_BONE_COUNT,
+            ProfileWeightKind::Mixed,
+            ProfileMorphKind::None,
+        );
+        let positions: Vec<Vec3> = model.vertices.iter().map(|vertex| vertex.position).collect();
+        let normals: Vec<Vec3> = model.vertices.iter().map(|vertex| vertex.normal).collect();
+        let bones = model.bone_data.as_ref().expect("bone_data should be prebuilt");
+        let matrices = model.bone_manager.get_skinning_matrices();
+        let mut rotations = Vec::new();
+
+        fill_skinning_rotation_cache(matrices, &mut rotations);
+
+        for ((position, normal), bone) in positions.iter().zip(normals.iter()).zip(bones.iter()) {
+            let uncached = skin_vertex_with_bone(*position, *normal, bone, matrices);
+            let cached = skin_vertex_with_bone_cached_rotations(
+                *position,
+                *normal,
+                bone,
+                matrices,
+                &rotations,
+            );
+
+            assert!(uncached.0.abs_diff_eq(cached.0, 1e-6));
+            assert!(uncached.1.abs_diff_eq(cached.1, 1e-6));
+        }
+    }
+
+    #[test]
+    fn bucketed_skinning_should_match_legacy_compact_path() {
+        let model = make_profile_model(
+            4_096,
+            PROFILE_BONE_COUNT,
+            ProfileWeightKind::Mixed,
+            ProfileMorphKind::None,
+        );
+        let positions: Vec<Vec3> = model.vertices.iter().map(|vertex| vertex.position).collect();
+        let normals: Vec<Vec3> = model.vertices.iter().map(|vertex| vertex.normal).collect();
+        let matrices = model.bone_manager.get_skinning_matrices();
+        let buckets = build_skinning_buckets(&model.weights);
+        let bones = model.bone_data.as_ref().expect("bone_data should be prebuilt");
+
+        let mut bucket_pos_raw = vec![0.0; positions.len() * 3];
+        let mut bucket_norm_raw = vec![0.0; positions.len() * 3];
+        skinning_buckets_to_raw(
+            &buckets,
+            &positions,
+            &model.vertices,
+            matrices,
+            &mut bucket_pos_raw,
+            &mut bucket_norm_raw,
+        );
+
+        let mut legacy_pos_raw = vec![0.0; positions.len() * 3];
+        let mut legacy_norm_raw = vec![0.0; positions.len() * 3];
+        for (index, ((position, normal), bone)) in positions
+            .iter()
+            .zip(normals.iter())
+            .zip(bones.iter())
+            .enumerate()
+        {
+            let (pos, nor) = skin_vertex_with_bone(*position, *normal, bone, matrices);
+            let base = index * 3;
+            legacy_pos_raw[base] = pos.x;
+            legacy_pos_raw[base + 1] = pos.y;
+            legacy_pos_raw[base + 2] = pos.z;
+            legacy_norm_raw[base] = nor.x;
+            legacy_norm_raw[base + 1] = nor.y;
+            legacy_norm_raw[base + 2] = nor.z;
+        }
+
+        assert_eq!(bucket_pos_raw, legacy_pos_raw);
+        assert_eq!(bucket_norm_raw, legacy_norm_raw);
+
+        let mut rotations = Vec::new();
+        fill_skinning_rotation_cache(matrices, &mut rotations);
+
+        let mut bucket_cached_pos_raw = vec![0.0; positions.len() * 3];
+        let mut bucket_cached_norm_raw = vec![0.0; positions.len() * 3];
+        skinning_buckets_to_raw_cached_rotations(
+            &buckets,
+            &positions,
+            &model.vertices,
+            matrices,
+            &rotations,
+            &mut bucket_cached_pos_raw,
+            &mut bucket_cached_norm_raw,
+        );
+
+        assert_eq!(bucket_cached_pos_raw, legacy_pos_raw);
+        assert_eq!(bucket_cached_norm_raw, legacy_norm_raw);
+    }
+
+    #[test]
+    #[ignore]
+    fn runtime_hotpath_profile() {
+        println!("=== runtime_hotpath_profile ===");
+        println!(
+            "config: vertices={}, bones={}, rayon_threads={}, full_iters={}, micro_iters={}",
+            PROFILE_VERTEX_COUNT,
+            PROFILE_BONE_COUNT,
+            rayon::current_num_threads(),
+            PROFILE_FULL_ITERS,
+            PROFILE_MICRO_ITERS,
+        );
+
+        let mut mixed_model = make_profile_model(
+            PROFILE_VERTEX_COUNT,
+            PROFILE_BONE_COUNT,
+            ProfileWeightKind::Mixed,
+            ProfileMorphKind::None,
+        );
+        let update_mixed = bench_model_update(
+            "update/mixed/no_uv_steady",
+            &mut mixed_model,
+            PROFILE_FULL_ITERS,
+            false,
+        );
+
+        let writeback_ab = bench_update_ab(
+            "update_ab/mixed/no_uv_steady",
+            ProfileWeightKind::Mixed,
+            ProfileMorphKind::None,
+            false,
+            PROFILE_AB_ITERS,
+            PROFILE_AB_SAMPLES,
+            ProfileUpdateVariant::CurrentRawOnly,
+            ProfileUpdateVariant::LegacyDualWriteback,
+            true,
+        );
+
+        let writeback_only = bench_model_writeback_only(
+            "update/writeback_only",
+            &mut make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                ProfileWeightKind::Mixed,
+                ProfileMorphKind::None,
+            ),
+            PROFILE_FULL_ITERS,
+        );
+
+        let skin_math_mixed = bench_skin_math_only(
+            "skin_math/mixed",
+            &make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                ProfileWeightKind::Mixed,
+                ProfileMorphKind::None,
+            ),
+            PROFILE_MICRO_ITERS,
+        );
+
+        let bdef4_qdef_dense = bench_skin_math_only(
+            "skin_math/bdef4_qdef_dense",
+            &make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                ProfileWeightKind::Bdef4QdefDense,
+                ProfileMorphKind::None,
+            ),
+            PROFILE_MICRO_ITERS,
+        );
+
+        let bdef4_sparse = bench_skin_math_only(
+            "skin_math/bdef4_sparse",
+            &make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                ProfileWeightKind::Bdef4Sparse,
+                ProfileMorphKind::None,
+            ),
+            PROFILE_MICRO_ITERS,
+        );
+
+        let sdef_skin = bench_skin_math_only(
+            "skin_math/sdef",
+            &make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                ProfileWeightKind::Sdef,
+                ProfileMorphKind::None,
+            ),
+            PROFILE_MICRO_ITERS,
+        );
+
+        let sdef_skin_ab = bench_skin_math_ab(
+            "skin_math_ab/sdef/cached_vs_uncached",
+            ProfileWeightKind::Sdef,
+            PROFILE_MICRO_ITERS,
+            PROFILE_AB_SAMPLES,
+        );
+
+        let sdef_update = bench_model_update(
+            "update/sdef/no_uv_steady",
+            &mut make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                ProfileWeightKind::Sdef,
+                ProfileMorphKind::None,
+            ),
+            PROFILE_FULL_ITERS,
+            false,
+        );
+
+        let sdef_update_ab = bench_update_ab(
+            "update_ab/sdef/no_uv_cached_vs_uncached",
+            ProfileWeightKind::Sdef,
+            ProfileMorphKind::None,
+            false,
+            PROFILE_AB_ITERS,
+            PROFILE_AB_SAMPLES,
+            ProfileUpdateVariant::CurrentRawOnly,
+            ProfileUpdateVariant::CurrentRawOnlyUncachedSdef,
+            false,
+        );
+
+        let mixed_sdef_update_ab = bench_update_ab(
+            "update_ab/mixed/no_uv_cached_vs_uncached_sdef",
+            ProfileWeightKind::Mixed,
+            ProfileMorphKind::None,
+            false,
+            PROFILE_AB_ITERS,
+            PROFILE_AB_SAMPLES,
+            ProfileUpdateVariant::CurrentRawOnly,
+            ProfileUpdateVariant::CurrentRawOnlyUncachedSdef,
+            false,
+        );
+
+        let bdef4_update = bench_model_update(
+            "update/bdef4_qdef/no_uv",
+            &mut make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                ProfileWeightKind::Bdef4QdefDense,
+                ProfileMorphKind::None,
+            ),
+            PROFILE_FULL_ITERS,
+            false,
+        );
+
+        let uv_forced_rewrite = bench_model_update(
+            "update/mixed/forced_uv_copy",
+            &mut make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                ProfileWeightKind::Mixed,
+                ProfileMorphKind::None,
+            ),
+            PROFILE_FULL_ITERS,
+            true,
+        );
+
+        let morph_none = bench_update_morph_animation(
+            "morph/no_active",
+            &mut make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                ProfileWeightKind::Mixed,
+                ProfileMorphKind::None,
+            ),
+            PROFILE_FULL_ITERS,
+        );
+
+        let morph_vertex = bench_update_morph_animation(
+            "morph/vertex_active",
+            &mut make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                ProfileWeightKind::Mixed,
+                ProfileMorphKind::VertexActive,
+            ),
+            PROFILE_FULL_ITERS,
+        );
+
+        let morph_uv = bench_update_morph_animation(
+            "morph/uv_active",
+            &mut make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                ProfileWeightKind::Mixed,
+                ProfileMorphKind::UvActive,
+            ),
+            PROFILE_FULL_ITERS,
+        );
+
+        println!("--- derived ratios ---");
+        println!(
+            "writeback share of mixed update: {:.1}%",
+            writeback_only.ms_per_iter / update_mixed.ms_per_iter * 100.0,
+        );
+        println!(
+            "math-only share of mixed update: {:.1}%",
+            skin_math_mixed.ms_per_iter / update_mixed.ms_per_iter * 100.0,
+        );
+        println!(
+            "forced UV copy overhead vs steady no-UV: +{:.1}%",
+            (uv_forced_rewrite.ms_per_iter / update_mixed.ms_per_iter - 1.0) * 100.0,
+        );
+        println!(
+            "SDEF / BDEF4-QDEF math cost: {:.2}x",
+            sdef_skin.ns_per_vertex / bdef4_qdef_dense.ns_per_vertex,
+        );
+        println!(
+            "BDEF4 sparse / dense math cost: {:.2}x",
+            bdef4_sparse.ns_per_vertex / bdef4_qdef_dense.ns_per_vertex,
+        );
+        println!(
+            "SDEF / BDEF4-QDEF full update cost: {:.2}x",
+            sdef_update.ms_per_iter / bdef4_update.ms_per_iter,
+        );
+        println!(
+            "SDEF cached vs uncached math mean delta: {:+.2}%",
+            sdef_skin_ab.delta_pct.mean,
+        );
+        println!(
+            "SDEF cached vs uncached full update mean delta: {:+.2}%",
+            sdef_update_ab.delta_pct.mean,
+        );
+        println!(
+            "mixed cached vs uncached-SDEF full update mean delta: {:+.2}%",
+            mixed_sdef_update_ab.delta_pct.mean,
+        );
+        println!(
+            "morph(no_active) / update(mixed): {:.1}%",
+            morph_none.ms_per_iter / update_mixed.ms_per_iter * 100.0,
+        );
+        println!(
+            "morph(vertex_active) / morph(no_active): {:.2}x",
+            morph_vertex.ms_per_iter / morph_none.ms_per_iter,
+        );
+        println!(
+            "morph(uv_active) / morph(no_active): {:.2}x",
+            morph_uv.ms_per_iter / morph_none.ms_per_iter,
+        );
+        println!(
+            "current raw-only / legacy dual-write mean delta: {:+.2}%",
+            writeback_ab.delta_pct.mean,
+        );
+        println!(
+            "current raw-only vs legacy dual-write win rate: {}/{}",
+            writeback_ab.current_win_count, writeback_ab.samples,
+        );
+    }
+
+    fn bench_model_update(
+        label: &'static str,
+        model: &mut MmdModel,
+        iterations: usize,
+        force_uv_rewrite: bool,
+    ) -> BenchResult {
+        let result = measure_model_update_variant(
+            label,
+            model,
+            iterations,
+            force_uv_rewrite,
+            ProfileUpdateVariant::CurrentRawOnly,
+        );
+        result.print();
+        result
+    }
+
+    fn bench_update_ab(
+        label: &'static str,
+        weight_kind: ProfileWeightKind,
+        morph_kind: ProfileMorphKind,
+        force_uv_rewrite: bool,
+        iterations: usize,
+        samples: usize,
+        current_variant: ProfileUpdateVariant,
+        legacy_variant: ProfileUpdateVariant,
+        require_checksum_match: bool,
+    ) -> AbSummary {
+        println!("--- {label} ---");
+
+        let mut current_values = Vec::with_capacity(samples);
+        let mut legacy_values = Vec::with_capacity(samples);
+        let mut delta_values = Vec::with_capacity(samples);
+        let mut current_win_count = 0;
+
+        for sample_index in 0..samples {
+            let current_first = sample_index % 2 == 0;
+            let mut current_model = make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                weight_kind,
+                morph_kind,
+            );
+            let mut legacy_model = make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                weight_kind,
+                morph_kind,
+            );
+
+            let (current, legacy) = if current_first {
+                (
+                    measure_model_update_variant(
+                        "ab/current_raw_only",
+                        &mut current_model,
+                        iterations,
+                        force_uv_rewrite,
+                        current_variant,
+                    ),
+                    measure_model_update_variant(
+                        "ab/legacy_dual_write",
+                        &mut legacy_model,
+                        iterations,
+                        force_uv_rewrite,
+                        legacy_variant,
+                    ),
+                )
+            } else {
+                let legacy = measure_model_update_variant(
+                    "ab/legacy_dual_write",
+                    &mut legacy_model,
+                    iterations,
+                    force_uv_rewrite,
+                    legacy_variant,
+                );
+                let current = measure_model_update_variant(
+                    "ab/current_raw_only",
+                    &mut current_model,
+                    iterations,
+                    force_uv_rewrite,
+                    current_variant,
+                );
+                (current, legacy)
+            };
+
+            if require_checksum_match {
+                assert_eq!(
+                    current.checksum, legacy.checksum,
+                    "{label} checksum mismatch for sample {}",
+                    sample_index + 1,
+                );
+            }
+
+            let delta_pct = (current.ms_per_iter / legacy.ms_per_iter - 1.0) * 100.0;
+            if current.ms_per_iter < legacy.ms_per_iter {
+                current_win_count += 1;
+            }
+
+            println!(
+                "{label} sample {:02}: current={:.3} ms legacy={:.3} ms delta={:+.2}% order={}",
+                sample_index + 1,
+                current.ms_per_iter,
+                legacy.ms_per_iter,
+                delta_pct,
+                if current_first {
+                    "current->legacy"
+                } else {
+                    "legacy->current"
+                },
+            );
+
+            current_values.push(current.ms_per_iter);
+            legacy_values.push(legacy.ms_per_iter);
+            delta_values.push(delta_pct);
+        }
+
+        let summary = AbSummary {
+            label,
+            iterations,
+            samples,
+            current_ms: BenchStats::from_values(&current_values),
+            legacy_ms: BenchStats::from_values(&legacy_values),
+            delta_pct: BenchStats::from_values(&delta_values),
+            current_win_count,
+        };
+        summary.print();
+        summary
+    }
+
+    fn bench_skin_math_ab(
+        label: &'static str,
+        weight_kind: ProfileWeightKind,
+        iterations: usize,
+        samples: usize,
+    ) -> AbSummary {
+        println!("--- {label} ---");
+
+        let mut current_values = Vec::with_capacity(samples);
+        let mut legacy_values = Vec::with_capacity(samples);
+        let mut delta_values = Vec::with_capacity(samples);
+        let mut current_win_count = 0;
+
+        for sample_index in 0..samples {
+            let current_first = sample_index % 2 == 0;
+            let current_model = make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                weight_kind,
+                ProfileMorphKind::None,
+            );
+            let legacy_model = make_profile_model(
+                PROFILE_VERTEX_COUNT,
+                PROFILE_BONE_COUNT,
+                weight_kind,
+                ProfileMorphKind::None,
+            );
+
+            let (current, legacy) = if current_first {
+                (
+                    measure_skin_math_variant(
+                        "ab/current_cached_sdef",
+                        &current_model,
+                        iterations,
+                        ProfileSkinningVariant::CachedSdefRotations,
+                    ),
+                    measure_skin_math_variant(
+                        "ab/legacy_uncached_sdef",
+                        &legacy_model,
+                        iterations,
+                        ProfileSkinningVariant::Uncached,
+                    ),
+                )
+            } else {
+                let legacy = measure_skin_math_variant(
+                    "ab/legacy_uncached_sdef",
+                    &legacy_model,
+                    iterations,
+                    ProfileSkinningVariant::Uncached,
+                );
+                let current = measure_skin_math_variant(
+                    "ab/current_cached_sdef",
+                    &current_model,
+                    iterations,
+                    ProfileSkinningVariant::CachedSdefRotations,
+                );
+                (current, legacy)
+            };
+
+            let delta_pct = (current.ms_per_iter / legacy.ms_per_iter - 1.0) * 100.0;
+            if current.ms_per_iter < legacy.ms_per_iter {
+                current_win_count += 1;
+            }
+
+            println!(
+                "{label} sample {:02}: current={:.3} ms legacy={:.3} ms delta={:+.2}% order={}",
+                sample_index + 1,
+                current.ms_per_iter,
+                legacy.ms_per_iter,
+                delta_pct,
+                if current_first {
+                    "current->legacy"
+                } else {
+                    "legacy->current"
+                },
+            );
+
+            current_values.push(current.ms_per_iter);
+            legacy_values.push(legacy.ms_per_iter);
+            delta_values.push(delta_pct);
+        }
+
+        let summary = AbSummary {
+            label,
+            iterations,
+            samples,
+            current_ms: BenchStats::from_values(&current_values),
+            legacy_ms: BenchStats::from_values(&legacy_values),
+            delta_pct: BenchStats::from_values(&delta_values),
+            current_win_count,
+        };
+        summary.print();
+        summary
+    }
+
+    fn measure_model_update_variant(
+        label: &'static str,
+        model: &mut MmdModel,
+        iterations: usize,
+        force_uv_rewrite: bool,
+        variant: ProfileUpdateVariant,
+    ) -> BenchResult {
+        let template: Vec<Vec3> = model.vertices.iter().map(|v| v.position).collect();
+
+        for _ in 0..4 {
+            reset_profile_positions(model, &template);
+            configure_profile_uv_flags(model, force_uv_rewrite);
+            run_profile_update_variant(model, variant);
+            black_box(checksum_model(model));
+        }
+
+        let start = Instant::now();
+        let mut checksum = 0_u64;
+        for _ in 0..iterations {
+            reset_profile_positions(model, &template);
+            configure_profile_uv_flags(model, force_uv_rewrite);
+            run_profile_update_variant(model, variant);
+            checksum ^= black_box(checksum_model(model));
+        }
+
+        make_bench_result(label, start.elapsed(), iterations, model.vertices.len(), checksum)
+    }
+
+    fn configure_profile_uv_flags(model: &mut MmdModel, force_uv_rewrite: bool) {
+        if force_uv_rewrite {
+            model.uv_buffers_dirty = true;
+            model.uv_morphs_active = false;
+        } else {
+            model.uv_buffers_dirty = false;
+        }
+    }
+
+    fn run_profile_update_variant(model: &mut MmdModel, variant: ProfileUpdateVariant) {
+        match variant {
+            ProfileUpdateVariant::CurrentRawOnly => model.update(),
+            ProfileUpdateVariant::CurrentRawOnlyUncachedSdef => raw_only_update_uncached_sdef(model),
+            ProfileUpdateVariant::LegacyDualWriteback => legacy_update_dual_writeback(model),
+        }
+    }
+
+    fn raw_only_update_uncached_sdef(model: &mut MmdModel) {
+        model.ensure_skinning_buckets();
+        model.ensure_legacy_bone_data();
+
+        let has_sdef_bone_data = model.has_sdef_bone_data;
+        model.has_sdef_bone_data = false;
+        model.update();
+        model.has_sdef_bone_data = has_sdef_bone_data;
+    }
+
+    fn legacy_update_dual_writeback(model: &mut MmdModel) {
+        model.ensure_legacy_bone_data();
+
+        let bone_matrices = model.bone_manager.get_skinning_matrices();
+        let vertex_count = model.vertices.len();
+        let raw_len = vertex_count * 3;
+
+        if model.update_positions_raw.len() != raw_len {
+            model.update_positions_raw.resize(raw_len, 0.0);
+        }
+        if model.update_normals_raw.len() != raw_len {
+            model.update_normals_raw.resize(raw_len, 0.0);
+        }
+        if model.update_uvs_raw.len() != model.update_uvs.len() * 2 {
+            model.update_uvs_raw.resize(model.update_uvs.len() * 2, 0.0);
+            model.uv_buffers_dirty = true;
+        }
+
+        if model.uv_buffers_dirty {
+            let vertices = &model.vertices;
+            let update_uvs = &mut model.update_uvs;
+            let update_uvs_raw = &mut model.update_uvs_raw;
+
+            if model.uv_morphs_active {
+                let uv_deltas = model.morph_manager.get_uv_morph_deltas();
+                update_uvs
+                    .par_iter_mut()
+                    .zip(update_uvs_raw.par_chunks_mut(2))
+                    .zip(vertices.par_iter())
+                    .zip(uv_deltas.par_iter())
+                    .for_each(|(((uv_out, chunk), vertex), delta)| {
+                        let uv = vertex.uv + *delta;
+                        *uv_out = uv;
+                        chunk[0] = uv.x;
+                        chunk[1] = uv.y;
+                    });
+            } else {
+                update_uvs
+                    .par_iter_mut()
+                    .zip(update_uvs_raw.par_chunks_mut(2))
+                    .zip(vertices.par_iter())
+                    .for_each(|((uv_out, chunk), vertex)| {
+                        let uv = vertex.uv;
+                        *uv_out = uv;
+                        chunk[0] = uv.x;
+                        chunk[1] = uv.y;
+                    });
+            }
+
+            model.uv_buffers_dirty = false;
+        }
+
+        let bone = model.bone_data.as_ref().unwrap();
+        let update_positions = &mut model.update_positions;
+        let update_normals = &mut model.update_normals;
+        let pos_raw = &mut model.update_positions_raw;
+        let norm_raw = &mut model.update_normals_raw;
+        let vertices = &model.vertices;
+
+        if model.has_sdef_bone_data {
+            fill_skinning_rotation_cache(bone_matrices, &mut model.bone_rotations);
+            let bone_rotations = &model.bone_rotations;
+
+            update_positions
+                .par_iter_mut()
+                .zip(update_normals.par_iter_mut())
+                .zip(pos_raw.par_chunks_mut(3))
+                .zip(norm_raw.par_chunks_mut(3))
+                .zip(vertices.par_iter())
+                .zip(bone.par_iter())
+                .for_each(
+                    |(((((morph_pos_out, norm_out), pos_chunk), norm_chunk), vertex), bone_vertex)| {
+                        let morph_pos = *morph_pos_out;
+                        let (pos, norm) = skin_vertex_with_bone_cached_rotations(
+                            morph_pos,
+                            vertex.normal,
+                            bone_vertex,
+                            bone_matrices,
+                            bone_rotations,
+                        );
+
+                        *morph_pos_out = pos;
+                        *norm_out = norm;
+
+                        pos_chunk[0] = pos.x;
+                        pos_chunk[1] = pos.y;
+                        pos_chunk[2] = pos.z;
+                        norm_chunk[0] = norm.x;
+                        norm_chunk[1] = norm.y;
+                        norm_chunk[2] = norm.z;
+                    },
+                );
+        } else {
+            update_positions
+                .par_iter_mut()
+                .zip(update_normals.par_iter_mut())
+                .zip(pos_raw.par_chunks_mut(3))
+                .zip(norm_raw.par_chunks_mut(3))
+                .zip(vertices.par_iter())
+                .zip(bone.par_iter())
+                .for_each(
+                    |(((((morph_pos_out, norm_out), pos_chunk), norm_chunk), vertex), bone_vertex)| {
+                        let morph_pos = *morph_pos_out;
+                        let (pos, norm) =
+                            skin_vertex_with_bone(morph_pos, vertex.normal, bone_vertex, bone_matrices);
+
+                        *morph_pos_out = pos;
+                        *norm_out = norm;
+
+                        pos_chunk[0] = pos.x;
+                        pos_chunk[1] = pos.y;
+                        pos_chunk[2] = pos.z;
+                        norm_chunk[0] = norm.x;
+                        norm_chunk[1] = norm.y;
+                        norm_chunk[2] = norm.z;
+                    },
+                );
+        }
+    }
+
+    fn bench_model_writeback_only(
+        label: &'static str,
+        model: &mut MmdModel,
+        iterations: usize,
+    ) -> BenchResult {
+        let template: Vec<Vec3> = model.vertices.iter().map(|v| v.position).collect();
+
+        model.update();
+        for _ in 0..4 {
+            reset_profile_positions(model, &template);
+            let positions = &model.update_positions;
+            let pos_raw = &mut model.update_positions_raw;
+            let norm_raw = &mut model.update_normals_raw;
+            let vertices = &model.vertices;
+
+            positions
+                .par_iter()
+                .zip(pos_raw.par_chunks_mut(3))
+                .zip(norm_raw.par_chunks_mut(3))
+                .zip(vertices.par_iter())
+                .for_each(|(((pos, pos_chunk), norm_chunk), vertex)| {
+                    let norm = vertex.normal;
+
+                    pos_chunk[0] = pos.x;
+                    pos_chunk[1] = pos.y;
+                    pos_chunk[2] = pos.z;
+                    norm_chunk[0] = norm.x;
+                    norm_chunk[1] = norm.y;
+                    norm_chunk[2] = norm.z;
+                });
+            black_box(checksum_model(model));
+        }
+
+        let start = Instant::now();
+        let mut checksum = 0_u64;
+        for _ in 0..iterations {
+            reset_profile_positions(model, &template);
+            let positions = &model.update_positions;
+            let pos_raw = &mut model.update_positions_raw;
+            let norm_raw = &mut model.update_normals_raw;
+            let vertices = &model.vertices;
+
+            positions
+                .par_iter()
+                .zip(pos_raw.par_chunks_mut(3))
+                .zip(norm_raw.par_chunks_mut(3))
+                .zip(vertices.par_iter())
+                .for_each(|(((pos, pos_chunk), norm_chunk), vertex)| {
+                    let norm = vertex.normal;
+
+                    pos_chunk[0] = pos.x;
+                    pos_chunk[1] = pos.y;
+                    pos_chunk[2] = pos.z;
+                    norm_chunk[0] = norm.x;
+                    norm_chunk[1] = norm.y;
+                    norm_chunk[2] = norm.z;
+                });
+            checksum ^= black_box(checksum_model(model));
+        }
+
+        finalize_bench(label, start.elapsed(), iterations, model.vertices.len(), checksum)
+    }
+
+    fn bench_skin_math_only(label: &'static str, model: &MmdModel, iterations: usize) -> BenchResult {
+        let result = measure_skin_math_variant(
+            label,
+            model,
+            iterations,
+            ProfileSkinningVariant::CachedSdefRotations,
+        );
+        result.print();
+        result
+    }
+
+    fn measure_skin_math_variant(
+        label: &'static str,
+        model: &MmdModel,
+        iterations: usize,
+        variant: ProfileSkinningVariant,
+    ) -> BenchResult {
+        let positions: Vec<Vec3> = model.vertices.iter().map(|v| v.position).collect();
+        let normals: Vec<Vec3> = model.vertices.iter().map(|v| v.normal).collect();
+        let bones = model.bone_data.as_ref().expect("bone_data should be prebuilt");
+        let matrices = model.bone_manager.get_skinning_matrices();
+
+        if matches!(variant, ProfileSkinningVariant::CachedSdefRotations) && model.has_sdef_bone_data {
+            let mut rotations = Vec::new();
+            fill_skinning_rotation_cache(matrices, &mut rotations);
+
+            for _ in 0..4 {
+                let checksum: f32 = positions
+                    .par_iter()
+                    .zip(normals.par_iter())
+                    .zip(bones.par_iter())
+                    .map(|((position, normal), bone)| {
+                        let (pos, nor) = skin_vertex_with_bone_cached_rotations(
+                            *position,
+                            *normal,
+                            bone,
+                            matrices,
+                            &rotations,
+                        );
+                        pos.x + pos.y + pos.z + nor.x + nor.y + nor.z
+                    })
+                    .sum();
+                black_box(checksum);
+            }
+
+            let start = Instant::now();
+            let mut checksum = 0_u64;
+            for _ in 0..iterations {
+                let total: f32 = positions
+                    .par_iter()
+                    .zip(normals.par_iter())
+                    .zip(bones.par_iter())
+                    .map(|((position, normal), bone)| {
+                        let (pos, nor) = skin_vertex_with_bone_cached_rotations(
+                            *position,
+                            *normal,
+                            bone,
+                            matrices,
+                            &rotations,
+                        );
+                        pos.x + pos.y + pos.z + nor.x + nor.y + nor.z
+                    })
+                    .sum();
+                checksum ^= black_box(total.to_bits() as u64);
+            }
+
+            make_bench_result(label, start.elapsed(), iterations, positions.len(), checksum)
+        } else {
+            for _ in 0..4 {
+                let checksum: f32 = positions
+                    .par_iter()
+                    .zip(normals.par_iter())
+                    .zip(bones.par_iter())
+                    .map(|((position, normal), bone)| {
+                        let (pos, nor) = skin_vertex_with_bone(*position, *normal, bone, matrices);
+                        pos.x + pos.y + pos.z + nor.x + nor.y + nor.z
+                    })
+                    .sum();
+                black_box(checksum);
+            }
+
+            let start = Instant::now();
+            let mut checksum = 0_u64;
+            for _ in 0..iterations {
+                let total: f32 = positions
+                    .par_iter()
+                    .zip(normals.par_iter())
+                    .zip(bones.par_iter())
+                    .map(|((position, normal), bone)| {
+                        let (pos, nor) = skin_vertex_with_bone(*position, *normal, bone, matrices);
+                        pos.x + pos.y + pos.z + nor.x + nor.y + nor.z
+                    })
+                    .sum();
+                checksum ^= black_box(total.to_bits() as u64);
+            }
+
+            make_bench_result(label, start.elapsed(), iterations, positions.len(), checksum)
+        }
+    }
+
+    fn bench_update_morph_animation(
+        label: &'static str,
+        model: &mut MmdModel,
+        iterations: usize,
+    ) -> BenchResult {
+        for _ in 0..4 {
+            black_box(model.update_morph_animation());
+        }
+
+        let start = Instant::now();
+        let mut checksum = 0_u64;
+        for _ in 0..iterations {
+            model.update_morph_animation();
+            checksum ^= black_box(checksum_positions(&model.update_positions));
+            checksum ^= (model.uv_buffers_dirty as u64) << 1;
+            checksum ^= model.uv_morphs_active as u64;
+        }
+
+        finalize_bench(label, start.elapsed(), iterations, model.vertices.len(), checksum)
+    }
+
+    fn finalize_bench(
+        label: &'static str,
+        elapsed: Duration,
+        iterations: usize,
+        vertex_count: usize,
+        checksum: u64,
+    ) -> BenchResult {
+        let result = make_bench_result(label, elapsed, iterations, vertex_count, checksum);
+        result.print();
+        result
+    }
+
+    fn make_bench_result(
+        label: &'static str,
+        elapsed: Duration,
+        iterations: usize,
+        vertex_count: usize,
+        checksum: u64,
+    ) -> BenchResult {
+        BenchResult {
+            label,
+            ms_per_iter: elapsed.as_secs_f64() * 1000.0 / iterations as f64,
+            ns_per_vertex: elapsed.as_secs_f64() * 1_000_000_000.0
+                / (iterations * vertex_count) as f64,
+            checksum,
+        }
+    }
+
+    fn make_profile_model(
+        vertex_count: usize,
+        bone_count: usize,
+        weight_kind: ProfileWeightKind,
+        morph_kind: ProfileMorphKind,
+    ) -> MmdModel {
+        let mut model = MmdModel::new();
+        model.bone_manager = make_profile_bone_manager(bone_count);
+
+        model.vertices = (0..vertex_count)
+            .map(|i| RuntimeVertex {
+                position: make_profile_position(i),
+                normal: make_profile_normal(i),
+                uv: make_profile_uv(i),
+            })
+            .collect();
+        model.weights = (0..vertex_count)
+            .map(|i| make_profile_weight(i, bone_count, weight_kind))
+            .collect();
+        model.update_positions = model.vertices.iter().map(|v| v.position).collect();
+        model.update_normals = vec![Vec3::ZERO; vertex_count];
+        model.update_uvs = model.vertices.iter().map(|v| v.uv).collect();
+        model.morph_manager.set_vertex_count(vertex_count);
+        model.morph_manager.set_material_count(1);
+
+        attach_profile_morphs(&mut model, morph_kind);
+        model.bone_data = Some(build_bone_data(&model.weights));
+        model.has_sdef_bone_data = model
+            .weights
+            .iter()
+            .any(|weight| matches!(weight, VertexWeight::Sdef { .. }));
+        model
+    }
+
+    fn make_profile_bone_manager(bone_count: usize) -> BoneManager {
+        let mut bone_manager = BoneManager::new();
+        for i in 0..bone_count {
+            let fi = i as f32;
+            let mut bone = BoneLink::new(format!("profile_bone_{i}"));
+            bone.initial_position = Vec3::new(fi * 0.013, (fi * 0.031).sin() * 0.4, -(fi * 0.017).cos() * 0.3);
+            bone.animation_translate = Vec3::new((fi * 0.013).sin() * 0.05, (fi * 0.007).cos() * 0.04, (fi * 0.011).sin() * 0.03);
+            bone.animation_rotate = Quat::from_rotation_x(fi * 0.011)
+                * Quat::from_rotation_y(fi * 0.017)
+                * Quat::from_rotation_z(fi * 0.023);
+            bone_manager.add_bone(bone);
+        }
+        bone_manager.build_hierarchy();
+        bone_manager.update_transforms(false);
+        bone_manager
+    }
+
+    fn make_profile_weight(
+        vertex_index: usize,
+        bone_count: usize,
+        weight_kind: ProfileWeightKind,
+    ) -> VertexWeight {
+        let b0 = (vertex_index % bone_count) as i32;
+        let b1 = ((vertex_index + 1) % bone_count) as i32;
+        let b2 = ((vertex_index + 7) % bone_count) as i32;
+        let b3 = ((vertex_index + 11) % bone_count) as i32;
+        let center = make_profile_position(vertex_index) * 0.35 + Vec3::new(0.01, -0.02, 0.03);
+
+        match weight_kind {
+            ProfileWeightKind::Bdef1 => VertexWeight::Bdef1 { bone: b0 },
+            ProfileWeightKind::Bdef2 => VertexWeight::Bdef2 {
+                bones: [b0, b1],
+                weight: 0.62,
+            },
+            ProfileWeightKind::Bdef4Sparse => VertexWeight::Bdef4 {
+                bones: [b0, b1, b2, b3],
+                weights: [0.78, 0.22, 0.0, 0.0],
+            },
+            ProfileWeightKind::Bdef4QdefDense => {
+                if vertex_index % 2 == 0 {
+                    VertexWeight::Bdef4 {
+                        bones: [b0, b1, b2, b3],
+                        weights: [0.45, 0.25, 0.2, 0.1],
+                    }
+                } else {
+                    VertexWeight::Qdef {
+                        bones: [b0, b1, b2, b3],
+                        weights: [0.45, 0.25, 0.2, 0.1],
+                    }
+                }
+            }
+            ProfileWeightKind::Sdef => VertexWeight::Sdef {
+                bones: [b0, b1],
+                weight: 0.58,
+                c: center,
+                r0: center + Vec3::new(0.02, 0.0, 0.0),
+                r1: center + Vec3::new(-0.02, 0.0, 0.0),
+            },
+            ProfileWeightKind::Mixed => match vertex_index % 6 {
+                0 => VertexWeight::Bdef1 { bone: b0 },
+                1 => VertexWeight::Bdef2 {
+                    bones: [b0, b1],
+                    weight: 0.64,
+                },
+                2 => VertexWeight::Bdef4 {
+                    bones: [b0, b1, b2, b3],
+                    weights: [0.72, 0.18, 0.1, 0.0],
+                },
+                3 => VertexWeight::Qdef {
+                    bones: [b0, b1, b2, b3],
+                    weights: [0.42, 0.28, 0.2, 0.1],
+                },
+                4 => VertexWeight::Sdef {
+                    bones: [b0, b1],
+                    weight: 0.6,
+                    c: center,
+                    r0: center + Vec3::new(0.018, 0.0, 0.0),
+                    r1: center + Vec3::new(-0.018, 0.0, 0.0),
+                },
+                _ => VertexWeight::Bdef1 { bone: b1 },
+            },
+        }
+    }
+
+    fn attach_profile_morphs(model: &mut MmdModel, morph_kind: ProfileMorphKind) {
+        match morph_kind {
+            ProfileMorphKind::None => {}
+            ProfileMorphKind::VertexActive => {
+                let mut morph = Morph::new("profile_vertex".to_string(), MorphType::Vertex);
+                for idx in (0..model.vertices.len()).step_by(PROFILE_MORPH_STRIDE) {
+                    morph.vertex_offsets.push(VertexMorphOffset {
+                        vertex_index: idx as u32,
+                        offset: Vec3::new(0.012, -0.006, 0.009),
+                    });
+                }
+                morph.set_weight(1.0);
+                model.morph_manager.add_morph(morph);
+            }
+            ProfileMorphKind::UvActive => {
+                let mut morph = Morph::new("profile_uv".to_string(), MorphType::Uv);
+                for idx in (0..model.vertices.len()).step_by(PROFILE_MORPH_STRIDE) {
+                    morph.uv_offsets.push(UvMorphOffset {
+                        vertex_index: idx as u32,
+                        offset: Vec4::new(0.005, -0.003, 0.0, 0.0),
+                    });
+                }
+                morph.set_weight(1.0);
+                model.morph_manager.add_morph(morph);
+            }
+        }
+    }
+
+    fn reset_profile_positions(model: &mut MmdModel, template: &[Vec3]) {
+        if model.update_positions.len() != template.len() {
+            model.update_positions = template.to_vec();
+        } else {
+            model.update_positions.copy_from_slice(template);
+        }
+    }
+
+    fn checksum_model(model: &MmdModel) -> u64 {
+        checksum_f32_slice(&model.update_positions_raw)
+            ^ checksum_f32_slice(&model.update_normals_raw).rotate_left(7)
+            ^ checksum_f32_slice(&model.update_uvs_raw).rotate_left(13)
+    }
+
+    fn checksum_positions(positions: &[Vec3]) -> u64 {
+        let mut acc = 0.0_f32;
+        let step = (positions.len() / 97).max(1);
+        for pos in positions.iter().step_by(step).take(97) {
+            acc += pos.x * 0.73 + pos.y * 1.13 + pos.z * 1.37;
+        }
+        acc.to_bits() as u64
+    }
+
+    fn checksum_f32_slice(values: &[f32]) -> u64 {
+        let mut acc = 0.0_f32;
+        let step = (values.len() / 127).max(1);
+        for value in values.iter().step_by(step).take(127) {
+            acc = acc.mul_add(1.001_953_1, *value);
+        }
+        acc.to_bits() as u64
+    }
+
+    fn make_profile_position(index: usize) -> Vec3 {
+        let i = index as f32;
+        Vec3::new(
+            (i * 0.013).sin() * 0.9 + (index % 17) as f32 * 0.003,
+            (i * 0.007).cos() * 1.1 + (index % 11) as f32 * 0.002,
+            (i * 0.011).sin() * 0.8 - (index % 13) as f32 * 0.0025,
+        )
+    }
+
+    fn make_profile_normal(index: usize) -> Vec3 {
+        let i = index as f32;
+        Vec3::new((i * 0.019).sin(), (i * 0.023).cos(), (i * 0.029).sin()).normalize_or_zero()
+    }
+
+    fn make_profile_uv(index: usize) -> Vec2 {
+        let u = (index % 1024) as f32 / 1024.0;
+        let v = ((index * 7) % 1024) as f32 / 1024.0;
+        Vec2::new(u, v)
+    }
+
     fn make_material_visibility_test_model() -> MmdModel {
         let mut model = MmdModel::new();
         model.materials = vec![
@@ -2959,97 +4388,4 @@ mod tests {
     }
 }
 
-/// 计算单个顶点的蒙皮
-fn compute_vertex_skinning(
-    position: Vec3,
-    normal: Vec3,
-    weight: &VertexWeight,
-    matrices: &[Mat4],
-) -> (Vec3, Vec3) {
-    match weight {
-        VertexWeight::Bdef1 { bone } => {
-            let m = matrices
-                .get(*bone as usize)
-                .copied()
-                .unwrap_or(Mat4::IDENTITY);
-            let pos = m.transform_point3(position);
-            let norm = m.transform_vector3(normal).normalize_or_zero();
-            (pos, norm)
-        }
-        VertexWeight::Bdef2 { bones, weight } => {
-            let m0 = matrices
-                .get(bones[0] as usize)
-                .copied()
-                .unwrap_or(Mat4::IDENTITY);
-            let m1 = matrices
-                .get(bones[1] as usize)
-                .copied()
-                .unwrap_or(Mat4::IDENTITY);
-            let w0 = *weight;
-            let w1 = 1.0 - w0;
-
-            let pos = m0.transform_point3(position) * w0 + m1.transform_point3(position) * w1;
-            let norm = (m0.transform_vector3(normal) * w0 + m1.transform_vector3(normal) * w1)
-                .normalize_or_zero();
-            (pos, norm)
-        }
-        VertexWeight::Bdef4 { bones, weights } => {
-            let mut pos = Vec3::ZERO;
-            let mut norm = Vec3::ZERO;
-
-            for i in 0..4 {
-                let m = matrices
-                    .get(bones[i] as usize)
-                    .copied()
-                    .unwrap_or(Mat4::IDENTITY);
-                let w = weights[i];
-                pos += m.transform_point3(position) * w;
-                norm += m.transform_vector3(normal) * w;
-            }
-
-            (pos, norm.normalize_or_zero())
-        }
-        VertexWeight::Sdef {
-            bones,
-            weight,
-            c: _,
-            r0: _,
-            r1: _,
-        } => {
-            // SDEF 球面变形
-            let m0 = matrices
-                .get(bones[0] as usize)
-                .copied()
-                .unwrap_or(Mat4::IDENTITY);
-            let m1 = matrices
-                .get(bones[1] as usize)
-                .copied()
-                .unwrap_or(Mat4::IDENTITY);
-            let w0 = *weight;
-            let w1 = 1.0 - w0;
-
-            // 简化实现：退化为 BDEF2
-            let pos = m0.transform_point3(position) * w0 + m1.transform_point3(position) * w1;
-            let norm = (m0.transform_vector3(normal) * w0 + m1.transform_vector3(normal) * w1)
-                .normalize_or_zero();
-            (pos, norm)
-        }
-        VertexWeight::Qdef { bones, weights } => {
-            // QDEF 与 BDEF4 相同处理
-            let mut pos = Vec3::ZERO;
-            let mut norm = Vec3::ZERO;
-
-            for i in 0..4 {
-                let m = matrices
-                    .get(bones[i] as usize)
-                    .copied()
-                    .unwrap_or(Mat4::IDENTITY);
-                let w = weights[i];
-                pos += m.transform_point3(position) * w;
-                norm += m.transform_vector3(normal) * w;
-            }
-
-            (pos, norm.normalize_or_zero())
-        }
-    }
-}
+// compute_vertex_skinning 已迁移至 skinning::soa::skin_vertex_with_bone（紧凑骨骼 + SIMD 加速版）
