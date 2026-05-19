@@ -1,8 +1,15 @@
 //! 顶点蒙皮计算
 
 mod skinning;
+pub mod soa;
 
 pub use skinning::{compute_skinning, SkinningContext};
+pub use soa::{
+    build_bone_data, build_soa_input_from_vertices, skin_single_vertex_direct,
+    skin_vertex_with_bone, skinning_soa_simd, write_soa_output_to_raw,
+    write_soa_output_to_vec3, SkinVertexBone, SkinWeightType, SkinningInputSoA,
+    SkinningOutputSoA,
+};
 
 use crate::model::VertexWeight;
 use glam::{Mat4, Vec3};

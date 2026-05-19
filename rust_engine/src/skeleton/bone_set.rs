@@ -33,6 +33,9 @@ pub struct BoneSet {
     /// 子骨骼缓存（parent_index -> children_indices）
     children_cache: Vec<Vec<usize>>,
 
+    /// 骨骼传播工作栈（复用，避免递归传播时的临时分配）
+    propagation_stack: Vec<usize>,
+
     /// 更新标志
     needs_hierarchy_update: bool,
 
@@ -51,6 +54,7 @@ impl BoneSet {
             skinning_matrices: Vec::new(),
             physics_bone_indices: HashSet::new(),
             children_cache: Vec::new(),
+            propagation_stack: Vec::new(),
             needs_hierarchy_update: true,
             is_vrm: false,
         }
@@ -139,12 +143,11 @@ impl BoneSet {
         }
 
         // 5. 初始化蒙皮矩阵缓存
-        self.skinning_matrices = vec![Mat4::IDENTITY; bone_count];
+        self.skinning_matrices.resize(bone_count, Mat4::IDENTITY);
 
         // 6. 计算初始蒙皮矩阵
-        for i in 0..bone_count {
-            self.skinning_matrices[i] = self.links[i].get_skinning_matrix();
-        }
+        self.refresh_skinning_matrices();
+        self.propagation_stack.clear();
 
         self.needs_hierarchy_update = false;
     }
@@ -286,9 +289,7 @@ impl BoneSet {
 
     /// 结束更新（计算蒙皮矩阵）
     pub fn end_update(&mut self) {
-        for i in 0..self.links.len() {
-            self.skinning_matrices[i] = self.links[i].get_skinning_matrix();
-        }
+        self.refresh_skinning_matrices();
     }
 
     /// 重置所有骨骼变换
@@ -309,8 +310,11 @@ impl BoneSet {
     ///
     /// 参考 nphysics Multibody::update_kinematics
     pub fn update_transforms(&mut self, after_physics: bool) {
+        let sorted_len = self.sorted_indices.len();
+
         // 1. 更新本地变换（跳过物理骨骼）
-        for &idx in &self.sorted_indices.clone() {
+        for pos in 0..sorted_len {
+            let idx = self.sorted_indices[pos];
             if self.links[idx].deform_after_physics() != after_physics {
                 continue;
             }
@@ -321,7 +325,8 @@ impl BoneSet {
         }
 
         // 2. 从根骨骼递归更新全局变换
-        for &idx in &self.sorted_indices.clone() {
+        for pos in 0..sorted_len {
+            let idx = self.sorted_indices[pos];
             if self.links[idx].deform_after_physics() != after_physics {
                 continue;
             }
@@ -331,7 +336,8 @@ impl BoneSet {
         }
 
         // 3. 处理附加变换和 IK
-        for &idx in &self.sorted_indices.clone() {
+        for pos in 0..sorted_len {
+            let idx = self.sorted_indices[pos];
             if self.links[idx].deform_after_physics() != after_physics {
                 continue;
             }
@@ -351,7 +357,8 @@ impl BoneSet {
         }
 
         // 4. 最终更新全局变换
-        for &idx in &self.sorted_indices.clone() {
+        for pos in 0..sorted_len {
+            let idx = self.sorted_indices[pos];
             if self.links[idx].deform_after_physics() != after_physics {
                 continue;
             }
@@ -365,47 +372,47 @@ impl BoneSet {
     ///
     /// 类似 nphysics Multibody::update_kinematics
     fn update_global_transform_recursive(&mut self, index: usize) {
-        // 跳过物理骨骼（它们的变换由物理系统设置）
-        if self.physics_bone_indices.contains(&index) {
-            // 仍需递归更新子骨骼
-            let children = self.children_cache[index].clone();
-            for child_idx in children {
-                self.update_global_transform_recursive(child_idx);
-            }
+        if index >= self.links.len() {
             return;
         }
 
-        // 计算全局变换：local_to_world = parent.local_to_world * local_to_parent
-        let parent_idx = self.links[index].parent_index;
-        if parent_idx >= 0 && (parent_idx as usize) < self.links.len() {
-            let parent_global = self.links[parent_idx as usize].local_to_world;
-            self.links[index].parent_to_world = parent_global;
-            self.links[index].local_to_world = parent_global * self.links[index].local_to_parent;
-        } else {
-            self.links[index].parent_to_world = Mat4::IDENTITY;
-            self.links[index].local_to_world = self.links[index].local_to_parent;
-        }
+        self.propagation_stack.clear();
+        self.propagation_stack.push(index);
 
-        // 递归更新子骨骼
-        let children = self.children_cache[index].clone();
-        for child_idx in children {
-            self.update_global_transform_recursive(child_idx);
+        while let Some(current) = self.propagation_stack.pop() {
+            // 跳过物理骨骼（它们的变换由物理系统设置）
+            if self.physics_bone_indices.contains(&current) {
+                self.push_children_reverse(current);
+                continue;
+            }
+
+            // 计算全局变换：local_to_world = parent.local_to_world * local_to_parent
+            let parent_idx = self.links[current].parent_index;
+            if parent_idx >= 0 && (parent_idx as usize) < self.links.len() {
+                let parent_global = self.links[parent_idx as usize].local_to_world;
+                self.links[current].parent_to_world = parent_global;
+                self.links[current].local_to_world =
+                    parent_global * self.links[current].local_to_parent;
+            } else {
+                self.links[current].parent_to_world = Mat4::IDENTITY;
+                self.links[current].local_to_world = self.links[current].local_to_parent;
+            }
+
+            self.push_children_reverse(current);
         }
     }
 
     /// 应用附加变换
     fn apply_append_transform(&mut self, index: usize) {
-        let append_config = match &self.links[index].append_config {
-            Some(config) => config.clone(),
+        let (parent_idx, rate) = match self.links[index].append_config.as_ref() {
+            Some(config) => (config.parent as usize, config.rate),
             None => return,
         };
 
-        let parent_idx = append_config.parent as usize;
         if parent_idx >= self.links.len() {
             return;
         }
 
-        let rate = append_config.rate;
         let is_append_local = self.links[index].is_append_local();
 
         // 附加旋转
@@ -454,8 +461,10 @@ impl BoneSet {
             .iter()
             .position(|s| s.bone_index == bone_index);
         if let Some(idx) = solver_idx {
-            let solver = self.ik_solvers[idx].clone();
-            solver.solve(&mut self.links, &self.children_cache);
+            {
+                let solver = &self.ik_solvers[idx];
+                solver.solve(&mut self.links, &self.children_cache);
+            }
             self.update_global_transform_recursive(bone_index);
         }
     }
@@ -588,13 +597,21 @@ impl BoneSet {
 
     /// 递归更新子骨骼全局变换
     fn update_children_global_transform(&mut self, parent_index: usize) {
-        let parent_global = self.links[parent_index].local_to_world;
-        let children = self.children_cache[parent_index].clone();
+        if parent_index >= self.children_cache.len() {
+            return;
+        }
 
-        for child_idx in children {
-            self.links[child_idx].local_to_world =
-                parent_global * self.links[child_idx].local_to_parent;
-            self.update_children_global_transform(child_idx);
+        self.propagation_stack.clear();
+        self.push_children_reverse(parent_index);
+
+        while let Some(child_idx) = self.propagation_stack.pop() {
+            let parent_idx = self.links[child_idx].parent_index;
+            if parent_idx >= 0 && (parent_idx as usize) < self.links.len() {
+                let parent_global = self.links[parent_idx as usize].local_to_world;
+                self.links[child_idx].local_to_world =
+                    parent_global * self.links[child_idx].local_to_parent;
+            }
+            self.push_children_reverse(child_idx);
         }
     }
 
@@ -691,8 +708,31 @@ impl BoneSet {
 
     /// 更新蒙皮矩阵
     pub fn update_skinning_matrices(&mut self) {
-        for i in 0..self.links.len() {
-            self.skinning_matrices[i] = self.links[i].get_skinning_matrix();
+        self.refresh_skinning_matrices();
+    }
+
+    #[inline]
+    fn push_children_reverse(&mut self, parent_index: usize) {
+        if parent_index >= self.children_cache.len() {
+            return;
+        }
+
+        let child_count = self.children_cache[parent_index].len();
+        for child_pos in (0..child_count).rev() {
+            let child_idx = self.children_cache[parent_index][child_pos];
+            self.propagation_stack.push(child_idx);
+        }
+    }
+
+    #[inline]
+    fn refresh_skinning_matrices(&mut self) {
+        if self.skinning_matrices.len() != self.links.len() {
+            self.skinning_matrices
+                .resize(self.links.len(), Mat4::IDENTITY);
+        }
+
+        for (matrix, bone) in self.skinning_matrices.iter_mut().zip(self.links.iter()) {
+            *matrix = bone.get_skinning_matrix();
         }
     }
 
@@ -713,6 +753,7 @@ impl BoneSet {
             total += (children.capacity() * size_of::<usize>()) as u64;
         }
         total += (self.children_cache.capacity() * size_of::<Vec<usize>>()) as u64;
+        total += (self.propagation_stack.capacity() * size_of::<usize>()) as u64;
         total
     }
 }
@@ -720,6 +761,89 @@ impl BoneSet {
 impl Default for BoneSet {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_bone(name: &str, parent_index: i32, initial_position: Vec3) -> BoneLink {
+        let mut bone = BoneLink::new(name.to_string());
+        bone.parent_index = parent_index;
+        bone.initial_position = initial_position;
+        bone
+    }
+
+    fn assert_vec3_approx_eq(actual: Vec3, expected: Vec3) {
+        let error = (actual - expected).abs().max_element();
+        assert!(
+            error <= 1.0e-5,
+            "vec3 mismatch: actual={actual:?}, expected={expected:?}, error={error}"
+        );
+    }
+
+    fn assert_mat4_approx_eq(actual: Mat4, expected: Mat4) {
+        let actual = actual.to_cols_array();
+        let expected = expected.to_cols_array();
+        let mut error = 0.0_f32;
+        for (lhs, rhs) in actual.iter().zip(expected.iter()) {
+            error = error.max((lhs - rhs).abs());
+        }
+
+        assert!(
+            error <= 1.0e-5,
+            "mat4 mismatch: actual={actual:?}, expected={expected:?}, error={error}"
+        );
+    }
+
+    #[test]
+    fn update_transforms_should_propagate_children_through_physics_bone() {
+        let mut bones = BoneSet::new();
+        bones.add_bone(make_bone("root", -1, Vec3::ZERO));
+        bones.add_bone(make_bone("physics", 0, Vec3::new(0.0, 1.0, 0.0)));
+        bones.add_bone(make_bone("leaf", 1, Vec3::new(0.0, 2.0, 0.0)));
+        bones.build_hierarchy();
+
+        let physics_bones = HashSet::from([1usize]);
+        bones.set_physics_bone_indices(&physics_bones);
+        bones.set_global_transform_physics(1, Mat4::from_translation(Vec3::new(2.0, 1.0, 0.0)));
+
+        bones.update_transforms(false);
+
+        assert_vec3_approx_eq(
+            bones.get_bone(1).expect("physics bone").position(),
+            Vec3::new(2.0, 1.0, 0.0),
+        );
+        assert_vec3_approx_eq(
+            bones.get_bone(2).expect("leaf bone").position(),
+            Vec3::new(2.0, 2.0, 0.0),
+        );
+    }
+
+    #[test]
+    fn end_update_should_refresh_skinning_matrices_after_global_transform_changes() {
+        let mut bones = BoneSet::new();
+        bones.add_bone(make_bone("root", -1, Vec3::ZERO));
+        bones.add_bone(make_bone("child", 0, Vec3::new(0.0, 1.0, 0.0)));
+        bones.build_hierarchy();
+
+        bones.set_global_transform(0, Mat4::from_translation(Vec3::new(3.0, 0.0, 0.0)));
+        bones.end_update();
+
+        let matrices = bones.get_skinning_matrices();
+        assert_mat4_approx_eq(
+            matrices[0],
+            bones.get_bone(0).expect("root bone").get_skinning_matrix(),
+        );
+        assert_mat4_approx_eq(
+            matrices[1],
+            bones.get_bone(1).expect("child bone").get_skinning_matrix(),
+        );
+        assert_vec3_approx_eq(
+            bones.get_bone(1).expect("child bone").position(),
+            Vec3::new(3.0, 1.0, 0.0),
+        );
     }
 }
 

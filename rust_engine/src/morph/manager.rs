@@ -108,6 +108,115 @@ impl MaterialMorphResult {
     }
 }
 
+#[derive(Default)]
+struct VertexMorphSoaCache {
+    indices: Vec<u32>,
+    dx: Vec<f32>,
+    dy: Vec<f32>,
+    dz: Vec<f32>,
+}
+
+impl VertexMorphSoaCache {
+    fn from_offsets(offsets: &[super::VertexMorphOffset]) -> Option<Self> {
+        if offsets.is_empty() {
+            return None;
+        }
+
+        let mut cache = Self {
+            indices: Vec::with_capacity(offsets.len()),
+            dx: Vec::with_capacity(offsets.len()),
+            dy: Vec::with_capacity(offsets.len()),
+            dz: Vec::with_capacity(offsets.len()),
+        };
+
+        for offset in offsets {
+            cache.indices.push(offset.vertex_index);
+            cache.dx.push(offset.offset.x);
+            cache.dy.push(offset.offset.y);
+            cache.dz.push(offset.offset.z);
+        }
+
+        Some(cache)
+    }
+
+    fn memory_usage(&self) -> u64 {
+        use std::mem::size_of;
+        (self.indices.capacity() * size_of::<u32>()) as u64
+            + (self.dx.capacity() * size_of::<f32>()) as u64
+            + (self.dy.capacity() * size_of::<f32>()) as u64
+            + (self.dz.capacity() * size_of::<f32>()) as u64
+    }
+}
+
+#[derive(Default)]
+struct UvMorphSoaCache {
+    indices: Vec<u32>,
+    du: Vec<f32>,
+    dv: Vec<f32>,
+}
+
+impl UvMorphSoaCache {
+    fn from_offsets(offsets: &[super::UvMorphOffset]) -> Option<Self> {
+        if offsets.is_empty() {
+            return None;
+        }
+
+        let mut cache = Self {
+            indices: Vec::with_capacity(offsets.len()),
+            du: Vec::with_capacity(offsets.len()),
+            dv: Vec::with_capacity(offsets.len()),
+        };
+
+        for offset in offsets {
+            cache.indices.push(offset.vertex_index);
+            cache.du.push(offset.offset.x);
+            cache.dv.push(offset.offset.y);
+        }
+
+        Some(cache)
+    }
+
+    fn memory_usage(&self) -> u64 {
+        use std::mem::size_of;
+        (self.indices.capacity() * size_of::<u32>()) as u64
+            + (self.du.capacity() * size_of::<f32>()) as u64
+            + (self.dv.capacity() * size_of::<f32>()) as u64
+    }
+}
+
+#[derive(Default)]
+struct MorphRuntimeCache {
+    vertex: Option<VertexMorphSoaCache>,
+    uv: Option<UvMorphSoaCache>,
+}
+
+impl MorphRuntimeCache {
+    fn from_morph(morph: &Morph) -> Self {
+        Self {
+            vertex: VertexMorphSoaCache::from_offsets(&morph.vertex_offsets),
+            uv: UvMorphSoaCache::from_offsets(&morph.uv_offsets),
+        }
+    }
+
+    fn memory_usage(&self) -> u64 {
+        self.vertex.as_ref().map_or(0, VertexMorphSoaCache::memory_usage)
+            + self.uv.as_ref().map_or(0, UvMorphSoaCache::memory_usage)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PreparedLeafMorph {
+    morph_idx: usize,
+    effective_weight: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PendingMorph {
+    morph_idx: usize,
+    effective_weight: f32,
+    depth: u32,
+}
+
 /// Morph 管理器
 pub struct MorphManager {
     morphs: Vec<Morph>,
@@ -115,7 +224,13 @@ pub struct MorphManager {
     material_morph_results: Vec<MaterialMorphResult>,
     material_count: usize,
     uv_morph_deltas: Vec<Vec2>,
+    has_active_uv_morphs: bool,
+    has_active_vertex_morphs: bool,
     vertex_count: usize,
+    runtime_caches: Vec<MorphRuntimeCache>,
+    runtime_caches_dirty: bool,
+    prepared_leaf_morphs: Vec<PreparedLeafMorph>,
+    traversal_stack: Vec<PendingMorph>,
 }
 
 impl MorphManager {
@@ -126,7 +241,13 @@ impl MorphManager {
             material_morph_results: Vec::new(),
             material_count: 0,
             uv_morph_deltas: Vec::new(),
+            has_active_uv_morphs: false,
+            has_active_vertex_morphs: false,
             vertex_count: 0,
+            runtime_caches: Vec::new(),
+            runtime_caches_dirty: false,
+            prepared_leaf_morphs: Vec::new(),
+            traversal_stack: Vec::new(),
         }
     }
 
@@ -144,6 +265,7 @@ impl MorphManager {
         let index = self.morphs.len();
         self.name_to_index.insert(morph.name.clone(), index);
         self.morphs.push(morph);
+        self.runtime_caches_dirty = true;
     }
 
     pub fn find_morph_by_name(&self, name: &str) -> Option<usize> {
@@ -159,6 +281,7 @@ impl MorphManager {
     }
 
     pub fn get_morph_mut(&mut self, index: usize) -> Option<&mut Morph> {
+        self.runtime_caches_dirty = true;
         self.morphs.get_mut(index)
     }
 
@@ -190,43 +313,140 @@ impl MorphManager {
         &self.uv_morph_deltas
     }
 
-    /// 应用所有 Morph（遵循 MMD 规范，Group/Flip 递归展开）
-    pub fn apply_morphs(&mut self, bone_manager: &mut BoneManager, positions: &mut [Vec3]) {
-        for result in &mut self.material_morph_results {
-            result.reset();
-        }
-        for delta in &mut self.uv_morph_deltas {
-            *delta = Vec2::ZERO;
-        }
+    pub fn has_active_uv_morphs(&self) -> bool {
+        self.has_active_uv_morphs
+    }
 
-        let active_morphs: Vec<(usize, f32)> = self
-            .morphs
-            .iter()
-            .enumerate()
-            .filter(|(_, m)| m.weight.abs() > MORPH_WEIGHT_EPSILON)
-            .map(|(i, m)| (i, m.weight))
-            .collect();
+    pub fn has_active_vertex_morphs(&self) -> bool {
+        self.has_active_vertex_morphs
+    }
 
-        for (morph_idx, weight) in active_morphs {
-            // 拆分借用：morphs 只读，material_morph_results / uv_morph_deltas 可写
-            apply_single_morph(
-                &self.morphs,
-                &mut self.material_morph_results,
-                &mut self.uv_morph_deltas,
-                morph_idx,
-                weight,
+    /// 应用已线性化的叶子 Morph。
+    ///
+    /// 调用方应先通过 [`MorphManager::compute_effective_weights_into()`](rust_engine/src/morph/manager.rs:349)
+    /// 准备当前帧的有效权重与叶子列表，以复用同一份 Group/Flip 展开结果。
+    pub fn apply_prepared_morphs(&mut self, bone_manager: &mut BoneManager, positions: &mut [Vec3]) {
+        self.ensure_runtime_caches();
+        self.reset_runtime_results();
+
+        let morphs = &self.morphs;
+        let runtime_caches = &self.runtime_caches;
+        let prepared_leaf_morphs = &self.prepared_leaf_morphs;
+        let material_morph_results = &mut self.material_morph_results;
+        let uv_morph_deltas = &mut self.uv_morph_deltas;
+
+        for prepared in prepared_leaf_morphs.iter().copied() {
+            apply_leaf_morph(
+                morphs,
+                runtime_caches,
+                material_morph_results,
+                uv_morph_deltas,
+                prepared.morph_idx,
+                prepared.effective_weight,
                 bone_manager,
                 positions,
-                0,
             );
         }
     }
 
-    /// 计算所有 Morph 的有效权重（递归展开 Group/Flip），写入外部缓冲区
-    pub fn compute_effective_weights_into(&self, out: &mut [f32]) {
-        for (i, morph) in self.morphs.iter().enumerate() {
-            if morph.weight.abs() > MORPH_WEIGHT_EPSILON {
-                accumulate_effective_weight(&self.morphs, i, morph.weight, out, 0);
+    /// 计算所有 Morph 的有效权重，并线性化当前帧叶子 Morph 顺序。
+    ///
+    /// `out` 保存按 Morph 索引聚合后的有效权重，供 GPU 顶点/UV Morph 同步复用；
+    /// `prepared_leaf_morphs` 保存保持原有深度优先语义的线性叶子列表，供 CPU 路径直接顺序应用。
+    pub fn compute_effective_weights_into(&mut self, out: &mut [f32]) {
+        self.ensure_runtime_caches();
+        out.fill(0.0);
+        self.prepared_leaf_morphs.clear();
+        self.traversal_stack.clear();
+        self.has_active_uv_morphs = false;
+        self.has_active_vertex_morphs = false;
+
+        let morph_count = self.morphs.len();
+        for morph_idx in (0..morph_count).rev() {
+            let weight = self.morphs[morph_idx].weight;
+            if weight.abs() > MORPH_WEIGHT_EPSILON {
+                self.traversal_stack.push(PendingMorph {
+                    morph_idx,
+                    effective_weight: weight,
+                    depth: 0,
+                });
+            }
+        }
+
+        while let Some(pending) = self.traversal_stack.pop() {
+            if pending.depth > MAX_GROUP_MORPH_DEPTH
+                || pending.effective_weight.abs() < MORPH_WEIGHT_EPSILON
+            {
+                continue;
+            }
+
+            let morph = match self.morphs.get(pending.morph_idx) {
+                Some(morph) => morph,
+                None => continue,
+            };
+
+            match morph.morph_type {
+                MorphType::Group => {
+                    for sub in morph.group_offsets.iter().rev() {
+                        let sub_idx = sub.morph_index as usize;
+                        if sub_idx < morph_count && sub_idx != pending.morph_idx {
+                            self.traversal_stack.push(PendingMorph {
+                                morph_idx: sub_idx,
+                                effective_weight: pending.effective_weight * sub.influence,
+                                depth: pending.depth + 1,
+                            });
+                        }
+                    }
+                }
+                MorphType::Flip => {
+                    let count = morph.group_offsets.len();
+                    if count > 0 {
+                        let w = pending.effective_weight.clamp(0.0, 1.0);
+                        let index = ((w * count as f32).floor() as usize).min(count - 1);
+                        let sub = &morph.group_offsets[index];
+                        let sub_idx = sub.morph_index as usize;
+                        if sub_idx < morph_count && sub_idx != pending.morph_idx {
+                            self.traversal_stack.push(PendingMorph {
+                                morph_idx: sub_idx,
+                                effective_weight: sub.influence,
+                                depth: pending.depth + 1,
+                            });
+                        }
+                    }
+                }
+                MorphType::Vertex => {
+                    if !morph.vertex_offsets.is_empty() {
+                        self.has_active_vertex_morphs = true;
+                    }
+                    if pending.morph_idx < out.len() {
+                        out[pending.morph_idx] += pending.effective_weight;
+                    }
+                    self.prepared_leaf_morphs.push(PreparedLeafMorph {
+                        morph_idx: pending.morph_idx,
+                        effective_weight: pending.effective_weight,
+                    });
+                }
+                MorphType::Uv | MorphType::AdditionalUv1 => {
+                    if !morph.uv_offsets.is_empty() {
+                        self.has_active_uv_morphs = true;
+                    }
+                    if pending.morph_idx < out.len() {
+                        out[pending.morph_idx] += pending.effective_weight;
+                    }
+                    self.prepared_leaf_morphs.push(PreparedLeafMorph {
+                        morph_idx: pending.morph_idx,
+                        effective_weight: pending.effective_weight,
+                    });
+                }
+                _ => {
+                    if pending.morph_idx < out.len() {
+                        out[pending.morph_idx] += pending.effective_weight;
+                    }
+                    self.prepared_leaf_morphs.push(PreparedLeafMorph {
+                        morph_idx: pending.morph_idx,
+                        effective_weight: pending.effective_weight,
+                    });
+                }
             }
         }
     }
@@ -239,77 +459,49 @@ impl MorphManager {
             (self.name_to_index.capacity() * (size_of::<String>() + size_of::<usize>())) as u64;
         total += (self.material_morph_results.capacity() * size_of::<MaterialMorphResult>()) as u64;
         total += (self.uv_morph_deltas.capacity() * size_of::<Vec2>()) as u64;
+        total += (self.runtime_caches.capacity() * size_of::<MorphRuntimeCache>()) as u64;
+        total += (self.prepared_leaf_morphs.capacity() * size_of::<PreparedLeafMorph>()) as u64;
+        total += (self.traversal_stack.capacity() * size_of::<PendingMorph>()) as u64;
+        for cache in &self.runtime_caches {
+            total += cache.memory_usage();
+        }
         total
     }
-}
 
-/// 递归累加有效权重到目标数组
-fn accumulate_effective_weight(
-    morphs: &[Morph],
-    morph_idx: usize,
-    effective_weight: f32,
-    out: &mut [f32],
-    depth: u32,
-) {
-    if depth > MAX_GROUP_MORPH_DEPTH || effective_weight.abs() < MORPH_WEIGHT_EPSILON {
-        return;
+    fn reset_runtime_results(&mut self) {
+        for result in &mut self.material_morph_results {
+            result.reset();
+        }
+        for delta in &mut self.uv_morph_deltas {
+            *delta = Vec2::ZERO;
+        }
     }
-    let morph = match morphs.get(morph_idx) {
-        Some(m) => m,
-        None => return,
-    };
 
-    match morph.morph_type {
-        MorphType::Group => {
-            let subs: Vec<(usize, f32)> = morph
-                .group_offsets
-                .iter()
-                .filter_map(|sub| {
-                    let sub_idx = sub.morph_index as usize;
-                    if sub_idx < morphs.len() && sub_idx != morph_idx {
-                        Some((sub_idx, effective_weight * sub.influence))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            for (sub_idx, sub_weight) in subs {
-                accumulate_effective_weight(morphs, sub_idx, sub_weight, out, depth + 1);
-            }
+    fn ensure_runtime_caches(&mut self) {
+        if !self.runtime_caches_dirty && self.runtime_caches.len() == self.morphs.len() {
+            return;
         }
-        MorphType::Flip => {
-            let count = morph.group_offsets.len();
-            if count > 0 {
-                let w = effective_weight.clamp(0.0, 1.0);
-                let index = ((w * count as f32).floor() as usize).min(count - 1);
-                let sub = &morph.group_offsets[index];
-                let sub_idx = sub.morph_index as usize;
-                if sub_idx < morphs.len() && sub_idx != morph_idx {
-                    accumulate_effective_weight(morphs, sub_idx, sub.influence, out, depth + 1);
-                }
-            }
-        }
-        _ => {
-            // 叶子节点：累加有效权重
-            if morph_idx < out.len() {
-                out[morph_idx] += effective_weight;
-            }
-        }
+
+        self.runtime_caches = self
+            .morphs
+            .iter()
+            .map(MorphRuntimeCache::from_morph)
+            .collect();
+        self.runtime_caches_dirty = false;
     }
 }
 
-/// 递归应用单个 Morph（拆分字段借用避免 clone 开销）
-fn apply_single_morph(
+fn apply_leaf_morph(
     morphs: &[Morph],
+    runtime_caches: &[MorphRuntimeCache],
     material_morph_results: &mut [MaterialMorphResult],
     uv_morph_deltas: &mut [Vec2],
     morph_idx: usize,
     effective_weight: f32,
     bone_manager: &mut BoneManager,
     positions: &mut [Vec3],
-    depth: u32,
 ) {
-    if depth > MAX_GROUP_MORPH_DEPTH || effective_weight.abs() < MORPH_WEIGHT_EPSILON {
+    if effective_weight.abs() < MORPH_WEIGHT_EPSILON {
         return;
     }
 
@@ -320,58 +512,14 @@ fn apply_single_morph(
 
     match morph.morph_type {
         MorphType::Vertex => {
-            apply_vertex_morph(&morph.vertex_offsets, effective_weight, positions);
+            if let Some(cache) = runtime_caches.get(morph_idx).and_then(|cache| cache.vertex.as_ref()) {
+                apply_vertex_morph_cached(cache, effective_weight, positions);
+            } else {
+                apply_vertex_morph(&morph.vertex_offsets, effective_weight, positions);
+            }
         }
         MorphType::Bone => {
             apply_bone_morph(&morph.bone_offsets, effective_weight, bone_manager);
-        }
-        MorphType::Group => {
-            let subs: Vec<(usize, f32)> = morph
-                .group_offsets
-                .iter()
-                .filter_map(|sub| {
-                    let sub_idx = sub.morph_index as usize;
-                    if sub_idx < morphs.len() && sub_idx != morph_idx {
-                        Some((sub_idx, effective_weight * sub.influence))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            for (sub_idx, sub_weight) in subs {
-                apply_single_morph(
-                    morphs,
-                    material_morph_results,
-                    uv_morph_deltas,
-                    sub_idx,
-                    sub_weight,
-                    bone_manager,
-                    positions,
-                    depth + 1,
-                );
-            }
-        }
-        MorphType::Flip => {
-            let count = morph.group_offsets.len();
-            if count > 0 {
-                let w = effective_weight.clamp(0.0, 1.0);
-                let index = ((w * count as f32).floor() as usize).min(count - 1);
-                let sub = &morph.group_offsets[index];
-                let sub_idx = sub.morph_index as usize;
-                let sub_influence = sub.influence;
-                if sub_idx < morphs.len() && sub_idx != morph_idx {
-                    apply_single_morph(
-                        morphs,
-                        material_morph_results,
-                        uv_morph_deltas,
-                        sub_idx,
-                        sub_influence,
-                        bone_manager,
-                        positions,
-                        depth + 1,
-                    );
-                }
-            }
         }
         MorphType::Material => {
             apply_material_morph(
@@ -381,7 +529,11 @@ fn apply_single_morph(
             );
         }
         MorphType::Uv | MorphType::AdditionalUv1 => {
-            apply_uv_morph(&morph.uv_offsets, effective_weight, uv_morph_deltas);
+            if let Some(cache) = runtime_caches.get(morph_idx).and_then(|cache| cache.uv.as_ref()) {
+                apply_uv_morph_cached(cache, effective_weight, uv_morph_deltas);
+            } else {
+                apply_uv_morph(&morph.uv_offsets, effective_weight, uv_morph_deltas);
+            }
         }
         _ => {
             // AdditionalUv2/3/4, Impulse 暂不处理
@@ -396,6 +548,86 @@ fn apply_vertex_morph(offsets: &[super::VertexMorphOffset], weight: f32, positio
             positions[idx] += offset.offset * weight;
         }
     }
+}
+
+#[inline]
+fn apply_vertex_morph_cached(cache: &VertexMorphSoaCache, weight: f32, positions: &mut [Vec3]) {
+    let positions_len = positions.len();
+    let mut i = 0;
+    let len = cache.indices.len();
+
+    while i + 3 < len {
+        apply_vertex_morph_cached_one(
+            cache.indices[i] as usize,
+            cache.dx[i],
+            cache.dy[i],
+            cache.dz[i],
+            weight,
+            positions,
+            positions_len,
+        );
+        apply_vertex_morph_cached_one(
+            cache.indices[i + 1] as usize,
+            cache.dx[i + 1],
+            cache.dy[i + 1],
+            cache.dz[i + 1],
+            weight,
+            positions,
+            positions_len,
+        );
+        apply_vertex_morph_cached_one(
+            cache.indices[i + 2] as usize,
+            cache.dx[i + 2],
+            cache.dy[i + 2],
+            cache.dz[i + 2],
+            weight,
+            positions,
+            positions_len,
+        );
+        apply_vertex_morph_cached_one(
+            cache.indices[i + 3] as usize,
+            cache.dx[i + 3],
+            cache.dy[i + 3],
+            cache.dz[i + 3],
+            weight,
+            positions,
+            positions_len,
+        );
+        i += 4;
+    }
+
+    while i < len {
+        apply_vertex_morph_cached_one(
+            cache.indices[i] as usize,
+            cache.dx[i],
+            cache.dy[i],
+            cache.dz[i],
+            weight,
+            positions,
+            positions_len,
+        );
+        i += 1;
+    }
+}
+
+#[inline(always)]
+fn apply_vertex_morph_cached_one(
+    idx: usize,
+    dx: f32,
+    dy: f32,
+    dz: f32,
+    weight: f32,
+    positions: &mut [Vec3],
+    positions_len: usize,
+) {
+    if idx >= positions_len {
+        return;
+    }
+
+    let position = &mut positions[idx];
+    position.x = dx.mul_add(weight, position.x);
+    position.y = dy.mul_add(weight, position.y);
+    position.z = dz.mul_add(weight, position.z);
 }
 
 fn apply_bone_morph(
@@ -471,6 +703,471 @@ fn apply_uv_morph(offsets: &[super::UvMorphOffset], weight: f32, uv_morph_deltas
         if idx < uv_morph_deltas.len() {
             uv_morph_deltas[idx] += Vec2::new(offset.offset.x, offset.offset.y) * weight;
         }
+    }
+}
+
+#[inline]
+fn apply_uv_morph_cached(cache: &UvMorphSoaCache, weight: f32, uv_morph_deltas: &mut [Vec2]) {
+    let uv_len = uv_morph_deltas.len();
+    let mut i = 0;
+    let len = cache.indices.len();
+
+    while i + 3 < len {
+        apply_uv_morph_cached_one(
+            cache.indices[i] as usize,
+            cache.du[i],
+            cache.dv[i],
+            weight,
+            uv_morph_deltas,
+            uv_len,
+        );
+        apply_uv_morph_cached_one(
+            cache.indices[i + 1] as usize,
+            cache.du[i + 1],
+            cache.dv[i + 1],
+            weight,
+            uv_morph_deltas,
+            uv_len,
+        );
+        apply_uv_morph_cached_one(
+            cache.indices[i + 2] as usize,
+            cache.du[i + 2],
+            cache.dv[i + 2],
+            weight,
+            uv_morph_deltas,
+            uv_len,
+        );
+        apply_uv_morph_cached_one(
+            cache.indices[i + 3] as usize,
+            cache.du[i + 3],
+            cache.dv[i + 3],
+            weight,
+            uv_morph_deltas,
+            uv_len,
+        );
+        i += 4;
+    }
+
+    while i < len {
+        apply_uv_morph_cached_one(
+            cache.indices[i] as usize,
+            cache.du[i],
+            cache.dv[i],
+            weight,
+            uv_morph_deltas,
+            uv_len,
+        );
+        i += 1;
+    }
+}
+
+#[inline(always)]
+fn apply_uv_morph_cached_one(
+    idx: usize,
+    du: f32,
+    dv: f32,
+    weight: f32,
+    uv_morph_deltas: &mut [Vec2],
+    uv_len: usize,
+) {
+    if idx >= uv_len {
+        return;
+    }
+
+    let delta = &mut uv_morph_deltas[idx];
+    delta.x = du.mul_add(weight, delta.x);
+    delta.y = dv.mul_add(weight, delta.y);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::morph::{
+        BoneMorphOffset, GroupMorphOffset, MaterialMorphOffset, UvMorphOffset,
+        VertexMorphOffset,
+    };
+    use crate::skeleton::BoneLink;
+
+    #[test]
+    fn prepared_morph_pipeline_should_match_legacy_recursive_semantics() {
+        let mut manager = MorphManager::new();
+        manager.set_vertex_count(3);
+        manager.set_material_count(2);
+
+        let mut vertex = Morph::new("vertex".to_string(), MorphType::Vertex);
+        vertex.vertex_offsets.push(VertexMorphOffset {
+            vertex_index: 0,
+            offset: Vec3::new(0.12, -0.04, 0.08),
+        });
+        vertex.vertex_offsets.push(VertexMorphOffset {
+            vertex_index: 2,
+            offset: Vec3::new(-0.03, 0.05, -0.01),
+        });
+        vertex.set_weight(0.2);
+        manager.add_morph(vertex);
+
+        let mut uv = Morph::new("uv".to_string(), MorphType::Uv);
+        uv.uv_offsets.push(UvMorphOffset {
+            vertex_index: 1,
+            offset: Vec4::new(0.03, -0.02, 0.0, 0.0),
+        });
+        manager.add_morph(uv);
+
+        let mut material = Morph::new("material".to_string(), MorphType::Material);
+        material.material_offsets.push(MaterialMorphOffset {
+            material_index: -1,
+            operation: 0,
+            diffuse: Vec4::new(1.2, 0.8, 1.1, 1.0),
+            specular: Vec3::new(0.9, 1.1, 1.05),
+            specular_strength: 1.25,
+            ambient: Vec3::new(1.1, 0.95, 1.0),
+            edge_color: Vec4::new(1.0, 1.15, 0.85, 1.0),
+            edge_size: 0.9,
+            texture_tint: Vec4::new(1.05, 0.95, 1.1, 1.0),
+            environment_tint: Vec4::new(0.9, 1.08, 1.02, 1.0),
+            toon_tint: Vec4::new(1.0, 0.88, 1.12, 1.0),
+        });
+        material.set_weight(0.35);
+        manager.add_morph(material);
+
+        let mut bone = Morph::new("bone".to_string(), MorphType::Bone);
+        let rotation = glam::Quat::from_rotation_z(0.35);
+        bone.bone_offsets.push(BoneMorphOffset {
+            bone_index: 0,
+            translation: Vec3::new(0.2, -0.1, 0.05),
+            rotation: Vec4::new(rotation.x, rotation.y, rotation.z, rotation.w),
+        });
+        bone.set_weight(0.25);
+        manager.add_morph(bone);
+
+        let mut group = Morph::new("group".to_string(), MorphType::Group);
+        group.group_offsets.extend([
+            GroupMorphOffset {
+                morph_index: 0,
+                influence: 0.5,
+            },
+            GroupMorphOffset {
+                morph_index: 1,
+                influence: 1.0,
+            },
+            GroupMorphOffset {
+                morph_index: 2,
+                influence: 0.4,
+            },
+            GroupMorphOffset {
+                morph_index: 3,
+                influence: -0.25,
+            },
+        ]);
+        group.set_weight(0.8);
+        manager.add_morph(group);
+
+        let mut flip = Morph::new("flip".to_string(), MorphType::Flip);
+        flip.group_offsets.extend([
+            GroupMorphOffset {
+                morph_index: 0,
+                influence: 0.2,
+            },
+            GroupMorphOffset {
+                morph_index: 2,
+                influence: 0.75,
+            },
+            GroupMorphOffset {
+                morph_index: 3,
+                influence: 0.6,
+            },
+        ]);
+        flip.set_weight(0.66);
+        manager.add_morph(flip);
+
+        let mut nested = Morph::new("nested".to_string(), MorphType::Group);
+        nested.group_offsets.extend([
+            GroupMorphOffset {
+                morph_index: 4,
+                influence: 0.5,
+            },
+            GroupMorphOffset {
+                morph_index: 5,
+                influence: 1.0,
+            },
+        ]);
+        nested.set_weight(0.5);
+        manager.add_morph(nested);
+
+        let base_positions = vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(1.0, -1.0, 0.5),
+            Vec3::new(-0.5, 0.25, 1.5),
+        ];
+
+        let mut actual_positions = base_positions.clone();
+        let mut actual_bones = make_test_bone_manager();
+        let mut actual_weights = vec![0.0; manager.morph_count()];
+        manager.compute_effective_weights_into(&mut actual_weights);
+        manager.apply_prepared_morphs(&mut actual_bones, &mut actual_positions);
+
+        let actual_uv = manager.get_uv_morph_deltas().to_vec();
+        let actual_material = manager.get_material_morph_results().to_vec();
+
+        let mut expected_positions = base_positions.clone();
+        let mut expected_bones = make_test_bone_manager();
+        let mut expected_weights = vec![0.0; manager.morph_count()];
+        legacy_compute_effective_weights(&manager.morphs, &mut expected_weights);
+
+        let mut expected_material = vec![MaterialMorphResult::default(); 2];
+        let mut expected_uv = vec![Vec2::ZERO; base_positions.len()];
+        let mut expected_has_active_uv = false;
+        legacy_apply_all_morphs(
+            &manager.morphs,
+            &mut expected_material,
+            &mut expected_uv,
+            &mut expected_has_active_uv,
+            &mut expected_bones,
+            &mut expected_positions,
+        );
+
+        assert_eq!(actual_weights, expected_weights);
+        assert_eq!(manager.has_active_uv_morphs(), expected_has_active_uv);
+        assert!(manager.has_active_vertex_morphs());
+
+        for (actual, expected) in actual_positions.iter().zip(expected_positions.iter()) {
+            assert!(actual.abs_diff_eq(*expected, 1e-6));
+        }
+        for (actual, expected) in actual_uv.iter().zip(expected_uv.iter()) {
+            assert!(actual.abs_diff_eq(*expected, 1e-6));
+        }
+        for (actual, expected) in actual_material.iter().zip(expected_material.iter()) {
+            assert_material_result_eq(actual, expected);
+        }
+
+        let actual_bone = actual_bones.get_bone(0).expect("actual bone");
+        let expected_bone = expected_bones.get_bone(0).expect("expected bone");
+        assert!(actual_bone
+            .animation_translate
+            .abs_diff_eq(expected_bone.animation_translate, 1e-6));
+        assert!(actual_bone
+            .animation_rotate
+            .dot(expected_bone.animation_rotate)
+            .abs()
+            > 1.0 - 1e-6);
+    }
+
+    fn make_test_bone_manager() -> BoneManager {
+        let mut bone_manager = BoneManager::new();
+        bone_manager.add_bone(BoneLink::new("root".to_string()));
+        bone_manager.build_hierarchy();
+        bone_manager
+    }
+
+    fn legacy_compute_effective_weights(morphs: &[Morph], out: &mut [f32]) {
+        out.fill(0.0);
+        for (morph_idx, morph) in morphs.iter().enumerate() {
+            if morph.weight.abs() > MORPH_WEIGHT_EPSILON {
+                legacy_accumulate_effective_weight(morphs, morph_idx, morph.weight, out, 0);
+            }
+        }
+    }
+
+    fn legacy_accumulate_effective_weight(
+        morphs: &[Morph],
+        morph_idx: usize,
+        effective_weight: f32,
+        out: &mut [f32],
+        depth: u32,
+    ) {
+        if depth > MAX_GROUP_MORPH_DEPTH || effective_weight.abs() < MORPH_WEIGHT_EPSILON {
+            return;
+        }
+
+        let morph = match morphs.get(morph_idx) {
+            Some(morph) => morph,
+            None => return,
+        };
+
+        match morph.morph_type {
+            MorphType::Group => {
+                for sub in &morph.group_offsets {
+                    let sub_idx = sub.morph_index as usize;
+                    if sub_idx < morphs.len() && sub_idx != morph_idx {
+                        legacy_accumulate_effective_weight(
+                            morphs,
+                            sub_idx,
+                            effective_weight * sub.influence,
+                            out,
+                            depth + 1,
+                        );
+                    }
+                }
+            }
+            MorphType::Flip => {
+                let count = morph.group_offsets.len();
+                if count > 0 {
+                    let w = effective_weight.clamp(0.0, 1.0);
+                    let index = ((w * count as f32).floor() as usize).min(count - 1);
+                    let sub = &morph.group_offsets[index];
+                    let sub_idx = sub.morph_index as usize;
+                    if sub_idx < morphs.len() && sub_idx != morph_idx {
+                        legacy_accumulate_effective_weight(
+                            morphs,
+                            sub_idx,
+                            sub.influence,
+                            out,
+                            depth + 1,
+                        );
+                    }
+                }
+            }
+            _ => {
+                if morph_idx < out.len() {
+                    out[morph_idx] += effective_weight;
+                }
+            }
+        }
+    }
+
+    fn legacy_apply_all_morphs(
+        morphs: &[Morph],
+        material_morph_results: &mut [MaterialMorphResult],
+        uv_morph_deltas: &mut [Vec2],
+        has_active_uv_morphs: &mut bool,
+        bone_manager: &mut BoneManager,
+        positions: &mut [Vec3],
+    ) {
+        for result in material_morph_results.iter_mut() {
+            result.reset();
+        }
+        for delta in uv_morph_deltas.iter_mut() {
+            *delta = Vec2::ZERO;
+        }
+        *has_active_uv_morphs = false;
+
+        for (morph_idx, morph) in morphs.iter().enumerate() {
+            if morph.weight.abs() > MORPH_WEIGHT_EPSILON {
+                legacy_apply_single_morph(
+                    morphs,
+                    material_morph_results,
+                    uv_morph_deltas,
+                    has_active_uv_morphs,
+                    morph_idx,
+                    morph.weight,
+                    bone_manager,
+                    positions,
+                    0,
+                );
+            }
+        }
+    }
+
+    fn legacy_apply_single_morph(
+        morphs: &[Morph],
+        material_morph_results: &mut [MaterialMorphResult],
+        uv_morph_deltas: &mut [Vec2],
+        has_active_uv_morphs: &mut bool,
+        morph_idx: usize,
+        effective_weight: f32,
+        bone_manager: &mut BoneManager,
+        positions: &mut [Vec3],
+        depth: u32,
+    ) {
+        if depth > MAX_GROUP_MORPH_DEPTH || effective_weight.abs() < MORPH_WEIGHT_EPSILON {
+            return;
+        }
+
+        let morph = match morphs.get(morph_idx) {
+            Some(morph) => morph,
+            None => return,
+        };
+
+        match morph.morph_type {
+            MorphType::Vertex => {
+                apply_vertex_morph(&morph.vertex_offsets, effective_weight, positions);
+            }
+            MorphType::Bone => {
+                apply_bone_morph(&morph.bone_offsets, effective_weight, bone_manager);
+            }
+            MorphType::Group => {
+                for sub in &morph.group_offsets {
+                    let sub_idx = sub.morph_index as usize;
+                    if sub_idx < morphs.len() && sub_idx != morph_idx {
+                        legacy_apply_single_morph(
+                            morphs,
+                            material_morph_results,
+                            uv_morph_deltas,
+                            has_active_uv_morphs,
+                            sub_idx,
+                            effective_weight * sub.influence,
+                            bone_manager,
+                            positions,
+                            depth + 1,
+                        );
+                    }
+                }
+            }
+            MorphType::Flip => {
+                let count = morph.group_offsets.len();
+                if count > 0 {
+                    let w = effective_weight.clamp(0.0, 1.0);
+                    let index = ((w * count as f32).floor() as usize).min(count - 1);
+                    let sub = &morph.group_offsets[index];
+                    let sub_idx = sub.morph_index as usize;
+                    if sub_idx < morphs.len() && sub_idx != morph_idx {
+                        legacy_apply_single_morph(
+                            morphs,
+                            material_morph_results,
+                            uv_morph_deltas,
+                            has_active_uv_morphs,
+                            sub_idx,
+                            sub.influence,
+                            bone_manager,
+                            positions,
+                            depth + 1,
+                        );
+                    }
+                }
+            }
+            MorphType::Material => {
+                apply_material_morph(
+                    &morph.material_offsets,
+                    effective_weight,
+                    material_morph_results,
+                );
+            }
+            MorphType::Uv | MorphType::AdditionalUv1 => {
+                if !morph.uv_offsets.is_empty() {
+                    *has_active_uv_morphs = true;
+                }
+                apply_uv_morph(&morph.uv_offsets, effective_weight, uv_morph_deltas);
+            }
+            _ => {}
+        }
+    }
+
+    fn assert_material_result_eq(actual: &MaterialMorphResult, expected: &MaterialMorphResult) {
+        assert!(actual.mul.diffuse.abs_diff_eq(expected.mul.diffuse, 1e-6));
+        assert!(actual.mul.specular.abs_diff_eq(expected.mul.specular, 1e-6));
+        assert!((actual.mul.specular_strength - expected.mul.specular_strength).abs() < 1e-6);
+        assert!(actual.mul.ambient.abs_diff_eq(expected.mul.ambient, 1e-6));
+        assert!(actual.mul.edge_color.abs_diff_eq(expected.mul.edge_color, 1e-6));
+        assert!((actual.mul.edge_size - expected.mul.edge_size).abs() < 1e-6);
+        assert!(actual.mul.texture_tint.abs_diff_eq(expected.mul.texture_tint, 1e-6));
+        assert!(actual
+            .mul
+            .environment_tint
+            .abs_diff_eq(expected.mul.environment_tint, 1e-6));
+        assert!(actual.mul.toon_tint.abs_diff_eq(expected.mul.toon_tint, 1e-6));
+
+        assert!(actual.add.diffuse.abs_diff_eq(expected.add.diffuse, 1e-6));
+        assert!(actual.add.specular.abs_diff_eq(expected.add.specular, 1e-6));
+        assert!((actual.add.specular_strength - expected.add.specular_strength).abs() < 1e-6);
+        assert!(actual.add.ambient.abs_diff_eq(expected.add.ambient, 1e-6));
+        assert!(actual.add.edge_color.abs_diff_eq(expected.add.edge_color, 1e-6));
+        assert!((actual.add.edge_size - expected.add.edge_size).abs() < 1e-6);
+        assert!(actual.add.texture_tint.abs_diff_eq(expected.add.texture_tint, 1e-6));
+        assert!(actual
+            .add
+            .environment_tint
+            .abs_diff_eq(expected.add.environment_tint, 1e-6));
+        assert!(actual.add.toon_tint.abs_diff_eq(expected.add.toon_tint, 1e-6));
     }
 }
 
