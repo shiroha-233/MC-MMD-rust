@@ -1,28 +1,107 @@
-// 负责公共模块的通用依赖与测试配置。
- architectury {
+architectury {
     common("fabric", "forge")
 }
 
+def nativeResourcesDir = layout.buildDirectory.dir("generated/native-resources")
+
+def currentOs = System.getProperty("os.name").toLowerCase()
+def currentArch = System.getProperty("os.arch").toLowerCase()
+def isWindows = currentOs.contains("windows")
+def isMacOS = currentOs.contains("mac")
+def isLinux = currentOs.contains("linux")
+def isArm64 = currentArch.contains("aarch64") || currentArch.contains("arm64")
+def isLoongArch64 = currentArch.contains("loongarch64") || currentArch.contains("loong64")
+def isRiscv64 = currentArch.contains("riscv64")
+
+def nativeOutputFile
+def nativeOutputDir
+def cargoExecutable = {
+    def cargoEnv = System.getenv("CARGO")
+    if (cargoEnv != null && !cargoEnv.isBlank()) {
+        return cargoEnv
+    }
+
+    def cargoHome = new File(System.getProperty("user.home"), ".cargo/bin")
+    if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+        def windowsCargo = new File(cargoHome, "cargo.exe")
+        if (windowsCargo.exists()) {
+            return windowsCargo.absolutePath
+        }
+    } else {
+        def unixCargo = new File(cargoHome, "cargo")
+        if (unixCargo.exists()) {
+            return unixCargo.absolutePath
+        }
+    }
+
+    return "cargo"
+}
+
+if (isWindows) {
+    nativeOutputDir = isArm64 ? "windows-arm64" : "windows-x64"
+    nativeOutputFile = rootProject.file("rust_engine/target/release/mmd_engine.dll")
+} else if (isMacOS) {
+    nativeOutputDir = isArm64 ? "macos-arm64" : "macos-x64"
+    nativeOutputFile = rootProject.file("rust_engine/target/release/libmmd_engine.dylib")
+} else if (isLinux) {
+    if (isArm64) {
+        nativeOutputDir = "linux-arm64"
+    } else if (isLoongArch64) {
+        nativeOutputDir = "linux-loongarch64"
+    } else if (isRiscv64) {
+        nativeOutputDir = "linux-riscv64"
+    } else {
+        nativeOutputDir = "linux-x64"
+    }
+    nativeOutputFile = rootProject.file("rust_engine/target/release/libmmd_engine.so")
+} else {
+    nativeOutputDir = null
+    nativeOutputFile = null
+}
+
+tasks.register("buildRustNative", Exec) {
+    group = "build"
+    description = "Build the Rust native library used by MMDSkin."
+    workingDir rootProject.projectDir
+    commandLine cargoExecutable(), "build", "--release", "--manifest-path", "rust_engine/Cargo.toml"
+}
+
+tasks.register("prepareNativeResources", Copy) {
+    group = "build"
+    description = "Copy the current platform native library into generated resources."
+    dependsOn tasks.named("buildRustNative")
+
+    if (nativeOutputFile == null || nativeOutputDir == null) {
+        enabled = false
+        return
+    }
+
+    from(nativeOutputFile)
+    into(nativeResourcesDir.map { it.dir("natives/${nativeOutputDir}") })
+}
+
 dependencies {
-    // Architectury API（作为 mod 依赖以启用 Loom 重映射）
     modImplementation("dev.architectury:architectury:9.2.14")
     compileOnly("net.fabricmc:fabric-loader:${project.loader_version}")
 
-    // Skiko / Skia（轮盘 UI 平滑渲染）
-
-    // ImGui workbench（舞台编辑工作台）
-    
-    // JLayer 仅用于编译期 API；运行时由平台侧统一阴影打包并重定位。
     compileOnly("javazoom:jlayer:1.0.1") { transitive = false }
-    
+
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
 }
- 
+
 sourceSets {
     main {
-        // 无特殊排除设置
+        resources.srcDir(nativeResourcesDir)
     }
+}
+
+tasks.named("processResources").configure {
+    dependsOn tasks.named("prepareNativeResources")
+}
+
+tasks.named("sourcesJar").configure {
+    dependsOn tasks.named("prepareNativeResources")
 }
 
 test {

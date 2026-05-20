@@ -252,6 +252,22 @@ public class NativeFunc {
 
     public native int ApplyVpdMorph(long model, String filename);
 
+    public native boolean SetBoneOverride(long model, int boneIndex,
+        float tx, float ty, float tz,
+        float qx, float qy, float qz, float qw);
+
+    public native boolean SetBoneOverrideByName(long model, String boneName,
+        float tx, float ty, float tz,
+        float qx, float qy, float qz, float qw);
+
+    public native void ClearBoneOverrides(long model);
+
+    public native int SetBoneOverrideBatch(long model, int[] boneIndices, float[] transforms);
+
+    public native void SetExternalIkOverride(long model, String ikName, boolean enabled);
+
+    public native void ClearExternalIkOverrides(long model);
+
     public native void ResetAllMorphs(long model);
 
     public native boolean SetMorphWeightByName(long model, String morphName, float weight);

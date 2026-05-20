@@ -20,6 +20,16 @@ import java.nio.ByteOrder;
 
 /** 文件职责：根据手部矩阵驱动双手物品的渲染姿态。 */
 public class ItemRenderHelper {
+    public interface ExternalItemRenderer {
+        boolean renderItems(AbstractClientPlayer player, ManagedModel model,
+                            PoseStack matrixStack, MultiBufferSource vertexConsumers,
+                            int packedLight, float tickDelta, float modelScale, float heldItemScale);
+    }
+
+    private static final ExternalItemRenderer NOOP_EXTERNAL_ITEM_RENDERER = (player, model, matrixStack,
+                                                                             vertexConsumers, packedLight,
+                                                                             tickDelta, modelScale,
+                                                                             heldItemScale) -> false;
 
     private static final float DEG_TO_RAD = (float) Math.PI / 180F;
     private static final NativeMatrixPort NOOP_MATRIX_PORT = new NativeMatrixPort() {
@@ -43,14 +53,24 @@ public class ItemRenderHelper {
     };
 
     private static volatile NativeMatrixPort matrixPort = NOOP_MATRIX_PORT;
+    private static volatile ExternalItemRenderer externalItemRenderer = NOOP_EXTERNAL_ITEM_RENDERER;
 
     public static void configureRuntimeCollaborators(NativeMatrixPort matrixPort) {
         ItemRenderHelper.matrixPort = matrixPort != null ? matrixPort : NOOP_MATRIX_PORT;
     }
 
+    public static void setExternalItemRenderer(ExternalItemRenderer renderer) {
+        externalItemRenderer = renderer != null ? renderer : NOOP_EXTERNAL_ITEM_RENDERER;
+    }
+
     public static void renderItems(AbstractClientPlayer player, ManagedModel model,
                                    PoseStack matrixStack, MultiBufferSource vertexConsumers,
-                                   int packedLight, float heldItemScale) {
+                                   int packedLight, float heldItemScale, float tickDelta, float modelScale) {
+        if (externalItemRenderer.renderItems(player, model, matrixStack, vertexConsumers,
+                packedLight, tickDelta, modelScale, heldItemScale)) {
+            return;
+        }
+
         renderHandItem(
                 player,
                 model,
@@ -67,6 +87,21 @@ public class ItemRenderHelper {
                 packedLight,
                 InteractionHand.OFF_HAND,
                 heldItemScale);
+    }
+
+    public static boolean applyMmdHandMatrix(ManagedModel model, PoseStack matrixStack, InteractionHand hand) {
+        matrixStack.last().pose().mul(getMmdHandMatrix(model, hand));
+        return true;
+    }
+
+    public static Matrix4f getMmdHandMatrix(ManagedModel model, InteractionHand hand) {
+        boolean isMainHand = hand == InteractionHand.MAIN_HAND;
+        NativeMatrixPort runtimeBridge = matrixPort;
+        long modelHandle = model.modelInstance().getModelHandle();
+        long handMat = isMainHand ? model.entityState().rightHandMat : model.entityState().leftHandMat;
+
+        runtimeBridge.populateHandMatrix(modelHandle, handMat, isMainHand);
+        return convertToMatrix4f(runtimeBridge, handMat, model.entityState().matBuffer);
     }
 
     private static void renderHandItem(AbstractClientPlayer player, ManagedModel model,
@@ -177,7 +212,7 @@ public class ItemRenderHelper {
         return descriptionId.substring(descriptionId.indexOf(".") + 1);
     }
 
-    private static Matrix4f convertToMatrix4f(NativeMatrixPort runtimeBridge, long matId, ByteBuffer buf) {
+    public static Matrix4f convertToMatrix4f(NativeMatrixPort runtimeBridge, long matId, ByteBuffer buf) {
         buf.clear();
         buf.order(ByteOrder.LITTLE_ENDIAN);
         if (!runtimeBridge.copyMatrixToBuffer(matId, buf)) {
