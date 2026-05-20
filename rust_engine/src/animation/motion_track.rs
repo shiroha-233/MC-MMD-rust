@@ -647,7 +647,10 @@ impl CameraMotionTrack {
             Vec3::Y
         };
         // roll = actual_up 相对 no_roll_up 绕 forward 轴的旋转角
-        let mc_roll = no_roll_up.cross(actual_up).dot(dir).atan2(no_roll_up.dot(actual_up));
+        let mc_roll = no_roll_up
+            .cross(actual_up)
+            .dot(dir)
+            .atan2(no_roll_up.dot(actual_up));
 
         CameraFrameTransform {
             position: position_mc,

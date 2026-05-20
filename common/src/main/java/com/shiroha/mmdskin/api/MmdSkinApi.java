@@ -1,6 +1,7 @@
 /* 文件职责：提供外部模组访问当前 MMD 模型信息的公共 API。 */
 package com.shiroha.mmdskin.api;
 
+import com.shiroha.mmdskin.bridge.runtime.NativeBoneOverridePort;
 import com.shiroha.mmdskin.bridge.runtime.NativeModelQueryPort;
 import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
@@ -75,6 +76,7 @@ public final class MmdSkinApi {
 
     private static volatile NativeModelQueryPort modelQueryPort = NativeModelQueryPort.noop();
     private static volatile NativeModelPort modelPort = NOOP_MODEL_PORT;
+    private static volatile NativeBoneOverridePort boneOverridePort = NativeBoneOverridePort.noop();
 
     private MmdSkinApi() {}
 
@@ -84,9 +86,65 @@ public final class MmdSkinApi {
         MmdSkinApi.modelQueryPort = modelQueryPort != null ? modelQueryPort : NativeModelQueryPort.noop();
     }
 
+    public static void configureRuntimeCollaborators(NativeModelPort modelPort,
+                                                     NativeModelQueryPort modelQueryPort,
+                                                     NativeBoneOverridePort boneOverridePort) {
+        configureRuntimeCollaborators(modelPort, modelQueryPort);
+        MmdSkinApi.boneOverridePort = boneOverridePort != null ? boneOverridePort : NativeBoneOverridePort.noop();
+    }
+
     public static ModelInfo getModelInfo(Player player) {
         long handle = resolveModelHandle(player);
         return readModelInfo(handle, modelQueryPort);
+    }
+
+    public static boolean setBoneOverride(Player player, int boneIndex,
+                                          float tx, float ty, float tz,
+                                          float qx, float qy, float qz, float qw) {
+        long handle = resolveModelHandle(player);
+        if (handle == 0 || boneIndex < 0) {
+            return false;
+        }
+        return boneOverridePort.setBoneOverride(handle, boneIndex, tx, ty, tz, qx, qy, qz, qw);
+    }
+
+    public static boolean setBoneOverrideByName(Player player, String boneName,
+                                                float tx, float ty, float tz,
+                                                float qx, float qy, float qz, float qw) {
+        long handle = resolveModelHandle(player);
+        if (handle == 0 || boneName == null || boneName.isEmpty()) {
+            return false;
+        }
+        return boneOverridePort.setBoneOverrideByName(handle, boneName, tx, ty, tz, qx, qy, qz, qw);
+    }
+
+    public static void clearBoneOverrides(Player player) {
+        long handle = resolveModelHandle(player);
+        if (handle != 0) {
+            boneOverridePort.clearBoneOverrides(handle);
+        }
+    }
+
+    public static int setBoneOverrideBatch(Player player, int[] boneIndices, float[] transforms) {
+        long handle = resolveModelHandle(player);
+        if (handle == 0 || boneIndices == null || transforms == null) {
+            return 0;
+        }
+        return boneOverridePort.setBoneOverrideBatch(handle, boneIndices, transforms);
+    }
+
+    public static void setExternalIkOverride(Player player, String ikName, boolean enabled) {
+        long handle = resolveModelHandle(player);
+        if (handle != 0 && ikName != null && !ikName.isEmpty()) {
+            boneOverridePort.setExternalIkOverride(handle, ikName, enabled);
+        }
+    }
+
+    public static void clearExternalIkOverrides(Player player) {
+        long handle = resolveModelHandle(player);
+        if (handle != 0) {
+            boneOverridePort.clearExternalIkOverrides(handle);
+        }
     }
 
     static ModelInfo readModelInfo(long handle, NativeModelQueryPort queryPort) {

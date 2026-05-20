@@ -6,6 +6,7 @@ import com.shiroha.mmdskin.config.PhysicsConfigSnapshot;
 public interface NativeRuntimePort extends
         NativeRenderBackendPort,
         NativeMorphPort,
+        NativeBoneOverridePort,
         NativeMatrixPort,
         PlatformCapabilityPort {
 

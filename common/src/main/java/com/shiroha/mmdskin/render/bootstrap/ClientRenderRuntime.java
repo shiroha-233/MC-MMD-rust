@@ -1,6 +1,7 @@
 package com.shiroha.mmdskin.render.bootstrap;
 
 import com.shiroha.mmdskin.bridge.runtime.NativeAnimationBridgeHolder;
+import com.shiroha.mmdskin.bridge.runtime.NativeBoneOverridePort;
 import com.shiroha.mmdskin.bridge.runtime.NativeModelLoadPort;
 import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
 import com.shiroha.mmdskin.bridge.runtime.NativeModelQueryPort;
@@ -57,6 +58,7 @@ public final class ClientRenderRuntime {
         NativeModelQueryPort modelQueryPort = (NativeModelQueryPort) nativeRuntimePort;
         NativeScenePort scenePort = (NativeScenePort) nativeRuntimePort;
         NativeMorphPort morphPort = (NativeMorphPort) nativeRuntimePort;
+        NativeBoneOverridePort boneOverridePort = (NativeBoneOverridePort) nativeRuntimePort;
         this.modelRepository = new ModelRepository(
                 new DefaultModelRuntimeAccessPort(renderBackendRegistry, modelLoadPort, modelPort),
                 MaidModelRepositoryExtension.INSTANCE);
@@ -71,7 +73,7 @@ public final class ClientRenderRuntime {
         SceneModelManager.getInstance().configureRuntimeCollaborators(scenePort);
         ExpressionApplicationService.configureRuntimeCollaborators(morphPort);
         ModelMorphCatalog.configureRuntimeCollaborators(modelQueryPort);
-        MmdSkinApi.configureRuntimeCollaborators(modelPort, modelQueryPort);
+        MmdSkinApi.configureRuntimeCollaborators(modelPort, modelQueryPort, boneOverridePort);
     }
 
     public static synchronized void initialize() {

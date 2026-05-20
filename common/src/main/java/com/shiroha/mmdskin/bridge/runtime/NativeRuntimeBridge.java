@@ -16,6 +16,7 @@ public final class NativeRuntimeBridge implements
         NativeMatrixPort,
         NativeModelQueryPort,
         NativeMorphPort,
+        NativeBoneOverridePort,
         NativeScenePort,
         PlatformCapabilityPort {
     private static final Logger logger = LogManager.getLogger();
@@ -388,6 +389,40 @@ public final class NativeRuntimeBridge implements
     @Override
     public int applyVpdMorph(long modelHandle, String filePath) {
         return nativeFunc().ApplyVpdMorph(modelHandle, filePath);
+    }
+
+    @Override
+    public boolean setBoneOverride(long modelHandle, int boneIndex,
+                                   float tx, float ty, float tz,
+                                   float qx, float qy, float qz, float qw) {
+        return nativeFunc().SetBoneOverride(modelHandle, boneIndex, tx, ty, tz, qx, qy, qz, qw);
+    }
+
+    @Override
+    public boolean setBoneOverrideByName(long modelHandle, String boneName,
+                                         float tx, float ty, float tz,
+                                         float qx, float qy, float qz, float qw) {
+        return nativeFunc().SetBoneOverrideByName(modelHandle, boneName, tx, ty, tz, qx, qy, qz, qw);
+    }
+
+    @Override
+    public void clearBoneOverrides(long modelHandle) {
+        nativeFunc().ClearBoneOverrides(modelHandle);
+    }
+
+    @Override
+    public int setBoneOverrideBatch(long modelHandle, int[] boneIndices, float[] transforms) {
+        return nativeFunc().SetBoneOverrideBatch(modelHandle, boneIndices, transforms);
+    }
+
+    @Override
+    public void setExternalIkOverride(long modelHandle, String ikName, boolean enabled) {
+        nativeFunc().SetExternalIkOverride(modelHandle, ikName, enabled);
+    }
+
+    @Override
+    public void clearExternalIkOverrides(long modelHandle) {
+        nativeFunc().ClearExternalIkOverrides(modelHandle);
     }
 
     @Override

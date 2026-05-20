@@ -79,7 +79,9 @@ final class PlayerModelRenderCoordinator {
                     matrixStack,
                     vertexConsumers,
                     packedLight,
-                    modelConfig.heldItemScale);
+                    modelConfig.heldItemScale,
+                    tickDelta,
+                    size[0]);
             return PlayerRenderAction.CANCEL;
         } finally {
             try {
