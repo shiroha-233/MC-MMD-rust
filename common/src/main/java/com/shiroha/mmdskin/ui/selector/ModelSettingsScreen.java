@@ -1,175 +1,378 @@
-/* 职责：以原生 GuiGraphics 渲染模型设置界面。 */
 package com.shiroha.mmdskin.ui.selector;
 
 import com.shiroha.mmdskin.config.ModelConfigData;
-import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import com.shiroha.mmdskin.ui.selector.application.ModelSettingsApplicationService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Mth;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 
-/** 文件职责：提供模型设置原生界面。 */
+/**
+ * 模型独立设置界面 — 简约右侧面板风格
+ * 允许用户为每个模型单独调整参数（眼球角度、物理等）
+ */
 public class ModelSettingsScreen extends Screen {
-    private static final Logger LOGGER = LogManager.getLogger();
-    private static final ModelSettingsApplicationService SERVICE = ModelSelectorServices.modelSettings();
 
-    private static final int WINDOW_MARGIN = 10;
-    private static final int MIN_WINDOW_WIDTH = 168;
-    private static final int MAX_WINDOW_WIDTH = 210;
-    private static final int MIN_WINDOW_HEIGHT = 340;
+    private static final int PANEL_WIDTH = 140;
+    private static final int PANEL_MARGIN = 4;
+    private static final int HEADER_HEIGHT = 28;
+    private static final int FOOTER_HEIGHT = 20;
 
-    private static final int HEADER_HEIGHT = 34;
-    private static final int SECTION_GAP = 4;
-    private static final int CARD_HEIGHT = 44;
-    private static final int QUICK_CARD_HEIGHT = 56;
-    private static final int BUTTON_HEIGHT = 16;
-    private static final int BUTTON_GAP = 4;
+    private static final int COLOR_PANEL_BG = 0xFF101418;
+    private static final int COLOR_PANEL_BORDER = 0xFF2A3A4A;
+    private static final int COLOR_ACCENT = 0xFF60A0D0;
+    private static final int COLOR_TEXT = 0xFFDDDDDD;
+    private static final int COLOR_TEXT_DIM = 0xFF888888;
+    private static final int COLOR_SEPARATOR = 0x30FFFFFF;
+    private static final int COLOR_SLIDER_BG = 0x40FFFFFF;
+    private static final int COLOR_SLIDER_FILL = 0xFF60A0D0;
+    private static final int COLOR_TOGGLE_ON = 0xFF40C080;
+    private static final int COLOR_TOGGLE_OFF = 0xFF505560;
+    private static final int COLOR_ITEM_HOVER = 0x30FFFFFF;
+
+    private static final int ITEM_HEIGHT = 24;
+    private static final int ITEM_SPACING = 2;
+    private static final int SLIDER_HEIGHT = 6;
+    private static final int TOGGLE_W = 20;
+    private static final int TOGGLE_H = 10;
 
     private final String modelName;
     private final Screen parentScreen;
-
     private ModelConfigData config;
-    private List<ModelSettingsApplicationService.QuickSlotBinding> quickSlotBindings = List.of();
-    private boolean pendingClose;
-    private boolean pendingOpenAnimConfig;
-    private HoverTarget hoveredTarget = HoverTarget.NONE;
-    private Layout layout = Layout.empty();
-    private ActiveSlider activeSlider = ActiveSlider.NONE;
 
-    private enum ActiveSlider {
-        NONE,
-        EYE,
-        SCALE,
-        HELD_BLOCK
-    }
+    private int panelX, panelY, panelH;
+    private int listTop, listBottom;
 
-    private enum HoverTarget {
-        NONE,
-        EYE_TOGGLE,
-        EYE_SLIDER,
-        SCALE_SLIDER,
-        HELD_BLOCK_SLIDER,
-        SLOT_0,
-        SLOT_1,
-        SLOT_2,
-        SLOT_3,
-        SAVE,
-        RESET,
-        ANIM,
-        DONE
-    }
+    private int draggingSlider = -1;
+
+    private static final int COLOR_SLOT_BOUND = 0xFF40C080;
+    private static final int COLOR_SLOT_UNBOUND = 0xFF505560;
+    private static final ModelSettingsApplicationService SERVICE = ModelSelectorServices.modelSettings();
+
+    private static final int SETTING_EYE_TRACKING = 0;
+    private static final int SETTING_EYE_MAX_ANGLE = 1;
+    private static final int SETTING_MODEL_SCALE = 2;
+    private static final int SETTING_HELD_ITEM_SCALE = 3;
+
+    private int quickSlotSectionY = 0;
 
     public ModelSettingsScreen(String modelName, Screen parentScreen) {
         super(Component.translatable("gui.mmdskin.model_settings.title"));
         this.modelName = modelName;
         this.parentScreen = parentScreen;
         this.config = SERVICE.loadEditableConfig(modelName);
-        reloadQuickSlotBindings();
     }
 
     @Override
     protected void init() {
         super.init();
-        updateLayout();
+
+        panelX = this.width - PANEL_WIDTH - PANEL_MARGIN;
+        panelY = PANEL_MARGIN;
+        panelH = this.height - PANEL_MARGIN * 2;
+
+        listTop = panelY + HEADER_HEIGHT;
+        listBottom = panelY + panelH - FOOTER_HEIGHT;
+
+        int btnY = listBottom + 4;
+        int btnW = (PANEL_WIDTH - 16) / 3;
+
+        this.addRenderableWidget(Button.builder(Component.translatable("gui.mmdskin.model_settings.save"), btn -> saveAndClose())
+            .bounds(panelX + 4, btnY, btnW, 14).build());
+
+        this.addRenderableWidget(Button.builder(Component.translatable("gui.mmdskin.model_settings.reset"), btn -> resetDefaults())
+            .bounds(panelX + 8 + btnW, btnY, btnW, 14).build());
+
+        this.addRenderableWidget(Button.builder(Component.translatable("gui.mmdskin.model_settings.anim_config"), btn -> openAnimConfig())
+            .bounds(panelX + 12 + btnW * 2, btnY, btnW, 14).build());
+    }
+
+    private void openAnimConfig() {
+        Minecraft.getInstance().setScreen(new ModelAnimationScreen(modelName, this));
+    }
+
+    private void saveAndClose() {
+        SERVICE.save(modelName, config);
+        this.onClose();
+    }
+
+    private void resetDefaults() {
+        config = SERVICE.resetToDefaults();
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        Minecraft minecraft = Minecraft.getInstance();
-        try {
-            updateLayout();
-            updateHoverState(mouseX, mouseY);
-            renderFallback(guiGraphics);
-            flushPendingActions(minecraft);
-        } catch (Throwable throwable) {
-            closeAfterFailure(throwable);
+        super.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+
+        guiGraphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + panelH, COLOR_PANEL_BG);
+        guiGraphics.fill(panelX, panelY, panelX + 1, panelY + panelH, COLOR_PANEL_BORDER);
+
+        renderHeader(guiGraphics);
+
+        guiGraphics.enableScissor(panelX, listTop, panelX + PANEL_WIDTH, listBottom);
+        renderSettings(guiGraphics, mouseX, mouseY);
+        guiGraphics.disableScissor();
+
+        super.render(guiGraphics, mouseX, mouseY, partialTick);
+    }
+
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    }
+
+    private void renderHeader(GuiGraphics guiGraphics) {
+        int cx = panelX + PANEL_WIDTH / 2;
+        guiGraphics.drawCenteredString(this.font, this.title, cx, panelY + 4, COLOR_ACCENT);
+
+        String info = truncate(modelName, 18);
+        guiGraphics.drawCenteredString(this.font, info, cx, panelY + 16, COLOR_TEXT_DIM);
+
+        guiGraphics.fill(panelX + 8, listTop - 2, panelX + PANEL_WIDTH - 8, listTop - 1, COLOR_SEPARATOR);
+    }
+
+    private void renderSettings(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        int y = listTop + 4;
+        int itemX = panelX + 6;
+        int itemW = PANEL_WIDTH - 12;
+
+        guiGraphics.drawString(this.font, Component.translatable("gui.mmdskin.model_settings.eye_tracking"), itemX, y, COLOR_TEXT_DIM);
+        y += 12;
+
+        renderToggle(guiGraphics, Component.translatable("gui.mmdskin.model_settings.eye_tracking_enabled").getString(), config.eyeTrackingEnabled,
+                     itemX, y, itemW, mouseX, mouseY, SETTING_EYE_TRACKING);
+        y += ITEM_HEIGHT + ITEM_SPACING;
+
+        float angleDeg = (float) Math.toDegrees(config.eyeMaxAngle);
+        String angleLabel = Component.translatable("gui.mmdskin.model_settings.eye_max_angle", String.format("%.0f", angleDeg)).getString();
+        renderSlider(guiGraphics, angleLabel, config.eyeMaxAngle, 0.05f, 1.0f,
+                     itemX, y, itemW, mouseX, mouseY, SETTING_EYE_MAX_ANGLE);
+        y += ITEM_HEIGHT + ITEM_SPACING;
+
+        y += 4;
+        guiGraphics.fill(panelX + 12, y, panelX + PANEL_WIDTH - 12, y + 1, COLOR_SEPARATOR);
+        y += 8;
+
+        guiGraphics.drawString(this.font, Component.translatable("gui.mmdskin.model_settings.model_display"), itemX, y, COLOR_TEXT_DIM);
+        y += 12;
+
+        String scaleLabel = Component.translatable("gui.mmdskin.model_settings.model_scale", String.format("%.2f", config.modelScale)).getString();
+        renderSlider(guiGraphics, scaleLabel, config.modelScale, 0.5f, 2.0f,
+                     itemX, y, itemW, mouseX, mouseY, SETTING_MODEL_SCALE);
+        y += ITEM_HEIGHT + ITEM_SPACING;
+
+        y += 4;
+        guiGraphics.fill(panelX + 12, y, panelX + PANEL_WIDTH - 12, y + 1, COLOR_SEPARATOR);
+        y += 8;
+
+        guiGraphics.drawString(this.font, Component.translatable("gui.mmdskin.model_settings.held_item_display"), itemX, y, COLOR_TEXT_DIM);
+        y += 12;
+
+        String heldItemScaleLabel = Component.translatable("gui.mmdskin.model_settings.held_item_scale", String.format("%.2f", config.heldItemScale)).getString();
+        renderSlider(guiGraphics, heldItemScaleLabel, config.heldItemScale,
+                     ModelConfigData.MIN_HELD_ITEM_SCALE, ModelConfigData.MAX_HELD_ITEM_SCALE,
+                     itemX, y, itemW, mouseX, mouseY, SETTING_HELD_ITEM_SCALE);
+        y += ITEM_HEIGHT + ITEM_SPACING;
+
+        y += 4;
+        guiGraphics.fill(panelX + 12, y, panelX + PANEL_WIDTH - 12, y + 1, COLOR_SEPARATOR);
+        y += 8;
+
+        guiGraphics.drawString(this.font, Component.translatable("gui.mmdskin.model_settings.quick_bind"), itemX, y, COLOR_TEXT_DIM);
+        y += 12;
+
+        quickSlotSectionY = y;
+        renderQuickSlots(guiGraphics, itemX, y, itemW, mouseX, mouseY);
+    }
+
+    private void renderQuickSlots(GuiGraphics guiGraphics, int x, int y, int w, int mouseX, int mouseY) {
+        List<ModelSettingsApplicationService.QuickSlotBinding> bindings = SERVICE.getQuickSlotBindings(modelName);
+        int btnW = (w - 4) / 2;
+        int btnH = 16;
+
+        for (ModelSettingsApplicationService.QuickSlotBinding binding : bindings) {
+            int i = binding.slot();
+            int col = i % 2;
+            int row = i / 2;
+            int btnX = x + col * (btnW + 4);
+            int btnY = y + row * (btnH + 3);
+
+            String boundModel = binding.boundModel();
+            boolean isBoundToThis = binding.boundToCurrentModel();
+            boolean isBoundToOther = boundModel != null && !boundModel.isEmpty() && !isBoundToThis;
+            boolean isHovered = mouseX >= btnX && mouseX <= btnX + btnW
+                             && mouseY >= btnY && mouseY <= btnY + btnH;
+
+            int bgColor;
+            if (isBoundToThis) {
+                bgColor = COLOR_SLOT_BOUND;
+            } else if (isHovered) {
+                bgColor = COLOR_ITEM_HOVER;
+            } else {
+                bgColor = COLOR_SLOT_UNBOUND;
+            }
+            guiGraphics.fill(btnX, btnY, btnX + btnW, btnY + btnH, bgColor);
+
+            String label = Component.translatable("gui.mmdskin.model_settings.slot", i + 1).getString();
+            int labelColor = isBoundToThis ? 0xFFFFFFFF : COLOR_TEXT;
+            int labelW = this.font.width(label);
+            guiGraphics.drawString(this.font, label, btnX + (btnW - labelW) / 2, btnY + 4, labelColor);
+
+            if (isBoundToOther && isHovered) {
+                String hint = truncate(boundModel, 14);
+                int hintW = this.font.width(hint);
+                int hintX = btnX + (btnW - hintW) / 2;
+                int hintY = btnY + btnH + 1;
+                guiGraphics.fill(hintX - 2, hintY - 1, hintX + hintW + 2, hintY + 9, 0xE0182030);
+                guiGraphics.drawString(this.font, hint, hintX, hintY, COLOR_TEXT_DIM);
+            }
         }
+    }
+
+    private void renderToggle(GuiGraphics guiGraphics, String label, boolean value,
+                               int x, int y, int w, int mouseX, int mouseY, int settingId) {
+        boolean isHovered = mouseX >= x && mouseX <= x + w
+                         && mouseY >= y && mouseY <= y + ITEM_HEIGHT;
+
+        if (isHovered) {
+            guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, COLOR_ITEM_HOVER);
+        }
+
+        guiGraphics.drawString(this.font, label, x + 4, y + (ITEM_HEIGHT - 8) / 2, COLOR_TEXT);
+
+        int toggleX = x + w - TOGGLE_W - 4;
+        int toggleY = y + (ITEM_HEIGHT - TOGGLE_H) / 2;
+        int toggleColor = value ? COLOR_TOGGLE_ON : COLOR_TOGGLE_OFF;
+        guiGraphics.fill(toggleX, toggleY, toggleX + TOGGLE_W, toggleY + TOGGLE_H, toggleColor);
+
+        int dotX = value ? toggleX + TOGGLE_W - TOGGLE_H : toggleX;
+        guiGraphics.fill(dotX + 1, toggleY + 1, dotX + TOGGLE_H - 1, toggleY + TOGGLE_H - 1, 0xFFFFFFFF);
+    }
+
+    private void renderSlider(GuiGraphics guiGraphics, String label, float value,
+                               float min, float max, int x, int y, int w,
+                               int mouseX, int mouseY, int settingId) {
+        boolean isHovered = mouseX >= x && mouseX <= x + w
+                         && mouseY >= y && mouseY <= y + ITEM_HEIGHT;
+
+        if (isHovered) {
+            guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, COLOR_ITEM_HOVER);
+        }
+
+        guiGraphics.drawString(this.font, label, x + 4, y + 2, COLOR_TEXT);
+
+        int sliderX = x + 4;
+        int sliderY = y + 14;
+        int sliderW = w - 8;
+
+        guiGraphics.fill(sliderX, sliderY, sliderX + sliderW, sliderY + SLIDER_HEIGHT, COLOR_SLIDER_BG);
+
+        float ratio = (value - min) / (max - min);
+        ratio = Math.max(0, Math.min(1, ratio));
+        int fillW = (int) (sliderW * ratio);
+        guiGraphics.fill(sliderX, sliderY, sliderX + fillW, sliderY + SLIDER_HEIGHT, COLOR_SLIDER_FILL);
+
+        int thumbX = sliderX + fillW - 2;
+        guiGraphics.fill(thumbX, sliderY - 1, thumbX + 4, sliderY + SLIDER_HEIGHT + 1, 0xFFFFFFFF);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0) {
-            return super.mouseClicked(mouseX, mouseY, button);
-        }
-        if (!layout.panel.contains(mouseX, mouseY)) {
-            return super.mouseClicked(mouseX, mouseY, button);
-        }
+        if (button == 0) {
+            int y = listTop + 4;
+            int itemX = panelX + 6;
+            int itemW = PANEL_WIDTH - 12;
 
-        if (layout.eyeToggle.contains(mouseX, mouseY)) {
-            config.eyeTrackingEnabled = !config.eyeTrackingEnabled;
-            return true;
-        }
-        if (layout.eyeSlider.contains(mouseX, mouseY)) {
-            activeSlider = ActiveSlider.EYE;
-            updateSliderValue(activeSlider, mouseX);
-            return true;
-        }
-        if (layout.scaleSlider.contains(mouseX, mouseY)) {
-            activeSlider = ActiveSlider.SCALE;
-            updateSliderValue(activeSlider, mouseX);
-            return true;
-        }
-        if (layout.heldBlockSlider.contains(mouseX, mouseY)) {
-            activeSlider = ActiveSlider.HELD_BLOCK;
-            updateSliderValue(activeSlider, mouseX);
-            return true;
-        }
+            y += 12;
 
-        for (int i = 0; i < layout.quickSlotButtons.length; i++) {
-            UiRect slotButton = layout.quickSlotButtons[i];
-            if (slotButton != null && slotButton.contains(mouseX, mouseY)) {
-                SERVICE.toggleQuickSlot(modelName, i);
-                reloadQuickSlotBindings();
+            if (isInToggleArea(mouseX, mouseY, itemX, y, itemW)) {
+                config.eyeTrackingEnabled = !config.eyeTrackingEnabled;
+                return true;
+            }
+            y += ITEM_HEIGHT + ITEM_SPACING;
+
+            if (isInSliderArea(mouseX, mouseY, itemX, y, itemW)) {
+                draggingSlider = SETTING_EYE_MAX_ANGLE;
+                updateSliderValue(mouseX, itemX, itemW);
+                return true;
+            }
+            y += ITEM_HEIGHT + ITEM_SPACING;
+
+            y += 4 + 8 + 12;
+
+            if (isInSliderArea(mouseX, mouseY, itemX, y, itemW)) {
+                draggingSlider = SETTING_MODEL_SCALE;
+                updateSliderValue(mouseX, itemX, itemW);
+                return true;
+            }
+            y += ITEM_HEIGHT + ITEM_SPACING;
+
+            y += 4 + 8 + 12;
+
+            if (isInSliderArea(mouseX, mouseY, itemX, y, itemW)) {
+                draggingSlider = SETTING_HELD_ITEM_SCALE;
+                updateSliderValue(mouseX, itemX, itemW);
+                return true;
+            }
+
+            if (handleQuickSlotClick(mouseX, mouseY, itemX, itemW)) {
                 return true;
             }
         }
-
-        if (layout.saveButton.contains(mouseX, mouseY)) {
-            saveAndClose();
-            return true;
-        }
-        if (layout.resetButton.contains(mouseX, mouseY)) {
-            config = SERVICE.resetToDefaults();
-            return true;
-        }
-        if (layout.animButton.contains(mouseX, mouseY)) {
-            pendingOpenAnimConfig = true;
-            return true;
-        }
-        if (layout.doneButton.contains(mouseX, mouseY)) {
-            pendingClose = true;
-            return true;
-        }
-        return true;
-    }
-
-    @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0) {
-            activeSlider = ActiveSlider.NONE;
-            return true;
-        }
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (button == 0 && activeSlider != ActiveSlider.NONE) {
-            updateSliderValue(activeSlider, mouseX);
+        if (button == 0 && draggingSlider >= 0) {
+            int itemX = panelX + 6;
+            int itemW = PANEL_WIDTH - 12;
+            updateSliderValue(mouseX, itemX, itemW);
             return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        return layout.panel.contains(mouseX, mouseY) || super.mouseScrolled(mouseX, mouseY, delta);
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && draggingSlider >= 0) {
+            draggingSlider = -1;
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    private void updateSliderValue(double mouseX, int itemX, int itemW) {
+        int sliderX = itemX + 4;
+        int sliderW = itemW - 8;
+
+        float ratio = (float) (mouseX - sliderX) / sliderW;
+        ratio = Math.max(0, Math.min(1, ratio));
+
+        switch (draggingSlider) {
+            case SETTING_EYE_MAX_ANGLE:
+                config.eyeMaxAngle = 0.05f + ratio * (1.0f - 0.05f);
+                break;
+            case SETTING_MODEL_SCALE:
+                config.modelScale = 0.5f + ratio * (2.0f - 0.5f);
+                break;
+            case SETTING_HELD_ITEM_SCALE:
+                config.heldItemScale = ModelConfigData.MIN_HELD_ITEM_SCALE
+                        + ratio * (ModelConfigData.MAX_HELD_ITEM_SCALE - ModelConfigData.MIN_HELD_ITEM_SCALE);
+                break;
+        }
+    }
+
+    private boolean isInToggleArea(double mouseX, double mouseY, int x, int y, int w) {
+        return mouseX >= x && mouseX <= x + w
+            && mouseY >= y && mouseY <= y + ITEM_HEIGHT;
+    }
+
+    private boolean isInSliderArea(double mouseX, double mouseY, int x, int y, int w) {
+        return mouseX >= x && mouseX <= x + w
+            && mouseY >= y && mouseY <= y + ITEM_HEIGHT;
     }
 
     @Override
@@ -183,17 +386,7 @@ public class ModelSettingsScreen extends Screen {
 
     @Override
     public void onClose() {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.screen == this) {
-            minecraft.setScreen(parentScreen);
-            return;
-        }
-        super.onClose();
-    }
-
-    @Override
-    public void removed() {
-        super.removed();
+        Minecraft.getInstance().setScreen(parentScreen);
     }
 
     @Override
@@ -201,312 +394,31 @@ public class ModelSettingsScreen extends Screen {
         return false;
     }
 
-    private void updateLayout() {
-        int panelWidth = Mth.clamp(Math.round(this.width * 0.16f), MIN_WINDOW_WIDTH, MAX_WINDOW_WIDTH);
-        int panelHeight = Math.max(MIN_WINDOW_HEIGHT, this.height - WINDOW_MARGIN * 2);
-        int panelX = this.width - panelWidth - WINDOW_MARGIN;
-        int panelY = WINDOW_MARGIN;
+    private boolean handleQuickSlotClick(double mouseX, double mouseY, int x, int w) {
+        int btnW = (w - 4) / 2;
+        int btnH = 16;
+        int y = quickSlotSectionY;
 
-        UiRect panel = new UiRect(panelX, panelY, panelWidth, panelHeight);
-        UiRect header = new UiRect(panelX + 8, panelY + 5, panelWidth - 16, HEADER_HEIGHT);
+        for (int i = 0; i < 4; i++) {
+            int col = i % 2;
+            int row = i / 2;
+            int btnX = x + col * (btnW + 4);
+            int btnY = y + row * (btnH + 3);
 
-        int eyeY = header.y + header.h + 2;
-        UiRect eyeCard = new UiRect(header.x, eyeY, header.w, CARD_HEIGHT);
-        UiRect eyeToggle = new UiRect(eyeCard.x + eyeCard.w - 34, eyeCard.y + 10, 26, 10);
-        UiRect eyeSlider = new UiRect(eyeCard.x + 4, eyeCard.y + 26, eyeCard.w - 8, 10);
-
-        int scaleY = eyeCard.y + eyeCard.h + SECTION_GAP;
-        UiRect scaleCard = new UiRect(header.x, scaleY, header.w, CARD_HEIGHT);
-        UiRect scaleSlider = new UiRect(scaleCard.x + 4, scaleCard.y + 26, scaleCard.w - 8, 10);
-
-        int heldBlockY = scaleCard.y + scaleCard.h + SECTION_GAP;
-        UiRect heldBlockCard = new UiRect(header.x, heldBlockY, header.w, CARD_HEIGHT);
-        UiRect heldBlockSlider = new UiRect(heldBlockCard.x + 4, heldBlockCard.y + 26, heldBlockCard.w - 8, 10);
-
-        int quickY = heldBlockCard.y + heldBlockCard.h + SECTION_GAP;
-        UiRect quickCard = new UiRect(header.x, quickY, header.w, QUICK_CARD_HEIGHT);
-        UiRect[] quickButtons = new UiRect[4];
-        int quickButtonWidth = (quickCard.w - BUTTON_GAP) / 2;
-        quickButtons[0] = new UiRect(quickCard.x + 4, quickCard.y + 16, quickButtonWidth - 4, BUTTON_HEIGHT);
-        quickButtons[1] = new UiRect(quickCard.x + 4 + quickButtonWidth, quickCard.y + 16, quickButtonWidth - 4, BUTTON_HEIGHT);
-        quickButtons[2] = new UiRect(quickCard.x + 4, quickCard.y + 16 + BUTTON_HEIGHT + BUTTON_GAP, quickButtonWidth - 4, BUTTON_HEIGHT);
-        quickButtons[3] = new UiRect(quickCard.x + 4 + quickButtonWidth, quickCard.y + 16 + BUTTON_HEIGHT + BUTTON_GAP, quickButtonWidth - 4, BUTTON_HEIGHT);
-
-        int actionsBottom = panel.y + panel.h - 6;
-        UiRect doneButton = new UiRect(header.x, actionsBottom - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
-        UiRect animButton = new UiRect(header.x, doneButton.y - BUTTON_GAP - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
-        UiRect resetButton = new UiRect(header.x, animButton.y - BUTTON_GAP - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
-        UiRect saveButton = new UiRect(header.x, resetButton.y - BUTTON_GAP - BUTTON_HEIGHT, header.w, BUTTON_HEIGHT);
-
-        layout = new Layout(panel, header, eyeCard, eyeToggle, eyeSlider, scaleCard, scaleSlider,
-                heldBlockCard, heldBlockSlider, quickCard, quickButtons,
-                saveButton, resetButton, animButton, doneButton);
-    }
-
-    private void updateHoverState(int mouseX, int mouseY) {
-        hoveredTarget = HoverTarget.NONE;
-        if (layout.eyeToggle.contains(mouseX, mouseY)) {
-            hoveredTarget = HoverTarget.EYE_TOGGLE;
-            return;
-        }
-        if (layout.eyeSlider.contains(mouseX, mouseY)) {
-            hoveredTarget = HoverTarget.EYE_SLIDER;
-            return;
-        }
-        if (layout.scaleSlider.contains(mouseX, mouseY)) {
-            hoveredTarget = HoverTarget.SCALE_SLIDER;
-            return;
-        }
-        if (layout.heldBlockSlider.contains(mouseX, mouseY)) {
-            hoveredTarget = HoverTarget.HELD_BLOCK_SLIDER;
-            return;
-        }
-        for (int i = 0; i < layout.quickSlotButtons.length; i++) {
-            UiRect slotButton = layout.quickSlotButtons[i];
-            if (slotButton != null && slotButton.contains(mouseX, mouseY)) {
-                hoveredTarget = switch (i) {
-                    case 0 -> HoverTarget.SLOT_0;
-                    case 1 -> HoverTarget.SLOT_1;
-                    case 2 -> HoverTarget.SLOT_2;
-                    default -> HoverTarget.SLOT_3;
-                };
-                return;
+            if (mouseX >= btnX && mouseX <= btnX + btnW
+                    && mouseY >= btnY && mouseY <= btnY + btnH) {
+                toggleQuickSlot(i);
+                return true;
             }
         }
-        if (layout.saveButton.contains(mouseX, mouseY)) {
-            hoveredTarget = HoverTarget.SAVE;
-            return;
-        }
-        if (layout.resetButton.contains(mouseX, mouseY)) {
-            hoveredTarget = HoverTarget.RESET;
-            return;
-        }
-        if (layout.animButton.contains(mouseX, mouseY)) {
-            hoveredTarget = HoverTarget.ANIM;
-            return;
-        }
-        if (layout.doneButton.contains(mouseX, mouseY)) {
-            hoveredTarget = HoverTarget.DONE;
-        }
+        return false;
     }
 
-    private void updateSliderValue(ActiveSlider slider, double mouseX) {
-        if (slider == ActiveSlider.EYE) {
-            config.eyeMaxAngle = valueFromSlider(
-                    layout.eyeSlider,
-                    mouseX,
-                    ModelConfigData.MIN_EYE_MAX_ANGLE,
-                    ModelConfigData.MAX_EYE_MAX_ANGLE);
-            return;
-        }
-        if (slider == ActiveSlider.SCALE) {
-            config.modelScale = valueFromSlider(
-                    layout.scaleSlider,
-                    mouseX,
-                    ModelConfigData.MIN_MODEL_SCALE,
-                    ModelConfigData.MAX_MODEL_SCALE);
-            return;
-        }
-        if (slider == ActiveSlider.HELD_BLOCK) {
-            config.heldItemScale = valueFromSlider(
-                    layout.heldBlockSlider,
-                    mouseX,
-                    ModelConfigData.MIN_HELD_ITEM_SCALE,
-                    ModelConfigData.MAX_HELD_ITEM_SCALE);
-        }
+    private void toggleQuickSlot(int slot) {
+        SERVICE.toggleQuickSlot(modelName, slot);
     }
 
-    private float valueFromSlider(UiRect sliderRect, double mouseX, float min, float max) {
-        float t = (float) ((mouseX - sliderRect.x) / Math.max(1.0, sliderRect.w));
-        return Mth.clamp(min + (max - min) * Mth.clamp(t, 0.0f, 1.0f), min, max);
-    }
-
-    private float normalized(float value, float min, float max) {
-        return Mth.clamp((value - min) / (max - min), 0.0f, 1.0f);
-    }
-
-    private HoverTarget slotHoverTarget(int index) {
-        return switch (index) {
-            case 0 -> HoverTarget.SLOT_0;
-            case 1 -> HoverTarget.SLOT_1;
-            case 2 -> HoverTarget.SLOT_2;
-            default -> HoverTarget.SLOT_3;
-        };
-    }
-
-    private void renderFallback(GuiGraphics guiGraphics) {
-        float eyeAngleNormalized = normalized(
-                config.eyeMaxAngle,
-                ModelConfigData.MIN_EYE_MAX_ANGLE,
-                ModelConfigData.MAX_EYE_MAX_ANGLE);
-        float modelScaleNormalized = normalized(
-                config.modelScale,
-                ModelConfigData.MIN_MODEL_SCALE,
-                ModelConfigData.MAX_MODEL_SCALE);
-        float heldBlockScaleNormalized = normalized(
-                config.heldItemScale,
-                ModelConfigData.MIN_HELD_ITEM_SCALE,
-                ModelConfigData.MAX_HELD_ITEM_SCALE);
-        TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
-        TranslucentTrayChrome.drawPanel(guiGraphics, layout.panel.x, layout.panel.y, layout.panel.w, layout.panel.h);
-
-        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
-        guiGraphics.drawString(this.font, shorten(modelName, 14), layout.header.x, layout.header.y + 10, TranslucentTrayChrome.SUBTITLE_TEXT, false);
-
-        drawFallbackCard(guiGraphics, layout.eyeCard, Component.translatable("gui.mmdskin.model_settings.eye_tracking").getString());
-        guiGraphics.drawString(this.font, Component.translatable("gui.mmdskin.model_settings.eye_tracking_enabled").getString(), layout.eyeCard.x + 4, layout.eyeCard.y + 13, TranslucentTrayChrome.BODY_TEXT, false);
-        drawFallbackSlider(
-                guiGraphics,
-                layout.eyeSlider,
-                Component.translatable("gui.mmdskin.model_settings.eye_max_angle", String.format("%.0f", Math.toDegrees(config.eyeMaxAngle))).getString(),
-                eyeAngleNormalized
-        );
-        drawFallbackToggle(guiGraphics, layout.eyeToggle, config.eyeTrackingEnabled, hoveredTarget == HoverTarget.EYE_TOGGLE);
-
-        drawFallbackCard(guiGraphics, layout.scaleCard, Component.translatable("gui.mmdskin.model_settings.model_display").getString());
-        drawFallbackSlider(
-                guiGraphics,
-                layout.scaleSlider,
-                Component.translatable("gui.mmdskin.model_settings.model_scale", String.format("%.2f", config.modelScale)).getString(),
-                modelScaleNormalized
-        );
-
-        drawFallbackCard(guiGraphics, layout.heldBlockCard, Component.translatable("gui.mmdskin.model_settings.held_item_display").getString());
-        drawFallbackSlider(
-                guiGraphics,
-                layout.heldBlockSlider,
-                Component.translatable("gui.mmdskin.model_settings.held_item_scale", String.format("%.2f", config.heldItemScale)).getString(),
-                heldBlockScaleNormalized
-        );
-
-        drawFallbackCard(guiGraphics, layout.quickCard, Component.translatable("gui.mmdskin.model_settings.quick_bind").getString());
-        for (int i = 0; i < quickSlotBindings.size() && i < layout.quickSlotButtons.length; i++) {
-            ModelSettingsApplicationService.QuickSlotBinding binding = quickSlotBindings.get(i);
-            UiRect rect = layout.quickSlotButtons[i];
-            int bg = binding.boundToCurrentModel()
-                    ? TranslucentTrayChrome.CARD_SELECTED
-                    : TranslucentTrayChrome.cardBackground(false, hoveredTarget == slotHoverTarget(i));
-            guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, bg);
-            guiGraphics.drawCenteredString(this.font, buildQuickSlotLabel(binding), rect.centerX(), rect.y + 4, TranslucentTrayChrome.TITLE_TEXT);
-        }
-
-        drawFallbackButton(guiGraphics, layout.saveButton, Component.translatable("gui.mmdskin.model_settings.save").getString(), hoveredTarget == HoverTarget.SAVE);
-        drawFallbackButton(guiGraphics, layout.resetButton, Component.translatable("gui.mmdskin.model_settings.reset").getString(), hoveredTarget == HoverTarget.RESET);
-        drawFallbackButton(guiGraphics, layout.animButton, Component.translatable("gui.mmdskin.model_settings.anim_config").getString(), hoveredTarget == HoverTarget.ANIM);
-        drawFallbackButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredTarget == HoverTarget.DONE);
-    }
-
-    private void drawFallbackCard(GuiGraphics guiGraphics, UiRect rect, String title) {
-        TranslucentTrayChrome.fillListArea(guiGraphics, rect.x, rect.y, rect.w, rect.h);
-        guiGraphics.drawString(this.font, title, rect.x + 4, rect.y + 3, TranslucentTrayChrome.BODY_TEXT, false);
-    }
-
-    private void drawFallbackSlider(GuiGraphics guiGraphics, UiRect rect, String label, float normalized) {
-        guiGraphics.drawString(this.font, label, rect.x, rect.y - 8, TranslucentTrayChrome.SUBTITLE_TEXT, false);
-        guiGraphics.fill(rect.x, rect.y + 3, rect.x + rect.w, rect.y + 7, 0x28FFFFFF);
-        int fillRight = rect.x + Math.round(rect.w * normalized);
-        guiGraphics.fill(rect.x, rect.y + 3, fillRight, rect.y + 7, 0x58FFFFFF);
-    }
-
-    private void drawFallbackToggle(GuiGraphics guiGraphics, UiRect rect, boolean enabled, boolean hovered) {
-        guiGraphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, hovered ? 0x30FFFFFF : 0x1A000000);
-        int knobSize = rect.h - 2;
-        int knobX = enabled ? rect.x + rect.w - knobSize - 1 : rect.x + 1;
-        guiGraphics.fill(knobX, rect.y + 1, knobX + knobSize, rect.y + rect.h - 1, 0xFFDDE8F8);
-    }
-
-    private void drawFallbackButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
-        TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, true);
-    }
-
-    private void saveAndClose() {
-        SERVICE.save(modelName, config);
-        pendingClose = true;
-    }
-
-    private void reloadQuickSlotBindings() {
-        quickSlotBindings = List.copyOf(SERVICE.getQuickSlotBindings(modelName));
-    }
-
-    private void flushPendingActions(Minecraft minecraft) {
-        if (pendingOpenAnimConfig && minecraft.screen == this) {
-            pendingOpenAnimConfig = false;
-            minecraft.setScreen(new ModelAnimationScreen(modelName, this));
-            return;
-        }
-        if (pendingClose && minecraft.screen == this) {
-            pendingClose = false;
-            minecraft.setScreen(parentScreen);
-        }
-    }
-
-    private void closeAfterFailure(Throwable throwable) {
-        LOGGER.error("[ModelSettings] Native settings render failed and will close", throwable);
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.screen == this) {
-            minecraft.setScreen(parentScreen);
-        }
-    }
-
-    private static String buildQuickSlotLabel(ModelSettingsApplicationService.QuickSlotBinding binding) {
-        String base = Component.translatable("gui.mmdskin.model_settings.slot", binding.slot() + 1).getString();
-        if (binding.boundToCurrentModel()) {
-            return "[x] " + base;
-        }
-        if (binding.boundModel() != null && !binding.boundModel().isEmpty()) {
-            return "[*] " + base;
-        }
-        return "[ ] " + base;
-    }
-
-    private static String shorten(String value, int maxChars) {
-        if (value == null || value.length() <= maxChars) {
-            return value == null ? "" : value;
-        }
-        if (maxChars <= 3) {
-            return value.substring(0, Math.max(0, maxChars));
-        }
-        return value.substring(0, maxChars - 2) + "..";
-    }
-
-    record UiRect(int x, int y, int w, int h) {
-        static UiRect empty() {
-            return new UiRect(0, 0, 0, 0);
-        }
-
-        boolean contains(double px, double py) {
-            return px >= x && py >= y && px <= x + w && py <= y + h;
-        }
-
-        int centerX() {
-            return x + w / 2;
-        }
-
-        int centerY() {
-            return y + h / 2;
-        }
-    }
-
-    private record Layout(
-            UiRect panel,
-            UiRect header,
-            UiRect eyeCard,
-            UiRect eyeToggle,
-            UiRect eyeSlider,
-            UiRect scaleCard,
-            UiRect scaleSlider,
-            UiRect heldBlockCard,
-            UiRect heldBlockSlider,
-            UiRect quickCard,
-            UiRect[] quickSlotButtons,
-            UiRect saveButton,
-            UiRect resetButton,
-            UiRect animButton,
-            UiRect doneButton
-    ) {
-        static Layout empty() {
-            UiRect empty = UiRect.empty();
-            return new Layout(empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, new UiRect[4], empty, empty, empty, empty);
-        }
+    private static String truncate(String s, int max) {
+        return s.length() > max ? s.substring(0, max - 2) + ".." : s;
     }
 }

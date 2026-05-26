@@ -173,7 +173,6 @@ pub struct MmdModel {
 
     // VPD 骨骼姿势覆盖（骨骼索引 -> (位移, 旋转)）
     vpd_bone_overrides: HashMap<usize, (Vec3, Quat)>,
-    external_ik_overrides: HashMap<String, bool>,
 
     // ======== 第一人称模式 ========
     /// 第一人称模式是否启用
@@ -290,7 +289,6 @@ impl MmdModel {
             effective_weights_buf: Vec::new(),
             material_morph_results_flat_cache: Vec::new(),
             vpd_bone_overrides: HashMap::new(),
-            external_ik_overrides: HashMap::new(),
             vr_hand_mode: 0,
             hand_submesh_flags: Vec::new(),
             hand_detection_initialized: false,
@@ -1597,8 +1595,7 @@ impl MmdModel {
     /// - offset 12: f32 alpha（基础材质 alpha，Java 侧再叠加 morph）
     /// - offset 16: u8  isVisible (0/1)
     /// - offset 17: u8  bothFace  (0/1)
-    /// - offset 18: u8  hasEdge   (0/1)
-    /// - offset 19: u8  padding
+    /// - offset 18: u16 padding
     ///
     /// 返回写入的子网格数量
     pub fn batch_get_sub_mesh_data(&self, output: &mut [u8]) -> usize {
@@ -1622,12 +1619,10 @@ impl MmdModel {
             } else {
                 0
             };
-            let mat = self.materials.get(submesh.material_id as usize);
-            let both_face: u8 = mat
+            let both_face: u8 = self
+                .materials
+                .get(submesh.material_id as usize)
                 .map(|m| if m.is_double_sided() { 1u8 } else { 0u8 })
-                .unwrap_or(0u8);
-            let has_edge: u8 = mat
-                .map(|m| if m.has_edge() { 1u8 } else { 0u8 })
                 .unwrap_or(0u8);
 
             unsafe {
@@ -1638,7 +1633,7 @@ impl MmdModel {
                 (p.add(12) as *mut f32).write_unaligned(alpha);
                 *p.add(16) = visible;
                 *p.add(17) = both_face;
-                *p.add(18) = has_edge;
+                // padding bytes 18-19 left as-is
             }
         }
 
@@ -2143,23 +2138,6 @@ impl MmdModel {
         }
     }
 
-    pub fn set_external_ik_override(&mut self, ik_name: String, enabled: bool) {
-        if ik_name.is_empty() {
-            return;
-        }
-        self.external_ik_overrides.insert(ik_name, enabled);
-    }
-
-    pub fn clear_external_ik_overrides(&mut self) {
-        self.external_ik_overrides.clear();
-    }
-
-    fn apply_external_ik_overrides(&mut self) {
-        for (ik_name, enabled) in &self.external_ik_overrides {
-            self.bone_manager.set_ik_enabled_by_name(ik_name, *enabled);
-        }
-    }
-
     /// 仅更新动画（不执行 CPU 蒙皮，用于 GPU 蒙皮模式）
     #[allow(unreachable_code)]
     pub fn tick_animation_no_skinning(&mut self, elapsed: f32) {
@@ -2248,7 +2226,6 @@ impl MmdModel {
             .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager);
 
         self.apply_vpd_bone_overrides();
-        self.apply_external_ik_overrides();
         self.update_auto_blink(elapsed);
 
         if !self.vr_enabled {
@@ -2387,11 +2364,10 @@ impl MmdModel {
     /// 流程：sync_bodies → stepSimulation → sync_bones
     /// 所有中间数据复用预分配缓冲区，零堆分配。
     pub fn update_physics(&mut self, delta_time: f32) {
+        let config = crate::physics::config::get_config();
+
         // 全局开关 + per-model 开关双重检查
-        if !crate::physics::config::get_config().enabled
-            || !self.physics_enabled
-            || self.physics.is_none()
-        {
+        if !config.enabled || !self.physics_enabled || self.physics.is_none() {
             return;
         }
 
@@ -2413,10 +2389,11 @@ impl MmdModel {
             &self.physics_bone_transforms_buf,
             delta_time,
             model_transform,
+            &config,
         );
 
-        // 2. Bullet3 步进
-        physics.step_simulation(delta_time);
+        // 2. Bullet3 步进（传入 config 避免内部重复 get_config）
+        physics.step_simulation(delta_time, &config);
 
         // 3. 同步物理结果回骨骼（复用内部缓冲区）
         let dynamic_bone_transforms =

@@ -1,10 +1,14 @@
-/* 文件职责：提供外部模组访问当前 MMD 模型信息的公共 API。 */
+/* 文件职责：提供外部模组访问当前玩家模型与替换配置的公共 API。 */
 package com.shiroha.mmdskin.api;
 
-import com.shiroha.mmdskin.bridge.runtime.NativeBoneOverridePort;
-import com.shiroha.mmdskin.bridge.runtime.NativeModelQueryPort;
 import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
+import com.shiroha.mmdskin.bridge.runtime.NativeModelQueryPort;
+import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
+import com.shiroha.mmdskin.renderer.integration.entity.MobReplacementService;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -15,11 +19,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** 文件职责：提供外部模组访问当前玩家模型信息的公共 API。 */
 public final class MmdSkinApi {
     private static final int FLOATS_PER_BONE_POSITION = 3;
     private static final int FLOATS_PER_UV = 2;
-    private static final Logger logger = LogManager.getLogger();
+    private static final Logger LOGGER = LogManager.getLogger();
     private static final NativeModelPort NOOP_MODEL_PORT = new NativeModelPort() {
         @Override
         public boolean setLayerBoneMask(long modelHandle, int layer, String rootBoneName) {
@@ -73,12 +76,11 @@ public final class MmdSkinApi {
         public void deleteModel(long modelHandle) {
         }
     };
-
-    private static volatile NativeModelQueryPort modelQueryPort = NativeModelQueryPort.noop();
     private static volatile NativeModelPort modelPort = NOOP_MODEL_PORT;
-    private static volatile NativeBoneOverridePort boneOverridePort = NativeBoneOverridePort.noop();
+    private static volatile NativeModelQueryPort modelQueryPort = NativeModelQueryPort.noop();
 
-    private MmdSkinApi() {}
+    private MmdSkinApi() {
+    }
 
     public static void configureRuntimeCollaborators(NativeModelPort modelPort,
                                                      NativeModelQueryPort modelQueryPort) {
@@ -86,82 +88,24 @@ public final class MmdSkinApi {
         MmdSkinApi.modelQueryPort = modelQueryPort != null ? modelQueryPort : NativeModelQueryPort.noop();
     }
 
-    public static void configureRuntimeCollaborators(NativeModelPort modelPort,
-                                                     NativeModelQueryPort modelQueryPort,
-                                                     NativeBoneOverridePort boneOverridePort) {
-        configureRuntimeCollaborators(modelPort, modelQueryPort);
-        MmdSkinApi.boneOverridePort = boneOverridePort != null ? boneOverridePort : NativeBoneOverridePort.noop();
-    }
-
     public static ModelInfo getModelInfo(Player player) {
         long handle = resolveModelHandle(player);
         return readModelInfo(handle, modelQueryPort);
     }
 
-    public static boolean setBoneOverride(Player player, int boneIndex,
-                                          float tx, float ty, float tz,
-                                          float qx, float qy, float qz, float qw) {
-        long handle = resolveModelHandle(player);
-        if (handle == 0 || boneIndex < 0) {
-            return false;
-        }
-        return boneOverridePort.setBoneOverride(handle, boneIndex, tx, ty, tz, qx, qy, qz, qw);
-    }
-
-    public static boolean setBoneOverrideByName(Player player, String boneName,
-                                                float tx, float ty, float tz,
-                                                float qx, float qy, float qz, float qw) {
-        long handle = resolveModelHandle(player);
-        if (handle == 0 || boneName == null || boneName.isEmpty()) {
-            return false;
-        }
-        return boneOverridePort.setBoneOverrideByName(handle, boneName, tx, ty, tz, qx, qy, qz, qw);
-    }
-
-    public static void clearBoneOverrides(Player player) {
-        long handle = resolveModelHandle(player);
-        if (handle != 0) {
-            boneOverridePort.clearBoneOverrides(handle);
-        }
-    }
-
-    public static int setBoneOverrideBatch(Player player, int[] boneIndices, float[] transforms) {
-        long handle = resolveModelHandle(player);
-        if (handle == 0 || boneIndices == null || transforms == null) {
-            return 0;
-        }
-        return boneOverridePort.setBoneOverrideBatch(handle, boneIndices, transforms);
-    }
-
-    public static void setExternalIkOverride(Player player, String ikName, boolean enabled) {
-        long handle = resolveModelHandle(player);
-        if (handle != 0 && ikName != null && !ikName.isEmpty()) {
-            boneOverridePort.setExternalIkOverride(handle, ikName, enabled);
-        }
-    }
-
-    public static void clearExternalIkOverrides(Player player) {
-        long handle = resolveModelHandle(player);
-        if (handle != 0) {
-            boneOverridePort.clearExternalIkOverrides(handle);
-        }
-    }
-
     static ModelInfo readModelInfo(long handle, NativeModelQueryPort queryPort) {
-        if (handle == 0 || queryPort == null) return null;
+        if (handle == 0 || queryPort == null) {
+            return null;
+        }
         try {
             int boneCount = sanitizeCount("bone", queryPort.getBoneCount(handle), handle);
             int vertexCount = sanitizeCount("vertex", queryPort.getVertexCount(handle), handle);
             int materialCount = sanitizeCount("material", queryPort.getMaterialCount(handle), handle);
-
             List<String> boneNames = clampBoneNames(parseBoneNames(queryPort.getBoneNames(handle)), boneCount, handle);
-
             float[] bonePositions = readBonePositions(handle, boneCount, queryPort);
-
-            return new ModelInfo(boneCount, vertexCount, materialCount, boneNames,
-                    bonePositions);
+            return new ModelInfo(boneCount, vertexCount, materialCount, boneNames, bonePositions);
         } catch (Exception e) {
-            logger.error("getModelInfo 异常，modelHandle={}", handle, e);
+            LOGGER.error("getModelInfo 异常，modelHandle={}", handle, e);
             return null;
         }
     }
@@ -172,22 +116,53 @@ public final class MmdSkinApi {
     }
 
     static float[] readRealtimeUvs(long handle, NativeModelQueryPort queryPort) {
-        if (handle == 0 || queryPort == null) return null;
+        if (handle == 0 || queryPort == null) {
+            return null;
+        }
         try {
             int vertexCount = sanitizeCount("vertex", queryPort.getVertexCount(handle), handle);
-            if (vertexCount <= 0) return null;
-
-            ByteBuffer buf = allocateFloatBuffer(vertexCount, FLOATS_PER_UV, handle, "uv");
-            if (buf == null) {
+            if (vertexCount <= 0) {
                 return null;
             }
-            int copied = clampCopiedCount("uv", vertexCount, queryPort.copyRealtimeUvsToBuffer(handle, buf), handle);
-            if (copied <= 0) return null;
-
-            return extractFloats(buf, copied * FLOATS_PER_UV, handle, "uv");
+            ByteBuffer buffer = allocateFloatBuffer(handle, vertexCount, FLOATS_PER_UV, "uv");
+            if (buffer == null) {
+                return null;
+            }
+            int copied = clampCopiedCount("uv", vertexCount, queryPort.copyRealtimeUvsToBuffer(handle, buffer), handle);
+            if (copied <= 0) {
+                return null;
+            }
+            return extractFloats(buffer, copied * FLOATS_PER_UV, handle, "uv");
         } catch (Exception e) {
-            logger.error("getUV 异常，modelHandle={}", handle, e);
+            LOGGER.error("getUV 异常，modelHandle={}", handle, e);
             return null;
+        }
+    }
+
+    public static String getMobModelReplacement(LivingEntity entity) {
+        return MobReplacementService.getReplacementModelName(entity);
+    }
+
+    public static String getConfiguredMobModelReplacement(String entityTypeId) {
+        return ConfigManager.getMobModelReplacement(entityTypeId);
+    }
+
+    public static String getConfiguredMobModelReplacement(net.minecraft.world.entity.EntityType<?> entityType) {
+        ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
+        return id == null ? "" : ConfigManager.getMobModelReplacement(id.toString());
+    }
+
+    private static long resolveModelHandle(Player player) {
+        if (player == null) return 0;
+        try {
+            PlayerModelResolver.Result result = PlayerModelResolver.resolve(player);
+            if (result == null || result.model() == null || result.model().model == null) {
+                return 0;
+            }
+            return result.model().model.getModelHandle();
+        } catch (Exception e) {
+            LOGGER.debug("resolveModelHandle 异常", e);
+            return 0;
         }
     }
 
@@ -195,32 +170,16 @@ public final class MmdSkinApi {
         if (boneCount <= 0) {
             return new float[0];
         }
-
-        ByteBuffer buf = allocateFloatBuffer(boneCount, FLOATS_PER_BONE_POSITION, handle, "bone positions");
-        if (buf == null) {
+        ByteBuffer buffer = allocateFloatBuffer(handle, boneCount, FLOATS_PER_BONE_POSITION, "bone positions");
+        if (buffer == null) {
             return new float[0];
         }
-
-        int copied = clampCopiedCount("bone positions", boneCount, queryPort.copyBonePositionsToBuffer(handle, buf), handle);
+        int copied = clampCopiedCount("bone positions", boneCount, queryPort.copyBonePositionsToBuffer(handle, buffer), handle);
         if (copied <= 0) {
             return new float[0];
         }
-        float[] floats = extractFloats(buf, copied * FLOATS_PER_BONE_POSITION, handle, "bone positions");
+        float[] floats = extractFloats(buffer, copied * FLOATS_PER_BONE_POSITION, handle, "bone positions");
         return floats != null ? floats : new float[0];
-    }
-
-    private static long resolveModelHandle(Player player) {
-        if (player == null) return 0;
-        try {
-            PlayerModelResolver.Result result = PlayerModelResolver.resolve(player);
-            if (result == null || result.model() == null || result.model().modelInstance() == null) {
-                return 0;
-            }
-            return result.model().modelInstance().getModelHandle();
-        } catch (Exception e) {
-            logger.debug("resolveModelHandle 异常", e);
-            return 0;
-        }
     }
 
     static List<String> parseBoneNames(String json) {
@@ -228,7 +187,7 @@ public final class MmdSkinApi {
             return Collections.emptyList();
         }
         if (json.charAt(0) != '[' || json.charAt(json.length() - 1) != ']') {
-            logger.debug("Ignored malformed bone-name payload: {}", json);
+            LOGGER.debug("Ignored malformed bone-name payload: {}", json);
             return Collections.emptyList();
         }
 
@@ -280,7 +239,7 @@ public final class MmdSkinApi {
         if (boneNames.size() <= boneCount) {
             return boneNames;
         }
-        logger.warn("Native bone-name count exceeded reported bone count, modelHandle={}, reported={}, names={}",
+        LOGGER.warn("Native bone-name count exceeded reported bone count, modelHandle={}, reported={}, names={}",
                 handle,
                 boneCount,
                 boneNames.size());
@@ -292,7 +251,7 @@ public final class MmdSkinApi {
             return 0;
         }
         if (count > Integer.MAX_VALUE) {
-            logger.warn("Native {} count exceeded int range, modelHandle={}, count={}", label, handle, count);
+            LOGGER.warn("Native {} count exceeded int range, modelHandle={}, count={}", label, handle, count);
             return 0;
         }
         return (int) count;
@@ -303,7 +262,7 @@ public final class MmdSkinApi {
             return 0;
         }
         if (copiedCount > requestedCount) {
-            logger.warn("Native {} copy exceeded requested count, modelHandle={}, requested={}, copied={}",
+            LOGGER.warn("Native {} copy exceeded requested count, modelHandle={}, requested={}, copied={}",
                     label,
                     handle,
                     requestedCount,
@@ -313,11 +272,11 @@ public final class MmdSkinApi {
         return copiedCount;
     }
 
-    private static ByteBuffer allocateFloatBuffer(int itemCount, int floatsPerItem, long handle, String label) {
+    private static ByteBuffer allocateFloatBuffer(long handle, int itemCount, int floatsPerItem, String label) {
         long floatCount = (long) itemCount * floatsPerItem;
         long byteCount = floatCount * Float.BYTES;
         if (itemCount <= 0 || floatCount <= 0L || byteCount <= 0L || byteCount > Integer.MAX_VALUE) {
-            logger.warn("Skipped {} buffer allocation because native count was unsafe, modelHandle={}, itemCount={}",
+            LOGGER.warn("Skipped {} buffer allocation because native count was unsafe, modelHandle={}, itemCount={}",
                     label,
                     handle,
                     itemCount);
@@ -332,7 +291,7 @@ public final class MmdSkinApi {
         }
         int availableFloatCount = buffer.capacity() / Float.BYTES;
         if (floatCount > availableFloatCount) {
-            logger.warn("Native {} payload exceeded allocated buffer, modelHandle={}, requestedFloats={}, availableFloats={}",
+            LOGGER.warn("Native {} payload exceeded allocated buffer, modelHandle={}, requestedFloats={}, availableFloats={}",
                     label,
                     handle,
                     floatCount,

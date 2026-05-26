@@ -7,10 +7,8 @@ import com.shiroha.mmdskin.stage.domain.model.StageMemberState;
 import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -161,15 +159,10 @@ final class StageAssignPanel {
         return false;
     }
 
-    boolean contains(double mouseX, double mouseY) {
-        return mouseX >= panelX && mouseX <= panelX + PANEL_WIDTH
-                && mouseY >= panelY && mouseY <= panelY + panelHeight;
-    }
-
     private void renderHeader(GuiGraphics graphics, int mouseX, int mouseY) {
-        graphics.drawString(font, wb("session.section"), panelX + PANEL_PADDING, panelY + 8, COLOR_ACCENT, false);
+        graphics.drawString(font, StageScreenUtils.wb("session.section"), panelX + PANEL_PADDING, panelY + 8, COLOR_ACCENT, false);
         if (facade.isSessionMember()) {
-            String stats = wb("guest.members.short", memberViews.size());
+            String stats = StageScreenUtils.wb("guest.members.short", memberViews.size());
             graphics.drawString(font, stats, panelX + PANEL_WIDTH - PANEL_PADDING - font.width(stats), panelY + 8, COLOR_TEXT_MUTED, false);
         } else {
             hoveredInviteButton = isRectHovered(mouseX, mouseY, inviteButtonX, inviteButtonY, INVITE_BUTTON_WIDTH, BUTTON_HEIGHT);
@@ -180,7 +173,8 @@ final class StageAssignPanel {
                     inviteButtonY + BUTTON_HEIGHT,
                     hoveredInviteButton ? COLOR_ACTION_HOVER : COLOR_ACTION
             );
-            graphics.drawCenteredString(font, wb("host.invite_all.short"), inviteButtonX + INVITE_BUTTON_WIDTH / 2, inviteButtonY + 4, TranslucentTrayChrome.TITLE_TEXT);
+            graphics.drawCenteredString(font, StageScreenUtils.wb("host.invite_all.short"),
+                    inviteButtonX + INVITE_BUTTON_WIDTH / 2, inviteButtonY + 4, TranslucentTrayChrome.TITLE_TEXT);
         }
         TranslucentTrayChrome.drawSeparator(graphics, panelX + PANEL_PADDING, listTop - 6, PANEL_WIDTH - PANEL_PADDING * 2);
     }
@@ -198,7 +192,8 @@ final class StageAssignPanel {
 
     private void renderGuestMembers(GuiGraphics graphics, int mouseX, int mouseY) {
         if (memberViews.isEmpty()) {
-            graphics.drawCenteredString(font, Component.translatable("gui.mmdskin.stage.waiting_host"), panelX + PANEL_WIDTH / 2, listTop + 4, COLOR_TEXT_DIM);
+            graphics.drawCenteredString(font, net.minecraft.network.chat.Component.translatable("gui.mmdskin.stage.waiting_host"),
+                    panelX + PANEL_WIDTH / 2, listTop + 4, COLOR_TEXT_DIM);
             return;
         }
         for (int i = 0; i < memberViews.size(); i++) {
@@ -215,15 +210,17 @@ final class StageAssignPanel {
                 fillRow(graphics, y, COLOR_ROW);
             }
             String prefix = memberView.host() ? "HOST" : memberView.local() ? "YOU" : "GUEST";
-            graphics.drawString(font, shorten(prefix + " " + memberView.name(), 17), panelX + PANEL_PADDING, y + 4, COLOR_TEXT, false);
+            graphics.drawString(font, StageScreenUtils.shorten(prefix + " " + memberView.name(), 17), panelX + PANEL_PADDING, y + 4, COLOR_TEXT, false);
             String state = guestStateText(memberView.state(), memberView.useHostCamera());
-            graphics.drawString(font, shorten(state, 13), panelX + PANEL_WIDTH - PANEL_PADDING - font.width(shorten(state, 13)), y + 4, colorForState(memberView.state()), false);
+            graphics.drawString(font, StageScreenUtils.shorten(state, 13),
+                    panelX + PANEL_WIDTH - PANEL_PADDING - font.width(StageScreenUtils.shorten(state, 13)),
+                    y + 4, colorForState(memberView.state()), false);
         }
     }
 
     private void renderHostMembers(GuiGraphics graphics, int mouseX, int mouseY) {
         if (hostEntries.isEmpty()) {
-            graphics.drawCenteredString(font, wb("host.empty.short"), panelX + PANEL_WIDTH / 2, listTop + 4, COLOR_TEXT_DIM);
+            graphics.drawCenteredString(font, StageScreenUtils.wb("host.empty.short"), panelX + PANEL_WIDTH / 2, listTop + 4, COLOR_TEXT_DIM);
             return;
         }
         for (int i = 0; i < hostEntries.size(); i++) {
@@ -239,9 +236,12 @@ final class StageAssignPanel {
             } else {
                 fillRow(graphics, y, COLOR_ROW);
             }
-            graphics.drawString(font, shorten(entry.name(), 17), panelX + PANEL_PADDING, y + 4, entry.nearby() ? COLOR_TEXT : COLOR_TEXT_MUTED, false);
+            graphics.drawString(font, StageScreenUtils.shorten(entry.name(), 17), panelX + PANEL_PADDING, y + 4,
+                    entry.nearby() ? COLOR_TEXT : COLOR_TEXT_MUTED, false);
             String action = hostActionText(entry);
-            graphics.drawString(font, shorten(action, 11), panelX + PANEL_WIDTH - PANEL_PADDING - font.width(shorten(action, 11)), y + 4, colorForHostEntry(entry), false);
+            graphics.drawString(font, StageScreenUtils.shorten(action, 11),
+                    panelX + PANEL_WIDTH - PANEL_PADDING - font.width(StageScreenUtils.shorten(action, 11)),
+                    y + 4, colorForHostEntry(entry), false);
         }
     }
 
@@ -258,15 +258,17 @@ final class StageAssignPanel {
                 TOGGLE_HEIGHT,
                 facade.isLocalCustomMotionEnabled(),
                 hoveredCustomMotionToggle,
-                Component.translatable("gui.mmdskin.stage.local_motion_override").getString()
+                net.minecraft.network.chat.Component.translatable("gui.mmdskin.stage.local_motion_override").getString()
         );
 
         if (!facade.isLocalCustomMotionEnabled()) {
-            graphics.drawString(font, Component.translatable("gui.mmdskin.stage.local_motion_fallback"), panelX + PANEL_PADDING, guestMotionTop, COLOR_TEXT_DIM, false);
+            graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.mmdskin.stage.local_motion_fallback"),
+                    panelX + PANEL_PADDING, guestMotionTop, COLOR_TEXT_DIM, false);
             return;
         }
         if (motionFiles.isEmpty()) {
-            graphics.drawString(font, Component.translatable("gui.mmdskin.stage.local_motion_empty"), panelX + PANEL_PADDING, guestMotionTop, COLOR_TEXT_DIM, false);
+            graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.mmdskin.stage.local_motion_empty"),
+                    panelX + PANEL_PADDING, guestMotionTop, COLOR_TEXT_DIM, false);
             return;
         }
 
@@ -285,8 +287,8 @@ final class StageAssignPanel {
                 fillRow(graphics, y, COLOR_ROW);
             }
             drawCheckbox(graphics, panelX + PANEL_PADDING, y + 4, facade.isLocalCustomMotionSelected(info.name));
-            graphics.drawString(font, shorten(stripExtension(info.name), 14), panelX + PANEL_PADDING + 13, y + 4, COLOR_TEXT, false);
-            String tag = motionTag(info);
+            graphics.drawString(font, StageScreenUtils.shorten(StageScreenUtils.stripExtension(info.name), 14), panelX + PANEL_PADDING + 13, y + 4, COLOR_TEXT, false);
+            String tag = StageScreenUtils.motionTag(info);
             graphics.drawString(font, tag, panelX + PANEL_WIDTH - PANEL_PADDING - font.width(tag), y + 4, COLOR_TEXT_MUTED, false);
         }
         graphics.disableScissor();
@@ -305,7 +307,8 @@ final class StageAssignPanel {
         int trackX = x + width - TOGGLE_TRACK_WIDTH;
         int trackY = y + Math.max(0, (height - trackHeight) / 2);
         int trackColor = enabled ? COLOR_TOGGLE_ON : COLOR_TOGGLE_OFF;
-        graphics.fill(trackX, trackY, trackX + TOGGLE_TRACK_WIDTH, trackY + trackHeight, hovered ? brighten(trackColor) : trackColor);
+        graphics.fill(trackX, trackY, trackX + TOGGLE_TRACK_WIDTH, trackY + trackHeight,
+                hovered ? brighten(trackColor) : trackColor);
         int knobSize = Math.max(8, trackHeight - 4);
         int knobX = enabled ? trackX + TOGGLE_TRACK_WIDTH - knobSize - 2 : trackX + 2;
         int knobY = trackY + (trackHeight - knobSize) / 2;
@@ -342,6 +345,11 @@ final class StageAssignPanel {
         motionScroll = Mth.clamp(motionScroll, 0.0f, maxMotionScroll());
     }
 
+    private boolean contains(double mouseX, double mouseY) {
+        return mouseX >= panelX && mouseX <= panelX + PANEL_WIDTH
+                && mouseY >= panelY && mouseY <= panelY + panelHeight;
+    }
+
     private int rowY(int top, int index, float scroll) {
         return top + index * (LIST_ROW_HEIGHT + ROW_GAP) - Math.round(scroll);
     }
@@ -357,34 +365,17 @@ final class StageAssignPanel {
         return mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height;
     }
 
-    private static String hostActionText(StageLobbyViewModel.HostEntry entry) {
-        StageMemberState state = entry.state();
+    private static int colorForState(StageMemberState state) {
         if (state == null) {
-            return entry.nearby() ? wb("host.action.invite") : wb("state.offline");
+            return COLOR_TEXT_MUTED;
         }
         return switch (state) {
-            case HOST -> wb("state.host");
-            case INVITED -> wb("host.action.cancel_invite");
-            case ACCEPTED -> entry.useHostCamera() ? wb("state.with_host_camera", wb("state.accepted")) : wb("state.accepted");
-            case READY -> entry.useHostCamera() ? wb("state.with_host_camera", wb("state.ready")) : wb("state.ready");
-            case DECLINED -> entry.nearby() ? wb("host.action.invite") : wb("state.declined");
-            case BUSY -> entry.nearby() ? wb("host.action.invite") : wb("state.busy");
+            case HOST -> COLOR_ACCENT;
+            case INVITED -> COLOR_WARN;
+            case ACCEPTED, READY -> COLOR_GOOD;
+            case DECLINED -> COLOR_BAD;
+            case BUSY -> COLOR_BUSY;
         };
-    }
-
-    private static String guestStateText(StageMemberState state, boolean useHostCamera) {
-        if (state == null) {
-            return wb("state.unknown");
-        }
-        String text = switch (state) {
-            case HOST -> wb("state.host");
-            case INVITED -> wb("state.invited");
-            case ACCEPTED -> wb("state.accepted");
-            case READY -> wb("state.ready");
-            case DECLINED -> wb("state.declined");
-            case BUSY -> wb("state.busy");
-        };
-        return useHostCamera ? wb("state.with_host_camera", text) : text;
     }
 
     private static int colorForHostEntry(StageLobbyViewModel.HostEntry entry) {
@@ -400,57 +391,41 @@ final class StageAssignPanel {
         };
     }
 
-    private static int colorForState(StageMemberState state) {
+    private static String guestStateText(StageMemberState state, boolean useHostCamera) {
         if (state == null) {
-            return COLOR_TEXT_MUTED;
+            return StageScreenUtils.wb("state.unknown");
+        }
+        String text = switch (state) {
+            case HOST -> StageScreenUtils.wb("state.host");
+            case INVITED -> StageScreenUtils.wb("state.invited");
+            case ACCEPTED -> StageScreenUtils.wb("state.accepted");
+            case READY -> StageScreenUtils.wb("state.ready");
+            case DECLINED -> StageScreenUtils.wb("state.declined");
+            case BUSY -> StageScreenUtils.wb("state.busy");
+        };
+        return useHostCamera ? StageScreenUtils.wb("state.with_host_camera", text) : text;
+    }
+
+    private static String hostActionText(StageLobbyViewModel.HostEntry entry) {
+        StageMemberState state = entry.state();
+        if (state == null) {
+            return entry.nearby() ? StageScreenUtils.wb("host.action.invite") : StageScreenUtils.wb("state.offline");
         }
         return switch (state) {
-            case HOST -> COLOR_ACCENT;
-            case INVITED -> COLOR_WARN;
-            case ACCEPTED, READY -> COLOR_GOOD;
-            case DECLINED -> COLOR_BAD;
-            case BUSY -> COLOR_BUSY;
+            case HOST -> StageScreenUtils.wb("state.host");
+            case INVITED -> StageScreenUtils.wb("host.action.cancel_invite");
+            case ACCEPTED -> entry.useHostCamera()
+                    ? StageScreenUtils.wb("state.with_host_camera", StageScreenUtils.wb("state.accepted"))
+                    : StageScreenUtils.wb("state.accepted");
+            case READY -> entry.useHostCamera()
+                    ? StageScreenUtils.wb("state.with_host_camera", StageScreenUtils.wb("state.ready"))
+                    : StageScreenUtils.wb("state.ready");
+            case DECLINED -> entry.nearby() ? StageScreenUtils.wb("host.action.invite") : StageScreenUtils.wb("state.declined");
+            case BUSY -> entry.nearby() ? StageScreenUtils.wb("host.action.invite") : StageScreenUtils.wb("state.busy");
         };
     }
 
     private static int brighten(int color) {
-        int a = color >>> 24;
-        int r = Math.min(255, ((color >>> 16) & 0xFF) + 18);
-        int g = Math.min(255, ((color >>> 8) & 0xFF) + 18);
-        int b = Math.min(255, (color & 0xFF) + 18);
-        return (a << 24) | (r << 16) | (g << 8) | b;
-    }
-
-    private static String motionTag(StagePack.VmdFileInfo info) {
-        List<String> tags = new ArrayList<>(3);
-        if (info.hasBones) {
-            tags.add("B");
-        }
-        if (info.hasMorphs) {
-            tags.add("M");
-        }
-        if (info.hasCamera) {
-            tags.add("C");
-        }
-        return String.join("/", tags);
-    }
-
-    private static String stripExtension(String text) {
-        int dot = text.lastIndexOf('.');
-        return dot > 0 ? text.substring(0, dot) : text;
-    }
-
-    private static String shorten(String text, int maxChars) {
-        if (text == null) {
-            return "";
-        }
-        if (text.length() <= maxChars) {
-            return text;
-        }
-        return maxChars <= 2 ? text.substring(0, Math.max(0, maxChars)) : text.substring(0, maxChars - 2) + "..";
-    }
-
-    private static String wb(String suffix, Object... args) {
-        return Component.translatable("gui.mmdskin.stage.workbench." + suffix, args).getString();
+        return TranslucentTrayChrome.brighten(color, 18);
     }
 }

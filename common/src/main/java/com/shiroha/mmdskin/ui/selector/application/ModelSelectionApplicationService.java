@@ -1,4 +1,3 @@
-/* 职责：管理玩家模型选择与快速切换。 */
 package com.shiroha.mmdskin.ui.selector.application;
 
 import com.shiroha.mmdskin.config.UIConstants;

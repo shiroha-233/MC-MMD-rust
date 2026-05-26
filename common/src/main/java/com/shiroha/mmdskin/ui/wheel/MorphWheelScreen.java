@@ -1,3 +1,4 @@
+/* 文件职责：承载表情轮盘的选择、配置入口与触发键确认语义。 */
 package com.shiroha.mmdskin.ui.wheel;
 
 import com.shiroha.mmdskin.ui.config.MorphWheelConfigScreen;
@@ -12,7 +13,6 @@ import net.minecraft.network.chat.Component;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 表情选择轮盘界面。 */
 public class MorphWheelScreen extends AbstractWheelScreen {
     private static final WheelStyle STYLE = createTranslucentWheelStyle(0.80f, 0.25f);
 

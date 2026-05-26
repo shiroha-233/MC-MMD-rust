@@ -1,6 +1,6 @@
+/* 文件职责：定义 morph 与表情应用相关的 native 能力边界。 */
 package com.shiroha.mmdskin.bridge.runtime;
 
-/** 文件职责：集中定义 morph 与表情应用相关的 native 能力。 */
 public interface NativeMorphPort {
 
     void resetAllMorphs(long modelHandle);

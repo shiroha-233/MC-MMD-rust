@@ -47,6 +47,8 @@ public class ActionWheelConfig {
         for (AnimationInfo anim : animations) {
             availableActions.add(ActionEntry.from(anim));
         }
+        
+
     }
 
     public void load() {

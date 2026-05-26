@@ -1,0 +1,185 @@
+// 负责 NeoForge 平台的依赖装配、阴影打包与重映射发布。
+plugins {
+	id 'com.gradleup.shadow' version '8.3.6'
+}
+
+architectury {
+    platformSetupLoomIde()
+    neoForge()
+}
+
+loom {
+    runs {
+        client {
+            client()
+            name "NeoForge Client"
+            runDir "run/client"
+            vmArgs "-Dneoforge.enabledGameTestNamespace=mmdskin"
+            programArgs "--username", "Player1"
+        }
+        client2 {
+            client()
+            name "NeoForge Client 2"
+            runDir "run/client2"
+            vmArgs "-Dneoforge.enabledGameTestNamespace=mmdskin"
+            programArgs "--username", "Player2"
+        }
+        server {
+            server()
+            name "NeoForge Server"
+            runDir "run/server"
+            vmArgs "-Dneoforge.enabledGameTestNamespace=mmdskin"
+        }
+    }
+}
+
+configurations {
+    common
+    shadowCommon // Don't use shadow from the shadow plugin since it conflicts with Loom.
+    shadowBundle
+    compileClasspath.extendsFrom common
+    runtimeClasspath.extendsFrom common
+    developmentNeoForge.extendsFrom common
+}
+
+shadowJar {
+    exclude "architectury.common.json"
+    exclude "fabric.mod.json"
+    configurations = [project.configurations.shadowCommon, project.configurations.shadowBundle]
+    archiveClassifier.set("dev-shadow")
+    relocate "javazoom", "com.shiroha.mmdskin.shadow.javazoom"
+    
+    // 包含 common 模块的资源（原生库、默认动画等）
+    from(project(":common").sourceSets.main.resources)
+    
+    // 排除不需要的文件
+    exclude 'META-INF/versions/**'
+    
+    // 强制更新 META-INF/services 里的类名
+    mergeServiceFiles()
+    
+    // 排除 module-info.class 避免 JPMS 冲突
+    exclude 'module-info.class'
+}
+
+
+remapJar {
+	inputFile.set shadowJar.archiveFile
+	dependsOn shadowJar
+}
+
+jar {
+	archiveClassifier.set("dev")
+	from("${rootProject.projectDir}/LICENSE") {
+		rename { "${it}_${base.archivesName.get()}"}
+	}
+	
+	manifest {
+		attributes([
+			'Specification-Title'     : 'Template Mod',
+			'Specification-Vendor'    : 'Template Author',
+			'Specification-Version'   : '1',
+			'Implementation-Title'    : project.name,
+			'Implementation-Version'  : project.version,
+			'Implementation-Vendor'   : 'Template Author'
+		])
+	}
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        url "https://maven.shedaniel.me/"
+        name "Shedaniel Maven"
+    }
+    maven {
+        url = "https://api.modrinth.com/maven"
+        name = "Modrinth Maven"
+    }
+    maven {
+        url "https://bmclapi2.bangbang93.com/maven/"
+        name "NeoForge Mirror"
+    }
+    maven {
+        url "https://maven.neoforged.net/releases/"
+        name "NeoForge"
+    }
+    maven {
+        url "https://maven.architectury.dev/"
+        name "Architectury"
+    }
+    maven {
+        url "https://cursemaven.com"
+        name "CurseMaven"
+    }
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    def replaceProperties = [
+        minecraft_version: '1.21.1',
+        minecraft_version_range: '[1.21.1,1.22)',
+        neoforge_version: project.neoforge_version,
+        neoforge_version_range: '[21.1,)',
+        loader_version_range: '[4,)',
+        mod_id: 'mmdskin',
+        mod_name: '3D Skin Layers',
+        mod_version: project.version,
+        mod_authors: 'shiroha233, kjkjkAIStudio, asuka-mio, Gengorou-C',
+        mod_description: 'A mod that replaces Minecraft entity rendering with MMD models'
+    ]
+
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand replaceProperties
+    }
+}
+
+dependencies {
+    // Common 模块 - 添加源代码到编译路径
+    common(project(path: ":common", configuration: "namedElements")) { transitive false }
+    shadowCommon(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
+
+    // JLayer 在 dev 运行时保持可见，但发布物改为私有化阴影打包。
+    common("javazoom:jlayer:1.0.1") { transitive = false }
+    shadowBundle("javazoom:jlayer:1.0.1") { transitive = false }
+
+    // NeoForge 平台
+    neoForge "net.neoforged:neoforge:${neoforge_version}"
+
+    // Architectury API - 使用 Jar-in-Jar 内嵌
+    modApi("dev.architectury:architectury-neoforge:${project.architectury_version}")
+    include("dev.architectury:architectury-neoforge:${project.architectury_version}")
+
+    // mc-vr-api - Vivecraft VR API（软依赖，运行时可选）
+
+    // Cloth Config API for NeoForge - Jar-in-Jar include
+    modApi("me.shedaniel.cloth:cloth-config-neoforge:${project.cloth_config_version}")
+    include("me.shedaniel.cloth:cloth-config-neoforge:${project.cloth_config_version}")
+}
+
+// Source JAR 组装（合并 common 源码）
+sourcesJar {
+    // Avoid duplicate entries when merging common sources
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    def commonSources = project(":common").sourcesJar
+    dependsOn commonSources
+    from commonSources.archiveFile.map { zipTree(it) }
+}
+
+components.java {
+    withVariantsFromConfiguration(project.configurations.shadowRuntimeElements) {
+        skip()
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            // Avoid JPMS split-package: keep top-level network package only in common
+        }
+        resources {
+            exclude 'assets/mmdskin/lang/*.json'
+        }
+    }
+}

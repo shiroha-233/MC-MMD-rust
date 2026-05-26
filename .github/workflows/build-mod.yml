@@ -309,7 +309,7 @@ jobs:
         with:
           ndk-version: r27c
 
-      - name: Copy natives to resources
+      - name: Copy natives to resources (only Windows/Linux x64 + Android ARM64)
         env:
           NDK_PATH: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
@@ -321,10 +321,10 @@ jobs:
           cp native-libs/native-android-arm64/libmmd_engine.so common/src/main/resources/natives/android-arm64/
           cp "$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" common/src/main/resources/natives/android-arm64/
 
-      - name: Setup JDK 17
+      - name: Setup JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
       - name: Setup Gradle
@@ -346,14 +346,14 @@ jobs:
             !fabric/build/libs/*-sources*.jar
           if-no-files-found: error
 
-      - name: Upload Forge Mod
+      - name: Upload NeoForge Mod
         uses: actions/upload-artifact@v4
         with:
-          name: mmdskin-forge-${{ steps.version.outputs.mod_version }}
+          name: mmdskin-neoforge-${{ steps.version.outputs.mod_version }}
           path: |
-            forge/build/libs/mmdskin-forge-*.jar
-            !forge/build/libs/*-dev*.jar
-            !forge/build/libs/*-sources*.jar
+            neoforge/build/libs/mmdskin-neoforge-*.jar
+            !neoforge/build/libs/*-dev*.jar
+            !neoforge/build/libs/*-sources*.jar
           if-no-files-found: error
 
   # ==================== Java 模组构建（通用版：包含所有平台） ====================
@@ -411,10 +411,10 @@ jobs:
           cp "$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" common/src/main/resources/natives/android-arm64/
           cp "$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/libc++_shared.so" common/src/main/resources/natives/android-amd64/
 
-      - name: Setup JDK 17
+      - name: Setup JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
       - name: Setup Gradle
@@ -433,8 +433,8 @@ jobs:
             case "$f" in *-dev*|*-sources*) continue;; esac
             mv "$f" "${f%.jar}-universal.jar"
           done
-          cd ../../../forge/build/libs
-          for f in mmdskin-forge-*.jar; do
+          cd ../../../neoforge/build/libs
+          for f in mmdskin-neoforge-*.jar; do
             case "$f" in *-dev*|*-sources*) continue;; esac
             mv "$f" "${f%.jar}-universal.jar"
           done
@@ -447,17 +447,17 @@ jobs:
             fabric/build/libs/*-universal.jar
           if-no-files-found: error
 
-      - name: Upload Universal Forge Mod
+      - name: Upload Universal NeoForge Mod
         uses: actions/upload-artifact@v4
         with:
-          name: mmdskin-forge-${{ steps.version.outputs.mod_version }}-universal
+          name: mmdskin-neoforge-${{ steps.version.outputs.mod_version }}-universal
           path: |
-            forge/build/libs/*-universal.jar
+            neoforge/build/libs/*-universal.jar
           if-no-files-found: error
 
   # ==================== 统一发布 ====================
   release:
-    needs: [build-rust-windows-x64, build-rust-windows-arm64, build-rust-linux-x64, build-rust-linux-arm64, build-rust-macos-x64, build-rust-macos-arm64, build-rust-android-arm64, build-rust-android-amd64, build-rust-linux-loongarch64, build-rust-linux-riscv64, build-java-universal]
+    needs: [build-rust-windows-x64, build-rust-windows-arm64, build-rust-linux-x64, build-rust-linux-arm64, build-rust-macos-x64, build-rust-macos-arm64, build-rust-android-arm64, build-rust-android-amd64, build-rust-linux-loongarch64, build-rust-linux-riscv64, build-java, build-java-universal]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -486,7 +486,9 @@ jobs:
         with:
           files: |
             artifacts/mmdskin-fabric-*/*.jar
-            artifacts/mmdskin-forge-*/*.jar
+            artifacts/mmdskin-neoforge-*/*.jar
+            artifacts/mmdskin-fabric-*-universal/*.jar
+            artifacts/mmdskin-neoforge-*-universal/*.jar
             artifacts/native-windows-x64/*.dll
             artifacts/native-windows-arm64/*.dll
             artifacts/native-linux-x64/*.so

@@ -4,14 +4,15 @@ import com.shiroha.mmdskin.stage.application.StageSessionService;
 import com.shiroha.mmdskin.stage.application.port.StageLocalPlayerContextPort;
 import com.shiroha.mmdskin.stage.application.port.StagePlaybackPreferencesPort;
 import com.shiroha.mmdskin.stage.application.port.StageSessionOutboundPort;
-import com.shiroha.mmdskin.stage.application.port.StageSessionReadyCommand;
+import com.shiroha.mmdskin.stage.client.DefaultStageLocalPlayerContext;
 import com.shiroha.mmdskin.stage.client.playback.StagePlaybackStartRequest;
+import com.shiroha.mmdskin.stage.client.playback.DefaultStagePlaybackPreferencesPort;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackBroadcastPort;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackRuntimePort;
-import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackSessionPort;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackUiPort;
-import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackWatchRequest;
 import com.shiroha.mmdskin.stage.domain.model.StageDescriptor;
+import com.shiroha.mmdskin.ui.network.StageNetworkSessionOutboundAdapter;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -24,13 +25,28 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StagePlaybackCoordinatorTest {
+    private final StageSessionService sessionService = StageSessionService.getInstance();
+    private final StagePlaybackCoordinator coordinator = StagePlaybackCoordinator.getInstance();
+
+    @AfterEach
+    void tearDown() {
+        sessionService.onDisconnect();
+        sessionService.configureRuntimeCollaborators(
+                DefaultStageLocalPlayerContext.INSTANCE,
+                DefaultStagePlaybackPreferencesPort.INSTANCE,
+                StageNetworkSessionOutboundAdapter.INSTANCE
+        );
+        coordinator.resetCollaborators();
+    }
+
     @Test
     void shouldStartGuestPlaybackThroughPorts() {
         UUID localId = UUID.randomUUID();
         UUID hostId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
         FakeSessionOutbound outbound = new FakeSessionOutbound();
-        StageSessionService sessionService = new StageSessionService(
+
+        sessionService.configureRuntimeCollaborators(
                 new FakeLocalPlayerContext(localId).withName(localId, "Local").withName(hostId, "Host"),
                 new FakePlaybackPreferences(),
                 outbound
@@ -46,12 +62,7 @@ class StagePlaybackCoordinatorTest {
         );
         FakeBroadcast broadcast = new FakeBroadcast();
         FakeUi ui = new FakeUi();
-        StagePlaybackCoordinator coordinator = new StagePlaybackCoordinator(
-                runtime,
-                broadcast,
-                ui,
-                new DefaultStageCameraSessionPort(sessionService)
-        );
+        coordinator.setCollaboratorsForTesting(runtime, broadcast, ui, DefaultStageCameraSessionPort.INSTANCE);
 
         StagePlaybackStartRequest request = new StagePlaybackStartRequest(
                 new StageDescriptor("host_pack", List.of("dance.vmd"), null, null),
@@ -73,12 +84,13 @@ class StagePlaybackCoordinatorTest {
     }
 
     @Test
-    void shouldLeaveSessionWhenClosingSelectionBeforeStart() {
+    void shouldKeepStageSelectionOpenWhenGuestPlaybackStartFails() {
         UUID localId = UUID.randomUUID();
         UUID hostId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
         FakeSessionOutbound outbound = new FakeSessionOutbound();
-        StageSessionService sessionService = new StageSessionService(
+
+        sessionService.configureRuntimeCollaborators(
                 new FakeLocalPlayerContext(localId).withName(localId, "Local").withName(hostId, "Host"),
                 new FakePlaybackPreferences(),
                 outbound
@@ -88,12 +100,112 @@ class StagePlaybackCoordinatorTest {
         sessionService.acceptInvite();
 
         FakeRuntime runtime = new FakeRuntime();
-        StagePlaybackCoordinator coordinator = new StagePlaybackCoordinator(
-                runtime,
-                new FakeBroadcast(),
-                new FakeUi(),
-                new DefaultStageCameraSessionPort(sessionService)
+        runtime.guestStartResult = StagePlaybackRuntimePort.GuestStartResult.failed();
+        FakeBroadcast broadcast = new FakeBroadcast();
+        FakeUi ui = new FakeUi();
+        coordinator.setCollaboratorsForTesting(runtime, broadcast, ui, DefaultStageCameraSessionPort.INSTANCE);
+
+        StagePlaybackStartRequest request = new StagePlaybackStartRequest(
+                new StageDescriptor("host_pack", List.of("dance.vmd"), null, null),
+                0.0f,
+                null,
+                "motion_pack"
         );
+
+        coordinator.handlePlaybackStart(hostId, sessionId, request);
+
+        assertEquals(0, ui.startedAndClosedCount);
+        assertEquals(1, ui.openSelectionCount);
+        assertEquals(List.of(true), runtime.waitingForHostFlags);
+    }
+
+    @Test
+    void shouldApplyInitialFrameSyncEvenWhenStartFrameIsZero() {
+        UUID localId = UUID.randomUUID();
+        UUID hostId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        FakeSessionOutbound outbound = new FakeSessionOutbound();
+
+        sessionService.configureRuntimeCollaborators(
+                new FakeLocalPlayerContext(localId).withName(localId, "Local").withName(hostId, "Host"),
+                new FakePlaybackPreferences(),
+                outbound
+        );
+
+        assertTrue(sessionService.onInviteReceived(hostId, sessionId));
+        sessionService.acceptInvite();
+
+        FakeRuntime runtime = new FakeRuntime();
+        runtime.guestStartResult = StagePlaybackRuntimePort.GuestStartResult.success(
+                new StageDescriptor("host_pack", List.of("dance.vmd"), null, null),
+                new StageDescriptor("motion_pack", List.of("dance.vmd"), null, null)
+        );
+        FakeBroadcast broadcast = new FakeBroadcast();
+        FakeUi ui = new FakeUi();
+        coordinator.setCollaboratorsForTesting(runtime, broadcast, ui, DefaultStageCameraSessionPort.INSTANCE);
+
+        StagePlaybackStartRequest request = new StagePlaybackStartRequest(
+                new StageDescriptor("host_pack", List.of("dance.vmd"), null, null),
+                0.0f,
+                null,
+                "motion_pack"
+        );
+
+        coordinator.handlePlaybackStart(hostId, sessionId, request);
+
+        assertEquals(List.of(0.0f), runtime.initialFrameSyncs);
+        assertEquals(1, ui.startedAndClosedCount);
+    }
+
+    @Test
+    void shouldRequestWatchFromHostThroughBroadcastPort() {
+        UUID localId = UUID.randomUUID();
+        UUID hostId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        FakeSessionOutbound outbound = new FakeSessionOutbound();
+
+        sessionService.configureRuntimeCollaborators(
+                new FakeLocalPlayerContext(localId).withName(localId, "Local").withName(hostId, "Host"),
+                new FakePlaybackPreferences(),
+                outbound
+        );
+
+        assertTrue(sessionService.onInviteReceived(hostId, sessionId));
+        sessionService.acceptInvite();
+
+        FakeRuntime runtime = new FakeRuntime();
+        FakeBroadcast broadcast = new FakeBroadcast();
+        coordinator.setCollaboratorsForTesting(runtime, broadcast, new FakeUi(), DefaultStageCameraSessionPort.INSTANCE);
+
+        StageDescriptor descriptor = new StageDescriptor("host_pack", List.of("dance.vmd"), null, null);
+        coordinator.requestWatchFromHost(descriptor, 1.25f, 12.0f);
+
+        assertEquals(1, broadcast.stageWatchCalls.size());
+        assertEquals(hostId, broadcast.stageWatchCalls.get(0).targetUUID());
+        assertEquals(sessionId, broadcast.stageWatchCalls.get(0).sessionId());
+        assertEquals("host_pack", broadcast.stageWatchCalls.get(0).descriptor().getPackName());
+        assertEquals(1.25f, broadcast.stageWatchCalls.get(0).heightOffset());
+        assertEquals(12.0f, broadcast.stageWatchCalls.get(0).startFrame());
+    }
+
+    @Test
+    void shouldLeaveSessionWhenClosingSelectionBeforeStart() {
+        UUID localId = UUID.randomUUID();
+        UUID hostId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        FakeSessionOutbound outbound = new FakeSessionOutbound();
+
+        sessionService.configureRuntimeCollaborators(
+                new FakeLocalPlayerContext(localId).withName(localId, "Local").withName(hostId, "Host"),
+                new FakePlaybackPreferences(),
+                outbound
+        );
+
+        assertTrue(sessionService.onInviteReceived(hostId, sessionId));
+        sessionService.acceptInvite();
+
+        FakeRuntime runtime = new FakeRuntime();
+        coordinator.setCollaboratorsForTesting(runtime, new FakeBroadcast(), new FakeUi(), DefaultStageCameraSessionPort.INSTANCE);
 
         coordinator.onStageSelectionClosed(false);
 
@@ -153,7 +265,8 @@ class StagePlaybackCoordinatorTest {
         private final List<LeaveCall> leaveCalls = new ArrayList<>();
 
         @Override
-        public void sendReady(StageSessionReadyCommand command) {
+        public void sendReady(UUID hostUUID, UUID sessionId, boolean ready, boolean useHostCamera,
+                              String motionPackName, List<String> motionFiles) {
         }
 
         @Override
@@ -184,17 +297,21 @@ class StagePlaybackCoordinatorTest {
     }
 
     private static final class FakeRuntime implements StagePlaybackRuntimePort {
+        private final List<Boolean> enterSelectionWaitingFlags = new ArrayList<>();
         private final List<Float> initialFrameSyncs = new ArrayList<>();
         private final List<GuestStartCall> guestStartCalls = new ArrayList<>();
+        private final List<Boolean> waitingForHostFlags = new ArrayList<>();
         private int exitSelectionCalls;
         private GuestStartResult guestStartResult = GuestStartResult.failed();
 
         @Override
         public void enterStageSelection(boolean waitingForHost) {
+            enterSelectionWaitingFlags.add(waitingForHost);
         }
 
         @Override
         public void setWaitingForHost(boolean waitingForHost) {
+            waitingForHostFlags.add(waitingForHost);
         }
 
         @Override
@@ -222,29 +339,41 @@ class StagePlaybackCoordinatorTest {
         }
 
         @Override
+        public HostStartResult startPuppetModePlayback(com.shiroha.mmdskin.config.StagePack pack, boolean cinematicMode,
+                                                       float cameraHeightOffset, String selectedMotionFileName) {
+            return HostStartResult.failed();
+        }
+
+        @Override
         public GuestStartResult startGuestPlayback(UUID hostUUID,
-                                                   StagePlaybackStartRequest request,
-                                                   boolean useHostCamera) {
+                                                    StagePlaybackStartRequest request,
+                                                    boolean useHostCamera) {
             guestStartCalls.add(new GuestStartCall(hostUUID, request, useHostCamera));
             return guestStartResult;
         }
     }
 
     private static final class FakeBroadcast implements StagePlaybackBroadcastPort {
+        private final List<StageWatchCall> stageWatchCalls = new ArrayList<>();
+        private final List<UUID> remoteStartSessionIds = new ArrayList<>();
         private final List<StageDescriptor> remoteStarts = new ArrayList<>();
 
         @Override
-        public void sendStageWatch(StagePlaybackWatchRequest request) {
+        public void sendStageWatch(UUID targetUUID, UUID sessionId, StageDescriptor descriptor,
+                                    float heightOffset, float startFrame) {
+            stageWatchCalls.add(new StageWatchCall(targetUUID, sessionId, descriptor, heightOffset, startFrame));
         }
 
         @Override
-        public void sendRemoteStageStart(StageDescriptor descriptor) {
+        public void sendRemoteStageStart(UUID sessionId, StageDescriptor descriptor) {
+            remoteStartSessionIds.add(sessionId);
             remoteStarts.add(descriptor);
         }
     }
 
     private static final class FakeUi implements StagePlaybackUiPort {
         private int startedAndClosedCount;
+        private int openSelectionCount;
 
         @Override
         public void showInvite(UUID hostUUID) {
@@ -257,6 +386,7 @@ class StagePlaybackCoordinatorTest {
 
         @Override
         public void openStageSelection() {
+            openSelectionCount++;
         }
 
         @Override
@@ -268,6 +398,10 @@ class StagePlaybackCoordinatorTest {
     }
 
     private record GuestStartCall(UUID hostUUID, StagePlaybackStartRequest request,
-                                  boolean useHostCamera) {
+                                    boolean useHostCamera) {
+    }
+
+    private record StageWatchCall(UUID targetUUID, UUID sessionId, StageDescriptor descriptor,
+                                  float heightOffset, float startFrame) {
     }
 }

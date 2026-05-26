@@ -1,3 +1,4 @@
+/* 文件职责：定义内建表情对模型 morph 名称的匹配规则。 */
 package com.shiroha.mmdskin.expression;
 
 import java.util.List;

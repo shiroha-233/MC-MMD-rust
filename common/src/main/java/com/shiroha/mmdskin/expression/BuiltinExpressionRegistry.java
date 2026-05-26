@@ -1,7 +1,7 @@
+/* 文件职责：注册内建表情预设并为配置层提供预设条目。 */
 package com.shiroha.mmdskin.expression;
 
 import com.shiroha.mmdskin.ui.config.MorphWheelConfig;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -82,10 +82,7 @@ public final class BuiltinExpressionRegistry {
                                 ))),
                         target(0.80f, aliasesWithTokens(
                                 List.of("口開き", "mouthopen", "openmouth", "あ", "aa", "a"),
-                                List.of(
-                                        List.of("mouth", "open"),
-                                        List.of("口", "開")
-                                ))),
+                                List.of(List.of("mouth", "open"), List.of("口", "開")))),
                         target(0.65f, aliasesWithTokens(
                                 List.of("瞳小", "小瞳", "pupilsmall", "smallpupil", "smalliris", "irissmall"),
                                 List.of(

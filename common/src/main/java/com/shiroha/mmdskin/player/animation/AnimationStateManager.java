@@ -1,8 +1,9 @@
 package com.shiroha.mmdskin.player.animation;
 
 import com.shiroha.mmdskin.player.runtime.EntityAnimState;
-import com.shiroha.mmdskin.model.runtime.ManagedModel;
-import com.shiroha.mmdskin.player.sync.PlayerActionSyncService;
+import com.shiroha.mmdskin.renderer.runtime.animation.MMDAnimManager;
+import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager.Model;
+import com.shiroha.mmdskin.ui.network.ActionWheelNetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.InteractionHand;
@@ -19,25 +20,26 @@ public class AnimationStateManager {
     private static final float TRANSITION_TIME = 0.25f;
     static final String DRINK_ANIMATION = "Drink";
 
-    public static void updateAnimationState(AbstractClientPlayer player, ManagedModel model) {
-        if (model.entityState().playCustomAnim) {
-            if (!model.entityState().playStageAnim) {
+    public static void updateAnimationState(AbstractClientPlayer player, Model model) {
+        if (model.entityData.playCustomAnim) {
+            // 纸娃娃模式下，不检查是否应该停止动画，让动画持续播放
+            if (!model.entityData.playStageAnim) {
                 boolean local = isLocalPlayer(player);
                 if (local && shouldStopCustomAnimation(player)) {
                     stopCustomAnim(model);
-                    PlayerActionSyncService.getInstance().syncAnimStop();
+                    ActionWheelNetworkHandler.getInstance().syncAnimStop();
                 }
             }
         }
 
-        if (!model.entityState().playCustomAnim) {
+        if (!model.entityData.playCustomAnim) {
             updateLayer0Animation(player, model);
             updateLayer1Animation(player, model);
             updateLayer2Animation(player, model);
         }
     }
 
-    private static void updateLayer0Animation(AbstractClientPlayer player, ManagedModel model) {
+    private static void updateLayer0Animation(AbstractClientPlayer player, Model model) {
         EntityAnimState.State target = resolveLayer0State(player);
         changeAnimationOnce(model, target, 0);
     }
@@ -74,20 +76,20 @@ public class AnimationStateManager {
         return hasMovement(player) ? EntityAnimState.State.Crawl : EntityAnimState.State.LieDown;
     }
 
-    private static void updateLayer1Animation(AbstractClientPlayer player, ManagedModel model) {
+    private static void updateLayer1Animation(AbstractClientPlayer player, Model model) {
         if ((!player.isUsingItem() && !player.swinging && player.hurtTime <= 0) || player.isSleeping()) {
-            if (model.entityState().stateLayers[1] != EntityAnimState.State.Idle) {
-                model.entityState().stateLayers[1] = EntityAnimState.State.Idle;
-                model.entityState().layerAnimationKeys[1] = null;
-                model.modelInstance().setLayerLoop(1, true);
-                model.modelInstance().transitionAnim(0, 1, TRANSITION_TIME);
+            if (model.entityData.stateLayers[1] != EntityAnimState.State.Idle) {
+                model.entityData.stateLayers[1] = EntityAnimState.State.Idle;
+                model.entityData.layerAnimationKeys[1] = null;
+                model.model.setLayerLoop(1, true);
+                model.model.transitionAnim(0, 1, TRANSITION_TIME);
             }
         } else if (player.hurtTime <= 0) {
             updateHandAnimation(player, model);
         }
     }
 
-    private static void updateHandAnimation(AbstractClientPlayer player, ManagedModel model) {
+    private static void updateHandAnimation(AbstractClientPlayer player, Model model) {
         if (player.getUsedItemHand() == InteractionHand.MAIN_HAND && player.isUsingItem()) {
             updateUsingItemAnimation(model, player.getItemInHand(InteractionHand.MAIN_HAND),
                     EntityAnimState.State.ItemRight, "Right", 1);
@@ -105,11 +107,11 @@ public class AnimationStateManager {
         }
     }
 
-    private static void updateUsingItemAnimation(ManagedModel model, ItemStack itemStack,
+    private static void updateUsingItemAnimation(Model model, ItemStack itemStack,
                                                  EntityAnimState.State targetState, String activeHand, int layer) {
         String triggerAnimation = resolveUseTriggerAnimationName(itemStack.getUseAnimation());
         if (triggerAnimation != null) {
-            long triggerAnim = model.animationLibrary().animation(triggerAnimation);
+            long triggerAnim = MMDAnimManager.GetAnimModel(model.model, triggerAnimation);
             if (triggerAnim != 0) {
                 applyLayerAnimation(model, targetState, triggerAnimation, triggerAnim, layer, false);
                 return;
@@ -120,28 +122,28 @@ public class AnimationStateManager {
                 itemStack.getUseAnimation(), "using", layer);
     }
 
-    private static void updateLayer2Animation(AbstractClientPlayer player, ManagedModel model) {
+    private static void updateLayer2Animation(AbstractClientPlayer player, Model model) {
         if (player.isShiftKeyDown() && !player.isVisuallyCrawling()) {
             changeAnimationOnce(model, EntityAnimState.State.Sneak, 2);
             return;
         }
 
-        if (model.entityState().stateLayers[2] != EntityAnimState.State.Idle) {
-            model.entityState().stateLayers[2] = EntityAnimState.State.Idle;
-            model.entityState().layerAnimationKeys[2] = null;
-            model.modelInstance().transitionAnim(0, 2, TRANSITION_TIME);
+        if (model.entityData.stateLayers[2] != EntityAnimState.State.Idle) {
+            model.entityData.stateLayers[2] = EntityAnimState.State.Idle;
+            model.entityData.layerAnimationKeys[2] = null;
+            model.model.transitionAnim(0, 2, TRANSITION_TIME);
         }
     }
 
-    private static void stopCustomAnim(ManagedModel model) {
-        model.entityState().playCustomAnim = false;
-        model.entityState().playStageAnim = false;
-        model.modelInstance().changeAnim(model.animationLibrary().animation("idle"), 0);
-        model.modelInstance().setLayerLoop(1, true);
-        model.modelInstance().changeAnim(0, 1);
-        model.modelInstance().changeAnim(0, 2);
-        model.modelInstance().resetPhysics();
-        model.entityState().invalidateStateLayers();
+    private static void stopCustomAnim(Model model) {
+        model.entityData.playCustomAnim = false;
+        model.entityData.playStageAnim = false;
+        model.model.changeAnim(MMDAnimManager.GetAnimModel(model.model, "idle"), 0);
+        model.model.setLayerLoop(1, true);
+        model.model.changeAnim(0, 1);
+        model.model.changeAnim(0, 2);
+        model.model.resetPhysics();
+        model.entityData.invalidateStateLayers();
     }
 
     private static boolean shouldStopCustomAnimation(AbstractClientPlayer player) {
@@ -167,22 +169,22 @@ public class AnimationStateManager {
                 || type == EntityType.ZOMBIE_HORSE;
     }
 
-    private static void changeAnimationOnce(ManagedModel model, EntityAnimState.State targetState, int layer) {
+    private static void changeAnimationOnce(Model model, EntityAnimState.State targetState, int layer) {
         String animationKey = targetState.propertyName;
-        if (model.entityState().stateLayers[layer] != targetState
-                || !Objects.equals(model.entityState().layerAnimationKeys[layer], animationKey)) {
-            model.entityState().stateLayers[layer] = targetState;
-            model.entityState().layerAnimationKeys[layer] = animationKey;
-            model.modelInstance().transitionAnim(model.animationLibrary().animation(animationKey), layer, TRANSITION_TIME);
+        if (model.entityData.stateLayers[layer] != targetState
+                || !Objects.equals(model.entityData.layerAnimationKeys[layer], animationKey)) {
+            model.entityData.stateLayers[layer] = targetState;
+            model.entityData.layerAnimationKeys[layer] = animationKey;
+            model.model.transitionAnim(MMDAnimManager.GetAnimModel(model.model, animationKey), layer, TRANSITION_TIME);
         }
     }
 
-    private static void applyCustomItemAnimation(ManagedModel model, EntityAnimState.State targetState,
+    private static void applyCustomItemAnimation(Model model, EntityAnimState.State targetState,
                                                  String itemName, String activeHand, UseAnim useAnim,
                                                  String handState, int layer) {
         boolean shouldLoop = !"using".equals(handState);
         for (String animationKey : resolveItemAnimationKeys(itemName, activeHand, useAnim, handState)) {
-            long anim = model.animationLibrary().animation(animationKey);
+            long anim = MMDAnimManager.GetAnimModel(model.model, animationKey);
             if (anim != 0) {
                 applyLayerAnimation(model, targetState, animationKey, anim, layer, shouldLoop);
                 return;
@@ -191,24 +193,24 @@ public class AnimationStateManager {
 
         if (targetState == EntityAnimState.State.ItemRight || targetState == EntityAnimState.State.SwingRight) {
             changeAnimationOnce(model, EntityAnimState.State.SwingRight, layer);
-            model.modelInstance().setLayerLoop(layer, shouldLoop);
+            model.model.setLayerLoop(layer, shouldLoop);
         } else if (targetState == EntityAnimState.State.ItemLeft || targetState == EntityAnimState.State.SwingLeft) {
             changeAnimationOnce(model, EntityAnimState.State.SwingLeft, layer);
-            model.modelInstance().setLayerLoop(layer, shouldLoop);
+            model.model.setLayerLoop(layer, shouldLoop);
         }
     }
 
-    private static void applyLayerAnimation(ManagedModel model, EntityAnimState.State targetState, String animationKey,
+    private static void applyLayerAnimation(Model model, EntityAnimState.State targetState, String animationKey,
                                             long animHandle, int layer, boolean shouldLoop) {
         if (animHandle == 0) {
             return;
         }
-        if (model.entityState().stateLayers[layer] != targetState
-                || !Objects.equals(model.entityState().layerAnimationKeys[layer], animationKey)) {
-            model.entityState().stateLayers[layer] = targetState;
-            model.entityState().layerAnimationKeys[layer] = animationKey;
-            model.modelInstance().setLayerLoop(layer, shouldLoop);
-            model.modelInstance().transitionAnim(animHandle, layer, TRANSITION_TIME);
+        if (model.entityData.stateLayers[layer] != targetState
+                || !Objects.equals(model.entityData.layerAnimationKeys[layer], animationKey)) {
+            model.entityData.stateLayers[layer] = targetState;
+            model.entityData.layerAnimationKeys[layer] = animationKey;
+            model.model.setLayerLoop(layer, shouldLoop);
+            model.model.transitionAnim(animHandle, layer, TRANSITION_TIME);
         }
     }
 

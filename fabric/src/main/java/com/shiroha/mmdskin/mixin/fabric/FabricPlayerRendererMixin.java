@@ -4,8 +4,8 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.compat.vr.VRArmHider;
 import com.shiroha.mmdskin.fabric.YsmCompat;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
-import com.shiroha.mmdskin.player.render.PlayerRenderEntrypoint;
-import com.shiroha.mmdskin.player.render.PlayerRenderAction;
+import com.shiroha.mmdskin.renderer.integration.player.PlayerMixinDelegate;
+import com.shiroha.mmdskin.renderer.integration.player.PlayerMixinDelegate.RenderAction;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.PlayerModel;
@@ -38,11 +38,11 @@ public abstract class FabricPlayerRendererMixin extends LivingEntityRenderer<Abs
             return;
         }
 
-        PlayerRenderAction action = PlayerRenderEntrypoint.handleRender(
+        RenderAction action = PlayerMixinDelegate.handleRender(
                 player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight,
                 YsmCompat.isYsmActive(player));
 
-        PlayerRenderEntrypoint.renderSceneOverlay(player, tickDelta, matrixStack, packedLight);
+        PlayerMixinDelegate.renderSceneModel(player, tickDelta, matrixStack, packedLight);
 
         switch (action) {
             case CANCEL -> ci.cancel();

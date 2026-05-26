@@ -1,3 +1,4 @@
+/* 文件职责：维护双列可选/已选列表的迁移语义与去重排序规则。 */
 package com.shiroha.mmdskin.ui.config;
 
 import java.util.ArrayList;
@@ -6,7 +7,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.BiPredicate;
 
-/** 双列选择界面的业务状态，负责可选与已选列表迁移语义。 */
 final class DualListSelectionState<T> {
     private final BiPredicate<T, T> matcher;
     private final Comparator<T> availableComparator;

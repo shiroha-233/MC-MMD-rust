@@ -3,7 +3,9 @@ package com.shiroha.mmdskin.player.port;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
-/** 文件职责：向普通业务类暴露最小化的 VR 运行时能力边界。 */
+/**
+ * 文件职责：向玩家渲染流程暴露最小化 VR 运行时能力边界。
+ */
 public interface VrRuntimePort {
     VrRuntimePort NOOP = new VrRuntimePort() {
         @Override

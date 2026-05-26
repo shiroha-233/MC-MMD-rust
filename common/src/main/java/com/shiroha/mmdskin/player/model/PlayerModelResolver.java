@@ -1,10 +1,8 @@
 package com.shiroha.mmdskin.player.model;
 
 import com.shiroha.mmdskin.config.UIConstants;
-import com.shiroha.mmdskin.model.runtime.ManagedModel;
-import com.shiroha.mmdskin.model.runtime.ModelRequestKey;
-import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
-import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
+import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
+import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 
@@ -16,7 +14,7 @@ public final class PlayerModelResolver {
     private PlayerModelResolver() {
     }
 
-    public record Result(ManagedModel model, String playerName) {}
+    public record Result(MMDModelManager.Model model, String playerName) {}
 
     public static String getCacheKey(Player player) {
         if (player == null) return "unknown";
@@ -35,15 +33,14 @@ public final class PlayerModelResolver {
         String playerName = player.getName().getString();
         Minecraft mc = Minecraft.getInstance();
         boolean isLocalPlayer = mc.player != null && mc.player.getUUID().equals(player.getUUID());
-        String selectedModel = PlayerModelSyncService.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
+        String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
 
         if (selectedModel == null || selectedModel.isEmpty()
                 || selectedModel.equals(UIConstants.DEFAULT_MODEL_NAME)) {
             return null;
         }
 
-        ManagedModel m = ClientRenderRuntime.get().modelRepository()
-                .acquire(ModelRequestKey.player(player, selectedModel));
+        MMDModelManager.Model m = MMDModelManager.GetModel(selectedModel, getCacheKey(player));
         if (m == null) {
             return null;
         }
