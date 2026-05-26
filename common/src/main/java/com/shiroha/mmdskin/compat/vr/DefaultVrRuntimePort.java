@@ -6,7 +6,9 @@ import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/** 文件职责：封装普通业务类所需的 VR 兼容与驱动细节。 */
+/**
+ * 文件职责：封装普通业务类所需的 VR 兼容与驱动细节。
+ */
 public final class DefaultVrRuntimePort implements VrRuntimePort {
     private static final Logger LOGGER = LogManager.getLogger();
 

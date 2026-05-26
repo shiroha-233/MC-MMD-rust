@@ -1,12 +1,11 @@
+/* 文件职责：定义渲染层可读取的全局渲染配置。 */
 package com.shiroha.mmdskin.config;
-
-/**
- * 渲染相关配置子接口
- */
 
 public interface IRenderConfig {
     boolean isOpenGLLightingEnabled();
+
     int getModelPoolMaxCount();
+
     boolean isMMDShaderEnabled();
 
     default boolean isGpuSkinningEnabled() { return false; }
@@ -36,6 +35,14 @@ public interface IRenderConfig {
     default float getFirstPersonCameraVerticalOffset() { return 0.0f; }
 
     default boolean isDebugHudEnabled() { return false; }
+
+    default boolean isPlayerFrontViewEnabled() { return true; }
+
+    default float getPlayerFrontViewScale() { return 1.5f; }
+
+    default int getPlayerFrontViewOffsetX() { return 10; }
+
+    default int getPlayerFrontViewOffsetY() { return 10; }
 
     default int getTextureCacheBudgetMB() { return 256; }
 }

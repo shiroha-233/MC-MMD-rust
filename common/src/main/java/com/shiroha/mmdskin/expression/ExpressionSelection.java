@@ -1,3 +1,4 @@
+/* 文件职责：表示表情应用请求的统一语义。 */
 package com.shiroha.mmdskin.expression;
 
 import java.util.Objects;

@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VRBoneDriverTest {
-
     private static final float EPSILON = 1.0e-4f;
 
     @Test
@@ -20,8 +19,8 @@ class VRBoneDriverTest {
 
         float cosY = Mth.cos(yawRad);
         float sinY = Mth.sin(yawRad);
-        float[] worldTracking = new float[21];
-        float[] localTracking = new float[21];
+        float[] worldTracking = new float[VRBoneDriver.TRACKING_PACKET_LENGTH];
+        float[] localTracking = new float[VRBoneDriver.TRACKING_PACKET_LENGTH];
 
         float forwardX = -sinY;
         float forwardZ = cosY;
@@ -37,11 +36,9 @@ class VRBoneDriverTest {
         assertEquals(0.0f, localTracking[0], EPSILON);
         assertEquals(0.0f, localTracking[1], EPSILON);
         assertEquals(1.0f, localTracking[2], EPSILON);
-
         assertEquals(1.0f, localTracking[7], EPSILON);
         assertEquals(0.0f, localTracking[8], EPSILON);
         assertEquals(0.0f, localTracking[9], EPSILON);
-
         assertEquals(-1.0f, localTracking[14], EPSILON);
         assertEquals(0.0f, localTracking[15], EPSILON);
         assertEquals(0.0f, localTracking[16], EPSILON);
@@ -50,8 +47,8 @@ class VRBoneDriverTest {
     @Test
     void shouldTransformBodyAlignedDiagonalRotationIntoIdentity() {
         float yawRad = (float) (3.0 * Math.PI / 4.0);
-        float[] src = new float[7];
-        float[] dst = new float[7];
+        float[] src = new float[VRBoneDriver.TRACKING_POINT_STRIDE];
+        float[] dst = new float[VRBoneDriver.TRACKING_POINT_STRIDE];
 
         writeTrackingPoint(src, 0, 0.0f, 0.0f, 0.0f, -yawRad);
         VRBoneDriver.transformRotationToPlayerLocal(src, 3, dst, 3, yawRad);

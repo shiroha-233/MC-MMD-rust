@@ -8,7 +8,9 @@ import org.apache.logging.log4j.Logger;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
-/** 文件职责：装载 Vivecraft 反射绑定元数据。 */
+/**
+ * 文件职责：装载 Vivecraft 反射绑定元数据。
+ */
 record VivecraftBindings(
         Method vrApiInstanceMethod,
         Method vrApiIsVrPlayerMethod,

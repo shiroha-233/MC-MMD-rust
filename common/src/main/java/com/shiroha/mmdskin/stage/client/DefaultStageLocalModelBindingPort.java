@@ -1,34 +1,32 @@
-/* 文件职责：把本地玩家当前选择的模型绑定到舞台播放会话。 */
 package com.shiroha.mmdskin.stage.client;
 
-import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
-import com.shiroha.mmdskin.bridge.runtime.NativeScenePort;
-import com.shiroha.mmdskin.config.StageConfig;
-import com.shiroha.mmdskin.model.runtime.ManagedModel;
-import com.shiroha.mmdskin.model.runtime.ModelRequestKey;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
-import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
-import com.shiroha.mmdskin.stage.client.playback.port.PlayerStageAnimationPort;
+import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
 import com.shiroha.mmdskin.stage.client.playback.port.StageLocalModelBindingPort;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
+import net.minecraft.client.Minecraft;
 
-import java.util.Objects;
+public final class DefaultStageLocalModelBindingPort implements StageLocalModelBindingPort {
+    public static final DefaultStageLocalModelBindingPort INSTANCE = new DefaultStageLocalModelBindingPort();
 
-/** 文件职责：把本地玩家当前选择的模型绑定到舞台播放会话。 */
-public final class DefaultStageLocalModelBindingPort implements StageLocalModelBindingPort, PlayerStageAnimationPort {
-    private final NativeScenePort scenePort;
-    private final NativeModelPort modelPort;
-
-    public DefaultStageLocalModelBindingPort(NativeScenePort scenePort, NativeModelPort modelPort) {
-        this.scenePort = Objects.requireNonNull(scenePort, "scenePort");
-        this.modelPort = Objects.requireNonNull(modelPort, "modelPort");
+    private DefaultStageLocalModelBindingPort() {
     }
 
     @Override
     public StageLocalModelBinding bindLocalModel(long mergedAnim) {
-        var minecraft = StageClientContext.minecraft();
-        if (minecraft.player == null) {
+        return bindLocalModel(mergedAnim, false);
+    }
+
+    /**
+     * 绑定本地模型到舞台动画
+     * @param mergedAnim 合并后的动画句柄
+     * @param puppetMode 纸娃娃模式：只播放纸娃娃动画，不设置玩家模型动画标志
+     * @return 模型绑定结果
+     */
+    public StageLocalModelBinding bindLocalModel(long mergedAnim, boolean puppetMode) {
+        Minecraft mc = StageClientContext.minecraft();
+        if (mc.player == null) {
             return StageLocalModelBinding.empty();
         }
 
@@ -37,56 +35,43 @@ public final class DefaultStageLocalModelBindingPort implements StageLocalModelB
             return StageLocalModelBinding.empty();
         }
 
-        ManagedModel modelData = ClientRenderRuntime.get().modelRepository()
-                .acquire(ModelRequestKey.player(minecraft.player, modelName));
+        MMDModelManager.Model modelData = MMDModelManager.GetModel(
+                modelName,
+                PlayerModelResolver.getCacheKey(mc.player)
+        );
         if (modelData == null) {
             return StageLocalModelBinding.empty();
         }
 
-        long modelHandle = modelData.modelInstance().getModelHandle();
-        MmdSkinRendererPlayerHelper.startStageAnimation(modelData, mergedAnim);
-        return new StageLocalModelBinding(modelHandle, modelName);
-    }
-
-    @Override
-    public void prepareLocalModelForStage(long modelHandle) {
-        if (modelHandle == 0L) {
-            return;
-        }
-        scenePort.setAutoBlinkEnabled(modelHandle, false);
-        scenePort.setEyeTrackingEnabled(modelHandle, false);
-    }
-
-    @Override
-    public void clearLocalStageFlags() {
-        var minecraft = StageClientContext.minecraft();
-        if (minecraft.player == null) {
-            return;
-        }
-
-        PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(minecraft.player);
-        if (resolved != null) {
-            resolved.model().entityState().playCustomAnim = false;
-            resolved.model().entityState().playStageAnim = false;
-        }
-    }
-
-    @Override
-    public void restoreLocalModelState() {
-        var minecraft = StageClientContext.minecraft();
-        if (minecraft.player == null) {
-            return;
-        }
-
-        PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(minecraft.player);
-        if (resolved != null) {
-            ManagedModel modelData = resolved.model();
-            long handle = modelData.modelInstance().getModelHandle();
-            if (handle != 0L) {
-                scenePort.setAutoBlinkEnabled(handle, true);
-                scenePort.setEyeTrackingEnabled(handle, true);
+        long modelHandle = modelData.model.getModelHandle();
+        
+        // 纸娃娃模式下，将动画应用到玩家模型
+        // 注意：模型不会在世界中渲染（MmdSkinRenderer 会跳过），但动画系统需要运行
+        if (puppetMode) {
+            if (mergedAnim != 0 && modelHandle != 0) {
+                // 清除覆盖层动画
+                modelData.model.setLayerLoop(1, true);
+                modelData.model.changeAnim(0, 1);
+                modelData.model.changeAnim(0, 2);
+                // 重置物理
+                modelData.model.resetPhysics();
+                // 使状态层失效
+                modelData.entityData.invalidateStateLayers();
+                // 直接应用动画到第0层
+                modelData.model.transitionAnim(mergedAnim, 0, 0.3f);
+                // 设置两个标志：playCustomAnim 和 playStageAnim
+                // playCustomAnim: 让 AnimationStateManager 跳过默认动画更新
+                // playStageAnim: 防止 shouldStopCustomAnimation 在玩家移动时停止动画
+                modelData.entityData.playCustomAnim = true;
+                modelData.entityData.playStageAnim = true;
+                // 注意：虽然设置了 playStageAnim，但 syncLocalStageFrame 会检查 state == PUPPET_MODE
+                // 实际上不会同步，动画帧由 MMDCameraController.updatePuppetMode() 手动同步
             }
-            MmdSkinRendererPlayerHelper.resetModelAnimationState(minecraft.player, modelData);
+        } else {
+            // 普通舞台模式，使用标准方法
+            MmdSkinRendererPlayerHelper.startStageAnimation(modelData, mergedAnim);
         }
+        
+        return new StageLocalModelBinding(modelHandle, modelName);
     }
 }

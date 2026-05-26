@@ -1,14 +1,16 @@
-/* 文件职责：维护原生舞台选择界面的可变选择状态。 */
+/* 文件职责：维护舞台工作台界面的本地可变选择状态。 */
 package com.shiroha.mmdskin.ui.stage;
 
 import com.shiroha.mmdskin.config.StagePack;
-import net.minecraft.util.Mth;
 
 import java.util.List;
 import java.util.Objects;
 
-/** 文件职责：维护原生舞台选择界面的可变选择状态。 */
+/** 文件职责：维护舞台工作台界面的本地可变选择状态。 */
 final class StageSelectState {
+    private static final float MIN_CAMERA_HEIGHT_OFFSET = -2.0f;
+    private static final float MAX_CAMERA_HEIGHT_OFFSET = 2.0f;
+
     private List<StagePack> stagePacks = List.of();
     private int selectedPackIndex = -1;
     private String selectedHostMotionFileName;
@@ -18,15 +20,15 @@ final class StageSelectState {
 
     StageSelectState(StageWorkbenchFacade.WorkbenchPreferences preferences, List<StagePack> initialStagePacks) {
         Objects.requireNonNull(preferences, "preferences");
-        this.cinematicMode = preferences.cinematicMode();
-        this.cameraHeightOffset = Mth.clamp(preferences.cameraHeightOffset(), -2.0f, 2.0f);
-        this.audioVolume = Mth.clamp(preferences.audioVolume(), 0.0f, 1.0f);
+        cinematicMode = preferences.cinematicMode();
+        cameraHeightOffset = clamp(preferences.cameraHeightOffset(), MIN_CAMERA_HEIGHT_OFFSET, MAX_CAMERA_HEIGHT_OFFSET);
+        audioVolume = clamp(preferences.audioVolume(), 0.0f, 1.0f);
         replaceStagePacks(initialStagePacks, preferences.lastStagePack());
     }
 
     void replaceStagePacks(List<StagePack> nextStagePacks, String preferredPackName) {
-        this.stagePacks = List.copyOf(Objects.requireNonNull(nextStagePacks, "nextStagePacks"));
-        this.selectedPackIndex = resolvePackIndex(preferredPackName);
+        stagePacks = List.copyOf(Objects.requireNonNull(nextStagePacks, "nextStagePacks"));
+        selectedPackIndex = resolvePackIndex(preferredPackName);
         if (selectedPackIndex < 0 && !stagePacks.isEmpty()) {
             selectedPackIndex = 0;
         }
@@ -59,11 +61,11 @@ final class StageSelectState {
     }
 
     void setCameraHeightOffset(float cameraHeightOffset) {
-        this.cameraHeightOffset = Mth.clamp(cameraHeightOffset, -2.0f, 2.0f);
+        this.cameraHeightOffset = clamp(cameraHeightOffset, MIN_CAMERA_HEIGHT_OFFSET, MAX_CAMERA_HEIGHT_OFFSET);
     }
 
     void setAudioVolume(float audioVolume) {
-        this.audioVolume = Mth.clamp(audioVolume, 0.0f, 1.0f);
+        this.audioVolume = clamp(audioVolume, 0.0f, 1.0f);
     }
 
     List<StagePack> stagePacks() {
@@ -124,5 +126,9 @@ final class StageSelectState {
             }
         }
         selectedHostMotionFileName = null;
+    }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
     }
 }

@@ -2,10 +2,14 @@ package com.shiroha.mmdskin.stage.server.application;
 
 import com.shiroha.mmdskin.stage.domain.model.StageDescriptor;
 import com.shiroha.mmdskin.stage.domain.model.StageInviteDecision;
+import com.shiroha.mmdskin.stage.domain.model.StageMemberState;
 import com.shiroha.mmdskin.stage.protocol.StagePacket;
+import com.shiroha.mmdskin.stage.protocol.StagePacketCodec;
 import com.shiroha.mmdskin.stage.protocol.StagePacketType;
 import com.shiroha.mmdskin.stage.server.application.port.StageServerPlatformPort;
 import com.shiroha.mmdskin.stage.server.domain.model.StageServerPlayer;
+import com.shiroha.mmdskin.stage.server.domain.model.StageServerSession;
+import com.shiroha.mmdskin.stage.server.domain.model.StageServerSessionMember;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +23,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** 文件职责：验证服务端远端舞台广播的会话鉴权与旁观者可见性。 */
+/** 文件职责：验证服务端远端舞台广播保持旧仓末态的全服可见语义与会话鉴权。 */
 class StageServerSessionServiceTest {
     private final StageServerSessionService service = StageServerSessionService.getInstance();
 
@@ -119,6 +123,30 @@ class StageServerSessionServiceTest {
         assertEquals(baselinePackets, platform.remotePackets().size());
     }
 
+    @Test
+    void shouldIgnoreRemoteStagePacketsFromStaleIndexedNonAcceptedMember() throws Exception {
+        UUID hostId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID spectatorId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        FakePlatform platform = new FakePlatform(
+                player(hostId, "Host"),
+                player(memberId, "Member"),
+                player(spectatorId, "Spectator")
+        );
+
+        establishAcceptedSession(platform, hostId, memberId, sessionId);
+        forceMemberState(sessionId, memberId, StageMemberState.INVITED);
+        int baselinePackets = platform.remotePackets().size();
+
+        StagePacket packet = new StagePacket(StagePacketType.REMOTE_STAGE_START);
+        packet.sessionId = sessionId.toString();
+        packet.descriptor = new StageDescriptor("pack_a", List.of("dance.vmd"), null, null);
+        service.handlePacket(platform, platform.findPlayer(memberId), encode(packet));
+
+        assertEquals(baselinePackets, platform.remotePackets().size());
+    }
+
     private void establishAcceptedSession(FakePlatform platform, UUID hostId, UUID memberId, UUID sessionId) {
         StagePacket invite = new StagePacket(StagePacketType.INVITE_REQUEST);
         invite.sessionId = sessionId.toString();
@@ -133,7 +161,19 @@ class StageServerSessionServiceTest {
     }
 
     private String encode(StagePacket packet) {
-        return com.shiroha.mmdskin.stage.protocol.StagePacketCodec.encode(packet);
+        return StagePacketCodec.encode(packet);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void forceMemberState(UUID sessionId, UUID memberId, StageMemberState state) throws Exception {
+        Field sessionsField = StageServerSessionService.class.getDeclaredField("sessions");
+        sessionsField.setAccessible(true);
+        Map<UUID, StageServerSession> sessions = (Map<UUID, StageServerSession>) sessionsField.get(service);
+        StageServerSession session = sessions.get(sessionId);
+        StageServerSessionMember member = session == null ? null : session.getMembers().get(memberId);
+        if (member != null) {
+            member.setState(state);
+        }
     }
 
     @SuppressWarnings("unchecked")

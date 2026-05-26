@@ -1,3 +1,4 @@
+/* 文件职责：验证内建表情预设的关键 morph 匹配与权重语义。 */
 package com.shiroha.mmdskin.expression;
 
 import org.junit.jupiter.api.Test;

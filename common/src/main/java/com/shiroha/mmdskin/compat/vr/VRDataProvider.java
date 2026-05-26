@@ -1,10 +1,13 @@
+/* 文件职责：统一读取 VR 追踪数据并收口到 Vivecraft 兼容链。 */
 package com.shiroha.mmdskin.compat.vr;
 
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
-/** 文件职责：向业务层提供与具体 VR 实现解耦的追踪数据读取。 */
+/**
+ * 文件职责：向业务层提供与具体 VR 实现解耦的追踪数据读取。
+ */
 public final class VRDataProvider {
     private static volatile VrTrackingFacade trackingFacade = VivecraftVrTrackingFacade.INSTANCE;
 
@@ -16,7 +19,7 @@ public final class VRDataProvider {
     }
 
     public static boolean isVRPlayer(Player player) {
-        return trackingFacade.isVrPlayer(player);
+        return player != null && trackingFacade.isVrPlayer(player);
     }
 
     public static float[] getRenderTrackingData(Player player) {

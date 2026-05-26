@@ -1,19 +1,14 @@
+/* 文件职责：检测可用 VR 运行时兼容链是否存在。 */
 package com.shiroha.mmdskin.compat.vr;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 /**
- * Vivecraft 运行时检测守卫
+ * 文件职责：检测当前客户端是否存在可用的 Vivecraft 兼容链。
  */
-
 public final class VRDetector {
+    private static volatile Boolean available;
 
-    private static final Logger logger = LogManager.getLogger();
-
-    private static volatile Boolean available = null;
-
-    private VRDetector() {}
+    private VRDetector() {
+    }
 
     public static boolean isAvailable() {
         if (available == null) {
@@ -27,14 +22,6 @@ public final class VRDetector {
     }
 
     private static boolean detect() {
-        try {
-            boolean detected = VivecraftReflectionBridge.isAvailable();
-            if (!detected) {
-                logger.debug("Vivecraft runtime API not detected");
-            }
-            return detected;
-        } catch (Exception e) {
-            return false;
-        }
+        return VivecraftReflectionBridge.isAvailable();
     }
 }

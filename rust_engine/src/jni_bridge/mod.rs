@@ -33,6 +33,10 @@ pub static ANIMATIONS: Lazy<RwLock<HashMap<i64, Arc<VmdAnimation>>>> =
 pub static TEXTURES: Lazy<RwLock<HashMap<i64, Arc<Texture>>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
+/// 纹理路径 → 句柄索引（避免重复加载同一文件）
+pub static TEXTURE_PATH_INDEX: Lazy<RwLock<HashMap<String, i64>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
+
 /// 生成唯一句柄 ID
 fn next_handle_id() -> i64 {
     use std::sync::atomic::{AtomicI64, Ordering};

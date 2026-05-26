@@ -1,7 +1,6 @@
 package com.shiroha.mmdskin.mixin.fabric;
 
-import com.shiroha.mmdskin.config.RuntimeConfigPort;
-import com.shiroha.mmdskin.config.RuntimeConfigPortHolder;
+import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.fabric.YsmCompat;
 import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
@@ -44,6 +43,7 @@ public abstract class CameraMixin {
             boolean vrEyeCameraActive = FirstPersonManager.isVrEyeCameraActive();
             boolean eyeCameraActive = FirstPersonManager.isEyeCameraActive();
             boolean eyeAnchorReady = vrEyeCameraActive || FirstPersonManager.isEyeBoneValid();
+
             if (eyeCameraActive && eyeAnchorReady && !detached) {
 
                 if (entity instanceof LivingEntity living) {
@@ -70,10 +70,9 @@ public abstract class CameraMixin {
                 float sinLookPitch = Mth.sin(lookPitchRad);
                 float cosLookYaw = Mth.cos(lookYawRad);
                 float sinLookYaw = Mth.sin(lookYawRad);
-                RuntimeConfigPort runtimeConfig = RuntimeConfigPortHolder.get();
 
-                double forwardOffset = runtimeConfig.getFirstPersonCameraForwardOffset();
-                double verticalOffset = runtimeConfig.getFirstPersonCameraVerticalOffset();
+                double forwardOffset = ConfigManager.getFirstPersonCameraForwardOffset();
+                double verticalOffset = ConfigManager.getFirstPersonCameraVerticalOffset();
 
                 double targetX = boneEyePos.x + (double) (sinLookYaw * cosLookPitch * (float) (-forwardOffset));
                 double targetY = boneEyePos.y + (double) (sinLookPitch * (float) (-forwardOffset)) + verticalOffset;

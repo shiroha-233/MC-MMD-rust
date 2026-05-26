@@ -1,3 +1,4 @@
+/* 文件职责：提供主配置轮盘界面与按键释放选择语义。 */
 package com.shiroha.mmdskin.ui.wheel;
 
 import com.mojang.blaze3d.platform.InputConstants;
@@ -17,7 +18,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-/** 主配置轮盘界面。 */
 public class ConfigWheelScreen extends AbstractWheelScreen {
     private static final WheelStyle STYLE = createTranslucentWheelStyle(0.50f, 0.30f);
 

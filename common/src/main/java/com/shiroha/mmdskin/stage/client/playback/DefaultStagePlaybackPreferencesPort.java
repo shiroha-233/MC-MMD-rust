@@ -3,14 +3,13 @@ package com.shiroha.mmdskin.stage.client.playback;
 import com.shiroha.mmdskin.stage.application.port.StagePlaybackPreferencesPort;
 
 import java.util.List;
-import java.util.Objects;
 
-/** 文件职责：把本地舞台播放偏好适配为会话层可用的 port。 */
 public final class DefaultStagePlaybackPreferencesPort implements StagePlaybackPreferencesPort {
-    private final StageLocalPlaybackPreferences delegate;
+    public static final DefaultStagePlaybackPreferencesPort INSTANCE = new DefaultStagePlaybackPreferencesPort();
 
-    public DefaultStagePlaybackPreferencesPort(StageLocalPlaybackPreferences delegate) {
-        this.delegate = Objects.requireNonNull(delegate, "delegate");
+    private final StageLocalPlaybackPreferences delegate = StageLocalPlaybackPreferences.getInstance();
+
+    private DefaultStagePlaybackPreferencesPort() {
     }
 
     @Override

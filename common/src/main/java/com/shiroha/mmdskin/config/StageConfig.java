@@ -13,10 +13,13 @@ import java.nio.file.Files;
 /**
  * 舞台模式配置
  */
-
 public class StageConfig {
     private static final Logger logger = LogManager.getLogger();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final float MIN_CAMERA_HEIGHT_OFFSET = -2.0f;
+    private static final float MAX_CAMERA_HEIGHT_OFFSET = 2.0f;
+    private static final float MIN_AUDIO_VOLUME = 0.0f;
+    private static final float MAX_AUDIO_VOLUME = 1.0f;
 
     private static volatile StageConfig instance;
 
@@ -25,7 +28,8 @@ public class StageConfig {
     public float cameraHeightOffset = 0.0f;
     public float audioVolume = 1.0f;
 
-    private StageConfig() {}
+    private StageConfig() {
+    }
 
     public static StageConfig getInstance() {
         StageConfig local = instance;
@@ -76,11 +80,11 @@ public class StageConfig {
         if (!Float.isFinite(cameraHeightOffset)) {
             cameraHeightOffset = 0.0f;
         }
-        cameraHeightOffset = clamp(cameraHeightOffset, -2.0f, 2.0f);
+        cameraHeightOffset = clamp(cameraHeightOffset, MIN_CAMERA_HEIGHT_OFFSET, MAX_CAMERA_HEIGHT_OFFSET);
         if (root == null || !root.has("audioVolume") || !Float.isFinite(audioVolume)) {
             audioVolume = 1.0f;
         }
-        audioVolume = clamp(audioVolume, 0.0f, 1.0f);
+        audioVolume = clamp(audioVolume, MIN_AUDIO_VOLUME, MAX_AUDIO_VOLUME);
     }
 
     private static float clamp(float value, float min, float max) {

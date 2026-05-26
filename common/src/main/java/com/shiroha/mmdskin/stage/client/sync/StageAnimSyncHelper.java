@@ -1,14 +1,12 @@
 package com.shiroha.mmdskin.stage.client.sync;
 
-import com.shiroha.mmdskin.bridge.runtime.NativeAnimationPort;
+import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.config.PathConstants;
-import com.shiroha.mmdskin.model.runtime.ManagedModel;
-import com.shiroha.mmdskin.player.model.PlayerModelResolver;
+import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
+import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
-import com.shiroha.mmdskin.stage.client.StageClientRuntime;
-import com.shiroha.mmdskin.stage.client.camera.port.StageFrameQueryPort;
+import com.shiroha.mmdskin.player.model.PlayerModelResolver;
 import com.shiroha.mmdskin.stage.domain.model.StageDescriptor;
-import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -17,21 +15,18 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/** 文件职责：同步远端舞台动画到本地玩家模型并管理临时动画句柄。 */
 public final class StageAnimSyncHelper {
-    private static final Logger LOGGER = LogManager.getLogger();
-    private static final int MAX_RETRY_TICKS = 100;
 
-    private final Map<UUID, List<Long>> remoteStageAnims = new ConcurrentHashMap<>();
-    private final Map<UUID, Long> remoteStageModels = new ConcurrentHashMap<>();
-    private final Map<UUID, PendingStageAnim> pendingAnims = new ConcurrentHashMap<>();
-    private final StageFrameQueryPort frameQueryPort;
-    private final NativeAnimationPort animationPort;
+    private static final Logger logger = LogManager.getLogger();
+
+    private static final Map<UUID, List<Long>> remoteStageAnims = new ConcurrentHashMap<>();
+    private static final Map<UUID, Long> remoteStageModels = new ConcurrentHashMap<>();
+    private static final Map<UUID, PendingStageAnim> pendingAnims = new ConcurrentHashMap<>();
+    private static final int MAX_RETRY_TICKS = 100;
 
     private record PendingStageAnim(UUID playerUUID, StageDescriptor descriptor, int ticksWaited) {
         private PendingStageAnim nextTick() {
@@ -39,40 +34,10 @@ public final class StageAnimSyncHelper {
         }
     }
 
-    public StageAnimSyncHelper(StageFrameQueryPort frameQueryPort, NativeAnimationPort animationPort) {
-        this.frameQueryPort = Objects.requireNonNull(frameQueryPort, "frameQueryPort");
-        this.animationPort = Objects.requireNonNull(animationPort, "animationPort");
-    }
-
-    public static StageAnimSyncHelper getInstance() {
-        return StageClientRuntime.get().animSyncHelper();
+    private StageAnimSyncHelper() {
     }
 
     public static void startStageAnim(Player player, StageDescriptor descriptor) {
-        getInstance().start(player, descriptor);
-    }
-
-    public static void endStageAnim(Player player) {
-        getInstance().end(player);
-    }
-
-    public static void endStageAnim(UUID playerUUID) {
-        getInstance().end(playerUUID);
-    }
-
-    public static void syncAllRemoteStageFrame(float frame) {
-        getInstance().syncRemoteFrame(frame);
-    }
-
-    public static void syncLocalStageFrame(float frame) {
-        getInstance().syncLocalFrame(frame);
-    }
-
-    public static void onDisconnect() {
-        getInstance().disconnect();
-    }
-
-    public void start(Player player, StageDescriptor descriptor) {
         if (player == null || descriptor == null || !descriptor.isValid()) {
             return;
         }
@@ -80,7 +45,7 @@ public final class StageAnimSyncHelper {
         PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
         if (resolved == null) {
             pendingAnims.put(player.getUUID(), new PendingStageAnim(player.getUUID(), descriptor.copy(), 0));
-            LOGGER.info("[StageSync] Player model still loading for {}", player.getName().getString());
+            logger.info("[舞台同步] 远程玩家 {} 模型加载中，已加入待处理队列", player.getName().getString());
             return;
         }
 
@@ -88,11 +53,11 @@ public final class StageAnimSyncHelper {
         applyStageAnim(player.getUUID(), resolved, descriptor);
     }
 
-    public void end(Player player) {
+    public static void endStageAnim(Player player) {
         if (player == null) {
             return;
         }
-        end(player.getUUID());
+        endStageAnim(player.getUUID());
 
         PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
         if (resolved != null) {
@@ -100,7 +65,7 @@ public final class StageAnimSyncHelper {
         }
     }
 
-    public void end(UUID playerUUID) {
+    public static void endStageAnim(UUID playerUUID) {
         if (playerUUID == null) {
             return;
         }
@@ -108,101 +73,113 @@ public final class StageAnimSyncHelper {
         cleanupRemoteStageAnim(playerUUID);
     }
 
-    public void tickPending() {
+    public static void tickPending() {
         if (pendingAnims.isEmpty()) {
             return;
         }
 
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.level == null) {
             return;
         }
 
-        var iterator = pendingAnims.entrySet().iterator();
-        while (iterator.hasNext()) {
-            var entry = iterator.next();
+        var it = pendingAnims.entrySet().iterator();
+        while (it.hasNext()) {
+            var entry = it.next();
             PendingStageAnim pending = entry.getValue();
             PendingStageAnim next = pending.nextTick();
             if (next.ticksWaited() > MAX_RETRY_TICKS) {
-                LOGGER.warn("[StageSync] Timed out waiting for player model {}", pending.playerUUID());
-                iterator.remove();
+                logger.warn("[舞台同步] 玩家 {} 模型加载超时，放弃重试", pending.playerUUID());
+                it.remove();
                 continue;
             }
 
-            Player player = minecraft.level.getPlayerByUUID(pending.playerUUID());
+            Player player = mc.level.getPlayerByUUID(pending.playerUUID());
             if (player == null) {
-                iterator.remove();
+                it.remove();
                 continue;
             }
 
             PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
             if (resolved != null) {
-                iterator.remove();
+                it.remove();
                 applyStageAnim(pending.playerUUID(), resolved, pending.descriptor());
+                logger.info("[舞台同步] 玩家 {} 模型加载完成，已应用舞台动画", player.getName().getString());
             } else {
                 pendingAnims.put(pending.playerUUID(), next);
             }
         }
     }
 
-    public void syncRemoteFrame(float frame) {
+    public static void syncAllRemoteStageFrame(float frame) {
         if (remoteStageModels.isEmpty()) {
             return;
         }
+        NativeFunc nf = NativeFunc.GetInst();
         for (Long modelHandle : remoteStageModels.values()) {
-            if (modelHandle != null && modelHandle != 0L) {
-                animationPort.seekLayer(modelHandle, 0, frame);
+            if (modelHandle != 0) {
+                nf.SeekLayer(modelHandle, 0, frame);
             }
         }
     }
 
-    public void syncLocalFrame(float frame) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null) {
+    public static void syncLocalStageFrame(float frame) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player == null) {
             return;
         }
-        PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(minecraft.player);
-        if (resolved == null || !resolved.model().entityState().playStageAnim) {
+        PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(mc.player);
+        if (resolved == null || !resolved.model().entityData.playStageAnim) {
             return;
         }
-        long modelHandle = resolved.model().modelInstance().getModelHandle();
-        if (modelHandle != 0L) {
-            animationPort.seekLayer(modelHandle, 0, frame);
+        
+        // 纸娃娃模式下，不同步本地玩家模型，因为动画由 MMDCameraController 直接管理
+        com.shiroha.mmdskin.stage.client.camera.MMDCameraController controller = 
+            com.shiroha.mmdskin.stage.client.camera.MMDCameraController.getInstance();
+        if (controller.isPuppetMode()) {
+            return;
+        }
+        
+        long modelHandle = resolved.model().model.getModelHandle();
+        if (modelHandle != 0) {
+            NativeFunc.GetInst().SeekLayer(modelHandle, 0, frame);
         }
     }
 
-    public void disconnect() {
+    public static void onDisconnect() {
         pendingAnims.clear();
         remoteStageModels.clear();
         if (remoteStageAnims.isEmpty()) {
             return;
         }
+        NativeFunc nf = NativeFunc.GetInst();
         for (List<Long> handles : remoteStageAnims.values()) {
             for (long handle : handles) {
-                if (handle != 0L) {
-                    animationPort.deleteAnimation(handle);
+                if (handle != 0) {
+                    nf.DeleteAnimation(handle);
                 }
             }
         }
         remoteStageAnims.clear();
     }
 
-    private void applyStageAnim(UUID playerUUID, PlayerModelResolver.Result resolved, StageDescriptor descriptor) {
+    private static void applyStageAnim(UUID playerUUID, PlayerModelResolver.Result resolved, StageDescriptor descriptor) {
         cleanupRemoteStageAnim(playerUUID);
 
         File stageDir = new File(PathConstants.getStageAnimDir(), descriptor.getPackName());
         if (!stageDir.exists() || !stageDir.isDirectory()) {
-            LOGGER.warn("[StageSync] Missing local stage pack {}", descriptor.getPackName());
+            logger.warn("[舞台同步] 本地没有舞台包: {}", descriptor.getPackName());
             return;
         }
 
         long mergedAnim = loadAndMergeAnimations(stageDir, descriptor.getMotionFiles());
-        if (mergedAnim == 0L) {
+        if (mergedAnim == 0) {
             return;
         }
 
-        ManagedModel modelData = resolved.model();
-        long modelHandle = modelData.modelInstance().getModelHandle();
+        MMDModelManager.Model modelData = resolved.model();
+        NativeFunc nf = NativeFunc.GetInst();
+        long modelHandle = modelData.model.getModelHandle();
         MmdSkinRendererPlayerHelper.startStageAnimation(modelData, mergedAnim);
 
         List<Long> tracked = new CopyOnWriteArrayList<>();
@@ -210,51 +187,53 @@ public final class StageAnimSyncHelper {
         remoteStageAnims.put(playerUUID, tracked);
         remoteStageModels.put(playerUUID, modelHandle);
 
-        if (frameQueryPort.isStagePresentationActive()) {
-            animationPort.seekLayer(modelHandle, 0, frameQueryPort.getCurrentFrame());
+        MMDCameraController controller = MMDCameraController.getInstance();
+        if (controller.isActive()) {
+            nf.SeekLayer(modelHandle, 0, controller.getCurrentFrame());
         }
     }
 
-    private long loadAndMergeAnimations(File stageDir, List<String> motionFiles) {
+    private static long loadAndMergeAnimations(File stageDir, List<String> motionFiles) {
         if (motionFiles == null || motionFiles.isEmpty()) {
-            return 0L;
+            return 0;
         }
 
-        List<Long> loadedAnimations = new ArrayList<>();
+        NativeFunc nf = NativeFunc.GetInst();
+        List<Long> loadedAnims = new ArrayList<>();
+
         String firstFile = new File(stageDir, motionFiles.get(0)).getAbsolutePath();
-        long mergedAnimation = animationPort.loadAnimation(0, firstFile);
-        if (mergedAnimation == 0L) {
-            LOGGER.warn("[StageSync] Failed to load motion {}", firstFile);
-            return 0L;
+        long mergedAnim = nf.LoadAnimation(0, firstFile);
+        if (mergedAnim == 0) {
+            logger.warn("[舞台同步] VMD 加载失败: {}", firstFile);
+            return 0;
         }
-        loadedAnimations.add(mergedAnimation);
+        loadedAnims.add(mergedAnim);
 
         for (int i = 1; i < motionFiles.size(); i++) {
             String filePath = new File(stageDir, motionFiles.get(i)).getAbsolutePath();
-            long tempAnimation = animationPort.loadAnimation(0, filePath);
-            if (tempAnimation != 0L) {
-                animationPort.mergeAnimation(mergedAnimation, tempAnimation);
-                loadedAnimations.add(tempAnimation);
+            long tempAnim = nf.LoadAnimation(0, filePath);
+            if (tempAnim != 0) {
+                nf.MergeAnimation(mergedAnim, tempAnim);
+                loadedAnims.add(tempAnim);
             }
         }
 
-        for (int i = 1; i < loadedAnimations.size(); i++) {
-            animationPort.deleteAnimation(loadedAnimations.get(i));
+        for (int i = 1; i < loadedAnims.size(); i++) {
+            nf.DeleteAnimation(loadedAnims.get(i));
         }
 
-        return mergedAnimation;
+        return mergedAnim;
     }
 
-    private void cleanupRemoteStageAnim(UUID playerUUID) {
+    private static void cleanupRemoteStageAnim(UUID playerUUID) {
         remoteStageModels.remove(playerUUID);
-        List<Long> animations = remoteStageAnims.remove(playerUUID);
-        if (animations == null) {
-            return;
-        }
-
-        for (long handle : animations) {
-            if (handle != 0L) {
-                animationPort.deleteAnimation(handle);
+        List<Long> anims = remoteStageAnims.remove(playerUUID);
+        if (anims != null) {
+            NativeFunc nf = NativeFunc.GetInst();
+            for (long handle : anims) {
+                if (handle != 0) {
+                    nf.DeleteAnimation(handle);
+                }
             }
         }
     }

@@ -5,15 +5,11 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 
 /**
- * Vivecraft 运行时反射桥接。
- * 仅在客户端渲染链路中使用，避免把 Vivecraft 设为硬依赖。
+ * 文件职责：提供 Vivecraft 运行时的反射兼容桥接。
  */
 public final class VivecraftReflectionBridge {
-
     private static final Logger LOGGER = LogManager.getLogger();
 
     private static volatile Support support;
@@ -67,12 +63,10 @@ public final class VivecraftReflectionBridge {
         if (initialized) {
             return support;
         }
-
         synchronized (VivecraftReflectionBridge.class) {
             if (initialized) {
                 return support;
             }
-
             support = Support.tryCreate();
             initialized = true;
             return support;
@@ -80,154 +74,70 @@ public final class VivecraftReflectionBridge {
     }
 
     private static final class Support {
-
-        private static final float EPSILON = 1.0e-4f;
-
-        private final Method vrApiInstanceMethod;
-        private final Method vrApiIsVrPlayerMethod;
-        private final Method vrApiGetVrPoseMethod;
-
-        private final Method vrClientApiInstanceMethod;
-        private final Method vrClientIsVrActiveMethod;
-        private final Method vrClientGetPreTickWorldPoseMethod;
-        private final Method vrClientGetWorldRenderPoseMethod;
-        private final Method vrClientGetPostTickWorldPoseMethod;
-
-        private final Method vrRenderingApiInstanceMethod;
-        private final Method vrRenderingIsVanillaRenderPassMethod;
-        private final Method vrRenderingGetCurrentRenderPassMethod;
-        private final Method vrRenderingGetWorldRenderPoseMethod;
+        private final java.lang.reflect.Method vrApiInstanceMethod;
+        private final java.lang.reflect.Method vrApiIsVrPlayerMethod;
+        private final java.lang.reflect.Method vrApiGetVrPoseMethod;
+        private final java.lang.reflect.Method vrClientApiInstanceMethod;
+        private final java.lang.reflect.Method vrClientIsVrActiveMethod;
+        private final java.lang.reflect.Method vrClientGetPreTickWorldPoseMethod;
+        private final java.lang.reflect.Method vrClientGetWorldRenderPoseMethod;
+        private final java.lang.reflect.Method vrClientGetPostTickWorldPoseMethod;
+        private final java.lang.reflect.Method vrRenderingApiInstanceMethod;
+        private final java.lang.reflect.Method vrRenderingIsVanillaRenderPassMethod;
+        private final java.lang.reflect.Method vrRenderingGetCurrentRenderPassMethod;
+        private final java.lang.reflect.Method vrRenderingGetWorldRenderPoseMethod;
         private final Object renderPassLeft;
         private final Object renderPassRight;
-
-        private final Method gameRendererGetRvePosMethod;
-
-        private final Method vrPoseGetHeadMethod;
-        private final Method vrPoseGetMainHandMethod;
-        private final Method vrPoseGetOffHandMethod;
-        private final Method vrPoseIsLeftHandedMethod;
-
-        private final Method vrBodyPartDataGetPosMethod;
-        private final Method vrBodyPartDataGetRotationMethod;
-
-        private final Method clientDataHolderGetInstanceMethod;
-        private final Field clientDataHolderVrPlayerField;
-        private final Method gameplayVrPlayerGetVrDataWorldMethod;
-        private final Method vrDataGetBodyYawRadMethod;
-
+        private final java.lang.reflect.Method gameRendererGetRvePosMethod;
+        private final java.lang.reflect.Method clientDataHolderGetInstanceMethod;
+        private final java.lang.reflect.Field clientDataHolderVrPlayerField;
+        private final java.lang.reflect.Method gameplayVrPlayerGetVrDataWorldMethod;
+        private final java.lang.reflect.Method vrDataGetBodyYawRadMethod;
         private final VivecraftRenderStateController renderStateController;
         private final VivecraftTrackingDataReader trackingDataReader;
 
-        private Support(Method vrApiInstanceMethod,
-                        Method vrApiIsVrPlayerMethod,
-                        Method vrApiGetVrPoseMethod,
-                        Method vrClientApiInstanceMethod,
-                        Method vrClientIsVrActiveMethod,
-                        Method vrClientGetPreTickWorldPoseMethod,
-                        Method vrClientGetWorldRenderPoseMethod,
-                        Method vrClientGetPostTickWorldPoseMethod,
-                        Method vrRenderingApiInstanceMethod,
-                        Method vrRenderingIsVanillaRenderPassMethod,
-                        Method vrRenderingGetCurrentRenderPassMethod,
-                        Method vrRenderingGetWorldRenderPoseMethod,
-                        Object renderPassLeft,
-                        Object renderPassRight,
-                        Method gameRendererGetRvePosMethod,
-                        Method vrPoseGetHeadMethod,
-                        Method vrPoseGetMainHandMethod,
-                        Method vrPoseGetOffHandMethod,
-                        Method vrPoseIsLeftHandedMethod,
-                        Method vrBodyPartDataGetPosMethod,
-                        Method vrBodyPartDataGetRotationMethod,
-                        Method clientDataHolderGetInstanceMethod,
-                        Field clientDataHolderVrPlayerField,
-                        Method gameplayVrPlayerGetVrDataWorldMethod,
-                        Method vrDataGetBodyYawRadMethod,
-                        Field vrSettingsInstanceField,
-                        Field showPlayerHandsField,
-                        Field shouldRenderSelfField,
-                        Field modelArmsModeField,
-                        Object modelArmsModeOff) {
-            this.vrApiInstanceMethod = vrApiInstanceMethod;
-            this.vrApiIsVrPlayerMethod = vrApiIsVrPlayerMethod;
-            this.vrApiGetVrPoseMethod = vrApiGetVrPoseMethod;
-            this.vrClientApiInstanceMethod = vrClientApiInstanceMethod;
-            this.vrClientIsVrActiveMethod = vrClientIsVrActiveMethod;
-            this.vrClientGetPreTickWorldPoseMethod = vrClientGetPreTickWorldPoseMethod;
-            this.vrClientGetWorldRenderPoseMethod = vrClientGetWorldRenderPoseMethod;
-            this.vrClientGetPostTickWorldPoseMethod = vrClientGetPostTickWorldPoseMethod;
-            this.vrRenderingApiInstanceMethod = vrRenderingApiInstanceMethod;
-            this.vrRenderingIsVanillaRenderPassMethod = vrRenderingIsVanillaRenderPassMethod;
-            this.vrRenderingGetCurrentRenderPassMethod = vrRenderingGetCurrentRenderPassMethod;
-            this.vrRenderingGetWorldRenderPoseMethod = vrRenderingGetWorldRenderPoseMethod;
-            this.renderPassLeft = renderPassLeft;
-            this.renderPassRight = renderPassRight;
-            this.gameRendererGetRvePosMethod = gameRendererGetRvePosMethod;
-            this.vrPoseGetHeadMethod = vrPoseGetHeadMethod;
-            this.vrPoseGetMainHandMethod = vrPoseGetMainHandMethod;
-            this.vrPoseGetOffHandMethod = vrPoseGetOffHandMethod;
-            this.vrPoseIsLeftHandedMethod = vrPoseIsLeftHandedMethod;
-            this.vrBodyPartDataGetPosMethod = vrBodyPartDataGetPosMethod;
-            this.vrBodyPartDataGetRotationMethod = vrBodyPartDataGetRotationMethod;
-            this.clientDataHolderGetInstanceMethod = clientDataHolderGetInstanceMethod;
-            this.clientDataHolderVrPlayerField = clientDataHolderVrPlayerField;
-            this.gameplayVrPlayerGetVrDataWorldMethod = gameplayVrPlayerGetVrDataWorldMethod;
-            this.vrDataGetBodyYawRadMethod = vrDataGetBodyYawRadMethod;
+        private Support(VivecraftBindings bindings) {
+            this.vrApiInstanceMethod = bindings.vrApiInstanceMethod();
+            this.vrApiIsVrPlayerMethod = bindings.vrApiIsVrPlayerMethod();
+            this.vrApiGetVrPoseMethod = bindings.vrApiGetVrPoseMethod();
+            this.vrClientApiInstanceMethod = bindings.vrClientApiInstanceMethod();
+            this.vrClientIsVrActiveMethod = bindings.vrClientIsVrActiveMethod();
+            this.vrClientGetPreTickWorldPoseMethod = bindings.vrClientGetPreTickWorldPoseMethod();
+            this.vrClientGetWorldRenderPoseMethod = bindings.vrClientGetWorldRenderPoseMethod();
+            this.vrClientGetPostTickWorldPoseMethod = bindings.vrClientGetPostTickWorldPoseMethod();
+            this.vrRenderingApiInstanceMethod = bindings.vrRenderingApiInstanceMethod();
+            this.vrRenderingIsVanillaRenderPassMethod = bindings.vrRenderingIsVanillaRenderPassMethod();
+            this.vrRenderingGetCurrentRenderPassMethod = bindings.vrRenderingGetCurrentRenderPassMethod();
+            this.vrRenderingGetWorldRenderPoseMethod = bindings.vrRenderingGetWorldRenderPoseMethod();
+            this.renderPassLeft = bindings.renderPassLeft();
+            this.renderPassRight = bindings.renderPassRight();
+            this.gameRendererGetRvePosMethod = bindings.gameRendererGetRvePosMethod();
+            this.clientDataHolderGetInstanceMethod = bindings.clientDataHolderGetInstanceMethod();
+            this.clientDataHolderVrPlayerField = bindings.clientDataHolderVrPlayerField();
+            this.gameplayVrPlayerGetVrDataWorldMethod = bindings.gameplayVrPlayerGetVrDataWorldMethod();
+            this.vrDataGetBodyYawRadMethod = bindings.vrDataGetBodyYawRadMethod();
             this.renderStateController = new VivecraftRenderStateController(
-                    vrSettingsInstanceField,
-                    showPlayerHandsField,
-                    shouldRenderSelfField,
-                    modelArmsModeField,
-                    modelArmsModeOff
+                    bindings.vrSettingsInstanceField(),
+                    bindings.showPlayerHandsField(),
+                    bindings.shouldRenderSelfField(),
+                    bindings.modelArmsModeField(),
+                    bindings.modelArmsModeOff()
             );
             this.trackingDataReader = new VivecraftTrackingDataReader(
-                    vrPoseGetHeadMethod,
-                    vrPoseGetMainHandMethod,
-                    vrPoseGetOffHandMethod,
-                    vrPoseIsLeftHandedMethod,
-                    vrBodyPartDataGetPosMethod,
-                    vrBodyPartDataGetRotationMethod
+                    bindings.vrPoseGetHeadMethod(),
+                    bindings.vrPoseGetMainHandMethod(),
+                    bindings.vrPoseGetOffHandMethod(),
+                    bindings.vrPoseIsLeftHandedMethod(),
+                    bindings.vrBodyPartDataGetPosMethod(),
+                    bindings.vrBodyPartDataGetRotationMethod()
             );
         }
 
-        @SuppressWarnings("unchecked")
         static Support tryCreate() {
             try {
                 VivecraftBindings bindings = VivecraftBindings.load();
-
                 LOGGER.info("Detected Vivecraft runtime API bridge");
-                return new Support(
-                        bindings.vrApiInstanceMethod(),
-                        bindings.vrApiIsVrPlayerMethod(),
-                        bindings.vrApiGetVrPoseMethod(),
-                        bindings.vrClientApiInstanceMethod(),
-                        bindings.vrClientIsVrActiveMethod(),
-                        bindings.vrClientGetPreTickWorldPoseMethod(),
-                        bindings.vrClientGetWorldRenderPoseMethod(),
-                        bindings.vrClientGetPostTickWorldPoseMethod(),
-                        bindings.vrRenderingApiInstanceMethod(),
-                        bindings.vrRenderingIsVanillaRenderPassMethod(),
-                        bindings.vrRenderingGetCurrentRenderPassMethod(),
-                        bindings.vrRenderingGetWorldRenderPoseMethod(),
-                        bindings.renderPassLeft(),
-                        bindings.renderPassRight(),
-                        bindings.gameRendererGetRvePosMethod(),
-                        bindings.vrPoseGetHeadMethod(),
-                        bindings.vrPoseGetMainHandMethod(),
-                        bindings.vrPoseGetOffHandMethod(),
-                        bindings.vrPoseIsLeftHandedMethod(),
-                        bindings.vrBodyPartDataGetPosMethod(),
-                        bindings.vrBodyPartDataGetRotationMethod(),
-                        bindings.clientDataHolderGetInstanceMethod(),
-                        bindings.clientDataHolderVrPlayerField(),
-                        bindings.gameplayVrPlayerGetVrDataWorldMethod(),
-                        bindings.vrDataGetBodyYawRadMethod(),
-                        bindings.vrSettingsInstanceField(),
-                        bindings.showPlayerHandsField(),
-                        bindings.shouldRenderSelfField(),
-                        bindings.modelArmsModeField(),
-                        bindings.modelArmsModeOff()
-                );
+                return new Support(bindings);
             } catch (Throwable t) {
                 LOGGER.debug("Vivecraft runtime API bridge unavailable", t);
                 return null;
@@ -238,12 +148,10 @@ public final class VivecraftReflectionBridge {
             if (player == null) {
                 return false;
             }
-
             try {
                 if (isLocalPlayer(player)) {
                     return isLocalVrActive();
                 }
-
                 Object vrApi = vrApiInstanceMethod.invoke(null);
                 return vrApi != null && (boolean) vrApiIsVrPlayerMethod.invoke(vrApi, player);
             } catch (Throwable t) {
@@ -252,11 +160,40 @@ public final class VivecraftReflectionBridge {
             }
         }
 
+        float[] getTrackingData(Player player) {
+            if (player == null) {
+                return null;
+            }
+            try {
+                TrackingPoseResult result = resolveTrackingPose(player);
+                if (result == null || result.pose == null) {
+                    trackingDataReader.logMissingTracking("no_pose");
+                    return null;
+                }
+
+                float[] data = trackingDataReader.poseToTrackingPacket(result.pose);
+                if (!trackingDataReader.isPacketUsable(data)) {
+                    trackingDataReader.logMissingTracking(result.source + "_empty");
+                    return null;
+                }
+
+                if (!result.source.equals(trackingDataReader.lastTrackingSource())) {
+                    LOGGER.info("Using Vivecraft tracking source: {}", result.source);
+                    trackingDataReader.recordTrackingSource(result.source);
+                }
+                trackingDataReader.clearMissingTrackingFlag();
+                return data;
+            } catch (Throwable t) {
+                LOGGER.debug("Failed to read Vivecraft tracking data", t);
+                trackingDataReader.logMissingTracking("exception");
+                return null;
+            }
+        }
+
         float getBodyYawRadians(Player player) {
             if (player == null || !isLocalPlayer(player)) {
                 return Float.NaN;
             }
-
             try {
                 if (!isLocalVrActive()) {
                     return Float.NaN;
@@ -287,7 +224,8 @@ public final class VivecraftReflectionBridge {
 
         boolean isLocalPlayerEyePass() {
             try {
-                if (!isLocalVrActive() || vrRenderingApiInstanceMethod == null
+                if (!isLocalVrActive()
+                        || vrRenderingApiInstanceMethod == null
                         || vrRenderingIsVanillaRenderPassMethod == null
                         || vrRenderingGetCurrentRenderPassMethod == null
                         || renderPassLeft == null
@@ -317,7 +255,6 @@ public final class VivecraftReflectionBridge {
             if (player == null) {
                 return null;
             }
-
             try {
                 Object pose = null;
                 if (vrRenderingApiInstanceMethod != null && vrRenderingGetWorldRenderPoseMethod != null) {
@@ -340,7 +277,6 @@ public final class VivecraftReflectionBridge {
                         pose = vrApiGetVrPoseMethod.invoke(vrApi, player);
                     }
                 }
-
                 return trackingDataReader.extractHeadPosition(pose);
             } catch (Throwable t) {
                 LOGGER.debug("Failed to read Vivecraft world-render head pose", t);
@@ -353,7 +289,6 @@ public final class VivecraftReflectionBridge {
                 if (!isLocalVrActive() || gameRendererGetRvePosMethod == null || isVanillaRenderPass()) {
                     return null;
                 }
-
                 Object renderOrigin = gameRendererGetRvePosMethod.invoke(Minecraft.getInstance().gameRenderer, partialTick);
                 return renderOrigin instanceof Vec3 vec3 ? vec3 : null;
             } catch (Throwable t) {
@@ -362,38 +297,7 @@ public final class VivecraftReflectionBridge {
             }
         }
 
-        float[] getTrackingData(Player player) {
-            if (player == null) {
-                return null;
-            }
-
-            try {
-                TrackingPoseResult result = resolveTrackingPose(player);
-                if (result == null || result.pose == null) {
-                    trackingDataReader.logMissingTracking("no_pose");
-                    return null;
-                }
-
-                float[] data = trackingDataReader.poseToTrackingPacket(result.pose);
-                if (!trackingDataReader.isPacketUsable(data)) {
-                    trackingDataReader.logMissingTracking(result.source + "_empty");
-                    return null;
-                }
-
-                if (!result.source.equals(trackingDataReader.lastTrackingSource())) {
-                    LOGGER.info("Using Vivecraft tracking source: {}", result.source);
-                    trackingDataReader.recordTrackingSource(result.source);
-                }
-                trackingDataReader.clearMissingTrackingFlag();
-                return data;
-            } catch (Throwable t) {
-                LOGGER.debug("Failed to read Vivecraft tracking data", t);
-                trackingDataReader.logMissingTracking("exception");
-                return null;
-            }
-        }
-
-        synchronized void applyMmdRenderState(boolean active) {
+        void applyMmdRenderState(boolean active) {
             renderStateController.apply(active);
         }
 
@@ -425,7 +329,6 @@ public final class VivecraftReflectionBridge {
             if (trackingDataReader.isPoseUsable(sharedPose)) {
                 return new TrackingPoseResult(isLocalPlayer(player) ? "shared_world_pose" : "remote_pose", sharedPose);
             }
-
             return null;
         }
 
@@ -438,7 +341,6 @@ public final class VivecraftReflectionBridge {
             if (vrRenderingApiInstanceMethod == null || vrRenderingIsVanillaRenderPassMethod == null) {
                 return true;
             }
-
             Object renderingApi = vrRenderingApiInstanceMethod.invoke(null);
             return renderingApi == null || (boolean) vrRenderingIsVanillaRenderPassMethod.invoke(renderingApi);
         }
@@ -446,11 +348,6 @@ public final class VivecraftReflectionBridge {
         private boolean isLocalPlayer(Player player) {
             Minecraft minecraft = Minecraft.getInstance();
             return minecraft.player != null && minecraft.player.getUUID().equals(player.getUUID());
-        }
-
-        @SuppressWarnings("unchecked")
-        static Object enumConstant(Class<?> enumClass, String name) {
-            return Enum.valueOf((Class<? extends Enum>) enumClass.asSubclass(Enum.class), name);
         }
     }
 

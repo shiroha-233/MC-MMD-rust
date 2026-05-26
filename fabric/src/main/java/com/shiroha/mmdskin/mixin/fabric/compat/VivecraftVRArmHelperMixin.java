@@ -1,3 +1,4 @@
+/** 文件职责：在 Vivecraft VR 手臂辅助渲染前拦截原生手臂。 */
 package com.shiroha.mmdskin.mixin.fabric.compat;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -11,7 +12,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Pseudo
 @Mixin(targets = "org.vivecraft.client_vr.render.helpers.VRArmHelper", remap = false)
 public abstract class VivecraftVRArmHelperMixin {
-
     @Inject(method = "renderVRHands", at = @At("HEAD"), cancellable = true, remap = false)
     private static void mmdskin$cancelVivecraftHands(float partialTick,
                                                      boolean renderMainHand,

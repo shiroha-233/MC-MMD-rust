@@ -43,4 +43,10 @@ public interface StagePlaybackRuntimePort {
                                       float cameraHeightOffset, String selectedMotionFileName);
 
     GuestStartResult startGuestPlayback(UUID hostUUID, StagePlaybackStartRequest request, boolean useHostCamera);
+
+    /**
+     * 启动纸娃娃模式：只有模型播放动画，玩家可以自由活动
+     */
+    HostStartResult startPuppetModePlayback(StagePack pack, boolean cinematicMode,
+                                            float cameraHeightOffset, String selectedMotionFileName);
 }

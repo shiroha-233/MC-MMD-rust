@@ -1,15 +1,11 @@
+/* 文件职责：向运行时提供线程安全的全局配置读取入口。 */
 package com.shiroha.mmdskin.config;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
-/**
- * 统一配置管理器
- */
-
-public class ConfigManager {
-    private static final Logger logger = LogManager.getLogger();
+public final class ConfigManager {
     private static volatile IConfigProvider provider;
+
+    private ConfigManager() {
+    }
 
     public static void init(IConfigProvider configProvider) {
         provider = configProvider;
@@ -189,6 +185,22 @@ public class ConfigManager {
 
     public static boolean isDebugHudEnabled() {
         return provider != null ? provider.isDebugHudEnabled() : false;
+    }
+
+    public static boolean isPlayerFrontViewEnabled() {
+        return provider != null ? provider.isPlayerFrontViewEnabled() : true;
+    }
+
+    public static float getPlayerFrontViewScale() {
+        return provider != null ? provider.getPlayerFrontViewScale() : 1.0f;
+    }
+
+    public static int getPlayerFrontViewOffsetX() {
+        return provider != null ? provider.getPlayerFrontViewOffsetX() : 10;
+    }
+
+    public static int getPlayerFrontViewOffsetY() {
+        return provider != null ? provider.getPlayerFrontViewOffsetY() : 10;
     }
 
     public static boolean isVREnabled() {

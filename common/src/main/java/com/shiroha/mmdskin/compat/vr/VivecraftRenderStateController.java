@@ -5,7 +5,9 @@ import org.apache.logging.log4j.Logger;
 
 import java.lang.reflect.Field;
 
-/** 文件职责：集中控制 Vivecraft 渲染状态覆盖与恢复。 */
+/**
+ * 文件职责：集中控制 Vivecraft 渲染状态覆盖与恢复。
+ */
 final class VivecraftRenderStateController {
     private static final Logger LOGGER = LogManager.getLogger();
 

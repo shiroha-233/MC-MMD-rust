@@ -1,15 +1,13 @@
 package com.shiroha.mmdskin.fabric.stage;
 
-import com.shiroha.mmdskin.fabric.register.MmdSkinRegisterCommon;
+import com.shiroha.mmdskin.fabric.network.MmdSkinPayload;
 import com.shiroha.mmdskin.stage.protocol.StagePacket;
 import com.shiroha.mmdskin.stage.protocol.StagePacketCodec;
 import com.shiroha.mmdskin.stage.server.application.StageServerSessionService;
 import com.shiroha.mmdskin.stage.server.application.port.StageServerPlatformPort;
 import com.shiroha.mmdskin.stage.server.domain.model.StageServerPlayer;
 import com.shiroha.mmdskin.ui.network.NetworkOpCode;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -68,11 +66,8 @@ public final class FabricStageSessionRegistry {
             if (target == null) {
                 return;
             }
-            FriendlyByteBuf buf = PacketByteBufs.create();
-            buf.writeInt(NetworkOpCode.STAGE_MULTI);
-            buf.writeUUID(sourcePlayerId);
-            buf.writeUtf(StagePacketCodec.encode(packet));
-            ServerPlayNetworking.send(target, MmdSkinRegisterCommon.SKIN_S2C, buf);
+            ServerPlayNetworking.send(target,
+                MmdSkinPayload.createString(NetworkOpCode.STAGE_MULTI, sourcePlayerId, StagePacketCodec.encode(packet)));
         }
     }
 }

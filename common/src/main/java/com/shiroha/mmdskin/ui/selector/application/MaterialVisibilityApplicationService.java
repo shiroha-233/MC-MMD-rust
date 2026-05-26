@@ -1,3 +1,4 @@
+/* 文件职责：封装材质显隐界面的上下文创建、显隐编辑与持久化语义。 */
 package com.shiroha.mmdskin.ui.selector.application;
 
 import com.shiroha.mmdskin.ui.selector.port.MaterialVisibilityGateway;
@@ -59,9 +60,7 @@ public class MaterialVisibilityApplicationService {
         if (context.configModelName() == null || context.configModelName().isEmpty()) {
             return;
         }
-
-        Set<Integer> hiddenMaterials = snapshotHiddenMaterials(materials);
-        gateway.saveHiddenMaterials(context.configModelName(), hiddenMaterials);
+        gateway.saveHiddenMaterials(context.configModelName(), snapshotHiddenMaterials(materials));
     }
 
     public boolean saveIfChanged(MaterialScreenContext context,
@@ -101,7 +100,7 @@ public class MaterialVisibilityApplicationService {
 
         public MaterialEntryState(int index, String name, boolean visible) {
             this.index = index;
-            this.name = name;
+            this.name = name == null ? "" : name;
             this.visible = visible;
         }
 

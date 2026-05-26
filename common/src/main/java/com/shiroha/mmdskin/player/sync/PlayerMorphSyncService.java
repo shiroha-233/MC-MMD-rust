@@ -1,3 +1,4 @@
+/* 文件职责：承载玩家表情轮盘的网络同步发送。 */
 package com.shiroha.mmdskin.player.sync;
 
 import com.shiroha.mmdskin.ui.wheel.service.MorphSyncPort;
@@ -5,7 +6,6 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/** 文件职责：承载玩家表情轮盘的网络同步发送。 */
 public final class PlayerMorphSyncService implements MorphSyncPort {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final PlayerMorphSyncService INSTANCE = new PlayerMorphSyncService();

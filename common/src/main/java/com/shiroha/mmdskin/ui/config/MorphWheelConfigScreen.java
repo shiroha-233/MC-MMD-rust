@@ -1,16 +1,16 @@
+/* 文件职责：提供表情轮盘可选/已选双列配置界面，并维护平滑滚动与迁移交互。 */
 package com.shiroha.mmdskin.ui.config;
 
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
-import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 
 import java.util.Comparator;
 import java.util.List;
 
-/** 表情轮盘配置界面，提供原生双列可选/已选迁移编辑。 */
 public class MorphWheelConfigScreen extends Screen {
     private static final int WINDOW_MIN_WIDTH = 600;
     private static final int WINDOW_MIN_HEIGHT = 320;
@@ -48,6 +48,10 @@ public class MorphWheelConfigScreen extends Screen {
     protected void init() {
         super.init();
         updateLayout();
+    }
+
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
     }
 
     @Override
@@ -101,16 +105,16 @@ public class MorphWheelConfigScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (layout.availableList.contains(mouseX, mouseY)) {
-            availableTargetScroll = clampScroll(availableTargetScroll - (float) delta * 16.0f, maxAvailableScroll());
+            availableTargetScroll = clampScroll(availableTargetScroll - (float) scrollY * 16.0f, maxAvailableScroll());
             return true;
         }
         if (layout.selectedList.contains(mouseX, mouseY)) {
-            selectedTargetScroll = clampScroll(selectedTargetScroll - (float) delta * 16.0f, maxSelectedScroll());
+            selectedTargetScroll = clampScroll(selectedTargetScroll - (float) scrollY * 16.0f, maxSelectedScroll());
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override
@@ -301,8 +305,8 @@ public class MorphWheelConfigScreen extends Screen {
     private void drawEntryCard(GuiGraphics guiGraphics, UiRect listRect, int y,
                                MorphWheelConfig.MorphEntry entry, boolean hovered) {
         int x = listRect.x + 4;
-        int w = listRect.w - 12;
-        guiGraphics.fill(x, y, x + w, y + CARD_HEIGHT, TranslucentTrayChrome.cardBackground(false, hovered));
+        int width = listRect.w - 12;
+        guiGraphics.fill(x, y, x + width, y + CARD_HEIGHT, TranslucentTrayChrome.cardBackground(false, hovered));
         guiGraphics.fill(x, y, x + 2, y + CARD_HEIGHT, hovered ? TranslucentTrayChrome.ACCENT_STRIP_ACTIVE : TranslucentTrayChrome.ACCENT_STRIP);
         guiGraphics.drawString(this.font, buildMorphTitle(entry), x + 8, y + 4, TranslucentTrayChrome.BODY_TEXT, false);
         guiGraphics.drawString(this.font, buildMorphMeta(entry), x + 8, y + 15, TranslucentTrayChrome.DETAIL_TEXT, false);
