@@ -42,8 +42,6 @@
 |------|--------|----------|----------|
 | KAIMyEntity | MIT | https://github.com/kjkjkAIStudio/KAIMyEntity | 原始 Minecraft MMD 模组 |
 | KAIMyEntity-C | MIT | https://github.com/Gengorou-C/KAIMyEntity-C | 本项目直接前身（二次开发基础） |
-| Bullet3 | zlib | https://github.com/bulletphysics/bullet3 | 6DOF 弹簧约束算法 |
-| babylon-mmd | MIT | https://github.com/noname0310/babylon-mmd | MMD 物理管线架构 |
 | Saba | MIT | https://github.com/benikabocha/saba | 物理系统设计 |
 | nphysics | Apache-2.0 | https://github.com/dimforge/nphysics | 骨骼层次结构 |
 | mdanceio | MIT | https://github.com/ReaNAiveD/mdanceio | 动画系统 |

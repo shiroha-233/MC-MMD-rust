@@ -29,7 +29,6 @@ public abstract class EntityMixin {
                         cir.setReturnValue(camera.getPosition());
                         return;
                     }
-
                     cir.setReturnValue(FirstPersonManager.getVrCameraPosition(entity, partialTick));
                     return;
                 }

@@ -1,3 +1,4 @@
+/* 文件职责：在网络与配置边界编码/解码表情选择 token。 */
 package com.shiroha.mmdskin.expression;
 
 public final class ExpressionSelectionCodec {

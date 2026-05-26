@@ -1,11 +1,7 @@
+/* 文件职责：定义物理系统可读取的全局配置。 */
 package com.shiroha.mmdskin.config;
 
-/**
- * 物理引擎配置子接口（Bullet3）
- */
-
 public interface IPhysicsConfig {
-
     default boolean isPhysicsEnabled() { return true; }
 
     default float getPhysicsGravityY() { return -98.0f; }

@@ -1,22 +1,23 @@
+/** 文件职责：注册 Fabric 客户端生命周期、HUD 与按键运行时钩子。 */
 package com.shiroha.mmdskin.fabric.register;
 
-import com.shiroha.mmdskin.player.sync.BoneSyncManager;
+import com.shiroha.mmdskin.bonesync.BoneSyncManager;
 import com.shiroha.mmdskin.config.UIConstants;
 import com.shiroha.mmdskin.debug.client.PerformanceHud;
+import com.shiroha.mmdskin.debug.client.PlayerFrontViewHud;
 import com.shiroha.mmdskin.fabric.maid.MaidCompatMixinPlugin;
 import com.shiroha.mmdskin.fabric.network.MmdSkinNetworkPack;
-import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
-import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
-import com.shiroha.mmdskin.stage.client.StageClientRuntime;
+import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
+import com.shiroha.mmdskin.stage.application.StageSessionService;
 import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
+import com.shiroha.mmdskin.stage.client.sync.StageAnimSyncHelper;
 import com.shiroha.mmdskin.ui.QuickModelSwitcher;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import com.shiroha.mmdskin.ui.network.NetworkOpCode;
+import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import com.shiroha.mmdskin.ui.wheel.ConfigWheelScreen;
 import com.shiroha.mmdskin.ui.wheel.MaidConfigWheelScreen;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
@@ -27,8 +28,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 
-/** 文件职责：注册 Fabric 客户端运行时生命周期与界面钩子。 */
-@Environment(EnvType.CLIENT)
 final class FabricClientRuntimeHooks {
     private final KeyMapping keyConfigWheel;
     private final KeyMapping keyMaidConfigWheel;
@@ -47,7 +46,10 @@ final class FabricClientRuntimeHooks {
         ClientTickEvents.END_CLIENT_TICK.register(client -> onClientTick(minecraft));
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> client.execute(() -> onJoin(client)));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> onDisconnect());
-        HudRenderCallback.EVENT.register((graphics, tickDelta) -> PerformanceHud.render(graphics));
+        HudRenderCallback.EVENT.register((graphics, tickDelta) -> {
+            PerformanceHud.render(graphics);
+            PlayerFrontViewHud.render(graphics, tickDelta.getGameTimeDeltaPartialTick(false));
+        });
     }
 
     private void onClientTick(Minecraft minecraft) {
@@ -56,8 +58,8 @@ final class FabricClientRuntimeHooks {
             return;
         }
 
-        ClientRenderRuntime.get().modelRepository().tick();
-        StageClientRuntime.get().animSyncHelper().tickPending();
+        MMDModelManager.tick();
+        StageAnimSyncHelper.tickPending();
         BoneSyncManager.tickLocal();
 
         if (!player.isAlive()) {
@@ -103,19 +105,22 @@ final class FabricClientRuntimeHooks {
         if (player == null) {
             return;
         }
+
         String selectedModel = ModelSelectorConfig.getInstance().getPlayerModel(player.getName().getString());
-        if (selectedModel != null && !selectedModel.isEmpty() && !selectedModel.equals(UIConstants.DEFAULT_MODEL_NAME)) {
-            PlayerModelSyncService.broadcastLocalModelSelection(player.getUUID(), selectedModel);
+        if (selectedModel != null
+            && !selectedModel.isEmpty()
+            && !selectedModel.equals(UIConstants.DEFAULT_MODEL_NAME)) {
+            PlayerModelSyncManager.broadcastLocalModelSelection(player.getUUID(), selectedModel);
         }
         MmdSkinNetworkPack.sendToServer(NetworkOpCode.REQUEST_ALL_MODELS, player.getUUID(), "");
     }
 
     private void onDisconnect() {
         MMDCameraController.getInstance().exitStageMode();
-        PlayerModelSyncService.onDisconnect();
+        PlayerModelSyncManager.onDisconnect();
         MmdSkinRendererPlayerHelper.onDisconnect();
         BoneSyncManager.onDisconnect();
-        StageClientRuntime.get().sessionService().onDisconnect();
+        StageSessionService.getInstance().onDisconnect();
     }
 
     private void tryOpenMaidConfigWheel(Minecraft minecraft) {
@@ -127,8 +132,12 @@ final class FabricClientRuntimeHooks {
         Entity target = ((EntityHitResult) hitResult).getEntity();
         String className = target.getClass().getName();
         if (className.contains("EntityMaid") || className.contains("touhoulittlemaid")) {
-            String maidName = target.getName().getString();
-            minecraft.setScreen(new MaidConfigWheelScreen(target.getUUID(), target.getId(), maidName, keyMaidConfigWheel));
+            minecraft.setScreen(new MaidConfigWheelScreen(
+                target.getUUID(),
+                target.getId(),
+                target.getName().getString(),
+                keyMaidConfigWheel
+            ));
         }
     }
 }

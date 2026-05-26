@@ -1,8 +1,8 @@
+/* 文件职责：定义模型查询与调试读取相关的 native 能力边界。 */
 package com.shiroha.mmdskin.bridge.runtime;
 
 import java.nio.ByteBuffer;
 
-/** 文件职责：集中定义模型查询与调试读取相关的 native 能力。 */
 public interface NativeModelQueryPort {
 
     NativeModelQueryPort NOOP = new NativeModelQueryPort() {

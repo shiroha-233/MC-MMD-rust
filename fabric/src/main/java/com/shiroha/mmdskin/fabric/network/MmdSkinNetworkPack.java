@@ -2,19 +2,15 @@ package com.shiroha.mmdskin.fabric.network;
 
 import java.util.UUID;
 
-import com.shiroha.mmdskin.player.sync.ClientNetworkBindings;
-import com.shiroha.mmdskin.fabric.register.MmdSkinRegisterCommon;
-import com.shiroha.mmdskin.compat.maid.runtime.MaidMMDModelManager;
+import com.shiroha.mmdskin.maid.MaidMMDModelManager;
 import com.shiroha.mmdskin.player.animation.PendingAnimSignalCache;
-import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.player.sync.MorphSyncHelper;
 import com.shiroha.mmdskin.ui.network.NetworkOpCode;
+import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 
@@ -22,67 +18,36 @@ import net.minecraft.world.entity.player.Player;
  * Fabric 网络包发送与客户端处理
  */
 public class MmdSkinNetworkPack {
-    private MmdSkinNetworkPack() {
-    }
-
-    public static int toOpCode(ClientNetworkBindings.NetworkMessageType messageType) {
-        return switch (messageType) {
-            case CUSTOM_ANIM -> NetworkOpCode.CUSTOM_ANIM;
-            case RESET_PHYSICS -> NetworkOpCode.RESET_PHYSICS;
-            case MODEL_SELECT -> NetworkOpCode.MODEL_SELECT;
-            case MORPH_SYNC -> NetworkOpCode.MORPH_SYNC;
-            case STAGE_MULTI -> NetworkOpCode.STAGE_MULTI;
-            case BONE_SYNC -> NetworkOpCode.BONE_SYNC;
-        };
-    }
 
     public static void sendToServer(int opCode, UUID playerUUID, int arg0) {
-        FriendlyByteBuf buffer = PacketByteBufs.create();
-        buffer.writeInt(opCode);
-        buffer.writeUUID(playerUUID);
-        buffer.writeInt(arg0);
-        ClientPlayNetworking.send(MmdSkinRegisterCommon.SKIN_C2S, buffer);
+        ClientPlayNetworking.send(MmdSkinPayload.createInt(opCode, playerUUID, arg0));
     }
 
     public static void sendBinaryToServer(int opCode, UUID playerUUID, byte[] data) {
-        FriendlyByteBuf buffer = PacketByteBufs.create();
-        buffer.writeInt(opCode);
-        buffer.writeUUID(playerUUID);
-        buffer.writeByteArray(data);
-        ClientPlayNetworking.send(MmdSkinRegisterCommon.SKIN_C2S, buffer);
+        ClientPlayNetworking.send(MmdSkinPayload.createBinary(opCode, playerUUID, data));
     }
 
     public static void sendToServer(int opCode, UUID playerUUID, String animId) {
-        FriendlyByteBuf buffer = PacketByteBufs.create();
-        buffer.writeInt(opCode);
-        buffer.writeUUID(playerUUID);
-        buffer.writeUtf(animId);
-        ClientPlayNetworking.send(MmdSkinRegisterCommon.SKIN_C2S, buffer);
+        ClientPlayNetworking.send(MmdSkinPayload.createString(opCode, playerUUID, animId));
     }
 
     public static void sendToServer(int opCode, UUID playerUUID, int entityId, String data) {
-        FriendlyByteBuf buffer = PacketByteBufs.create();
-        buffer.writeInt(opCode);
-        buffer.writeUUID(playerUUID);
-        buffer.writeInt(entityId);
-        buffer.writeUtf(data);
-        ClientPlayNetworking.send(MmdSkinRegisterCommon.SKIN_C2S, buffer);
+        ClientPlayNetworking.send(MmdSkinPayload.createMaid(opCode, playerUUID, entityId, data));
     }
 
-    public static void doInClient(FriendlyByteBuf buffer) {
-        int opCode = buffer.readInt();
-        UUID playerUUID = buffer.readUUID();
+    public static void handlePayload(MmdSkinPayload payload) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
 
-        if (NetworkOpCode.isStringPayload(opCode)) {
-            String data = buffer.readUtf();
-            handleString(opCode, playerUUID, data);
-        } else if (NetworkOpCode.isEntityStringPayload(opCode)) {
-            int entityId = buffer.readInt();
-            String data = buffer.readUtf();
-            handleMaid(opCode, playerUUID, entityId, data);
+        int opCode = payload.opCode();
+        UUID playerUUID = payload.playerUUID();
+
+        if (NetworkOpCode.isEntityStringPayload(opCode)) {
+            handleMaid(opCode, playerUUID, payload.entityId(), payload.stringArg());
+        } else if (NetworkOpCode.isStringPayload(opCode)) {
+            handleString(opCode, playerUUID, payload.stringArg());
         } else {
-            int arg0 = buffer.readInt();
-            handleInt(opCode, playerUUID, arg0);
+            handleInt(opCode, playerUUID, payload.intArg());
         }
     }
 
@@ -117,7 +82,7 @@ public class MmdSkinNetworkPack {
                 if (target != null) MmdSkinRendererPlayerHelper.CustomAnim(target, data);
             }
             case NetworkOpCode.MODEL_SELECT -> {
-                PlayerModelSyncService.onRemotePlayerModelReceived(playerUUID, data);
+                PlayerModelSyncManager.onRemotePlayerModelReceived(playerUUID, data);
             }
             case NetworkOpCode.MORPH_SYNC -> {
                 if (target != null) MorphSyncHelper.applyRemoteMorph(target, data);

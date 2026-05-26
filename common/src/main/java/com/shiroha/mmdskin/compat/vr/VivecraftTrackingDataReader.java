@@ -4,10 +4,13 @@ import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.joml.Quaternionf;
+import org.joml.Quaternionfc;
 
 import java.lang.reflect.Method;
 
-/** 文件职责：把 Vivecraft pose 解析为 MMD 所需的 tracking 数据包。 */
+/**
+ * 文件职责：把 Vivecraft pose 解析为 MMD 所需的 tracking 数据包。
+ */
 final class VivecraftTrackingDataReader {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final float EPSILON = 1.0e-4f;
@@ -40,7 +43,6 @@ final class VivecraftTrackingDataReader {
         if (pose == null) {
             return null;
         }
-
         Object head = vrPoseGetHeadMethod.invoke(pose);
         if (head == null) {
             return null;
@@ -66,10 +68,7 @@ final class VivecraftTrackingDataReader {
     }
 
     boolean isPoseUsable(Object pose) throws Exception {
-        if (pose == null) {
-            return false;
-        }
-        return isPacketUsable(poseToTrackingPacket(pose));
+        return pose != null && isPacketUsable(poseToTrackingPacket(pose));
     }
 
     boolean isPacketUsable(float[] data) {
@@ -120,7 +119,7 @@ final class VivecraftTrackingDataReader {
         out[offset + 2] = (float) pos.z;
 
         Quaternionf rotation = new Quaternionf();
-        rotation.set((org.joml.Quaternionfc) vrBodyPartDataGetRotationMethod.invoke(bodyPartData));
+        rotation.set((Quaternionfc) vrBodyPartDataGetRotationMethod.invoke(bodyPartData));
         rotation.normalize();
         out[offset + 3] = rotation.x;
         out[offset + 4] = rotation.y;

@@ -1,9 +1,8 @@
-/* 文件职责：为舞台工作台 UI 收口会话与开播操作。 */
+/* 文件职责：为舞台工作台 UI 收口会话、偏好和开播操作。 */
 package com.shiroha.mmdskin.ui.stage;
 
 import com.shiroha.mmdskin.config.StageConfig;
 import com.shiroha.mmdskin.config.StagePack;
-import com.shiroha.mmdskin.stage.client.StageClientRuntime;
 import com.shiroha.mmdskin.stage.client.StagePlaybackCoordinator;
 import com.shiroha.mmdskin.stage.client.asset.LocalStagePackRepository;
 import com.shiroha.mmdskin.stage.client.playback.StageHostPlaybackService;
@@ -15,26 +14,22 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-/** 文件职责：为舞台工作台 UI 收口会话与开播操作。 */
+/** 文件职责：为舞台工作台 UI 收口会话、偏好和开播操作。 */
 public final class StageWorkbenchFacade {
-    private static final StageWorkbenchFacade INSTANCE = new StageWorkbenchFacade(new StageConfigAccess());
+    private static final StageWorkbenchFacade INSTANCE = new StageWorkbenchFacade(
+            new RuntimeLobbyAccess(),
+            () -> LocalStagePackRepository.getInstance().loadStagePacks(),
+            (pack, cinematicMode, cameraHeightOffset, selectedMotionFileName) ->
+                    StageHostPlaybackService.getInstance().startPack(pack, cinematicMode, cameraHeightOffset, selectedMotionFileName),
+            new RuntimeSelectionLifecycle(),
+            new StageConfigAccess()
+    );
 
-    private final ConfigAccess configAccess;
     private final LobbyAccess lobbyAccess;
     private final PackCatalog packCatalog;
     private final StageStarter stageStarter;
     private final SelectionLifecycle selectionLifecycle;
-
-    private StageWorkbenchFacade(ConfigAccess configAccess) {
-        this(
-                new RuntimeLobbyAccess(),
-                () -> LocalStagePackRepository.getInstance().loadStagePacks(),
-                (pack, cinematicMode, cameraHeightOffset, selectedMotionFileName) ->
-                        StageClientRuntime.get().hostPlaybackService().startPack(pack, cinematicMode, cameraHeightOffset, selectedMotionFileName),
-                new RuntimeSelectionLifecycle(),
-                configAccess
-        );
-    }
+    private final ConfigAccess configAccess;
 
     StageWorkbenchFacade(LobbyAccess lobbyAccess,
                          PackCatalog packCatalog,
@@ -56,12 +51,7 @@ public final class StageWorkbenchFacade {
         return configAccess.loadPreferences();
     }
 
-    public List<StagePack> loadStagePacks() {
-        return packCatalog.loadStagePacks();
-    }
-
-    public void savePreferences(String selectedPackName, boolean cinematicMode, float cameraHeightOffset,
-                                float audioVolume) {
+    public void savePreferences(String selectedPackName, boolean cinematicMode, float cameraHeightOffset, float audioVolume) {
         configAccess.savePreferences(new WorkbenchPreferences(
                 selectedPackName == null ? "" : selectedPackName,
                 cinematicMode,
@@ -70,16 +60,16 @@ public final class StageWorkbenchFacade {
         ));
     }
 
+    public List<StagePack> loadStagePacks() {
+        return packCatalog.loadStagePacks();
+    }
+
     public void onStageSelectionOpened() {
         selectionLifecycle.onOpened();
     }
 
     public void onStageSelectionClosed(boolean stageStarted) {
         selectionLifecycle.onClosed(stageStarted);
-    }
-
-    public boolean hasPendingInvite() {
-        return lobbyAccess.hasPendingInvite();
     }
 
     public boolean isSessionMember() {
@@ -110,8 +100,12 @@ public final class StageWorkbenchFacade {
         return lobbyAccess.getHostPanelEntries();
     }
 
-    public void toggleLocalCustomMotionEnabled() {
-        lobbyAccess.setLocalCustomMotionEnabled(!lobbyAccess.isLocalCustomMotionEnabled());
+    public Set<UUID> getAcceptedMembers() {
+        return lobbyAccess.getAcceptedMembers();
+    }
+
+    public boolean allMembersReady() {
+        return lobbyAccess.allMembersReady();
     }
 
     public void toggleUseHostCamera() {
@@ -120,6 +114,10 @@ public final class StageWorkbenchFacade {
 
     public void toggleLocalReady() {
         lobbyAccess.setLocalReady(!lobbyAccess.isLocalReady());
+    }
+
+    public void toggleLocalCustomMotionEnabled() {
+        lobbyAccess.setLocalCustomMotionEnabled(!lobbyAccess.isLocalCustomMotionEnabled());
     }
 
     public void toggleLocalCustomMotion(String fileName) {
@@ -144,6 +142,13 @@ public final class StageWorkbenchFacade {
 
     public boolean startStage(StagePack pack, boolean cinematicMode, float cameraHeightOffset, String selectedMotionFileName) {
         return pack != null && stageStarter.start(pack, cinematicMode, cameraHeightOffset, selectedMotionFileName);
+    }
+
+    public boolean startPuppetMode(StagePack pack, boolean cinematicMode, float cameraHeightOffset, String selectedMotionFileName) {
+        if (pack == null || !pack.hasMotionVmd()) {
+            return false;
+        }
+        return StageHostPlaybackService.getInstance().startPuppetMode(pack, cinematicMode, cameraHeightOffset, selectedMotionFileName);
     }
 
     public void inviteAllNearby() {
@@ -173,14 +178,6 @@ public final class StageWorkbenchFacade {
         }
     }
 
-    public void acceptInvite() {
-        lobbyAccess.acceptInvite();
-    }
-
-    public void declineInvite() {
-        lobbyAccess.declineInvite();
-    }
-
     public record WorkbenchPreferences(String lastStagePack, boolean cinematicMode, float cameraHeightOffset,
                                        float audioVolume) {
     }
@@ -192,8 +189,6 @@ public final class StageWorkbenchFacade {
     }
 
     interface LobbyAccess {
-        boolean hasPendingInvite();
-
         boolean isSessionMember();
 
         boolean isUseHostCamera();
@@ -215,10 +210,6 @@ public final class StageWorkbenchFacade {
         void sendInvite(UUID targetUUID);
 
         void cancelInvite(UUID targetUUID);
-
-        void acceptInvite();
-
-        void declineInvite();
 
         void setUseHostCamera(boolean useHostCamera);
 
@@ -248,11 +239,6 @@ public final class StageWorkbenchFacade {
     }
 
     private static final class RuntimeLobbyAccess implements LobbyAccess {
-        @Override
-        public boolean hasPendingInvite() {
-            return StageLobbyViewModel.getInstance().hasPendingInvite();
-        }
-
         @Override
         public boolean isSessionMember() {
             return StageLobbyViewModel.getInstance().isSessionMember();
@@ -309,16 +295,6 @@ public final class StageWorkbenchFacade {
         }
 
         @Override
-        public void acceptInvite() {
-            StageLobbyViewModel.getInstance().acceptInvite();
-        }
-
-        @Override
-        public void declineInvite() {
-            StageLobbyViewModel.getInstance().declineInvite();
-        }
-
-        @Override
         public void setUseHostCamera(boolean useHostCamera) {
             StageLobbyViewModel.getInstance().setUseHostCamera(useHostCamera);
         }
@@ -352,12 +328,12 @@ public final class StageWorkbenchFacade {
     private static final class RuntimeSelectionLifecycle implements SelectionLifecycle {
         @Override
         public void onOpened() {
-            StageClientRuntime.get().playbackCoordinator().onStageSelectionOpened();
+            StagePlaybackCoordinator.getInstance().onStageSelectionOpened();
         }
 
         @Override
         public void onClosed(boolean stageStarted) {
-            StageClientRuntime.get().playbackCoordinator().onStageSelectionClosed(stageStarted);
+            StagePlaybackCoordinator.getInstance().onStageSelectionClosed(stageStarted);
         }
     }
 

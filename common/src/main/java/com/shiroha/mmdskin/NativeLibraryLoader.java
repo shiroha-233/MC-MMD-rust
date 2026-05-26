@@ -1,3 +1,4 @@
+/* 文件职责：识别平台并按 1.20.1 的方式提取、加载与校验 JNI 原生库。*/
 package com.shiroha.mmdskin;
 
 import java.io.File;
@@ -131,7 +132,7 @@ public final class NativeLibraryLoader {
             System.load(extractedPath.toAbsolutePath().toString());
         } catch (Error error) {
             throw buildLinkError(
-                    "无法加载内置原生库: " + library.resourcePath() + " -> " + extractedPath + "，原因: " + error.getMessage(),
+                    "无法加载内置原生库 " + library.resourcePath() + " -> " + extractedPath + "，原因: " + error.getMessage(),
                     error
             );
         }
@@ -149,7 +150,7 @@ public final class NativeLibraryLoader {
             return targetPath;
         } catch (IOException exception) {
             throw buildLinkError(
-                    "解压内置原生库失败: " + library.resourcePath() + " -> " + targetPath + "，原因: " + exception.getMessage(),
+                    "解压内置原生库失败 " + library.resourcePath() + " -> " + targetPath + "，原因: " + exception.getMessage(),
                     exception
             );
         }
@@ -263,8 +264,8 @@ public final class NativeLibraryLoader {
             if (LIBRARY_VERSION.equals(rustVersion)) {
                 return;
             }
-            logger.warn("原生库版本不匹配！Java 侧期望: " + LIBRARY_VERSION + ", Rust 侧实际: " + rustVersion);
-            logger.warn("这通常发生在开发环境或手动替换内置库文件时，请确保 Rust 引擎和 Java 模组版本一致。");
+            logger.warn("原生库版本不匹配，Java 侧期望 " + LIBRARY_VERSION + ", Rust 侧实际 " + rustVersion);
+            logger.warn("这通常发生在开发环境或手动替换内置库文件时，请确保 Rust 引擎和 Java 模块版本一致。");
         } catch (Exception | Error e) {
             logger.warn("运行时版本校验失败（GetVersion 调用异常）: " + e.getMessage());
         }

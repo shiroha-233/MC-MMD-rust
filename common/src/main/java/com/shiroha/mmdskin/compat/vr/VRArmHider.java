@@ -1,19 +1,19 @@
 package com.shiroha.mmdskin.compat.vr;
 
-import com.shiroha.mmdskin.config.RuntimeConfigPortHolder;
+import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 
 /**
- * VR 手臂隐藏判断。
+ * 文件职责：集中判断本地玩家 VR 手臂与自体隐藏条件。
  */
 public final class VRArmHider {
-
-    private VRArmHider() {}
+    private VRArmHider() {
+    }
 
     public static boolean isLocalPlayerInVR() {
-        if (!RuntimeConfigPortHolder.get().isVrEnabled() || !VRDetector.isAvailable()) {
+        if (!ConfigManager.isVREnabled() || !VRDetector.isAvailable()) {
             return false;
         }
 
@@ -22,7 +22,6 @@ public final class VRArmHider {
         if (player == null) {
             return false;
         }
-
         return VRDataProvider.isVRPlayer(player);
     }
 

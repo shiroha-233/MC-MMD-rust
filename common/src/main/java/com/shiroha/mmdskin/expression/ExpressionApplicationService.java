@@ -1,5 +1,7 @@
+/* 文件职责：把预设表情或 VPD 表情应用到模型实例。 */
 package com.shiroha.mmdskin.expression;
 
+import com.shiroha.mmdskin.bridge.runtime.NativeMorphBridgePorts;
 import com.shiroha.mmdskin.bridge.runtime.NativeMorphPort;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
 import java.io.File;
@@ -10,9 +12,8 @@ import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/** 文件职责：把预设表情或 VPD 表情应用到模型实例上。 */
 public final class ExpressionApplicationService {
-    private static final Logger logger = LogManager.getLogger();
+    private static final Logger LOGGER = LogManager.getLogger();
     private static final ConcurrentHashMap<Long, Set<Integer>> PRESET_STATE = new ConcurrentHashMap<>();
     private static final NativeMorphPort NOOP_MORPH_PORT = new NativeMorphPort() {
         @Override
@@ -32,8 +33,7 @@ public final class ExpressionApplicationService {
             return -1;
         }
     };
-
-    private static volatile NativeMorphPort morphPort = NOOP_MORPH_PORT;
+    private static volatile NativeMorphPort morphPort = NativeMorphBridgePorts.morphPort();
 
     private ExpressionApplicationService() {
     }
@@ -48,13 +48,17 @@ public final class ExpressionApplicationService {
         }
 
         PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
-        if (resolved == null || resolved.model() == null || resolved.model().modelInstance() == null) {
+        if (resolved == null || resolved.model() == null || resolved.model().model == null) {
             return false;
         }
-        return apply(resolved.model().modelInstance().getModelHandle(), selection, resolved.playerName());
+        return apply(resolved.model().model.getModelHandle(), selection, resolved.playerName());
     }
 
     public static boolean apply(long modelHandle, ExpressionSelection selection, String playerName) {
+        if (selection == null) {
+            return false;
+        }
+
         NativeMorphPort nativeBridge = morphPort;
         return switch (selection.type()) {
             case RESET -> {
@@ -70,7 +74,7 @@ public final class ExpressionApplicationService {
     private static boolean applyPreset(long modelHandle, String presetId, String playerName) {
         BuiltinExpressionPreset preset = BuiltinExpressionRegistry.find(presetId);
         if (preset == null) {
-            logger.warn("[BuiltinExpression] Unknown preset: {}", presetId);
+            LOGGER.warn("[BuiltinExpression] Unknown preset: {}", presetId);
             return false;
         }
 
@@ -78,7 +82,7 @@ public final class ExpressionApplicationService {
         BuiltinExpressionPreset.ResolvedPreset resolvedPreset = preset.resolve(catalog);
         clearPresetMorphs(modelHandle);
         if (!resolvedPreset.available()) {
-            logger.warn("[BuiltinExpression] Model for {} is missing required morphs for preset {}", playerName, presetId);
+            LOGGER.warn("[BuiltinExpression] Model for {} is missing required morphs for preset {}", playerName, presetId);
             return false;
         }
 
@@ -95,13 +99,13 @@ public final class ExpressionApplicationService {
     private static boolean applyVpd(long modelHandle, String filePath, String playerName) {
         clearPresetMorphs(modelHandle);
         if (filePath == null || filePath.isEmpty() || !new File(filePath).exists()) {
-            logger.warn("[Expression] VPD file does not exist for {}: {}", playerName, filePath);
+            LOGGER.warn("[Expression] VPD file does not exist for {}: {}", playerName, filePath);
             return false;
         }
 
         int result = morphPort.applyVpdMorph(modelHandle, filePath);
         if (result < 0) {
-            logger.warn("[Expression] Failed to apply VPD for {}: {} ({})", playerName, filePath, result);
+            LOGGER.warn("[Expression] Failed to apply VPD for {}: {} ({})", playerName, filePath, result);
             return false;
         }
         return true;

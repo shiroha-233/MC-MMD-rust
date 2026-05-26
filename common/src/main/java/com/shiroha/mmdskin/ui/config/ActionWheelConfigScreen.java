@@ -1,16 +1,16 @@
+/* 文件职责：提供动作轮盘可选/已选双列配置界面，并维护平滑滚动与迁移交互。 */
 package com.shiroha.mmdskin.ui.config;
 
+import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
-import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 
 import java.util.Comparator;
 import java.util.List;
 
-/** 动作轮盘配置界面，提供原生双列可选/已选迁移编辑。 */
 public class ActionWheelConfigScreen extends Screen {
     private static final int WINDOW_MIN_WIDTH = 600;
     private static final int WINDOW_MIN_HEIGHT = 320;
@@ -37,6 +37,15 @@ public class ActionWheelConfigScreen extends Screen {
     private int hoveredSelectedIndex = -1;
     private ButtonTarget hoveredButton = ButtonTarget.NONE;
     private Layout layout = Layout.empty();
+
+    private enum ButtonTarget {
+        NONE,
+        REFRESH,
+        SELECT_ALL,
+        CLEAR_ALL,
+        SAVE,
+        CANCEL
+    }
 
     public ActionWheelConfigScreen(Screen parent) {
         super(Component.translatable("gui.mmdskin.action_config"));
@@ -101,16 +110,16 @@ public class ActionWheelConfigScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (layout.availableList.contains(mouseX, mouseY)) {
-            availableTargetScroll = clampScroll(availableTargetScroll - (float) delta * 16.0f, maxAvailableScroll());
+            availableTargetScroll = clampScroll(availableTargetScroll - (float) scrollY * 16.0f, maxAvailableScroll());
             return true;
         }
         if (layout.selectedList.contains(mouseX, mouseY)) {
-            selectedTargetScroll = clampScroll(selectedTargetScroll - (float) delta * 16.0f, maxSelectedScroll());
+            selectedTargetScroll = clampScroll(selectedTargetScroll - (float) scrollY * 16.0f, maxSelectedScroll());
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override
@@ -397,15 +406,6 @@ public class ActionWheelConfigScreen extends Screen {
             return text.substring(0, Math.max(0, maxChars));
         }
         return text.substring(0, maxChars - 3) + "...";
-    }
-
-    private enum ButtonTarget {
-        NONE,
-        REFRESH,
-        SELECT_ALL,
-        CLEAR_ALL,
-        SAVE,
-        CANCEL
     }
 
     record UiRect(int x, int y, int w, int h) {

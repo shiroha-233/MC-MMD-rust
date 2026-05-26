@@ -62,18 +62,10 @@ repositories {
 		url "https://maven.irisshaders.dev"
 		name "Iris Shaders"
 	}
-	// Cardinal Components API (Ladysnake)
+	// Cardinal Components API v3 (Ladysnake)
 	maven {
 		url "https://maven.ladysnake.org/releases"
 		name "Ladysnake"
-	}
-	// Reach Entity Attributes (JamiesWhiteShirt)
-	maven {
-		url "https://maven.jamieswhiteshirt.com/libs-release/"
-		name "JamiesWhiteShirt"
-		content {
-			includeGroup "com.jamieswhiteshirt"
-		}
 	}
 }
 
@@ -85,10 +77,6 @@ dependencies {
 	// JLayer 运行时由平台包私有化，避免与其他模组的 JPMS 模块导出冲突。
 	common("javazoom:jlayer:1.0.1") { transitive = false }
 	shadowBundle("javazoom:jlayer:1.0.1") { transitive = false }
-
-	// Skiko / Skia（轮盘 UI 平滑渲染）
-
-	// ImGui workbench（开发/本地运行）
 	
 	// Fabric Loader
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
@@ -97,29 +85,32 @@ dependencies {
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 	
 	// Architectury API - 内嵌到模组中
-	modImplementation("dev.architectury:architectury-fabric:9.2.14") {
+	modImplementation("dev.architectury:architectury-fabric:${project.architectury_version}") {
 		exclude group: "net.fabricmc.fabric-api"
 	}
-	include("dev.architectury:architectury-fabric:9.2.14")
+	include("dev.architectury:architectury-fabric:${project.architectury_version}")
 	
 	// Cloth Config API - 配置界面
-	modApi("me.shedaniel.cloth:cloth-config-fabric:11.1.136") {
+	modApi("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}") {
 		exclude(group: "net.fabricmc.fabric-api")
 	}
+	include("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}")
 	
-	// Cardinal Components API - Touhou Little Maid Fabric 移植版的必需传递依赖
-	// Modrinth Maven 不提供传递依赖，需要手动添加
-	modCompileOnly "dev.onyxstudios.cardinal-components-api:cardinal-components-base:${rootProject.cardinal_components_version}"
-	modCompileOnly "dev.onyxstudios.cardinal-components-api:cardinal-components-entity:${rootProject.cardinal_components_version}"
-	modLocalRuntime "dev.onyxstudios.cardinal-components-api:cardinal-components-base:${rootProject.cardinal_components_version}"
-	modLocalRuntime "dev.onyxstudios.cardinal-components-api:cardinal-components-entity:${rootProject.cardinal_components_version}"
+	// Cardinal Components API v3 - Touhou Little Maid Orihime 的传递依赖
+	modCompileOnly "org.ladysnake.cardinal-components-api:cardinal-components-base:${rootProject.cardinal_components_version}"
+	modCompileOnly "org.ladysnake.cardinal-components-api:cardinal-components-entity:${rootProject.cardinal_components_version}"
+	modLocalRuntime "org.ladysnake.cardinal-components-api:cardinal-components-base:${rootProject.cardinal_components_version}"
+	modLocalRuntime "org.ladysnake.cardinal-components-api:cardinal-components-entity:${rootProject.cardinal_components_version}"
 	
-	// Reach Entity Attributes - Touhou Little Maid 的传递依赖
-	modLocalRuntime "com.jamieswhiteshirt:reach-entity-attributes:2.4.0"
-	
-	// Nashorn 脚本引擎 - Java 17 不再内置，Touhou Little Maid JS 动画需要
+	// Nashorn 脚本引擎 - Java 21 不再内置，Touhou Little Maid JS 动画需要
 	runtimeOnly "org.openjdk.nashorn:nashorn-core:15.4"
 	
+	// NightConfig - Forge Config API Port 的传递依赖，dev 环境需要显式声明
+	runtimeOnly "com.electronwill.night-config:core:3.8.1"
+	runtimeOnly "com.electronwill.night-config:toml:3.8.1"
+	
+	// mc-vr-api - Vivecraft VR API（软依赖，运行时可选）
+
 	// TouhouLittleMaid Orihime (Fabric 移植版) - 可选依赖，用于联动
 	modCompileOnly "maven.modrinth:touhoulittlemaid-orihime:${rootProject.touhou_little_maid_fabric_version}"
 	modLocalRuntime "maven.modrinth:touhoulittlemaid-orihime:${rootProject.touhou_little_maid_fabric_version}"
@@ -140,13 +131,16 @@ shadowJar {
     configurations = [project.configurations.shadowCommon, project.configurations.shadowBundle]
     archiveClassifier.set("dev-shadow")
     relocate "javazoom", "com.shiroha.mmdskin.shadow.javazoom"
-    
+
+    // 包含 common 模块的资源（原生库、默认动画等）
+    from(project(":common").sourceSets.main.resources)
+
     // 排除不需要的文件
     exclude 'META-INF/versions/**'
-    
+
     // 强制更新 META-INF/services 里的类名
     mergeServiceFiles()
-    
+
     // 排除 module-info.class 避免 JPMS 冲突
     exclude 'module-info.class'
 }

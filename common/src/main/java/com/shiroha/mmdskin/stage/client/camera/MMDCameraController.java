@@ -1,156 +1,277 @@
-/* 文件职责：协调舞台模式下的相机、音频与观演状态。 */
 package com.shiroha.mmdskin.stage.client.camera;
 
-import com.shiroha.mmdskin.bridge.runtime.NativeAnimationPort;
+import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.config.StageConfig;
-import com.shiroha.mmdskin.stage.client.StageClientRuntime;
 import com.shiroha.mmdskin.stage.client.camera.port.StageCameraBroadcastPort;
 import com.shiroha.mmdskin.stage.client.camera.port.StageCameraSessionPort;
 import com.shiroha.mmdskin.stage.client.camera.port.StageCameraUiPort;
-import com.shiroha.mmdskin.stage.client.camera.port.StagePlayerSyncPort;
-import com.shiroha.mmdskin.stage.client.playback.port.PlayerStageAnimationPort;
+import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
+import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
+import com.shiroha.mmdskin.player.model.PlayerModelResolver;
+import com.shiroha.mmdskin.stage.client.sync.StageAnimSyncHelper;
+import net.minecraft.client.CameraType;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.network.chat.Component;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.joml.Vector3f;
 
 import java.util.Objects;
 import java.util.UUID;
 
-/** 文件职责：协调舞台模式下的相机、音频与观演状态。 */
-public final class MMDCameraController {
-    private static final Logger LOGGER = LogManager.getLogger();
+/** 协调舞台模式下的相机、音频与观演状态。 */
+public class MMDCameraController {
+    private static final Logger logger = LogManager.getLogger();
+
+    private static volatile StageCameraSessionPort defaultSessionPort = new StageCameraSessionPort() {
+        @Override
+        public boolean isWatchingStage() {
+            return false;
+        }
+
+        @Override
+        public boolean isSessionHost() {
+            return false;
+        }
+
+        @Override
+        public UUID getSessionId() {
+            return null;
+        }
+
+        @Override
+        public UUID getHostPlayerId() {
+            return null;
+        }
+
+        @Override
+        public void stopWatching() {
+        }
+
+        @Override
+        public void stopWatchingStageOnly() {
+        }
+
+        @Override
+        public void notifyMembersStageEnd() {
+        }
+
+        @Override
+        public void closeHostedSession() {
+        }
+    };
+
+    private static volatile StageCameraBroadcastPort defaultBroadcastPort = new StageCameraBroadcastPort() {
+        @Override
+        public void sendRemoteStageStop(UUID sessionId) {
+        }
+
+        @Override
+        public void sendFrameSync(UUID sessionId, float frame) {
+        }
+
+        @Override
+        public void sendLeave(UUID hostUUID) {
+        }
+    };
+
+    private static volatile StageCameraUiPort defaultUiPort = new StageCameraUiPort() {
+        @Override
+        public void openStageSelection() {
+        }
+    };
+
+    private static final MMDCameraController INSTANCE = new MMDCameraController();
+
     private static final float MMD_TO_MC_SCALE = 0.09f;
     private static final float VMD_FPS = 30.0f;
+
+    private enum StageState { INACTIVE, INTRO, STANDBY, PLAYING, OUTRO, WATCHING, PUPPET_MODE }
+    private StageState state = StageState.INACTIVE;
+
+    private CameraType savedCameraType = null;
+    private String modelName = null;
+    private boolean cinematicMode = false;
+    private boolean previousHideGui = false;
+    private float cameraHeightOffset = 0.0f;
+
+    private float currentFrame = 0.0f;
+    private float maxFrame = 0.0f;
+    private float playbackSpeed = 1.0f;
+
+    private long cameraAnimHandle = 0;
+    private long motionAnimHandle = 0;
+    private long modelHandle = 0;
+
+    private final StageAudioPlayer audioPlayer = new StageAudioPlayer();
+    private final MMDCameraData cameraData = new MMDCameraData();
+
+    private double anchorX, anchorY, anchorZ;
+    private float anchorYaw;
+
+    private double cameraX, cameraY, cameraZ;
+    private float cameraPitch, cameraYaw, cameraRoll;
+    private float cameraFov = 70.0f;
+
+    private long lastTickTimeNs = 0;
+    private boolean mouseReleased = false;
+
+    private boolean escWasPressed = false;
+    private long lastEscTimeNs = 0;
     private static final long DOUBLE_ESC_WINDOW_NS = 600_000_000L;
+
+    private java.util.UUID watchingHostUUID = null;
+    private long watchCameraAnimHandle = 0;
+
     private static final int SYNC_INTERVAL_FRAMES = 60;
     private static final float CATCHUP_SPEED_MAX = 1.15f;
     private static final float CATCHUP_SPEED_MIN = 0.85f;
     private static final float SYNC_TOLERANCE = 2.0f;
+    private int frameSyncCounter = 0;
+    private float targetSyncFrame = -1.0f;
+
     private static final float INTRO_DURATION = 2.0f;
+    private float introElapsed = 0.0f;
+    private double introStartX, introStartY, introStartZ;
+    private float introStartPitch, introStartYaw, introStartFov;
+
+    private double standbyX, standbyY, standbyZ;
+    private float standbyPitch, standbyYaw, standbyFov;
+
     private static final float OUTRO_DURATION = 2.5f;
+    private float outroElapsed = 0.0f;
+    private double outroStartX, outroStartY, outroStartZ;
+    private float outroStartPitch, outroStartYaw, outroStartFov;
+    private boolean outroIsGuest = false;
 
-    private final StageCameraSessionStateMachine stateMachine = new StageCameraSessionStateMachine();
-    private final StageCameraPlaybackSession playbackSession = new StageCameraPlaybackSession();
-    private final StageAudioPlayer audioPlayer = new StageAudioPlayer();
-    private final MMDCameraData cameraData = new MMDCameraData();
-    private final StageCameraEnvironmentController environmentController = new StageCameraEnvironmentController();
+    private volatile boolean waitingForHost = false;
 
-    private final StageCameraSessionPort sessionPort;
-    private final StageCameraBroadcastPort broadcastPort;
-    private final StageCameraUiPort uiPort;
-    private final StagePlayerSyncPort playerSyncPort;
-    private final PlayerStageAnimationPort playerStageAnimationPort;
-    private final NativeAnimationPort animationPort;
+    private volatile StageCameraSessionPort sessionPort;
+    private volatile StageCameraBroadcastPort broadcastPort;
+    private volatile StageCameraUiPort uiPort;
+    
+    private MMDCameraController() {
+        resetCollaborators();
+    }
 
-    private boolean cinematicMode;
+    public synchronized void configureRuntimeCollaborators(StageCameraSessionPort sessionPort,
+                                                           StageCameraBroadcastPort broadcastPort,
+                                                           StageCameraUiPort uiPort) {
+        defaultSessionPort = Objects.requireNonNull(sessionPort, "sessionPort");
+        defaultBroadcastPort = Objects.requireNonNull(broadcastPort, "broadcastPort");
+        defaultUiPort = Objects.requireNonNull(uiPort, "uiPort");
+        resetCollaborators();
+    }
 
-    private double anchorX;
-    private double anchorY;
-    private double anchorZ;
-    private float anchorYaw;
-
-    private double cameraX;
-    private double cameraY;
-    private double cameraZ;
-    private float cameraPitch;
-    private float cameraYaw;
-    private float cameraRoll;
-    private float cameraFov = 70.0f;
-
-    private long lastTickTimeNs;
-    private boolean escWasPressed;
-    private long lastEscTimeNs;
-
-    private UUID watchingHostUUID;
-    private boolean waitingForHost;
-
-    private float introElapsed;
-    private StageCameraPose introStartPose = new StageCameraPose(0.0, 0.0, 0.0, 0.0f, 0.0f, 0.0f, 70.0f);
-    private StageCameraPose standbyPose = new StageCameraPose(0.0, 0.0, 0.0, 15.0f, 180.0f, 0.0f, 70.0f);
-    private float outroElapsed;
-    private StageCameraPose outroStartPose = new StageCameraPose(0.0, 0.0, 0.0, 0.0f, 0.0f, 0.0f, 70.0f);
-    private boolean outroIsGuest;
-
-    public MMDCameraController(StageCameraSessionPort sessionPort,
-                               StageCameraBroadcastPort broadcastPort,
-                               StageCameraUiPort uiPort,
-                               StagePlayerSyncPort playerSyncPort,
-                               PlayerStageAnimationPort playerStageAnimationPort,
-                               NativeAnimationPort animationPort) {
-        this.sessionPort = Objects.requireNonNull(sessionPort, "sessionPort");
-        this.broadcastPort = Objects.requireNonNull(broadcastPort, "broadcastPort");
-        this.uiPort = Objects.requireNonNull(uiPort, "uiPort");
-        this.playerSyncPort = Objects.requireNonNull(playerSyncPort, "playerSyncPort");
-        this.playerStageAnimationPort = Objects.requireNonNull(playerStageAnimationPort, "playerStageAnimationPort");
-        this.animationPort = Objects.requireNonNull(animationPort, "animationPort");
-        this.cameraData.setAnimationPort(animationPort);
+    synchronized void resetCollaborators() {
+        this.sessionPort = defaultSessionPort;
+        this.broadcastPort = defaultBroadcastPort;
+        this.uiPort = defaultUiPort;
     }
 
     public static MMDCameraController getInstance() {
-        return StageClientRuntime.get().cameraController();
+        return INSTANCE;
     }
 
-    public synchronized void enterStageMode() {
-        if (!stateMachine.canEnterStageMode()) {
-            return;
+    public void enterStageMode() {
+        if (state != StageState.INACTIVE) return;
+
+        Minecraft mc = Minecraft.getInstance();
+
+        this.savedCameraType = mc.options.getCameraType();
+        mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+
+        if (mc.player != null) {
+            this.anchorX = mc.player.getX();
+            this.anchorY = mc.player.getY();
+            this.anchorZ = mc.player.getZ();
+            this.anchorYaw = mc.player.getYRot();
+            mc.player.setXRot(0.0f);
+            mc.player.setYRot(this.anchorYaw);
+            mc.player.yHeadRot = this.anchorYaw;
+            mc.player.yBodyRot = this.anchorYaw;
         }
 
-        Minecraft minecraft = Minecraft.getInstance();
-        environmentController.enterStageCameraMode(minecraft);
+        computeIntroAndStandby(mc);
 
-        if (minecraft.player != null) {
-            anchorX = minecraft.player.getX();
-            anchorY = minecraft.player.getY();
-            anchorZ = minecraft.player.getZ();
-            anchorYaw = minecraft.player.getYRot();
-            minecraft.player.setXRot(0.0f);
-            minecraft.player.setYRot(anchorYaw);
-            minecraft.player.yHeadRot = anchorYaw;
-            minecraft.player.yBodyRot = anchorYaw;
-        }
-
-        computeIntroAndStandby(minecraft);
-        introElapsed = 0.0f;
-        lastTickTimeNs = System.nanoTime();
-        escWasPressed = false;
-        lastEscTimeNs = 0L;
-        environmentController.resetStageInputState();
+        this.introElapsed = 0.0f;
+        this.lastTickTimeNs = System.nanoTime();
+        this.escWasPressed = false;
+        this.lastEscTimeNs = 0;
+        this.mouseReleased = false;
+        
         if (sessionPort.getHostPlayerId() == null) {
-            waitingForHost = false;
+            this.waitingForHost = false;
         }
-        stateMachine.enterIntro();
-        applyPose(introStartPose);
+        
+        this.state = StageState.INTRO;
+        this.cameraX = introStartX;
+        this.cameraY = introStartY;
+        this.cameraZ = introStartZ;
+        this.cameraPitch = introStartPitch;
+        this.cameraYaw = introStartYaw;
+        this.cameraRoll = 0.0f;
+        this.cameraFov = introStartFov;
     }
 
-    public synchronized boolean startStage(long motionAnim, long cameraAnim, boolean cinematic,
+
+    public boolean startStage(long motionAnim, long cameraAnim, boolean cinematic,
                               long modelHandle, String modelName, String audioPath, float heightOffset) {
-        if (!stateMachine.canStartStage()) {
-            return false;
-        }
+        return startStageInternal(motionAnim, cameraAnim, cinematic, modelHandle, modelName, audioPath, heightOffset, false);
+    }
 
-        boolean hasCameraData = playbackSession.configureStagePlayback(
-                motionAnim,
-                cameraAnim,
-                modelHandle,
-                modelName,
-                heightOffset,
-                animationPort
-        );
-        if (!hasCameraData) {
-            LOGGER.warn("[舞台模式] 没有可用的相机数据，将以无相机模式继续");
+    /**
+     * 启动纸娃娃模式：只有模型播放动画，玩家可以自由活动
+     */
+    public boolean startPuppetMode(long motionAnim, long cameraAnim, boolean cinematic,
+                                   long modelHandle, String modelName, String audioPath, float heightOffset) {
+        return startStageInternal(motionAnim, cameraAnim, cinematic, modelHandle, modelName, audioPath, heightOffset, true);
+    }
+
+    private boolean startStageInternal(long motionAnim, long cameraAnim, boolean cinematic,
+                                       long modelHandle, String modelName, String audioPath, float heightOffset, boolean puppetMode) {
+        if (state != StageState.STANDBY && state != StageState.INTRO) return false;
+
+        NativeFunc nf = NativeFunc.GetInst();
+
+        this.motionAnimHandle = motionAnim;
+
+        boolean hasCameraData = false;
+        if (cameraAnim != 0 && nf.HasCameraData(cameraAnim)) {
+            this.cameraAnimHandle = cameraAnim;
+            hasCameraData = true;
+        } else if (motionAnim != 0 && nf.HasCameraData(motionAnim)) {
+            this.cameraAnimHandle = motionAnim;
+            hasCameraData = true;
         } else {
-            cameraData.setAnimHandle(playbackSession.cameraAnimHandle());
+            logger.warn("[舞台模式] 没有可用的相机数据，将以无相机模式继续");
+            this.cameraAnimHandle = 0;
         }
 
-        cinematicMode = cinematic;
+        if (hasCameraData) {
+            this.maxFrame = nf.GetAnimMaxFrame(this.cameraAnimHandle);
+            this.cameraData.setAnimHandle(this.cameraAnimHandle);
+        } else if (motionAnim != 0) {
+            this.maxFrame = nf.GetAnimMaxFrame(motionAnim);
+        } else {
+            this.maxFrame = 0;
+        }
+
+        this.cinematicMode = cinematic;
+        this.cameraHeightOffset = heightOffset;
+
         if (cinematic) {
-            environmentController.enterCinematicMode(Minecraft.getInstance());
+            Minecraft mc = Minecraft.getInstance();
+            this.previousHideGui = mc.options.hideGui;
+            mc.options.hideGui = true;
         }
 
-        if (modelHandle != 0L) {
-            playerStageAnimationPort.prepareLocalModelForStage(modelHandle);
+        this.modelHandle = modelHandle;
+        if (modelHandle != 0) {
+            nf.SetAutoBlinkEnabled(modelHandle, false);
+            nf.SetEyeTrackingEnabled(modelHandle, false);
         }
 
         audioPlayer.setVolume(StageConfig.getInstance().audioVolume);
@@ -158,103 +279,415 @@ public final class MMDCameraController {
             if (audioPlayer.load(audioPath)) {
                 audioPlayer.play();
             } else {
-                LOGGER.warn("[舞台模式] 音频加载失败: {}", audioPath);
+                logger.warn("[舞台模式] 音频加载失败: {}", audioPath);
             }
         }
 
-        stateMachine.enterPlaying();
-        lastTickTimeNs = System.nanoTime();
-        escWasPressed = false;
-        lastEscTimeNs = 0L;
-        environmentController.resetStageInputState();
+        this.state = puppetMode ? StageState.PUPPET_MODE : StageState.PLAYING;
+        
+        // 纸娃娃模式下使用第一人称视角，让玩家自由观察
+        if (puppetMode) {
+            Minecraft mc = Minecraft.getInstance();
+            mc.options.setCameraType(CameraType.FIRST_PERSON);
+        }
+        
+        this.lastTickTimeNs = System.nanoTime();
+        this.escWasPressed = false;
+        this.lastEscTimeNs = 0;
+        this.mouseReleased = false;
+        this.frameSyncCounter = 0;
+        this.targetSyncFrame = -1.0f;
+
         return true;
     }
 
-    public synchronized void exitStageMode() {
-        if (stateMachine.isInactive()) {
-            return;
+    private void endPlayback() {
+        restoreMouseGrab();
+        audioPlayer.cleanup();
+
+        if (cinematicMode) {
+            Minecraft.getInstance().options.hideGui = previousHideGui;
         }
-        if (stateMachine.isWatching()) {
+
+        NativeFunc nf = NativeFunc.GetInst();
+
+        clearLocalPlayerStageFlags();
+        restoreModelState(nf);
+
+        if (this.motionAnimHandle != 0) {
+            nf.DeleteAnimation(this.motionAnimHandle);
+        }
+        if (this.cameraAnimHandle != 0 && this.cameraAnimHandle != this.motionAnimHandle) {
+            nf.DeleteAnimation(this.cameraAnimHandle);
+        }
+
+        this.cameraAnimHandle = 0;
+        this.motionAnimHandle = 0;
+        this.modelHandle = 0;
+        this.modelName = null;
+        this.currentFrame = 0.0f;
+        this.maxFrame = 0.0f;
+
+        this.outroStartX = cameraX;
+        this.outroStartY = cameraY;
+        this.outroStartZ = cameraZ;
+        this.outroStartPitch = cameraPitch;
+        this.outroStartYaw = cameraYaw;
+        this.outroStartFov = cameraFov;
+
+        this.outroElapsed = 0.0f;
+        this.lastTickTimeNs = System.nanoTime();
+
+        this.outroIsGuest = sessionPort.isWatchingStage();
+        this.state = StageState.OUTRO;
+
+        if (outroIsGuest) {
+            StageAnimSyncHelper.endStageAnim(Minecraft.getInstance().player);
+            broadcastPort.sendRemoteStageStop(sessionPort.getSessionId());
+            sessionPort.stopWatchingStageOnly();
+        } else {
+            broadcastPort.sendRemoteStageStop(sessionPort.getSessionId());
+            sessionPort.notifyMembersStageEnd();
+        }
+    }
+
+    public void exitStageMode() {
+        if (state == StageState.INACTIVE) return;
+
+        if (state == StageState.WATCHING) {
             exitWatchMode();
             return;
         }
 
-        boolean wasPlaying = stateMachine.isPlaying();
+        boolean wasPlaying = (state == StageState.PLAYING || state == StageState.PUPPET_MODE);
+
         if (wasPlaying) {
-            cleanupPlayingResources();
+            audioPlayer.cleanup();
+            if (cinematicMode) {
+                Minecraft.getInstance().options.hideGui = previousHideGui;
+            }
+            NativeFunc nf = NativeFunc.GetInst();
+
+            clearLocalPlayerStageFlags();
+            restoreModelState(nf);
+            if (this.motionAnimHandle != 0) {
+                nf.DeleteAnimation(this.motionAnimHandle);
+            }
+            if (this.cameraAnimHandle != 0 && this.cameraAnimHandle != this.motionAnimHandle) {
+                nf.DeleteAnimation(this.cameraAnimHandle);
+            }
         }
 
         restoreMouseGrab();
-        Minecraft minecraft = Minecraft.getInstance();
-        environmentController.restoreCameraType(minecraft);
 
-        stateMachine.enterInactive();
-        waitingForHost = false;
-        playbackSession.clearAllState();
+        Minecraft mc = Minecraft.getInstance();
+        if (savedCameraType != null) {
+            mc.options.setCameraType(savedCameraType);
+            savedCameraType = null;
+        }
+
+        this.state = StageState.INACTIVE;
+        this.waitingForHost = false;
+        this.cameraAnimHandle = 0;
+        this.motionAnimHandle = 0;
+        this.modelHandle = 0;
+        this.modelName = null;
+        this.currentFrame = 0.0f;
+        this.maxFrame = 0.0f;
 
         if (wasPlaying) {
-            broadcastPort.sendRemoteStageStop();
+            // PUPPET_MODE是单机模式，不需要广播
+            if (state != StageState.PUPPET_MODE) {
+                broadcastPort.sendRemoteStageStop(sessionPort.getSessionId());
+            }
             if (sessionPort.isWatchingStage()) {
-                playerSyncPort.stopLocalStageAnimation();
-                waitingForHost = true;
+                if (mc.player != null) {
+                    StageAnimSyncHelper.endStageAnim(mc.player);
+                }
+                this.waitingForHost = true;
                 uiPort.openStageSelection();
             } else {
                 sessionPort.closeHostedSession();
             }
         }
 
-        environmentController.releaseAllKeys();
+        KeyMapping.releaseAll();
     }
 
-    public synchronized void updateCamera() {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player != null && stateMachine.shouldPinPlayer()) {
-            minecraft.player.setPos(anchorX, anchorY, anchorZ);
-            minecraft.player.setDeltaMovement(0, 0, 0);
+    private void computeIntroAndStandby(Minecraft mc) {
+        if (mc.gameRenderer != null && mc.gameRenderer.getMainCamera() != null) {
+            var cam = mc.gameRenderer.getMainCamera();
+            introStartX = cam.getPosition().x;
+            introStartY = cam.getPosition().y;
+            introStartZ = cam.getPosition().z;
+            introStartPitch = cam.getXRot();
+            introStartYaw = cam.getYRot();
+        } else if (mc.player != null) {
+            introStartX = mc.player.getX();
+            introStartY = mc.player.getEyeY();
+            introStartZ = mc.player.getZ();
+            introStartPitch = mc.player.getXRot();
+            introStartYaw = mc.player.getYRot();
+        }
+        introStartFov = (float) mc.options.fov().get();
+
+        float yawRad = (float) Math.toRadians(anchorYaw);
+        standbyX = anchorX - Math.sin(yawRad) * 3.5;
+        standbyY = anchorY + 1.8;
+        standbyZ = anchorZ + Math.cos(yawRad) * 3.5;
+        standbyYaw = anchorYaw + 180.0f;
+        standbyPitch = 15.0f;
+        standbyFov = 70.0f;
+    }
+
+    public void updateCamera() {
+        Minecraft mc = Minecraft.getInstance();
+        // PUPPET_MODE模式下不锁定玩家位置，允许玩家自由移动
+        if (mc.player != null && state != StageState.PUPPET_MODE 
+                && (state == StageState.INTRO || state == StageState.STANDBY
+                || state == StageState.PLAYING || state == StageState.OUTRO)) {
+            mc.player.setPos(anchorX, anchorY, anchorZ);
+            mc.player.setDeltaMovement(0, 0, 0);
         }
 
-        switch (stateMachine.current()) {
-            case INTRO -> updateIntro();
-            case PLAYING -> updatePlaying();
-            case OUTRO -> updateOutro();
-            case WATCHING -> updateWatching();
-            default -> {
+        switch (state) {
+            case INTRO:    updateIntro();    break;
+            case PLAYING:  updatePlaying();  break;
+            case OUTRO:    updateOutro();    break;
+            case WATCHING: updateWatching(); break;
+            case PUPPET_MODE: updatePuppetMode(); break;
+            case STANDBY: break;
+            default: break;
+        }
+    }
+
+    private void updateIntro() {
+        long now = System.nanoTime();
+        float deltaTime = (now - lastTickTimeNs) / 1_000_000_000.0f;
+        lastTickTimeNs = now;
+        deltaTime = Math.min(deltaTime, 0.1f);
+
+        introElapsed += deltaTime;
+        float t = easeOutCubic(introElapsed / INTRO_DURATION);
+
+        cameraX = lerp(introStartX, standbyX, t);
+        cameraY = lerp(introStartY, standbyY, t);
+        cameraZ = lerp(introStartZ, standbyZ, t);
+        cameraPitch = lerp(introStartPitch, standbyPitch, t);
+        cameraYaw = lerpAngle(introStartYaw, standbyYaw, t);
+        cameraFov = lerp(introStartFov, standbyFov, t);
+        cameraRoll = 0.0f;
+
+        if (introElapsed >= INTRO_DURATION) {
+            cameraX = standbyX;
+            cameraY = standbyY;
+            cameraZ = standbyZ;
+            cameraPitch = standbyPitch;
+            cameraYaw = standbyYaw;
+            cameraFov = standbyFov;
+            state = StageState.STANDBY;
+        }
+    }
+
+    private void updatePlaying() {
+        long now = System.nanoTime();
+        float deltaTime = (now - lastTickTimeNs) / 1_000_000_000.0f;
+        lastTickTimeNs = now;
+        deltaTime = Math.min(deltaTime, 0.1f);
+
+        if (cinematicMode && lastEscTimeNs != 0
+                && now - lastEscTimeNs >= DOUBLE_ESC_WINDOW_NS) {
+            Minecraft.getInstance().options.hideGui = true;
+            lastEscTimeNs = 0;
+        }
+
+        float effectiveSpeed = playbackSpeed;
+        if (targetSyncFrame >= 0) {
+            float drift = targetSyncFrame - currentFrame;
+            if (Math.abs(drift) > SYNC_TOLERANCE) {
+                effectiveSpeed = drift > 0 ? CATCHUP_SPEED_MAX : CATCHUP_SPEED_MIN;
+            } else {
+                targetSyncFrame = -1.0f;
             }
         }
+
+        currentFrame += deltaTime * VMD_FPS * effectiveSpeed;
+
+        if (currentFrame >= maxFrame) {
+            currentFrame = maxFrame;
+            endPlayback();
+            return;
+        }
+
+        syncStagePresentation(currentFrame);
+        if (sessionPort.isSessionHost() && sessionPort.getSessionId() != null) {
+            frameSyncCounter++;
+            if (frameSyncCounter >= SYNC_INTERVAL_FRAMES) {
+                frameSyncCounter = 0;
+                broadcastPort.sendFrameSync(sessionPort.getSessionId(), currentFrame);
+            }
+        }
+
+        if (cameraAnimHandle != 0) {
+            cameraData.update(currentFrame);
+
+            Vector3f mmdPos = cameraData.getPosition();
+            float sx = mmdPos.x * MMD_TO_MC_SCALE;
+            float sy = mmdPos.y * MMD_TO_MC_SCALE;
+            float sz = mmdPos.z * MMD_TO_MC_SCALE;
+
+            float yawRad = (float) Math.toRadians(anchorYaw);
+            float cos = (float) Math.cos(yawRad);
+            float sin = (float) Math.sin(yawRad);
+            cameraX = anchorX + sx * cos - sz * sin;
+            cameraY = anchorY + sy + cameraHeightOffset;
+            cameraZ = anchorZ + sx * sin + sz * cos;
+
+            cameraPitch = (float) Math.toDegrees(cameraData.getPitch());
+            cameraYaw = (float) Math.toDegrees(cameraData.getYaw()) + anchorYaw;
+            cameraRoll = (float) Math.toDegrees(cameraData.getRoll());
+            cameraFov = cameraData.getFov();
+        }
     }
 
-    public synchronized void checkEscapeKey() {
-        if (stateMachine.isInactive()) {
-            return;
+    /**
+     * 纸娃娃模式更新：模型播放动画，但玩家可以自由移动
+     */
+    private void updatePuppetMode() {
+        long now = System.nanoTime();
+        float deltaTime = (now - lastTickTimeNs) / 1_000_000_000.0f;
+        lastTickTimeNs = now;
+        deltaTime = Math.min(deltaTime, 0.1f);
+
+        if (cinematicMode && lastEscTimeNs != 0
+                && now - lastEscTimeNs >= DOUBLE_ESC_WINDOW_NS) {
+            Minecraft.getInstance().options.hideGui = true;
+            lastEscTimeNs = 0;
         }
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.screen instanceof PauseScreen) {
-            minecraft.setScreen(null);
-            return;
+
+        // 纸娃娃模式下，允许玩家自由移动，不锁定玩家位置
+        // 只更新动画帧
+        currentFrame += deltaTime * VMD_FPS * playbackSpeed;
+
+        // 实现动画循环播放：当动画结束时自动重置到开头
+        if (currentFrame >= maxFrame) {
+            currentFrame = 0.0f;  // 循环回到开头而不是结束播放
         }
-        if (minecraft.screen != null) {
+
+        // 同步舞台呈现（模型动画）
+        syncStagePresentation(currentFrame);
+        
+        // 纸娃娃模式下，需要同步玩家模型的动画帧
+        // 注意：这个模型不会在世界中渲染，而是在 HUD 层渲染
+        if (modelHandle != 0) {
+            NativeFunc.GetInst().SeekLayer(modelHandle, 0, currentFrame);
+        }
+
+        // 在纸娃娃模式下，使用玩家的视角作为相机视角
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null && cameraAnimHandle == 0) {
+            // 如果没有相机动画，直接使用玩家的视角
+            // 使用平滑插值来减少抖动
+            double playerX = mc.player.getX();
+            double playerY = mc.player.getEyeY();
+            double playerZ = mc.player.getZ();
+            float playerYaw = mc.player.getYRot();
+            float playerPitch = mc.player.getXRot();
+            
+            // 相机位置与玩家眼睛位置一致，使用平滑过渡减少抖动
+            float smoothFactor = 0.8f;  // 平滑因子，越高越跟随，越低越平滑
+            cameraX = lerp(cameraX, playerX, smoothFactor);
+            cameraY = lerp(cameraY, playerY, smoothFactor);
+            cameraZ = lerp(cameraZ, playerZ, smoothFactor);
+            
+            // 角度也需要平滑处理
+            cameraYaw = lerpAngle(cameraYaw, playerYaw, smoothFactor);
+            cameraPitch = lerpAngle(cameraPitch, playerPitch, smoothFactor);
+            cameraRoll = 0.0f;
+            cameraFov = mc.options.fov().get();
+        } else if (cameraAnimHandle != 0) {
+            // 如果有相机动画，仍然使用相机动画
+            cameraData.update(currentFrame);
+
+            Vector3f mmdPos = cameraData.getPosition();
+            float sx = mmdPos.x * MMD_TO_MC_SCALE;
+            float sy = mmdPos.y * MMD_TO_MC_SCALE;
+            float sz = mmdPos.z * MMD_TO_MC_SCALE;
+
+            float yawRad = (float) Math.toRadians(anchorYaw);
+            float cos = (float) Math.cos(yawRad);
+            float sin = (float) Math.sin(yawRad);
+            cameraX = anchorX + sx * cos - sz * sin;
+            cameraY = anchorY + sy + cameraHeightOffset;
+            cameraZ = anchorZ + sx * sin + sz * cos;
+
+            cameraPitch = (float) Math.toDegrees(cameraData.getPitch());
+            cameraYaw = (float) Math.toDegrees(cameraData.getYaw()) + anchorYaw;
+            cameraRoll = (float) Math.toDegrees(cameraData.getRoll());
+            cameraFov = cameraData.getFov();
+        }
+    }
+
+    private void updateOutro() {
+        long now = System.nanoTime();
+        float deltaTime = (now - lastTickTimeNs) / 1_000_000_000.0f;
+        lastTickTimeNs = now;
+        deltaTime = Math.min(deltaTime, 0.1f);
+
+        outroElapsed += deltaTime;
+        float t = easeInOutQuart(outroElapsed / OUTRO_DURATION);
+
+        cameraX = lerp(outroStartX, standbyX, t);
+        cameraY = lerp(outroStartY, standbyY, t);
+        cameraZ = lerp(outroStartZ, standbyZ, t);
+        cameraPitch = lerp(outroStartPitch, standbyPitch, t);
+        cameraYaw = lerpAngle(outroStartYaw, standbyYaw, t);
+        cameraFov = lerp(outroStartFov, standbyFov, t);
+        cameraRoll = 0.0f;
+
+        if (outroElapsed >= OUTRO_DURATION) {
+            cameraX = standbyX;
+            cameraY = standbyY;
+            cameraZ = standbyZ;
+            cameraPitch = standbyPitch;
+            cameraYaw = standbyYaw;
+            cameraFov = standbyFov;
+
+            state = StageState.STANDBY;
+            uiPort.openStageSelection();
+        }
+    }
+
+    public void checkEscapeKey() {
+        if (state == StageState.INACTIVE) return;
+        Minecraft mc = Minecraft.getInstance();
+
+        if (mc.screen instanceof PauseScreen) {
+            mc.setScreen(null);
             return;
         }
 
-        long window = minecraft.getWindow().getWindow();
-        boolean escNow = org.lwjgl.glfw.GLFW.glfwGetKey(window, org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE)
-                == org.lwjgl.glfw.GLFW.GLFW_PRESS;
+        if (mc.screen != null) return;
+
+        long window = mc.getWindow().getWindow();
+        boolean escNow = org.lwjgl.glfw.GLFW.glfwGetKey(window, org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
+
         if (escNow && !escWasPressed) {
-            if (stateMachine.isPlaying()) {
+            if (state == StageState.PLAYING) {
                 long now = System.nanoTime();
-                if (lastEscTimeNs != 0L && now - lastEscTimeNs < DOUBLE_ESC_WINDOW_NS) {
-                    lastEscTimeNs = 0L;
+                if (now - lastEscTimeNs < DOUBLE_ESC_WINDOW_NS && lastEscTimeNs != 0) {
+                    lastEscTimeNs = 0;
                     endPlayback();
                 } else {
                     lastEscTimeNs = now;
                     if (cinematicMode) {
-                        environmentController.leaveCinematicMode(minecraft);
+                        mc.options.hideGui = previousHideGui;
                     }
-                    if (minecraft.gui != null) {
-                        minecraft.gui.setOverlayMessage(Component.translatable("gui.mmdskin.stage.esc_hint"), false);
+                    if (mc.gui != null) {
+                        mc.gui.setOverlayMessage(Component.translatable("gui.mmdskin.stage.esc_hint"), false);
                     }
                 }
-            } else if (stateMachine.isWatching()) {
+            } else if (state == StageState.WATCHING) {
                 exitWatchMode();
             } else {
                 exitStageMode();
@@ -264,27 +697,103 @@ public final class MMDCameraController {
     }
 
     public void toggleMouseGrab() {
-        environmentController.toggleMouseGrab(Minecraft.getInstance());
+        Minecraft mc = Minecraft.getInstance();
+        if (mouseReleased) {
+            mc.mouseHandler.grabMouse();
+            mouseReleased = !mc.mouseHandler.isMouseGrabbed();
+        } else {
+            mc.mouseHandler.releaseMouse();
+            mouseReleased = true;
+            if (mc.gui != null) {
+                mc.gui.setOverlayMessage(Component.translatable("gui.mmdskin.stage.mouse_released"), false);
+            }
+        }
     }
 
     public boolean isMouseReleased() {
-        return environmentController.isMouseReleased();
+        return mouseReleased;
+    }
+
+    private void restoreMouseGrab() {
+        if (mouseReleased) {
+            Minecraft mc = Minecraft.getInstance();
+            mc.mouseHandler.grabMouse();
+            mouseReleased = !mc.mouseHandler.isMouseGrabbed();
+        }
+        escWasPressed = false;
+        lastEscTimeNs = 0;
+    }
+
+    private void clearLocalPlayerStageFlags() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+        PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(mc.player);
+        if (resolved != null) {
+            resolved.model().entityData.playCustomAnim = false;
+            resolved.model().entityData.playStageAnim = false;
+        }
+    }
+
+    private void restoreModelState(NativeFunc nf) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+        PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(mc.player);
+        if (resolved != null) {
+            MMDModelManager.Model mwed = resolved.model();
+            long handle = mwed.model.getModelHandle();
+            if (handle != 0) {
+                nf.SetAutoBlinkEnabled(handle, true);
+                nf.SetEyeTrackingEnabled(handle, true);
+            }
+            MmdSkinRendererPlayerHelper.resetModelAnimationState(mc.player, mwed);
+        }
+    }
+
+    private static float easeOutCubic(float t) {
+        t = Math.max(0, Math.min(1, t));
+        float f = 1 - t;
+        return 1 - f * f * f;
+    }
+
+    private static float easeInOutQuart(float t) {
+        t = Math.max(0, Math.min(1, t));
+        return t < 0.5f ? 8 * t * t * t * t : 1 - (float) Math.pow(-2 * t + 2, 4) / 2;
+    }
+
+    private static double lerp(double a, double b, float t) {
+        return a + (b - a) * t;
+    }
+
+    private static float lerp(float a, float b, float t) {
+        return a + (b - a) * t;
+    }
+
+    private static float lerpAngle(float a, float b, float t) {
+        float diff = ((b - a) % 360 + 540) % 360 - 180;
+        return a + diff * t;
     }
 
     public boolean isActive() {
-        return stateMachine.isActive();
+        return state != StageState.INACTIVE;
     }
 
     public boolean isPlaying() {
-        return stateMachine.isPlaying();
+        return state == StageState.PLAYING || state == StageState.PUPPET_MODE;
+    }
+
+    /**
+     * 检查当前是否处于纸娃娃模式
+     */
+    public boolean isPuppetMode() {
+        return state == StageState.PUPPET_MODE;
     }
 
     public boolean isInStageMode() {
-        return stateMachine.isActive();
+        return state != StageState.INACTIVE;
     }
 
     public boolean isStagePlayingModel(long handle) {
-        return stateMachine.isPlaying() && playbackSession.modelHandle() != 0L && playbackSession.modelHandle() == handle;
+        return state == StageState.PLAYING && modelHandle != 0 && modelHandle == handle;
     }
 
     public float getAnchorYaw() {
@@ -296,143 +805,130 @@ public final class MMDCameraController {
     }
 
     public float getCurrentFrame() {
-        return playbackSession.currentFrame();
+        return currentFrame;
     }
 
     public float getMaxFrame() {
-        return playbackSession.maxFrame();
+        return maxFrame;
     }
 
     public float getProgress() {
-        return playbackSession.maxFrame() > 0 ? playbackSession.currentFrame() / playbackSession.maxFrame() : 0.0f;
+        return maxFrame > 0 ? currentFrame / maxFrame : 0.0f;
     }
 
-    public double getCameraX() {
-        return cameraX;
+    public double getCameraX() { return cameraX; }
+    public double getCameraY() { return cameraY; }
+    public double getCameraZ() { return cameraZ; }
+
+    public float getCameraPitch() { return cameraPitch; }
+    public float getCameraYaw() { return cameraYaw; }
+    public float getCameraRoll() { return cameraRoll; }
+
+    public float getCameraFov() { return cameraFov; }
+
+    public void setPlaybackSpeed(float speed) {
+        this.playbackSpeed = speed;
     }
 
-    public double getCameraY() {
-        return cameraY;
+    public float getPlaybackSpeed() {
+        return playbackSpeed;
     }
 
-    public double getCameraZ() {
-        return cameraZ;
-    }
-
-    public float getCameraPitch() {
-        return cameraPitch;
-    }
-
-    public float getCameraYaw() {
-        return cameraYaw;
-    }
-
-    public float getCameraRoll() {
-        return cameraRoll;
-    }
-
-    public float getCameraFov() {
-        return cameraFov;
-    }
-
-    public synchronized void setPlaybackSpeed(float speed) {
-        playbackSession.setPlaybackSpeed(speed);
-    }
-
-    public synchronized float getPlaybackSpeed() {
-        return playbackSession.playbackSpeed();
-    }
-
-    public synchronized String getActiveStageModelName() {
-        return playbackSession.modelName();
-    }
-
-    public synchronized boolean isWaitingForHost() {
+    public boolean isWaitingForHost() {
         return waitingForHost;
     }
 
-    public synchronized void setWaitingForHost(boolean waiting) {
+    public void setWaitingForHost(boolean waiting) {
         this.waitingForHost = waiting;
     }
 
-    public synchronized UUID getWatchingHostUUID() {
+
+    public java.util.UUID getWatchingHostUUID() {
         return watchingHostUUID;
     }
 
-    public synchronized void enterWatchMode(UUID hostUUID) {
-        if (stateMachine.isWatching()) {
-            return;
-        }
-        if (!stateMachine.isInactive()) {
+    public void enterWatchMode(java.util.UUID hostUUID) {
+        if (state == StageState.WATCHING) return;
+
+        if (state != StageState.INACTIVE) {
             forceCleanupForWatch();
         }
 
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null || minecraft.level == null) {
-            return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return;
+
+        var host = mc.level.getPlayerByUUID(hostUUID);
+        if (host == null) return;
+
+        this.savedCameraType = mc.options.getCameraType();
+        mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+
+        this.anchorX = host.getX();
+        this.anchorY = host.getY();
+        this.anchorZ = host.getZ();
+        this.anchorYaw = host.getYRot();
+        this.watchingHostUUID = hostUUID;
+
+        this.cinematicMode = com.shiroha.mmdskin.config.StageConfig.getInstance().cinematicMode;
+        if (this.cinematicMode) {
+            this.previousHideGui = mc.options.hideGui;
+            mc.options.hideGui = true;
         }
 
-        var host = minecraft.level.getPlayerByUUID(hostUUID);
-        if (host == null) {
-            return;
-        }
-
-        environmentController.enterStageCameraMode(minecraft);
-
-        anchorX = host.getX();
-        anchorY = host.getY();
-        anchorZ = host.getZ();
-        anchorYaw = host.getYRot();
-        watchingHostUUID = hostUUID;
-
-        cinematicMode = StageConfig.getInstance().cinematicMode;
-        if (cinematicMode) {
-            environmentController.enterCinematicMode(minecraft);
-        }
-
-        lastTickTimeNs = System.nanoTime();
-        escWasPressed = false;
-        environmentController.resetStageInputState();
-        playbackSession.clearPresentationState();
-        stateMachine.enterWatching();
+        this.lastTickTimeNs = System.nanoTime();
+        this.escWasPressed = false;
+        this.mouseReleased = false;
+        this.targetSyncFrame = -1.0f;
+        this.currentFrame = 0.0f;
+        this.state = StageState.WATCHING;
     }
 
-    public synchronized void setWatchCamera(long cameraAnimHandle, float heightOffset) {
-        if (!stateMachine.isWatching()) {
-            return;
-        }
-        if (playbackSession.watchCameraAnimHandle() != 0L) {
-            animationPort.deleteAnimation(playbackSession.watchCameraAnimHandle());
-        }
-        playbackSession.configureWatchCamera(cameraAnimHandle, heightOffset, animationPort);
-        if (cameraAnimHandle != 0L && animationPort.hasCameraData(cameraAnimHandle)) {
-            cameraData.setAnimHandle(cameraAnimHandle);
-        }
-    }
 
-    public synchronized void setWatchMotion(long motionAnim, long modelHandle, String modelName) {
-        if (!stateMachine.isWatching()) {
-            return;
+    public void setWatchCamera(long cameraAnimHandle, float heightOffset) {
+        if (state != StageState.WATCHING) return;
+
+        NativeFunc nf = NativeFunc.GetInst();
+
+        if (this.watchCameraAnimHandle != 0) {
+            nf.DeleteAnimation(this.watchCameraAnimHandle);
         }
-        playbackSession.configureWatchMotion(motionAnim, modelHandle, modelName, animationPort);
-        if (modelHandle != 0L) {
-            playerStageAnimationPort.prepareLocalModelForStage(modelHandle);
+
+        this.watchCameraAnimHandle = cameraAnimHandle;
+        this.cameraHeightOffset = heightOffset;
+
+        if (cameraAnimHandle != 0 && nf.HasCameraData(cameraAnimHandle)) {
+            this.maxFrame = nf.GetAnimMaxFrame(cameraAnimHandle);
+            this.currentFrame = 0.0f;
+            this.cameraData.setAnimHandle(cameraAnimHandle);
         }
     }
 
-    public synchronized void loadWatchAudio(String audioPath) {
-        if (!stateMachine.isWatching()) {
-            return;
+    public void setWatchMotion(long motionAnim, long modelHandle, String modelName) {
+        if (state != StageState.WATCHING) return;
+        this.motionAnimHandle = motionAnim;
+        this.modelHandle = modelHandle;
+        this.modelName = modelName;
+        if (this.maxFrame <= 0.0f && motionAnim != 0) {
+            this.maxFrame = NativeFunc.GetInst().GetAnimMaxFrame(motionAnim);
         }
+        if (modelHandle != 0) {
+            NativeFunc nf = NativeFunc.GetInst();
+            nf.SetAutoBlinkEnabled(modelHandle, false);
+            nf.SetEyeTrackingEnabled(modelHandle, false);
+        }
+    }
+
+    public void loadWatchAudio(String audioPath) {
+        if (state != StageState.WATCHING) return;
         audioPlayer.setVolume(StageConfig.getInstance().audioVolume);
         if (audioPlayer.load(audioPath)) {
             audioPlayer.play();
         } else {
-            LOGGER.warn("[WATCHING] 音频加载失败: {}", audioPath);
+            logger.warn("[WATCHING] 音频加载失败: {}", audioPath);
         }
     }
 
-    public synchronized void syncAudioPosition(float seconds) {
+    public void syncAudioPosition(float seconds) {
         if (!audioPlayer.isLoaded()) {
             return;
         }
@@ -442,298 +938,201 @@ public final class MMDCameraController {
         }
     }
 
-    public synchronized void exitWatchMode() {
+    public void exitWatchMode() {
         exitWatchMode(true);
     }
-
-    public synchronized void exitWatchMode(boolean sendLeave) {
-        if (!stateMachine.isWatching()) {
-            return;
-        }
+    
+    public void exitWatchMode(boolean sendLeave) {
+        if (state != StageState.WATCHING) return;
 
         audioPlayer.cleanup();
+
         if (cinematicMode) {
-            environmentController.leaveCinematicMode(Minecraft.getInstance());
+            Minecraft.getInstance().options.hideGui = previousHideGui;
         }
 
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player != null) {
-            playerSyncPort.stopLocalStageAnimation();
-            broadcastPort.sendRemoteStageStop();
-            UUID hostPlayerId = sessionPort.getHostPlayerId();
-            UUID sessionId = sessionPort.getSessionId();
-            if (sendLeave && hostPlayerId != null && sessionId != null) {
-                broadcastPort.sendLeave(hostPlayerId, sessionId);
+        Minecraft mc = Minecraft.getInstance();
+            
+        if (mc.player != null) {
+            StageAnimSyncHelper.endStageAnim(mc.player);
+            broadcastPort.sendRemoteStageStop(sessionPort.getSessionId());
+
+            if (sendLeave && sessionPort.getHostPlayerId() != null) {
+                broadcastPort.sendLeave(sessionPort.getHostPlayerId());
             }
 
-            anchorX = minecraft.player.getX();
-            anchorY = minecraft.player.getY();
-            anchorZ = minecraft.player.getZ();
-            anchorYaw = minecraft.player.getYRot();
+            this.anchorX = mc.player.getX();
+            this.anchorY = mc.player.getY();
+            this.anchorZ = mc.player.getZ();
+            this.anchorYaw = mc.player.getYRot();
         }
 
-        computeIntroAndStandby(minecraft);
-        playerStageAnimationPort.clearLocalStageFlags();
-        playerStageAnimationPort.restoreLocalModelState();
-        if (playbackSession.motionAnimHandle() != 0L) {
-            animationPort.deleteAnimation(playbackSession.motionAnimHandle());
-        }
-        if (playbackSession.watchCameraAnimHandle() != 0L) {
-            animationPort.deleteAnimation(playbackSession.watchCameraAnimHandle());
-            playbackSession.clearWatchCameraHandle();
+        computeIntroAndStandby(mc);
+
+        clearLocalPlayerStageFlags();
+
+        NativeFunc nf = NativeFunc.GetInst();
+        restoreModelState(nf);
+        if (this.motionAnimHandle != 0) {
+            nf.DeleteAnimation(this.motionAnimHandle);
         }
 
-        playbackSession.clearPresentationState();
-        outroStartPose = currentPose();
-        outroElapsed = 0.0f;
-        lastTickTimeNs = System.nanoTime();
-        outroIsGuest = true;
+        if (watchCameraAnimHandle != 0) {
+            nf.DeleteAnimation(watchCameraAnimHandle);
+            watchCameraAnimHandle = 0;
+        }
+
+        this.cameraAnimHandle = 0;
+        this.motionAnimHandle = 0;
+        this.modelHandle = 0;
+        this.modelName = null;
+        this.currentFrame = 0.0f;
+        this.maxFrame = 0.0f;
+
+        this.outroStartX = cameraX;
+        this.outroStartY = cameraY;
+        this.outroStartZ = cameraZ;
+        this.outroStartPitch = cameraPitch;
+        this.outroStartYaw = cameraYaw;
+        this.outroStartFov = cameraFov;
+
+        this.outroElapsed = 0.0f;
+        this.lastTickTimeNs = System.nanoTime();
+        this.outroIsGuest = true;
+
         restoreMouseGrab();
 
         if (sendLeave) {
             sessionPort.stopWatching();
-            watchingHostUUID = null;
+            this.watchingHostUUID = null;
         } else {
             sessionPort.stopWatchingStageOnly();
-            waitingForHost = true;
+            this.waitingForHost = true;
         }
-        stateMachine.enterOutro();
+        
+        this.state = StageState.OUTRO;
     }
 
-    public synchronized void onFrameSync(float hostFrame) {
-        if (!stateMachine.isWatching() && !stateMachine.isPlaying()) {
-            return;
-        }
-        playbackSession.setTargetSyncFrame(hostFrame);
-    }
 
-    public boolean isWatching() {
-        return stateMachine.isWatching();
-    }
+    private void forceCleanupForWatch() {
+        NativeFunc nf = NativeFunc.GetInst();
 
-    public boolean shouldBlockInput() {
-        return stateMachine.shouldBlockInput();
-    }
-
-    void setStateForTesting(StageCameraSessionStateMachine.StageState state) {
-        stateMachine.set(state);
-    }
-
-    StageCameraSessionStateMachine.StageState getStateForTesting() {
-        return stateMachine.current();
-    }
-
-    private void computeIntroAndStandby(Minecraft minecraft) {
-        if (minecraft.gameRenderer != null && minecraft.gameRenderer.getMainCamera() != null) {
-            var camera = minecraft.gameRenderer.getMainCamera();
-            introStartPose = new StageCameraPose(
-                    camera.getPosition().x,
-                    camera.getPosition().y,
-                    camera.getPosition().z,
-                    camera.getXRot(),
-                    camera.getYRot(),
-                    0.0f,
-                    (float) minecraft.options.fov().get()
-            );
-        } else if (minecraft.player != null) {
-            introStartPose = new StageCameraPose(
-                    minecraft.player.getX(),
-                    minecraft.player.getEyeY(),
-                    minecraft.player.getZ(),
-                    minecraft.player.getXRot(),
-                    minecraft.player.getYRot(),
-                    0.0f,
-                    (float) minecraft.options.fov().get()
-            );
-        }
-        standbyPose = StageCameraTimeline.standbyPose(anchorX, anchorY, anchorZ, anchorYaw);
-    }
-
-    private void updateIntro() {
-        long now = System.nanoTime();
-        float deltaTime = StageCameraTimeline.cappedDeltaSeconds(now, lastTickTimeNs);
-        lastTickTimeNs = now;
-        introElapsed += deltaTime;
-        applyPose(StageCameraTimeline.interpolateIntro(introStartPose, standbyPose, introElapsed, INTRO_DURATION));
-        if (introElapsed >= INTRO_DURATION) {
-            applyPose(standbyPose);
-            stateMachine.enterStandby();
-        }
-    }
-
-    private void updatePlaying() {
-        long now = System.nanoTime();
-        float deltaTime = StageCameraTimeline.cappedDeltaSeconds(now, lastTickTimeNs);
-        lastTickTimeNs = now;
-
-        if (cinematicMode && lastEscTimeNs != 0L && now - lastEscTimeNs >= DOUBLE_ESC_WINDOW_NS) {
-            Minecraft.getInstance().options.hideGui = true;
-            lastEscTimeNs = 0L;
+        if (state == StageState.PLAYING) {
+            audioPlayer.cleanup();
+            if (cinematicMode) {
+                Minecraft.getInstance().options.hideGui = previousHideGui;
+            }
+            clearLocalPlayerStageFlags();
+            if (this.motionAnimHandle != 0) nf.DeleteAnimation(this.motionAnimHandle);
+            if (this.cameraAnimHandle != 0 && this.cameraAnimHandle != this.motionAnimHandle) {
+                nf.DeleteAnimation(this.cameraAnimHandle);
+            }
         }
 
-        StagePlaybackAdvance advance = playbackSession.advance(
-                deltaTime,
-                VMD_FPS,
-                CATCHUP_SPEED_MAX,
-                CATCHUP_SPEED_MIN,
-                SYNC_TOLERANCE
-        );
-        if (advance.completed()) {
-            endPlayback();
-            return;
+        if (watchCameraAnimHandle != 0) {
+            nf.DeleteAnimation(watchCameraAnimHandle);
+            watchCameraAnimHandle = 0;
         }
 
-        syncStagePresentation(playbackSession.currentFrame());
-        if (sessionPort.isSessionHost() && sessionPort.getSessionId() != null
-                && playbackSession.shouldBroadcastFrameSync(SYNC_INTERVAL_FRAMES)) {
-            broadcastPort.sendFrameSync(sessionPort.getSessionId(), playbackSession.currentFrame());
-        }
+        restoreMouseGrab();
 
-        if (playbackSession.cameraAnimHandle() != 0L) {
-            cameraData.update(playbackSession.currentFrame());
-            applyPose(StageCameraTimeline.playbackPose(
-                    cameraData,
-                    anchorX,
-                    anchorY,
-                    anchorZ,
-                    anchorYaw,
-                    playbackSession.cameraHeightOffset(),
-                    MMD_TO_MC_SCALE
-            ));
-        }
-    }
-
-    private void updateOutro() {
-        long now = System.nanoTime();
-        float deltaTime = StageCameraTimeline.cappedDeltaSeconds(now, lastTickTimeNs);
-        lastTickTimeNs = now;
-        outroElapsed += deltaTime;
-        applyPose(StageCameraTimeline.interpolateOutro(outroStartPose, standbyPose, outroElapsed, OUTRO_DURATION));
-        if (outroElapsed >= OUTRO_DURATION) {
-            applyPose(standbyPose);
-            stateMachine.enterStandby();
-            uiPort.openStageSelection();
-        }
+        this.cameraAnimHandle = 0;
+        this.motionAnimHandle = 0;
+        this.modelHandle = 0;
+        this.modelName = null;
+        this.currentFrame = 0.0f;
+        this.maxFrame = 0.0f;
+        this.waitingForHost = false;
+        this.state = StageState.INACTIVE;
     }
 
     private void updateWatching() {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level != null && watchingHostUUID != null) {
-            var host = minecraft.level.getPlayerByUUID(watchingHostUUID);
+        Minecraft mc = Minecraft.getInstance();
+
+        if (mc.level != null && watchingHostUUID != null) {
+            var host = mc.level.getPlayerByUUID(watchingHostUUID);
             if (host != null) {
-                anchorX = host.getX();
-                anchorY = host.getY();
-                anchorZ = host.getZ();
-                anchorYaw = host.getYRot();
+                this.anchorX = host.getX();
+                this.anchorY = host.getY();
+                this.anchorZ = host.getZ();
+                this.anchorYaw = host.getYRot();
             }
         }
 
         long now = System.nanoTime();
-        float deltaTime = StageCameraTimeline.cappedDeltaSeconds(now, lastTickTimeNs);
+        float deltaTime = (now - lastTickTimeNs) / 1_000_000_000.0f;
         lastTickTimeNs = now;
+        deltaTime = Math.min(deltaTime, 0.1f);
 
-        StagePlaybackAdvance advance = playbackSession.advance(
-                deltaTime,
-                VMD_FPS,
-                CATCHUP_SPEED_MAX,
-                CATCHUP_SPEED_MIN,
-                SYNC_TOLERANCE
-        );
-        if (advance.completed()) {
+        float effectiveSpeed = playbackSpeed;
+        if (targetSyncFrame >= 0) {
+            float drift = targetSyncFrame - currentFrame;
+            if (Math.abs(drift) > SYNC_TOLERANCE) {
+                effectiveSpeed = drift > 0 ? CATCHUP_SPEED_MAX : CATCHUP_SPEED_MIN;
+            } else {
+                targetSyncFrame = -1.0f;
+            }
+        }
+
+        currentFrame += deltaTime * VMD_FPS * effectiveSpeed;
+
+        if (currentFrame >= maxFrame) {
             exitWatchMode(true);
             return;
         }
 
-        syncStagePresentation(playbackSession.currentFrame());
-        if (playbackSession.watchCameraAnimHandle() == 0L) {
-            applyPose(StageCameraTimeline.standbyPose(anchorX, anchorY, anchorZ, anchorYaw));
+        syncStagePresentation(currentFrame);
+
+        if (watchCameraAnimHandle == 0) {
+            float yawRad = (float) Math.toRadians(anchorYaw);
+            cameraX = anchorX - Math.sin(yawRad) * 3.5;
+            cameraY = anchorY + 1.8;
+            cameraZ = anchorZ + Math.cos(yawRad) * 3.5;
+            cameraYaw = anchorYaw + 180.0f;
+            cameraPitch = 15.0f;
+            cameraFov = 70.0f;
+            cameraRoll = 0.0f;
             return;
         }
 
-        cameraData.update(playbackSession.currentFrame());
-        applyPose(StageCameraTimeline.playbackPose(
-                cameraData,
-                anchorX,
-                anchorY,
-                anchorZ,
-                anchorYaw,
-                playbackSession.cameraHeightOffset(),
-                MMD_TO_MC_SCALE
-        ));
+        cameraData.update(currentFrame);
+
+        Vector3f mmdPos = cameraData.getPosition();
+        float sx = mmdPos.x * MMD_TO_MC_SCALE;
+        float sy = mmdPos.y * MMD_TO_MC_SCALE;
+        float sz = mmdPos.z * MMD_TO_MC_SCALE;
+
+        float yawRad = (float) Math.toRadians(anchorYaw);
+        float cos = (float) Math.cos(yawRad);
+        float sin = (float) Math.sin(yawRad);
+        cameraX = anchorX + sx * cos - sz * sin;
+        cameraY = anchorY + sy + cameraHeightOffset;
+        cameraZ = anchorZ + sx * sin + sz * cos;
+
+        cameraPitch = (float) Math.toDegrees(cameraData.getPitch());
+        cameraYaw = (float) Math.toDegrees(cameraData.getYaw()) + anchorYaw;
+        cameraRoll = (float) Math.toDegrees(cameraData.getRoll());
+        cameraFov = cameraData.getFov();
     }
 
-    private void cleanupPlayingResources() {
-        audioPlayer.cleanup();
-        if (cinematicMode) {
-            environmentController.leaveCinematicMode(Minecraft.getInstance());
-        }
-        playerStageAnimationPort.clearLocalStageFlags();
-        playerStageAnimationPort.restoreLocalModelState();
-        if (playbackSession.motionAnimHandle() != 0L) {
-            animationPort.deleteAnimation(playbackSession.motionAnimHandle());
-        }
-        if (playbackSession.cameraAnimHandle() != 0L
-                && playbackSession.cameraAnimHandle() != playbackSession.motionAnimHandle()) {
-            animationPort.deleteAnimation(playbackSession.cameraAnimHandle());
-        }
-    }
-
-    private void endPlayback() {
-        restoreMouseGrab();
-        cleanupPlayingResources();
-        playbackSession.clearPresentationState();
-        outroStartPose = currentPose();
-        outroElapsed = 0.0f;
-        lastTickTimeNs = System.nanoTime();
-        outroIsGuest = sessionPort.isWatchingStage();
-        stateMachine.enterOutro();
-
-        if (outroIsGuest) {
-            playerSyncPort.stopLocalStageAnimation();
-            broadcastPort.sendRemoteStageStop();
-            sessionPort.stopWatchingStageOnly();
-        } else {
-            broadcastPort.sendRemoteStageStop();
-            sessionPort.notifyMembersStageEnd();
-        }
-    }
-
-    private void forceCleanupForWatch() {
-        if (stateMachine.isPlaying()) {
-            cleanupPlayingResources();
-        }
-        if (playbackSession.watchCameraAnimHandle() != 0L) {
-            animationPort.deleteAnimation(playbackSession.watchCameraAnimHandle());
-            playbackSession.clearWatchCameraHandle();
-        }
-        restoreMouseGrab();
-        playbackSession.clearAllState();
-        waitingForHost = false;
-        stateMachine.enterInactive();
-    }
-
-    private void restoreMouseGrab() {
-        environmentController.restoreMouseGrab(Minecraft.getInstance());
-        escWasPressed = false;
-        lastEscTimeNs = 0L;
+    public void onFrameSync(float hostFrame) {
+        if (state != StageState.WATCHING && state != StageState.PLAYING) return;
+        this.targetSyncFrame = hostFrame;
     }
 
     private void syncStagePresentation(float frame) {
-        playerSyncPort.syncStageFrame(frame);
+        StageAnimSyncHelper.syncAllRemoteStageFrame(frame);
+        StageAnimSyncHelper.syncLocalStageFrame(frame);
         syncAudioPosition(frame / VMD_FPS);
     }
 
-    private StageCameraPose currentPose() {
-        return new StageCameraPose(cameraX, cameraY, cameraZ, cameraPitch, cameraYaw, cameraRoll, cameraFov);
+    public boolean isWatching() {
+        return state == StageState.WATCHING;
     }
 
-    private void applyPose(StageCameraPose pose) {
-        cameraX = pose.x();
-        cameraY = pose.y();
-        cameraZ = pose.z();
-        cameraPitch = pose.pitch();
-        cameraYaw = pose.yaw();
-        cameraRoll = pose.roll();
-        cameraFov = pose.fov();
+    public boolean shouldBlockInput() {
+        return state == StageState.PLAYING || state == StageState.WATCHING
+            || state == StageState.INTRO || state == StageState.OUTRO;
     }
+
 }

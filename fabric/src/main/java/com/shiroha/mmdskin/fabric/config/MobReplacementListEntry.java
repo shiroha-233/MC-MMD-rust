@@ -1,7 +1,13 @@
+/* 文件职责：提供 Fabric 生物替换配置项的列表条目。 */
 package com.shiroha.mmdskin.fabric.config;
 
 import com.shiroha.mmdskin.config.UIConstants;
-import com.shiroha.mmdskin.render.entity.MobReplacementTargets;
+import com.shiroha.mmdskin.fabric.render.MobReplacementTargets;
+import com.shiroha.mmdskin.ui.selector.MobReplacementPickerScreen;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Consumer;
 import me.shedaniel.clothconfig2.api.AbstractConfigListEntry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -11,15 +17,10 @@ import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.function.Consumer;
-
 final class MobReplacementListEntry extends AbstractConfigListEntry<String> {
     private static final int ENTRY_HEIGHT = 24;
-    private static final int CHOOSE_BUTTON_WIDTH = 52;
-    private static final int RESET_BUTTON_WIDTH = 44;
+    private static final int CHOOSE_BUTTON_WIDTH = 60;
+    private static final int RESET_BUTTON_WIDTH = 48;
     private static final int BUTTON_GAP = 4;
     private static final int COLOR_LABEL = 0xFFFFFF;
     private static final int COLOR_VALUE = 0xA0A0A0;
@@ -38,14 +39,10 @@ final class MobReplacementListEntry extends AbstractConfigListEntry<String> {
         this.saveConsumer = saveConsumer;
         this.originalValue = normalize(value);
         this.value = this.originalValue;
-        this.chooseButton = Button.builder(
-                Component.translatable("gui.mmdskin.mod_settings.mob_replacement.choose"),
-                button -> openPicker())
+        this.chooseButton = Button.builder(Component.translatable("gui.mmdskin.mod_settings.mob_replacement.choose"), button -> openPicker())
             .bounds(0, 0, CHOOSE_BUTTON_WIDTH, 20)
             .build();
-        this.resetButton = Button.builder(
-                Component.translatable("gui.mmdskin.mod_settings.mob_replacement.reset"),
-                button -> setValue(UIConstants.DEFAULT_MODEL_NAME))
+        this.resetButton = Button.builder(Component.translatable("gui.mmdskin.mod_settings.mob_replacement.reset"), button -> setValue(UIConstants.DEFAULT_MODEL_NAME))
             .bounds(0, 0, RESET_BUTTON_WIDTH, 20)
             .build();
         updateButtons();
@@ -56,7 +53,13 @@ final class MobReplacementListEntry extends AbstractConfigListEntry<String> {
         if (parent == null) {
             return;
         }
-        Minecraft.getInstance().setScreen(new MobReplacementModelPickerScreen(parent, target, value, this::setValue));
+        Minecraft.getInstance().setScreen(new MobReplacementPickerScreen(
+            parent,
+            target.displayName(),
+            value,
+            ModConfigScreen::createModelSelections,
+            this::setValue
+        ));
     }
 
     private void setValue(String value) {
@@ -73,23 +76,6 @@ final class MobReplacementListEntry extends AbstractConfigListEntry<String> {
             return UIConstants.DEFAULT_MODEL_NAME;
         }
         return value;
-    }
-
-    private static String trimToWidth(String value, int maxWidth) {
-        if (value == null || value.isEmpty() || maxWidth <= 0) {
-            return "";
-        }
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.font.width(value) <= maxWidth) {
-            return value;
-        }
-        String ellipsis = "...";
-        int ellipsisWidth = minecraft.font.width(ellipsis);
-        String trimmed = value;
-        while (!trimmed.isEmpty() && minecraft.font.width(trimmed) + ellipsisWidth > maxWidth) {
-            trimmed = trimmed.substring(0, trimmed.length() - 1);
-        }
-        return trimmed.isEmpty() ? ellipsis : trimmed + ellipsis;
     }
 
     @Override
@@ -153,5 +139,22 @@ final class MobReplacementListEntry extends AbstractConfigListEntry<String> {
 
         chooseButton.render(guiGraphics, mouseX, mouseY, delta);
         resetButton.render(guiGraphics, mouseX, mouseY, delta);
+    }
+
+    private static String trimToWidth(String value, int maxWidth) {
+        if (value == null || value.isEmpty() || maxWidth <= 0) {
+            return "";
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.font.width(value) <= maxWidth) {
+            return value;
+        }
+        String ellipsis = "...";
+        int ellipsisWidth = minecraft.font.width(ellipsis);
+        String trimmed = value;
+        while (!trimmed.isEmpty() && minecraft.font.width(trimmed) + ellipsisWidth > maxWidth) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed.isEmpty() ? ellipsis : trimmed + ellipsis;
     }
 }

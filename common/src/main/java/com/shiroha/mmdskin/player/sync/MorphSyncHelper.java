@@ -1,3 +1,4 @@
+/* 文件职责：把远端同步过来的表情选择应用到本地玩家模型实例。 */
 package com.shiroha.mmdskin.player.sync;
 
 import com.shiroha.mmdskin.config.PathConstants;
@@ -10,9 +11,8 @@ import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/** 文件职责：把远端同步过来的表情选择应用到本地玩家模型实例。 */
 public final class MorphSyncHelper {
-    private static final Logger logger = LogManager.getLogger();
+    private static final Logger LOGGER = LogManager.getLogger();
 
     private MorphSyncHelper() {
     }
@@ -29,15 +29,15 @@ public final class MorphSyncHelper {
 
         ExpressionSelection selection = ExpressionSelectionCodec.decode(morphName);
         if (selection.type() == ExpressionSelection.Type.FILE) {
-            String filePath = findVpdFile(selection.value(), resolved.model().modelInstance().getModelName());
+            String filePath = findVpdFile(selection.value(), resolved.model().getModelName());
             if (filePath == null) {
-                logger.warn("[MorphSync] Local VPD file not found: {}", selection.value());
+                LOGGER.warn("[MorphSync] Local VPD file not found: {}", selection.value());
                 return;
             }
             selection = ExpressionSelection.file(filePath);
         }
         ExpressionApplicationService.apply(
-                resolved.model().modelInstance().getModelHandle(),
+                resolved.model().model.getModelHandle(),
                 selection,
                 resolved.playerName());
     }

@@ -1,11 +1,10 @@
-/** 文件职责：统一托盘界面的半透明外观与基础绘制。 */
+/* 文件职责：统一托盘式界面的半透明配色与基础绘制。 */
 package com.shiroha.mmdskin.ui.chrome;
 
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
-/** 文件职责：统一托盘界面的半透明外观与基础绘制。 */
 public final class TranslucentTrayChrome {
     public static final int OVERLAY = 0x28000000;
     public static final int PANEL_OUTER = 0x2A000000;
@@ -52,18 +51,34 @@ public final class TranslucentTrayChrome {
         graphics.fill(x, y, x + width, y + 1, SEPARATOR);
     }
 
-    public static void drawButton(GuiGraphics graphics, Font font,
-                                  int x, int y, int width, int height,
-                                  String text, boolean hovered, boolean enabled) {
+    public static void drawButton(
+            GuiGraphics graphics,
+            Font font,
+            int x,
+            int y,
+            int width,
+            int height,
+            String text,
+            boolean hovered,
+            boolean enabled
+    ) {
         int background = enabled ? (hovered ? BUTTON_HOVER : BUTTON_BACKGROUND) : BUTTON_DISABLED;
         int textColor = enabled ? TITLE_TEXT : MUTED_TEXT;
         graphics.fill(x, y, x + width, y + height, background);
         graphics.drawCenteredString(font, text, x + width / 2, y + Math.max(0, (height - font.lineHeight) / 2), textColor);
     }
 
-    public static void drawButton(GuiGraphics graphics, Font font,
-                                  int x, int y, int width, int height,
-                                  Component text, boolean hovered, boolean enabled) {
+    public static void drawButton(
+            GuiGraphics graphics,
+            Font font,
+            int x,
+            int y,
+            int width,
+            int height,
+            Component text,
+            boolean hovered,
+            boolean enabled
+    ) {
         drawButton(graphics, font, x, y, width, height, text.getString(), hovered, enabled);
     }
 
@@ -87,10 +102,10 @@ public final class TranslucentTrayChrome {
     }
 
     public static int brighten(int color, int delta) {
-        int a = color >>> 24;
-        int r = Math.min(255, ((color >>> 16) & 0xFF) + delta);
-        int g = Math.min(255, ((color >>> 8) & 0xFF) + delta);
-        int b = Math.min(255, (color & 0xFF) + delta);
-        return (a << 24) | (r << 16) | (g << 8) | b;
+        int alpha = color >>> 24;
+        int red = Math.min(255, ((color >>> 16) & 0xFF) + delta);
+        int green = Math.min(255, ((color >>> 8) & 0xFF) + delta);
+        int blue = Math.min(255, (color & 0xFF) + delta);
+        return (alpha << 24) | (red << 16) | (green << 8) | blue;
     }
 }

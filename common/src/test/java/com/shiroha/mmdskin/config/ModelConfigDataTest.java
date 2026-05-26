@@ -1,68 +1,62 @@
-/* 文件职责：验证模型独立配置的归一化和防御性复制。 */
 package com.shiroha.mmdskin.config;
 
-import java.io.File;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ModelConfigDataTest {
+    @TempDir
+    Path tempDir;
 
     @Test
-    void shouldNormalizeOutOfRangeValuesAndHiddenMaterials() {
-        ModelConfigData config = new ModelConfigData();
-        config.eyeMaxAngle = Float.NaN;
-        config.modelScale = 100.0f;
-        config.heldItemScale = -1.0f;
-        config.hiddenMaterials = new HashSet<>(Set.of(-2, 3));
+    void shouldClampHeldItemScaleIntoSupportedRange() {
+        ModelConfigData data = new ModelConfigData();
+        data.heldItemScale = 99.0f;
 
-        ModelConfigData normalized = config.normalizedCopy();
+        ModelConfigData normalized = data.normalizeInPlace();
 
-        assertEquals(ModelConfigData.DEFAULT_EYE_MAX_ANGLE, normalized.eyeMaxAngle);
-        assertEquals(ModelConfigData.MAX_MODEL_SCALE, normalized.modelScale);
-        assertEquals(ModelConfigData.MIN_HELD_ITEM_SCALE, normalized.heldItemScale);
-        assertEquals(Set.of(3), normalized.hiddenMaterials);
+        assertEquals(ModelConfigData.MAX_HELD_ITEM_SCALE, normalized.heldItemScale);
     }
 
     @Test
-    void shouldCopyHiddenMaterialsDefensively() {
-        ModelConfigData config = new ModelConfigData();
-        config.hiddenMaterials.add(7);
+    void shouldFallbackHeldItemScaleWhenValueIsNotFinite() {
+        ModelConfigData data = new ModelConfigData();
+        data.heldItemScale = Float.NaN;
 
-        ModelConfigData copied = config.copy();
-        copied.hiddenMaterials.add(9);
+        ModelConfigData normalized = data.normalizeInPlace();
 
-        assertNotSame(config.hiddenMaterials, copied.hiddenMaterials);
-        assertEquals(Set.of(7), config.hiddenMaterials);
-        assertEquals(Set.of(7, 9), copied.hiddenMaterials);
+        assertEquals(ModelConfigData.DEFAULT_HELD_ITEM_SCALE, normalized.heldItemScale);
     }
 
     @Test
-    void shouldLoadLegacyHeldBlockScaleField() {
-        File tempFile = new File("build/tmp/test-legacy-model-config.json");
-        tempFile.getParentFile().mkdirs();
-        ModelConfigData legacy = new ModelConfigData();
-        legacy.heldItemScale = 1.0f;
-        legacy.save(tempFile);
-
-        String legacyJson = """
+    void shouldLoadLegacyHeldItemScaleAlias() throws Exception {
+        Path configFile = tempDir.resolve("legacy-model.json");
+        Files.writeString(configFile, """
                 {
-                  "firstPersonHeldBlockScale": 0.6
+                  "firstPersonHeldBlockScale": 1.75
                 }
-                """;
-        tempFile.delete();
-        try {
-            java.nio.file.Files.writeString(tempFile.toPath(), legacyJson, java.nio.charset.StandardCharsets.UTF_8);
-            ModelConfigData loaded = ModelConfigData.load(tempFile);
-            assertEquals(0.6f, loaded.heldItemScale);
-        } catch (java.io.IOException e) {
-            throw new RuntimeException(e);
-        } finally {
-            tempFile.delete();
-        }
+                """, StandardCharsets.UTF_8);
+
+        ModelConfigData loaded = ModelConfigData.load(configFile.toFile());
+
+        assertEquals(1.75f, loaded.heldItemScale);
+    }
+
+    @Test
+    void shouldDropNegativeHiddenMaterialIndices() {
+        ModelConfigData data = new ModelConfigData();
+        data.hiddenMaterials.add(-1);
+        data.hiddenMaterials.add(2);
+
+        ModelConfigData normalized = data.normalizeInPlace();
+
+        assertEquals(1, normalized.hiddenMaterials.size());
+        assertTrue(normalized.hiddenMaterials.contains(2));
     }
 }

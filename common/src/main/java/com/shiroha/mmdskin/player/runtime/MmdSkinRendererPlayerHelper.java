@@ -1,13 +1,14 @@
 package com.shiroha.mmdskin.player.runtime;
 
 import com.shiroha.mmdskin.config.UIConstants;
+import com.shiroha.mmdskin.renderer.runtime.animation.MMDAnimManager;
+import com.shiroha.mmdskin.renderer.runtime.model.MMDModelManager;
 import com.shiroha.mmdskin.player.animation.AnimationStateManager;
 import com.shiroha.mmdskin.player.animation.PendingAnimSignalCache;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
-import com.shiroha.mmdskin.model.runtime.ManagedModel;
-import com.shiroha.mmdskin.model.runtime.ModelInstance;
+import com.shiroha.mmdskin.renderer.api.IMMDModel;
 import com.shiroha.mmdskin.stage.client.sync.StageAnimSyncHelper;
-import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
+import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.entity.player.Player;
@@ -23,7 +24,7 @@ public final class MmdSkinRendererPlayerHelper {
         String playerName = player.getName().getString();
         Minecraft mc = Minecraft.getInstance();
         boolean isLocalPlayer = mc.player != null && mc.player.getUUID().equals(player.getUUID());
-        String selectedModel = PlayerModelSyncService.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
+        String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
         return selectedModel != null && !selectedModel.isEmpty() && !selectedModel.equals(UIConstants.DEFAULT_MODEL_NAME);
     }
 
@@ -41,62 +42,63 @@ public final class MmdSkinRendererPlayerHelper {
         PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
         if (resolved == null) return;
 
-        ManagedModel managedModel = resolved.model();
-        ModelInstance model = managedModel.modelInstance();
-        managedModel.entityState().playCustomAnim = true;
+        MMDModelManager.Model mwed = resolved.model();
+        IMMDModel model = mwed.model;
+        mwed.entityData.playCustomAnim = true;
 
-        managedModel.entityState().invalidateStateLayers();
-        model.changeAnim(managedModel.animationLibrary().animation(id), 0);
+        mwed.entityData.invalidateStateLayers();
+        model.changeAnim(MMDAnimManager.GetAnimModel(model, id), 0);
         model.setLayerLoop(1, true);
         model.changeAnim(0, 1);
         model.changeAnim(0, 2);
     }
 
-    public static void startStageAnimation(ManagedModel modelData, long animHandle) {
-        if (modelData == null || modelData.modelInstance() == null || modelData.entityState() == null || animHandle == 0) return;
+    public static void startStageAnimation(MMDModelManager.Model modelData, long animHandle) {
+        if (modelData == null || modelData.model == null || modelData.entityData == null || animHandle == 0) return;
 
-        ModelInstance model = modelData.modelInstance();
+        IMMDModel model = modelData.model;
         clearOverlayLayers(model);
         model.resetPhysics();
-        modelData.entityState().invalidateStateLayers();
+        modelData.entityData.invalidateStateLayers();
         model.transitionAnim(animHandle, 0, STAGE_TRANSITION_TIME);
-        modelData.entityState().playCustomAnim = true;
-        modelData.entityState().playStageAnim = true;
+        modelData.entityData.playCustomAnim = true;
+        modelData.entityData.playStageAnim = true;
     }
 
-    public static void resetModelAnimationState(ManagedModel modelData) {
+    public static void resetModelAnimationState(MMDModelManager.Model modelData) {
         resetModelAnimationState(null, modelData);
     }
 
-    public static void resetModelAnimationState(Player player, ManagedModel modelData) {
-        if (modelData == null || modelData.modelInstance() == null || modelData.entityState() == null) return;
+    public static void resetModelAnimationState(Player player, MMDModelManager.Model modelData) {
+        if (modelData == null || modelData.model == null || modelData.entityData == null) return;
 
-        ModelInstance model = modelData.modelInstance();
-        modelData.entityState().playCustomAnim = false;
-        modelData.entityState().playStageAnim = false;
-        model.changeAnim(modelData.animationLibrary().animation("idle"), 0);
+        IMMDModel model = modelData.model;
+        modelData.entityData.playCustomAnim = false;
+        modelData.entityData.playStageAnim = false;
+        model.changeAnim(MMDAnimManager.GetAnimModel(model, "idle"), 0);
         clearOverlayLayers(model);
         model.resetPhysics();
-        modelData.entityState().invalidateStateLayers();
+        modelData.entityData.invalidateStateLayers();
 
         if (player instanceof AbstractClientPlayer clientPlayer) {
             AnimationStateManager.updateAnimationState(clientPlayer, modelData);
         }
     }
 
-    public static void suppressDefaultAnimationState(ManagedModel modelData) {
-        if (modelData == null || modelData.modelInstance() == null || modelData.entityState() == null) return;
+    public static void suppressDefaultAnimationState(MMDModelManager.Model modelData) {
+        if (modelData == null || modelData.model == null || modelData.entityData == null) {
+            return;
+        }
 
-        ModelInstance model = modelData.modelInstance();
-        modelData.entityState().playCustomAnim = false;
-        modelData.entityState().playStageAnim = false;
-        model.changeAnim(0, 0);
-        clearOverlayLayers(model);
-        model.resetPhysics();
-        modelData.entityState().invalidateStateLayers();
+        modelData.entityData.playCustomAnim = false;
+        modelData.entityData.playStageAnim = false;
+        modelData.model.changeAnim(0, 0);
+        clearOverlayLayers(modelData.model);
+        modelData.model.resetPhysics();
+        modelData.entityData.invalidateStateLayers();
     }
 
-    private static void clearOverlayLayers(ModelInstance model) {
+    private static void clearOverlayLayers(IMMDModel model) {
         model.setLayerLoop(1, true);
         model.changeAnim(0, 1);
         model.changeAnim(0, 2);
