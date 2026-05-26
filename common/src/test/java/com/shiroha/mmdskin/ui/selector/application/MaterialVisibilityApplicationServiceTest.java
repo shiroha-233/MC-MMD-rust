@@ -54,15 +54,28 @@ class MaterialVisibilityApplicationServiceTest {
     }
 
     @Test
-    void shouldSkipSaveWhenSelectionDidNotChange() {
+    void shouldSkipSaveWhenHiddenMaterialsUnchanged() {
         FakeMaterialGateway gateway = new FakeMaterialGateway();
         MaterialVisibilityApplicationService service = new MaterialVisibilityApplicationService(gateway);
         MaterialScreenContext context = new MaterialScreenContext(9L, "alice", "alice");
 
-        boolean saved = service.saveIfChanged(context, gateway.materials, Set.of(1));
+        boolean changed = service.saveIfChanged(context, gateway.materials, Set.of(1));
 
-        assertFalse(saved);
-        assertEquals(0, gateway.saveCount);
+        assertFalse(changed);
+        assertEquals(Set.of(), gateway.savedHiddenMaterials);
+    }
+
+    @Test
+    void shouldSaveWhenHiddenMaterialsChanged() {
+        FakeMaterialGateway gateway = new FakeMaterialGateway();
+        MaterialVisibilityApplicationService service = new MaterialVisibilityApplicationService(gateway);
+        MaterialScreenContext context = new MaterialScreenContext(9L, "alice", "alice");
+        gateway.materials.get(0).setVisible(false);
+
+        boolean changed = service.saveIfChanged(context, gateway.materials, Set.of(1));
+
+        assertTrue(changed);
+        assertEquals(Set.of(0, 1), gateway.savedHiddenMaterials);
     }
 
     private static final class FakeMaterialGateway implements MaterialVisibilityGateway {
@@ -74,7 +87,6 @@ class MaterialVisibilityApplicationServiceTest {
         private int lastMaterialIndex = -1;
         private boolean lastVisible;
         private Set<Integer> savedHiddenMaterials = Set.of();
-        private int saveCount;
 
         @Override
         public Optional<MaterialScreenContext> createPlayerContext() {
@@ -104,7 +116,6 @@ class MaterialVisibilityApplicationServiceTest {
 
         @Override
         public void saveHiddenMaterials(String configModelName, Set<Integer> hiddenMaterials) {
-            saveCount++;
             savedHiddenMaterials = hiddenMaterials;
         }
     }

@@ -3,8 +3,10 @@ package com.shiroha.mmdskin.stage.client;
 import com.shiroha.mmdskin.stage.application.StageSessionService;
 import com.shiroha.mmdskin.stage.client.sync.StageAnimSyncHelper;
 import com.shiroha.mmdskin.stage.domain.model.StageCameraMode;
+import com.shiroha.mmdskin.stage.domain.model.StageRole;
 import com.shiroha.mmdskin.stage.protocol.StagePacket;
 import com.shiroha.mmdskin.stage.protocol.StagePacketCodec;
+import com.shiroha.mmdskin.stage.protocol.StagePacketType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
@@ -13,38 +15,33 @@ import org.apache.logging.log4j.Logger;
 import java.util.Objects;
 import java.util.UUID;
 
-/** 文件职责：解析并分发客户端收到的舞台协议包。 */
+/** 文件职责：解析并分发客户端收到的多人舞台协议包。 */
 public final class StageClientPacketHandler {
     private static final Logger LOGGER = LogManager.getLogger();
+    private static final StageClientPacketHandler INSTANCE = new StageClientPacketHandler();
 
-    private final StageSessionService sessionService;
-    private final StagePlaybackCoordinator playbackCoordinator;
-    private final StageAnimSyncHelper animSyncHelper;
+    private final StageSessionService sessionService = StageSessionService.getInstance();
+    private final StagePlaybackCoordinator playbackCoordinator = StagePlaybackCoordinator.getInstance();
 
-    public StageClientPacketHandler(StageSessionService sessionService,
-                                    StagePlaybackCoordinator playbackCoordinator,
-                                    StageAnimSyncHelper animSyncHelper) {
-        this.sessionService = Objects.requireNonNull(sessionService, "sessionService");
-        this.playbackCoordinator = Objects.requireNonNull(playbackCoordinator, "playbackCoordinator");
-        this.animSyncHelper = Objects.requireNonNull(animSyncHelper, "animSyncHelper");
+    private StageClientPacketHandler() {
     }
 
     public static StageClientPacketHandler getInstance() {
-        return StageClientRuntime.get().packetHandler();
+        return INSTANCE;
     }
 
     public void handle(UUID senderUUID, String rawData) {
         StagePacket packet = StagePacketCodec.decode(rawData);
         if (packet == null) {
-            LOGGER.warn("[多人舞台] 收到无法识别的新协议数据包");
+            LOGGER.warn("[多人舞台] 收到无法识别的协议数据包");
             return;
         }
 
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) {
             return;
         }
-        UUID localPlayerId = minecraft.player.getUUID();
+        UUID localPlayerId = mc.player.getUUID();
 
         UUID targetUUID = StageClientPacketMapper.parseUUID(packet.targetPlayerId);
         if (targetUUID != null && !targetUUID.equals(localPlayerId)) {
@@ -78,25 +75,25 @@ public final class StageClientPacketHandler {
             case FRAME_SYNC -> playbackCoordinator.handleFrameSync(senderUUID, sessionId, packet.frame);
             case REMOTE_STAGE_START -> {
                 if (!shouldHandleRemoteStagePacket(localPlayerId, senderUUID, sessionId)
-                        || minecraft.level == null
+                        || mc.level == null
                         || packet.descriptor == null
                         || !packet.descriptor.isValid()) {
                     return;
                 }
-                Player target = minecraft.level.getPlayerByUUID(senderUUID);
+                Player target = mc.level.getPlayerByUUID(senderUUID);
                 if (target != null) {
-                    animSyncHelper.startStageAnim(target, packet.descriptor);
+                    StageAnimSyncHelper.startStageAnim(target, packet.descriptor);
                 }
             }
             case REMOTE_STAGE_STOP -> {
                 if (!shouldHandleRemoteStagePacket(localPlayerId, senderUUID, sessionId)) {
                     return;
                 }
-                Player target = minecraft.level != null ? minecraft.level.getPlayerByUUID(senderUUID) : null;
+                Player target = mc.level != null ? mc.level.getPlayerByUUID(senderUUID) : null;
                 if (target != null) {
-                    animSyncHelper.endStageAnim(target);
+                    StageAnimSyncHelper.endStageAnim(target);
                 } else {
-                    animSyncHelper.endStageAnim(senderUUID);
+                    StageAnimSyncHelper.endStageAnim(senderUUID);
                 }
             }
             default -> LOGGER.warn("[多人舞台] 未处理的数据包类型 {}", packet.type);
@@ -107,6 +104,8 @@ public final class StageClientPacketHandler {
         if (localPlayerId == null || senderUUID == null || senderUUID.equals(localPlayerId)) {
             return false;
         }
-        return sessionService.isCurrentSession(sessionId);
+        return sessionService.getLocalRole() != StageRole.NONE
+                && sessionId != null
+                && Objects.equals(sessionService.getSessionId(), sessionId);
     }
 }

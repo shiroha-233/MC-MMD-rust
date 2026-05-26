@@ -3,7 +3,9 @@ package com.shiroha.mmdskin.compat.vr;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
-/** 文件职责：把 Vivecraft 反射桥接适配为 VR 追踪查询门面。 */
+/**
+ * 文件职责：把 Vivecraft 反射桥接适配为 VR 追踪查询门面。
+ */
 final class VivecraftVrTrackingFacade implements VrTrackingFacade {
     static final VivecraftVrTrackingFacade INSTANCE = new VivecraftVrTrackingFacade();
 

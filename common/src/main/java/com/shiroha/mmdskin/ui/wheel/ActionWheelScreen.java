@@ -1,3 +1,4 @@
+/* 文件职责：提供动作选择轮盘界面与配置入口。 */
 package com.shiroha.mmdskin.ui.wheel;
 
 import com.shiroha.mmdskin.ui.config.ActionWheelConfigScreen;
@@ -10,7 +11,6 @@ import net.minecraft.network.chat.Component;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 动作选择轮盘界面。 */
 public class ActionWheelScreen extends AbstractWheelScreen {
     private static final WheelStyle STYLE = createTranslucentWheelStyle(0.80f, 0.25f);
 
@@ -45,10 +45,8 @@ public class ActionWheelScreen extends AbstractWheelScreen {
     protected void init() {
         super.init();
         initWheelLayout();
-
-        this.addRenderableWidget(createWheelIconButton(Component.literal("⚙"), btn -> {
-            this.minecraft.setScreen(new ActionWheelConfigScreen(this));
-        }));
+        this.addRenderableWidget(createWheelIconButton(Component.literal("⚙"), btn ->
+                this.minecraft.setScreen(new ActionWheelConfigScreen(this))));
     }
 
     @Override
@@ -59,7 +57,6 @@ public class ActionWheelScreen extends AbstractWheelScreen {
             renderCenterBubble(guiGraphics, Component.translatable("gui.mmdskin.select_action").getString(), style.lineColor());
         } else {
             renderWheelBase(guiGraphics, mouseX, mouseY, partialTick, buildEntries());
-
             String centerText = selectedSlot >= 0
                     ? Component.translatable("gui.mmdskin.action_wheel.click_select").getString()
                     : Component.translatable("gui.mmdskin.select_action").getString();

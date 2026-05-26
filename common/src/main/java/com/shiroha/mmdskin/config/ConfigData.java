@@ -1,24 +1,21 @@
+/* 文件职责：承载全局客户端配置并负责加载、保存与归一化。 */
 package com.shiroha.mmdskin.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
-/**
- * 统一配置数据类
- */
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class ConfigData {
-    private static final Logger logger = LogManager.getLogger();
+    private static final Logger LOGGER = LogManager.getLogger();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public boolean openGLEnableLighting = true;
@@ -69,8 +66,11 @@ public class ConfigData {
     public float firstPersonCameraVerticalOffset = 0.0f;
 
     public int textureCacheBudgetMB = 256;
-
     public boolean debugHudEnabled = false;
+    public boolean playerFrontViewEnabled = true;
+    public float playerFrontViewScale = 1.5f;
+    public int playerFrontViewOffsetX = 10;
+    public int playerFrontViewOffsetY = 10;
 
     public boolean vrEnabled = false;
     public float vrArmIKStrength = 1.0f;
@@ -79,40 +79,52 @@ public class ConfigData {
 
     public static ConfigData load(Path configPath) {
         Path configFile = configPath.resolve("config.json");
-
         if (!Files.exists(configFile)) {
             ConfigData defaultConfig = new ConfigData();
             defaultConfig.save(configPath);
             return defaultConfig;
         }
 
-        try (Reader reader = Files.newBufferedReader(configFile)) {
+        try (Reader reader = Files.newBufferedReader(configFile, StandardCharsets.UTF_8)) {
             ConfigData config = GSON.fromJson(reader, ConfigData.class);
             if (config == null) {
-                logger.warn("配置文件为空，使用默认配置");
+                LOGGER.warn("配置文件为空，使用默认配置");
                 return new ConfigData();
             }
             config.normalize();
             return config;
         } catch (Exception e) {
-            logger.error("配置加载失败，使用默认配置: {}", e.getMessage());
+            LOGGER.error("配置加载失败，使用默认配置: {}", e.getMessage());
             return new ConfigData();
         }
     }
 
     public void save(Path configPath) {
         try {
-
             if (!Files.exists(configPath)) {
                 Files.createDirectories(configPath);
             }
 
             Path configFile = configPath.resolve("config.json");
-            try (Writer writer = Files.newBufferedWriter(configFile)) {
+            try (Writer writer = Files.newBufferedWriter(configFile, StandardCharsets.UTF_8)) {
                 GSON.toJson(this, writer);
             }
         } catch (IOException e) {
-            logger.error("保存配置失败: {}", e.getMessage());
+            LOGGER.error("保存配置失败: {}", e.getMessage());
+        }
+    }
+
+    public void copyTo(ConfigData other) {
+        ConfigData copy = GSON.fromJson(GSON.toJson(this), ConfigData.class);
+        try {
+            for (var field : ConfigData.class.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                    continue;
+                }
+                field.set(other, field.get(copy));
+            }
+        } catch (IllegalAccessException e) {
+            LOGGER.error("配置复制失败", e);
         }
     }
 
@@ -121,6 +133,7 @@ public class ConfigData {
             mobModelReplacements = new LinkedHashMap<>();
         }
 
+        modelPoolMaxCount = Math.max(1, modelPoolMaxCount);
         performanceLogIntervalSeconds = Math.max(1, performanceLogIntervalSeconds);
         maxVisibleModelsPerFrame = Math.max(1, maxVisibleModelsPerFrame);
         animationLodMediumDistance = Math.max(0.0f, animationLodMediumDistance);
@@ -141,22 +154,14 @@ public class ConfigData {
         toonOutlineB = clamp(toonOutlineB, 0.0f, 1.0f);
         maxPhysicsModelsPerFrame = Math.max(1, maxPhysicsModelsPerFrame);
         physicsLodMaxDistance = Math.max(0.0f, physicsLodMaxDistance);
+        vrArmIKStrength = !Float.isFinite(vrArmIKStrength) ? 1.0f : clamp(vrArmIKStrength, 0.0f, 1.0f);
+        playerFrontViewEnabled = true; // 默认启用
+        playerFrontViewScale = Math.max(0.5f, Math.min(5.0f, playerFrontViewScale));
+        playerFrontViewOffsetX = Math.max(0, Math.min(420, playerFrontViewOffsetX));
+        playerFrontViewOffsetY = Math.max(0, Math.min(220, playerFrontViewOffsetY));
     }
 
     private static float clamp(float value, float min, float max) {
         return Math.max(min, Math.min(max, value));
-    }
-
-    public void copyTo(ConfigData other) {
-        ConfigData copy = GSON.fromJson(GSON.toJson(this), ConfigData.class);
-
-        try {
-            for (var field : ConfigData.class.getDeclaredFields()) {
-                if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) continue;
-                field.set(other, field.get(copy));
-            }
-        } catch (IllegalAccessException e) {
-            logger.error("配置复制失败", e);
-        }
     }
 }

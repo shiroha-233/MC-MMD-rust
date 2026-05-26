@@ -72,26 +72,6 @@
   - 本项目的整体 Java 层架构基础
 
 
-### Bullet3（物理引擎）
-- **仓库**: https://github.com/bulletphysics/bullet3
-- **作者**: Erwin Coumans 及贡献者
-- **许可证**: zlib
-- **说明**: 实时碰撞检测和物理模拟库
-- **参考内容**:
-  - `btGeneric6DofSpringConstraint` 的 6DOF 弹簧约束算法
-  - 线性/角度限制和弹簧电机的实现逻辑
-  - 约束求解器参数（ERP、CFM）的设计思路
-
-### babylon-mmd（MMD for Babylon.js）
-- **仓库**: https://github.com/noname0310/babylon-mmd
-- **作者**: noname0310
-- **许可证**: MIT
-- **说明**: 基于 Babylon.js 的 MMD 运行时实现
-- **参考内容**:
-  - MMD 物理管线架构（syncBodies/syncBones 流程）
-  - 6DOF 弹簧约束的参数设置方式（角度弹簧始终启用、线性弹簧仅 stiffness≠0 启用）
-  - PhysicsMode 调整逻辑（父子刚体关系处理）
-
 ### Saba（C++ MMD 库）
 - **仓库**: https://github.com/benikabocha/saba
 - **作者**: benikabocha

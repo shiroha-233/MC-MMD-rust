@@ -16,19 +16,20 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** 文件职责：服务端舞台会话生命周期管理与数据包路由。 */
+/** 文件职责：管理服务端舞台会话生命周期并路由多人舞台协议。 */
 public final class StageServerSessionService {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final StageServerSessionService INSTANCE = new StageServerSessionService();
 
     private final Map<UUID, StageServerSession> sessions = new ConcurrentHashMap<>();
     private final Map<UUID, UUID> playerSessions = new ConcurrentHashMap<>();
-    private final StageSessionPermissionGuard guard = new StageSessionPermissionGuard(sessions, playerSessions);
 
     private StageServerSessionService() {
     }
@@ -63,10 +64,14 @@ public final class StageServerSessionService {
 
     public synchronized void onPlayerDisconnect(StageServerPlatformPort platform, UUID playerUUID) {
         UUID sessionId = playerSessions.remove(playerUUID);
-        if (sessionId == null) return;
+        if (sessionId == null) {
+            return;
+        }
 
         StageServerSession session = sessions.get(sessionId);
-        if (session == null) return;
+        if (session == null) {
+            return;
+        }
 
         if (playerUUID.equals(session.getHostId())) {
             dissolveSession(platform, session, true);
@@ -79,29 +84,43 @@ public final class StageServerSessionService {
     }
 
     private void handleInviteRequest(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
-        UUID sessionId = guard.parseUUID(packet.sessionId);
-        UUID targetUUID = guard.parseUUID(packet.targetPlayerId);
-        if (sessionId == null || targetUUID == null) return;
+        UUID sessionId = parseUUID(packet.sessionId);
+        UUID targetUUID = parseUUID(packet.targetPlayerId);
+        if (sessionId == null || targetUUID == null) {
+            return;
+        }
 
         StageServerSession session = ensureHostSession(platform, sender, sessionId);
-        if (session == null) return;
+        if (session == null) {
+            return;
+        }
 
         StageServerPlayer target = platform.findPlayer(targetUUID);
-        if (target == null) return;
+        if (target == null) {
+            return;
+        }
 
         session.getMembers().put(targetUUID, new StageServerSessionMember(
-                targetUUID, target.getName(), StageMemberState.INVITED, StageCameraMode.HOST_CAMERA));
+                targetUUID,
+                target.getName(),
+                StageMemberState.INVITED,
+                StageCameraMode.HOST_CAMERA
+        ));
         platform.sendPacket(targetUUID, sender.getUuid(), packet);
         broadcastSessionState(platform, session);
     }
 
     private void handleInviteCancel(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
-        StageServerSession session = guard.requireHostSession(sender.getUuid(), guard.parseUUID(packet.sessionId));
-        UUID targetUUID = guard.parseUUID(packet.targetPlayerId);
-        if (session == null || targetUUID == null) return;
+        StageServerSession session = requireHostSession(sender.getUuid(), parseUUID(packet.sessionId));
+        UUID targetUUID = parseUUID(packet.targetPlayerId);
+        if (session == null || targetUUID == null) {
+            return;
+        }
 
         StageServerSessionMember member = session.getMembers().get(targetUUID);
-        if (member == null || member.getState() != StageMemberState.INVITED) return;
+        if (member == null || member.getState() != StageMemberState.INVITED) {
+            return;
+        }
 
         session.getMembers().remove(targetUUID);
         if (platform.findPlayer(targetUUID) != null) {
@@ -111,15 +130,23 @@ public final class StageServerSessionService {
     }
 
     private void handleInviteResponse(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
-        UUID sessionId = guard.parseUUID(packet.sessionId);
-        UUID hostUUID = guard.parseUUID(packet.targetPlayerId);
-        if (sessionId == null || hostUUID == null || packet.inviteDecision == null) return;
+        UUID sessionId = parseUUID(packet.sessionId);
+        UUID hostUUID = parseUUID(packet.targetPlayerId);
+        if (sessionId == null || hostUUID == null || packet.inviteDecision == null) {
+            return;
+        }
 
         StageServerSession session = sessions.get(sessionId);
-        if (session == null || !session.getHostId().equals(hostUUID)) return;
+        if (session == null || !session.getHostId().equals(hostUUID)) {
+            return;
+        }
 
-        StageServerSessionMember member = session.getMembers().computeIfAbsent(sender.getUuid(),
-                uuid -> new StageServerSessionMember(uuid, sender.getName(), StageMemberState.INVITED, StageCameraMode.HOST_CAMERA));
+        StageServerSessionMember member = session.getMembers().get(sender.getUuid());
+        if (member == null) {
+            member = new StageServerSessionMember(sender.getUuid(), sender.getName(),
+                    StageMemberState.INVITED, StageCameraMode.HOST_CAMERA);
+            session.getMembers().put(sender.getUuid(), member);
+        }
 
         switch (packet.inviteDecision) {
             case ACCEPT -> {
@@ -136,26 +163,35 @@ public final class StageServerSessionService {
                 playerSessions.remove(sender.getUuid());
             }
         }
+
         broadcastSessionState(platform, session);
     }
 
     private void handleReadyUpdate(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
-        StageServerSession session = guard.requireMemberSession(sender.getUuid(), guard.parseUUID(packet.sessionId));
-        if (session == null) return;
+        UUID sessionId = parseUUID(packet.sessionId);
+        StageServerSession session = requireMemberSession(sender.getUuid(), sessionId);
+        if (session == null) {
+            return;
+        }
 
         StageServerSessionMember member = session.getMembers().get(sender.getUuid());
-        if (member == null || !member.getState().isAcceptedState()) return;
+        if (member == null || !member.getState().isAcceptedState()) {
+            return;
+        }
 
         member.setCameraMode(packet.cameraMode != null ? packet.cameraMode : StageCameraMode.HOST_CAMERA);
-        member.setMotionPackName(guard.isSafeName(packet.motionPackName) ? packet.motionPackName : null);
-        member.setMotionFiles(guard.sanitizeMotionFiles(packet.motionFiles));
+        member.setMotionPackName(isSafeName(packet.motionPackName) ? packet.motionPackName : null);
+        member.setMotionFiles(sanitizeMotionFiles(packet.motionFiles));
         member.setState(Boolean.TRUE.equals(packet.ready) ? StageMemberState.READY : StageMemberState.ACCEPTED);
         broadcastSessionState(platform, session);
     }
 
     private void handleMemberLeave(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
-        StageServerSession session = guard.requireMemberSession(sender.getUuid(), guard.parseUUID(packet.sessionId));
-        if (session == null) return;
+        UUID sessionId = parseUUID(packet.sessionId);
+        StageServerSession session = requireMemberSession(sender.getUuid(), sessionId);
+        if (session == null) {
+            return;
+        }
 
         session.getMembers().remove(sender.getUuid());
         playerSessions.remove(sender.getUuid());
@@ -164,19 +200,25 @@ public final class StageServerSessionService {
     }
 
     private void handleSessionDissolve(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
-        StageServerSession session = guard.requireHostSession(sender.getUuid(), guard.parseUUID(packet.sessionId));
-        if (session == null) return;
+        StageServerSession session = requireHostSession(sender.getUuid(), parseUUID(packet.sessionId));
+        if (session == null) {
+            return;
+        }
         dissolveSession(platform, session, true);
     }
 
     private void handlePlaybackStart(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
-        StageServerSession session = guard.requireHostSession(sender.getUuid(), guard.parseUUID(packet.sessionId));
-        if (session == null || packet.descriptor == null || !packet.descriptor.isValid()) return;
+        StageServerSession session = requireHostSession(sender.getUuid(), parseUUID(packet.sessionId));
+        if (session == null || packet.descriptor == null || !packet.descriptor.isValid()) {
+            return;
+        }
 
-        UUID targetUUID = guard.parseUUID(packet.targetPlayerId);
+        UUID targetUUID = parseUUID(packet.targetPlayerId);
         if (targetUUID != null) {
             StageServerSessionMember member = session.getMembers().get(targetUUID);
-            if (member == null || !member.getState().isAcceptedState()) return;
+            if (member == null || !member.getState().isAcceptedState()) {
+                return;
+            }
             if (platform.findPlayer(targetUUID) != null) {
                 platform.sendPacket(targetUUID, sender.getUuid(), resolveMemberPlaybackPacket(packet, member));
             }
@@ -184,7 +226,9 @@ public final class StageServerSessionService {
         }
 
         for (StageServerSessionMember member : session.getMembers().values()) {
-            if (member.getUuid().equals(session.getHostId()) || !member.getState().isAcceptedState()) continue;
+            if (member.getUuid().equals(session.getHostId()) || !member.getState().isAcceptedState()) {
+                continue;
+            }
             if (platform.findPlayer(member.getUuid()) != null) {
                 platform.sendPacket(member.getUuid(), sender.getUuid(), resolveMemberPlaybackPacket(packet, member));
             }
@@ -192,10 +236,12 @@ public final class StageServerSessionService {
     }
 
     private void handlePlaybackStop(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
-        StageServerSession session = guard.requireHostSession(sender.getUuid(), guard.parseUUID(packet.sessionId));
-        if (session == null) return;
+        StageServerSession session = requireHostSession(sender.getUuid(), parseUUID(packet.sessionId));
+        if (session == null) {
+            return;
+        }
 
-        UUID targetUUID = guard.parseUUID(packet.targetPlayerId);
+        UUID targetUUID = parseUUID(packet.targetPlayerId);
         if (targetUUID != null) {
             if (platform.findPlayer(targetUUID) != null) {
                 platform.sendPacket(targetUUID, sender.getUuid(), packet);
@@ -204,7 +250,9 @@ public final class StageServerSessionService {
         }
 
         for (StageServerSessionMember member : session.getMembers().values()) {
-            if (member.getUuid().equals(session.getHostId()) || !member.getState().isAcceptedState()) continue;
+            if (member.getUuid().equals(session.getHostId()) || !member.getState().isAcceptedState()) {
+                continue;
+            }
             if (platform.findPlayer(member.getUuid()) != null) {
                 platform.sendPacket(member.getUuid(), sender.getUuid(), packet);
             }
@@ -212,23 +260,31 @@ public final class StageServerSessionService {
     }
 
     private void handleRemoteStageStart(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
-        StageServerSession session = guard.requireActiveSessionParticipant(sender.getUuid(), guard.parseUUID(packet.sessionId));
-        if (session == null || packet.descriptor == null || !packet.descriptor.isValid()) return;
-        broadcastRemotePacket(platform, sender.getUuid(), packet);
+        StageServerSession session = requireActiveSessionParticipant(sender.getUuid(), parseUUID(packet.sessionId));
+        if (session == null || packet.descriptor == null || !packet.descriptor.isValid()) {
+            return;
+        }
+        broadcastRemotePacket(platform, sender.getUuid(), session, packet);
     }
 
     private void handleRemoteStageStop(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
-        StageServerSession session = guard.requireActiveSessionParticipant(sender.getUuid(), guard.parseUUID(packet.sessionId));
-        if (session == null) return;
-        broadcastRemotePacket(platform, sender.getUuid(), packet);
+        StageServerSession session = requireActiveSessionParticipant(sender.getUuid(), parseUUID(packet.sessionId));
+        if (session == null) {
+            return;
+        }
+        broadcastRemotePacket(platform, sender.getUuid(), session, packet);
     }
 
     private void handleFrameSync(StageServerPlatformPort platform, StageServerPlayer sender, StagePacket packet) {
-        StageServerSession session = guard.requireHostSession(sender.getUuid(), guard.parseUUID(packet.sessionId));
-        if (session == null || packet.frame == null) return;
+        StageServerSession session = requireHostSession(sender.getUuid(), parseUUID(packet.sessionId));
+        if (session == null || packet.frame == null) {
+            return;
+        }
 
         for (StageServerSessionMember member : session.getMembers().values()) {
-            if (member.getUuid().equals(session.getHostId()) || !member.getState().isAcceptedState()) continue;
+            if (member.getUuid().equals(session.getHostId()) || !member.getState().isAcceptedState()) {
+                continue;
+            }
             if (platform.findPlayer(member.getUuid()) != null) {
                 platform.sendPacket(member.getUuid(), sender.getUuid(), packet);
             }
@@ -239,21 +295,64 @@ public final class StageServerSessionService {
         UUID senderUUID = sender.getUuid();
         UUID existingSessionId = playerSessions.get(senderUUID);
         if (existingSessionId != null && !existingSessionId.equals(sessionId)) {
-            StageServerSession existing = sessions.get(existingSessionId);
-            if (existing != null && senderUUID.equals(existing.getHostId())) {
-                dissolveSession(platform, existing, true);
+            StageServerSession existingSession = sessions.get(existingSessionId);
+            if (existingSession != null && senderUUID.equals(existingSession.getHostId())) {
+                dissolveSession(platform, existingSession, true);
             } else {
                 return null;
             }
         }
 
         StageServerSession session = sessions.computeIfAbsent(sessionId, id -> new StageServerSession(id, senderUUID));
-        if (!session.getHostId().equals(senderUUID)) return null;
+        if (!session.getHostId().equals(senderUUID)) {
+            return null;
+        }
 
         playerSessions.put(senderUUID, sessionId);
         session.getMembers().put(senderUUID, new StageServerSessionMember(
-                senderUUID, sender.getName(), StageMemberState.HOST, StageCameraMode.HOST_CAMERA));
+                senderUUID,
+                sender.getName(),
+                StageMemberState.HOST,
+                StageCameraMode.HOST_CAMERA
+        ));
         return session;
+    }
+
+    private StageServerSession requireHostSession(UUID senderUUID, UUID sessionId) {
+        if (sessionId == null) {
+            return null;
+        }
+        StageServerSession session = sessions.get(sessionId);
+        if (session == null || !session.getHostId().equals(senderUUID)) {
+            return null;
+        }
+        return session;
+    }
+
+    private StageServerSession requireMemberSession(UUID senderUUID, UUID sessionId) {
+        if (sessionId == null) {
+            return null;
+        }
+        UUID indexedSession = playerSessions.get(senderUUID);
+        if (!Objects.equals(indexedSession, sessionId)) {
+            return null;
+        }
+        return sessions.get(sessionId);
+    }
+
+    private StageServerSession requireActiveSessionParticipant(UUID senderUUID, UUID sessionId) {
+        StageServerSession session = requireMemberSession(senderUUID, sessionId);
+        if (session == null) {
+            return null;
+        }
+        StageServerSessionMember member = session.getMembers().get(senderUUID);
+        if (member == null) {
+            return null;
+        }
+        if (senderUUID.equals(session.getHostId())) {
+            return session;
+        }
+        return member.getState().isAcceptedState() ? session : null;
     }
 
     private void broadcastSessionState(StageServerPlatformPort platform, StageServerSession session) {
@@ -264,8 +363,11 @@ public final class StageServerSessionService {
         if (platform.findPlayer(session.getHostId()) != null) {
             platform.sendPacket(session.getHostId(), session.getHostId(), packet);
         }
+
         for (StageServerSessionMember member : session.getMembers().values()) {
-            if (member.getUuid().equals(session.getHostId()) || !member.getState().isAcceptedState()) continue;
+            if (member.getUuid().equals(session.getHostId()) || !member.getState().isAcceptedState()) {
+                continue;
+            }
             if (platform.findPlayer(member.getUuid()) != null) {
                 platform.sendPacket(member.getUuid(), session.getHostId(), packet);
             }
@@ -275,14 +377,17 @@ public final class StageServerSessionService {
     private List<StageMemberSnapshot> buildSnapshots(StageServerSession session) {
         List<StageServerSessionMember> ordered = new ArrayList<>(session.getMembers().values());
         ordered.sort(Comparator
-                .comparingInt((StageServerSessionMember m) -> m.getState() == StageMemberState.HOST ? 0 : 1)
-                .thenComparing(m -> m.getName(), String.CASE_INSENSITIVE_ORDER));
+                .comparingInt((StageServerSessionMember member) -> member.getState() == StageMemberState.HOST ? 0 : 1)
+                .thenComparing(member -> member.getName(), String.CASE_INSENSITIVE_ORDER));
 
         List<StageMemberSnapshot> snapshots = new ArrayList<>();
         for (StageServerSessionMember member : ordered) {
             snapshots.add(new StageMemberSnapshot(
-                    member.getUuid().toString(), member.getName(),
-                    member.getState().name(), member.getCameraMode().name()));
+                    member.getUuid().toString(),
+                    member.getName(),
+                    member.getState().name(),
+                    member.getCameraMode().name()
+            ));
         }
         return snapshots;
     }
@@ -292,12 +397,15 @@ public final class StageServerSessionService {
             StagePacket packet = new StagePacket(StagePacketType.SESSION_DISSOLVE);
             packet.sessionId = session.getSessionId().toString();
             for (StageServerSessionMember member : session.getMembers().values()) {
-                if (member.getUuid().equals(session.getHostId())) continue;
+                if (member.getUuid().equals(session.getHostId())) {
+                    continue;
+                }
                 if (platform.findPlayer(member.getUuid()) != null) {
                     platform.sendPacket(member.getUuid(), session.getHostId(), packet);
                 }
             }
         }
+
         for (StageServerSessionMember member : session.getMembers().values()) {
             playerSessions.remove(member.getUuid());
         }
@@ -305,31 +413,37 @@ public final class StageServerSessionService {
     }
 
     private void cleanupIfEmpty(StageServerSession session) {
-        boolean hasGuest = session.getMembers().values().stream()
-                .anyMatch(m -> !m.getUuid().equals(session.getHostId()));
-        if (!hasGuest) {
+        boolean hasAnyGuest = session.getMembers().values().stream()
+                .anyMatch(member -> !member.getUuid().equals(session.getHostId()));
+        if (!hasAnyGuest) {
             sessions.remove(session.getSessionId());
             playerSessions.remove(session.getHostId());
         }
     }
 
-    private void broadcastRemotePacket(StageServerPlatformPort platform, UUID senderUUID, StagePacket packet) {
+    private void broadcastRemotePacket(StageServerPlatformPort platform, UUID senderUUID,
+                                       StageServerSession session, StagePacket packet) {
+        StagePacket resolvedPacket = copyPacket(packet);
+        resolvedPacket.sessionId = session.getSessionId().toString();
         for (StageServerPlayer target : platform.getOnlinePlayers()) {
-            if (!target.getUuid().equals(senderUUID)) {
-                platform.sendPacket(target.getUuid(), senderUUID, packet);
+            UUID targetUUID = target.getUuid();
+            if (!targetUUID.equals(senderUUID)) {
+                platform.sendPacket(targetUUID, senderUUID, resolvedPacket);
             }
         }
     }
 
     private StagePacket resolveMemberPlaybackPacket(StagePacket packet, StageServerSessionMember member) {
-        if (packet.descriptor == null || member.getMotionFiles().isEmpty()) return packet;
+        if (packet.descriptor == null || member.getMotionFiles().isEmpty()) {
+            return packet;
+        }
 
-        StagePacket resolved = copyPacket(packet);
+        StagePacket resolvedPacket = copyPacket(packet);
         StageDescriptor descriptor = packet.descriptor.copy();
         descriptor.setMotionFiles(member.getMotionFiles());
-        resolved.descriptor = descriptor;
-        resolved.motionPackName = member.getMotionPackName();
-        return resolved;
+        resolvedPacket.descriptor = descriptor;
+        resolvedPacket.motionPackName = member.getMotionPackName();
+        return resolvedPacket;
     }
 
     private StagePacket copyPacket(StagePacket source) {
@@ -347,5 +461,37 @@ public final class StageServerSessionService {
         copy.motionFiles = source.motionFiles != null ? List.copyOf(source.motionFiles) : List.of();
         copy.members = source.members != null ? List.copyOf(source.members) : List.of();
         return copy;
+    }
+
+    private List<String> sanitizeMotionFiles(List<String> motionFiles) {
+        if (motionFiles == null || motionFiles.isEmpty()) {
+            return List.of();
+        }
+
+        LinkedHashSet<String> sanitized = new LinkedHashSet<>();
+        for (String motionFile : motionFiles) {
+            if (isSafeName(motionFile)) {
+                sanitized.add(motionFile);
+            }
+        }
+        return sanitized.isEmpty() ? List.of() : List.copyOf(sanitized);
+    }
+
+    private boolean isSafeName(String value) {
+        return value != null && !value.isEmpty()
+                && !value.contains("..")
+                && !value.contains("/")
+                && !value.contains("\\");
+    }
+
+    private UUID parseUUID(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 }

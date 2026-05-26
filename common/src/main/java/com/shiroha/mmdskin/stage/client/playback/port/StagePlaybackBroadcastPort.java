@@ -2,9 +2,11 @@ package com.shiroha.mmdskin.stage.client.playback.port;
 
 import com.shiroha.mmdskin.stage.domain.model.StageDescriptor;
 
-/** 定义舞台播放广播边界。 */
-public interface StagePlaybackBroadcastPort {
-    void sendStageWatch(StagePlaybackWatchRequest request);
+import java.util.UUID;
 
-    void sendRemoteStageStart(StageDescriptor descriptor);
+public interface StagePlaybackBroadcastPort {
+    void sendStageWatch(UUID targetUUID, UUID sessionId, StageDescriptor descriptor,
+                        float heightOffset, float startFrame);
+
+    void sendRemoteStageStart(UUID sessionId, StageDescriptor descriptor);
 }

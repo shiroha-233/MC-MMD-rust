@@ -18,17 +18,32 @@ fn texture_from_image(img: DynamicImage) -> Texture {
     let (width, height) = img.dimensions();
     let has_alpha = has_alpha_channel(&img);
 
-    // 与C++一致：垂直翻转图像，然后根据是否有alpha通道选择格式
+    let w = width as usize;
+    let h = height as usize;
+
     let data = if has_alpha {
-        // RGBA格式（4字节/像素）
-        let rgba = img.to_rgba8();
-        let flipped = image::imageops::flip_vertical(&rgba);
-        flipped.into_raw()
+        let raw = img.to_rgba8().into_raw();
+        let row_bytes = w * 4;
+        // 单次分配 + 垂直翻转（避免 to_rgba8 + flip_vertical 双分配）
+        let mut flipped = vec![0u8; raw.len()];
+        for src_row in 0..h {
+            let dst_row = h - 1 - src_row;
+            let src = src_row * row_bytes;
+            let dst = dst_row * row_bytes;
+            flipped[dst..dst + row_bytes].copy_from_slice(&raw[src..src + row_bytes]);
+        }
+        flipped
     } else {
-        // RGB格式（3字节/像素）- 与C++的STBI_rgb一致
-        let rgb = img.to_rgb8();
-        let flipped = image::imageops::flip_vertical(&rgb);
-        flipped.into_raw()
+        let raw = img.to_rgb8().into_raw();
+        let row_bytes = w * 3;
+        let mut flipped = vec![0u8; raw.len()];
+        for src_row in 0..h {
+            let dst_row = h - 1 - src_row;
+            let src = src_row * row_bytes;
+            let dst = dst_row * row_bytes;
+            flipped[dst..dst + row_bytes].copy_from_slice(&raw[src..src + row_bytes]);
+        }
+        flipped
     };
 
     Texture::new(width, height, data, has_alpha)

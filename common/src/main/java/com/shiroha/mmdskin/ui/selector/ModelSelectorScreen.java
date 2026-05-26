@@ -1,4 +1,4 @@
-/* 职责：以原生 GuiGraphics 渲染模型选择界面。 */
+/* 文件职责：提供玩家模型选择原生界面。 */
 package com.shiroha.mmdskin.ui.selector;
 
 import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
@@ -14,7 +14,6 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 文件职责：提供玩家模型选择原生界面。 */
 public class ModelSelectorScreen extends Screen {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final ModelSelectionApplicationService SERVICE = ModelSelectorServices.modelSelection();
@@ -36,7 +35,6 @@ public class ModelSelectorScreen extends Screen {
     private String currentModel;
     private boolean pendingClose;
     private String pendingSettingsModel;
-
     private float targetScroll;
     private float animatedScroll;
     private int hoveredCard = -1;
@@ -68,7 +66,7 @@ public class ModelSelectorScreen extends Screen {
             updateLayout();
             updateHoverState(mouseX, mouseY);
             updateScrollAnimation();
-            renderFallback(guiGraphics);
+            renderScreen(guiGraphics);
             flushPendingActions(minecraft);
         } catch (Throwable throwable) {
             closeAfterFailure(throwable);
@@ -80,7 +78,6 @@ public class ModelSelectorScreen extends Screen {
         if (button != 0) {
             return super.mouseClicked(mouseX, mouseY, button);
         }
-
         if (!layout.panel.contains(mouseX, mouseY)) {
             return super.mouseClicked(mouseX, mouseY, button);
         }
@@ -106,18 +103,15 @@ public class ModelSelectorScreen extends Screen {
             selectModel(modelCards.get(hoveredCard).displayName());
             return true;
         }
-
         return true;
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (!layout.listBox.contains(mouseX, mouseY)) {
-            return super.mouseScrolled(mouseX, mouseY, delta);
+            return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
         }
-        float step = 12.0f;
-        targetScroll -= (float) delta * step;
-        targetScroll = Mth.clamp(targetScroll, 0.0f, maxScroll());
+        targetScroll = Mth.clamp(targetScroll - (float) scrollY * 12.0f, 0.0f, maxScroll());
         return true;
     }
 
@@ -133,6 +127,56 @@ public class ModelSelectorScreen extends Screen {
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    private void renderScreen(GuiGraphics guiGraphics) {
+        TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
+        TranslucentTrayChrome.drawPanel(guiGraphics, layout.panel.x, layout.panel.y, layout.panel.w, layout.panel.h);
+
+        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
+        String stats = Component.translatable(
+                "gui.mmdskin.model_selector.stats",
+                Math.max(0, modelCards.size() - 1),
+                shorten(currentModel, 8)
+        ).getString();
+        guiGraphics.drawString(this.font, stats, layout.header.x, layout.header.y + 10, TranslucentTrayChrome.SUBTITLE_TEXT, false);
+
+        drawButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredButton == ButtonTarget.DONE, true);
+        drawButton(guiGraphics, layout.refreshButton, Component.translatable("gui.mmdskin.refresh").getString(), hoveredButton == ButtonTarget.REFRESH, true);
+        ModelSelectionApplicationService.ModelCard selectedCard = getSelectedCard();
+        boolean settingsEnabled = selectedCard != null && selectedCard.configurable();
+        drawButton(guiGraphics, layout.settingsButton, Component.translatable("gui.mmdskin.model_settings.title").getString(), hoveredButton == ButtonTarget.SETTINGS, settingsEnabled);
+
+        UiRect list = layout.listBox;
+        TranslucentTrayChrome.fillListArea(guiGraphics, list.x, list.y, list.w, list.h);
+        if (modelCards.isEmpty()) {
+            guiGraphics.drawCenteredString(this.font, "No models", list.centerX(), list.centerY() - 4, TranslucentTrayChrome.BODY_TEXT);
+            return;
+        }
+
+        guiGraphics.enableScissor(list.x, list.y, list.x + list.w, list.y + list.h);
+        int y = Math.round(list.y + LIST_PADDING - animatedScroll);
+        for (int i = 0; i < modelCards.size(); i++) {
+            ModelSelectionApplicationService.ModelCard card = modelCards.get(i);
+            if (y + CARD_HEIGHT < list.y) {
+                y += CARD_HEIGHT + CARD_GAP;
+                continue;
+            }
+            if (y > list.y + list.h) {
+                break;
+            }
+            boolean selected = card.displayName().equals(currentModel);
+            boolean hovered = i == hoveredCard;
+            guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, TranslucentTrayChrome.cardBackground(selected, hovered));
+            guiGraphics.drawString(this.font, buildCardLabel(card), list.x + 7, y + 3, TranslucentTrayChrome.BODY_TEXT, false);
+            y += CARD_HEIGHT + CARD_GAP;
+        }
+        guiGraphics.disableScissor();
+        TranslucentTrayChrome.drawScrollbar(guiGraphics, list.x + list.w - 3, list.y, list.y + list.h, animatedScroll, maxScroll());
+    }
+
+    private void drawButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered, boolean enabled) {
+        TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, enabled);
     }
 
     private void updateLayout() {
@@ -174,36 +218,28 @@ public class ModelSelectorScreen extends Screen {
             return;
         }
         ModelSelectionApplicationService.ModelCard selectedCard = getSelectedCard();
-        if (selectedCard != null
-                && selectedCard.configurable()
-                && layout.settingsButton.contains(mouseX, mouseY)) {
+        if (selectedCard != null && selectedCard.configurable() && layout.settingsButton.contains(mouseX, mouseY)) {
             hoveredButton = ButtonTarget.SETTINGS;
             return;
         }
-
         if (!layout.listBox.contains(mouseX, mouseY) || modelCards.isEmpty()) {
             return;
         }
 
-        float listTop = layout.listBox.y + LIST_PADDING;
-        float itemStride = CARD_HEIGHT + CARD_GAP;
-        float localY = (float) mouseY - listTop + animatedScroll;
+        float localY = (float) mouseY - (layout.listBox.y + LIST_PADDING) + animatedScroll;
         if (localY < 0.0f) {
             return;
         }
-        int index = (int) (localY / itemStride);
+        int index = (int) (localY / (CARD_HEIGHT + CARD_GAP));
         if (index < 0 || index >= modelCards.size()) {
             return;
         }
-
-        float offsetInItem = localY - index * itemStride;
-        if (offsetInItem <= CARD_HEIGHT) {
+        if (localY - index * (CARD_HEIGHT + CARD_GAP) <= CARD_HEIGHT) {
             hoveredCard = index;
         }
     }
 
     private void updateScrollAnimation() {
-        targetScroll = Mth.clamp(targetScroll, 0.0f, maxScroll());
         animatedScroll = Mth.lerp(0.24f, animatedScroll, targetScroll);
         if (Math.abs(animatedScroll - targetScroll) < 0.25f) {
             animatedScroll = targetScroll;
@@ -216,51 +252,6 @@ public class ModelSelectorScreen extends Screen {
                 ? 0.0f
                 : LIST_PADDING * 2.0f + count * CARD_HEIGHT + Math.max(0, count - 1) * CARD_GAP;
         return Math.max(0.0f, contentHeight - layout.listBox.h);
-    }
-
-    private void renderFallback(GuiGraphics guiGraphics) {
-        TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
-        TranslucentTrayChrome.drawPanel(guiGraphics, layout.panel.x, layout.panel.y, layout.panel.w, layout.panel.h);
-
-        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
-        String stats = Component.translatable("gui.mmdskin.model_selector.stats",
-                Math.max(0, modelCards.size() - 1),
-                shorten(currentModel, 8)).getString();
-        guiGraphics.drawString(this.font, stats, layout.header.x, layout.header.y + 10, TranslucentTrayChrome.SUBTITLE_TEXT, false);
-        drawFallbackButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredButton == ButtonTarget.DONE, true);
-        drawFallbackButton(guiGraphics, layout.refreshButton, Component.translatable("gui.mmdskin.refresh").getString(), hoveredButton == ButtonTarget.REFRESH, true);
-        ModelSelectionApplicationService.ModelCard selectedCard = getSelectedCard();
-        boolean settingsEnabled = selectedCard != null && selectedCard.configurable();
-        drawFallbackButton(guiGraphics, layout.settingsButton, Component.translatable("gui.mmdskin.model_settings.title").getString(), hoveredButton == ButtonTarget.SETTINGS, settingsEnabled);
-
-        UiRect list = layout.listBox;
-        TranslucentTrayChrome.fillListArea(guiGraphics, list.x, list.y, list.w, list.h);
-        if (modelCards.isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, "No models", list.centerX(), list.centerY() - 4, TranslucentTrayChrome.BODY_TEXT);
-            return;
-        }
-
-        int y = Math.round(list.y + LIST_PADDING - animatedScroll);
-        for (int i = 0; i < modelCards.size(); i++) {
-            ModelSelectionApplicationService.ModelCard card = modelCards.get(i);
-            if (y + CARD_HEIGHT < list.y) {
-                y += CARD_HEIGHT + CARD_GAP;
-                continue;
-            }
-            if (y > list.y + list.h) {
-                break;
-            }
-            boolean selected = card.displayName().equals(currentModel);
-            boolean hovered = i == hoveredCard;
-            int bg = TranslucentTrayChrome.cardBackground(selected, hovered);
-            guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, bg);
-            guiGraphics.drawString(this.font, buildCardLabel(card), list.x + 7, y + 3, TranslucentTrayChrome.BODY_TEXT, false);
-            y += CARD_HEIGHT + CARD_GAP;
-        }
-    }
-
-    private void drawFallbackButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered, boolean enabled) {
-        TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, enabled);
     }
 
     private void reloadModelCards() {
@@ -297,7 +288,6 @@ public class ModelSelectorScreen extends Screen {
             minecraft.setScreen(new ModelSettingsScreen(modelName, this));
             return;
         }
-
         if (pendingClose && minecraft.screen == this) {
             pendingClose = false;
             minecraft.setScreen(null);
@@ -305,7 +295,7 @@ public class ModelSelectorScreen extends Screen {
     }
 
     private void closeAfterFailure(Throwable throwable) {
-        LOGGER.error("[ModelSelector] Native selector failed and will close", throwable);
+        LOGGER.error("[ModelSelector] Native selector render failed and will close", throwable);
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen == this) {
             minecraft.setScreen(null);

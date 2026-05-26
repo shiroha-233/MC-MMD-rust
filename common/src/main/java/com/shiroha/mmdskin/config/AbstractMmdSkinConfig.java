@@ -1,9 +1,8 @@
 package com.shiroha.mmdskin.config;
 
 /**
- * 配置提供者基类（DRY 原则）
+ * 文件职责：把配置数据对象适配为运行时配置读取接口。
  */
-
 public abstract class AbstractMmdSkinConfig implements ConfigManager.IConfigProvider {
     protected ConfigData data;
 
@@ -40,6 +39,7 @@ public abstract class AbstractMmdSkinConfig implements ConfigManager.IConfigProv
     @Override public float getToonOutlineG() { return data.toonOutlineG; }
     @Override public float getToonOutlineB() { return data.toonOutlineB; }
 
+    @Override public boolean isPhysicsEnabled() { return data.physicsEnabled; }
     @Override public float getPhysicsGravityY() { return data.physicsGravityY; }
     @Override public float getPhysicsFps() { return data.physicsFps; }
     @Override public int getPhysicsMaxSubstepCount() { return data.physicsMaxSubstepCount; }
@@ -56,6 +56,10 @@ public abstract class AbstractMmdSkinConfig implements ConfigManager.IConfigProv
     @Override public float getFirstPersonCameraForwardOffset() { return data.firstPersonCameraForwardOffset; }
     @Override public float getFirstPersonCameraVerticalOffset() { return data.firstPersonCameraVerticalOffset; }
     @Override public boolean isDebugHudEnabled() { return data.debugHudEnabled; }
+    @Override public boolean isPlayerFrontViewEnabled() { return data.playerFrontViewEnabled; }
+    @Override public float getPlayerFrontViewScale() { return data.playerFrontViewScale; }
+    @Override public int getPlayerFrontViewOffsetX() { return data.playerFrontViewOffsetX; }
+    @Override public int getPlayerFrontViewOffsetY() { return data.playerFrontViewOffsetY; }
     @Override public int getTextureCacheBudgetMB() { return data.textureCacheBudgetMB; }
     @Override public String getMobModelReplacement(String entityTypeId) {
         return data.mobModelReplacements.getOrDefault(entityTypeId, "");

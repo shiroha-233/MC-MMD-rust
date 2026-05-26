@@ -1,10 +1,11 @@
+/* 文件职责：收敛舞台工作台界面共用的文案与格式化工具。 */
 package com.shiroha.mmdskin.ui.stage;
 
 import com.shiroha.mmdskin.config.StagePack;
 import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.network.chat.Component;
 
-/** 文件职责：StageSelectScreen 使用的无状态静态工具方法。 */
+/** 文件职责：收敛舞台工作台界面共用的文案与格式化工具。 */
 final class StageScreenUtils {
 
     private StageScreenUtils() {
@@ -14,10 +15,14 @@ final class StageScreenUtils {
         int motion = 0;
         int camera = 0;
         for (StagePack.VmdFileInfo info : pack.getVmdFiles()) {
-            if (info.hasBones || info.hasMorphs) motion++;
-            if (info.hasCamera) camera++;
+            if (info.hasBones || info.hasMorphs) {
+                motion++;
+            }
+            if (info.hasCamera) {
+                camera++;
+            }
         }
-        return "M" + motion + "/C" + camera + "/A" + pack.getAudioFiles().size();
+        return wb("packs.stats.short", motion, camera, pack.getAudioFiles().size());
     }
 
     static int brighten(int color) {
@@ -25,11 +30,23 @@ final class StageScreenUtils {
     }
 
     static String motionTag(StagePack.VmdFileInfo info) {
-        StringBuilder sb = new StringBuilder();
-        if (info.hasBones) sb.append('B');
-        if (info.hasMorphs) { if (sb.length() > 0) sb.append('/'); sb.append('M'); }
-        if (info.hasCamera) { if (sb.length() > 0) sb.append('/'); sb.append('C'); }
-        return sb.toString();
+        StringBuilder builder = new StringBuilder();
+        if (info.hasBones) {
+            builder.append('B');
+        }
+        if (info.hasMorphs) {
+            if (!builder.isEmpty()) {
+                builder.append('/');
+            }
+            builder.append('M');
+        }
+        if (info.hasCamera) {
+            if (!builder.isEmpty()) {
+                builder.append('/');
+            }
+            builder.append('C');
+        }
+        return builder.toString();
     }
 
     static String stripExtension(String text) {
@@ -38,8 +55,12 @@ final class StageScreenUtils {
     }
 
     static String shorten(String text, int maxChars) {
-        if (text == null) return "";
-        if (text.length() <= maxChars) return text;
+        if (text == null) {
+            return "";
+        }
+        if (text.length() <= maxChars) {
+            return text;
+        }
         return maxChars <= 2 ? text.substring(0, Math.max(0, maxChars)) : text.substring(0, maxChars - 2) + "..";
     }
 

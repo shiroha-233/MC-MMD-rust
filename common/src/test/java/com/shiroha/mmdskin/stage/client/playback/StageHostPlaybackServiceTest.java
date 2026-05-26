@@ -4,13 +4,14 @@ import com.shiroha.mmdskin.stage.application.StageSessionService;
 import com.shiroha.mmdskin.stage.application.port.StageLocalPlayerContextPort;
 import com.shiroha.mmdskin.stage.application.port.StagePlaybackPreferencesPort;
 import com.shiroha.mmdskin.stage.application.port.StageSessionOutboundPort;
-import com.shiroha.mmdskin.stage.application.port.StageSessionReadyCommand;
 import com.shiroha.mmdskin.stage.client.DefaultStageCameraSessionPort;
+import com.shiroha.mmdskin.stage.client.DefaultStageLocalPlayerContext;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackBroadcastPort;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackRuntimePort;
-import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackWatchRequest;
 import com.shiroha.mmdskin.stage.domain.model.StageDescriptor;
 import com.shiroha.mmdskin.stage.domain.model.StageInviteDecision;
+import com.shiroha.mmdskin.ui.network.StageNetworkSessionOutboundAdapter;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -23,12 +24,26 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StageHostPlaybackServiceTest {
+    private final StageSessionService sessionService = StageSessionService.getInstance();
+    private final StageHostPlaybackService hostPlaybackService = StageHostPlaybackService.getInstance();
+
+    @AfterEach
+    void tearDown() {
+        sessionService.onDisconnect();
+        sessionService.configureRuntimeCollaborators(
+                DefaultStageLocalPlayerContext.INSTANCE,
+                DefaultStagePlaybackPreferencesPort.INSTANCE,
+                StageNetworkSessionOutboundAdapter.INSTANCE
+        );
+        hostPlaybackService.resetCollaborators();
+    }
+
     @Test
     void shouldNotifyAcceptedMembersThroughPorts() {
         UUID hostId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
 
-        StageSessionService sessionService = new StageSessionService(
+        sessionService.configureRuntimeCollaborators(
                 new FakeLocalPlayerContext(hostId).withName(hostId, "Host").withName(memberId, "Member"),
                 new FakePlaybackPreferences(),
                 new FakeSessionOutbound()
@@ -43,11 +58,7 @@ class StageHostPlaybackServiceTest {
                 new StageDescriptor("host_pack", List.of("dance.vmd"), null, null)
         ));
         FakeBroadcast broadcast = new FakeBroadcast();
-        StageHostPlaybackService hostPlaybackService = new StageHostPlaybackService(
-                runtime,
-                broadcast,
-                new DefaultStageCameraSessionPort(sessionService)
-        );
+        hostPlaybackService.setCollaboratorsForTesting(runtime, broadcast, DefaultStageCameraSessionPort.INSTANCE);
 
         assertTrue(hostPlaybackService.startPack(null, true, 1.25f, "dance.vmd"));
         assertEquals(1, runtime.hostStartCalls);
@@ -57,6 +68,7 @@ class StageHostPlaybackServiceTest {
         assertEquals("host_pack", broadcast.stageWatchCalls.get(0).descriptor().getPackName());
         assertEquals(List.of("dance.vmd"), broadcast.stageWatchCalls.get(0).descriptor().getMotionFiles());
         assertEquals(1, broadcast.remoteStarts.size());
+        assertEquals(List.of(sessionId), broadcast.remoteStartSessionIds);
         assertEquals("host_pack", broadcast.remoteStarts.get(0).getPackName());
     }
 
@@ -107,7 +119,8 @@ class StageHostPlaybackServiceTest {
 
     private static final class FakeSessionOutbound implements StageSessionOutboundPort {
         @Override
-        public void sendReady(StageSessionReadyCommand command) {
+        public void sendReady(UUID hostUUID, UUID sessionId, boolean ready, boolean useHostCamera,
+                              String motionPackName, List<String> motionFiles) {
         }
 
         @Override
@@ -175,30 +188,33 @@ class StageHostPlaybackServiceTest {
         }
 
         @Override
+        public HostStartResult startPuppetModePlayback(com.shiroha.mmdskin.config.StagePack pack, boolean cinematicMode,
+                                                       float cameraHeightOffset, String selectedMotionFileName) {
+            return HostStartResult.failed();
+        }
+
+        @Override
         public GuestStartResult startGuestPlayback(UUID hostUUID,
-                                                   StagePlaybackStartRequest request,
-                                                   boolean useHostCamera) {
+                                                    StagePlaybackStartRequest request,
+                                                    boolean useHostCamera) {
             return GuestStartResult.failed();
         }
     }
 
     private static final class FakeBroadcast implements StagePlaybackBroadcastPort {
         private final List<StageWatchCall> stageWatchCalls = new ArrayList<>();
+        private final List<UUID> remoteStartSessionIds = new ArrayList<>();
         private final List<StageDescriptor> remoteStarts = new ArrayList<>();
 
         @Override
-        public void sendStageWatch(StagePlaybackWatchRequest request) {
-            stageWatchCalls.add(new StageWatchCall(
-                    request.targetUUID(),
-                    request.sessionId(),
-                    request.descriptor(),
-                    request.heightOffset(),
-                    request.startFrame()
-            ));
+        public void sendStageWatch(UUID targetUUID, UUID sessionId, StageDescriptor descriptor,
+                                   float heightOffset, float startFrame) {
+            stageWatchCalls.add(new StageWatchCall(targetUUID, sessionId, descriptor, heightOffset, startFrame));
         }
 
         @Override
-        public void sendRemoteStageStart(StageDescriptor descriptor) {
+        public void sendRemoteStageStart(UUID sessionId, StageDescriptor descriptor) {
+            remoteStartSessionIds.add(sessionId);
             remoteStarts.add(descriptor);
         }
     }

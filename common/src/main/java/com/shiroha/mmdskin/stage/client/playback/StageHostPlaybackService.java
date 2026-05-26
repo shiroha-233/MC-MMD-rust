@@ -4,28 +4,174 @@ import com.shiroha.mmdskin.config.StagePack;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackBroadcastPort;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackRuntimePort;
 import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackSessionPort;
-import com.shiroha.mmdskin.stage.client.playback.port.StagePlaybackWatchRequest;
 import com.shiroha.mmdskin.stage.domain.model.StageDescriptor;
 
 import java.util.Objects;
 import java.util.UUID;
 
-/** 文件职责：协调主机侧舞台开播与成员广播。 */
 public final class StageHostPlaybackService {
-    private final StagePlaybackRuntimePort runtime;
-    private final StagePlaybackBroadcastPort broadcast;
-    private final StagePlaybackSessionPort sessionPort;
+    private static volatile StagePlaybackRuntimePort defaultRuntime = new StagePlaybackRuntimePort() {
+        @Override
+        public void enterStageSelection(boolean waitingForHost) {
+        }
 
-    public StageHostPlaybackService(StagePlaybackRuntimePort runtime,
-                                    StagePlaybackBroadcastPort broadcast,
-                                    StagePlaybackSessionPort sessionPort) {
+        @Override
+        public void setWaitingForHost(boolean waitingForHost) {
+        }
+
+        @Override
+        public void exitStageSelection() {
+        }
+
+        @Override
+        public void stopActivePlaybackForRemoteEnd() {
+        }
+
+        @Override
+        public void applyFrameSync(float frame) {
+        }
+
+        @Override
+        public void applyInitialFrameSync(float frame) {
+        }
+
+        @Override
+        public HostStartResult startHostPlayback(StagePack pack, boolean cinematicMode,
+                                                 float cameraHeightOffset, String selectedMotionFileName) {
+            return HostStartResult.failed();
+        }
+
+        @Override
+        public GuestStartResult startGuestPlayback(UUID hostUUID, StagePlaybackStartRequest request,
+                                                    boolean useHostCamera) {
+            return GuestStartResult.failed();
+        }
+
+        @Override
+        public HostStartResult startPuppetModePlayback(StagePack pack, boolean cinematicMode,
+                                                       float cameraHeightOffset, String selectedMotionFileName) {
+            return HostStartResult.failed();
+        }
+    };
+
+    private static volatile StagePlaybackBroadcastPort defaultBroadcast = new StagePlaybackBroadcastPort() {
+        @Override
+        public void sendStageWatch(UUID targetUUID, UUID sessionId, StageDescriptor descriptor,
+                                   float heightOffset, float startFrame) {
+        }
+
+        @Override
+        public void sendRemoteStageStart(UUID sessionId, StageDescriptor descriptor) {
+        }
+    };
+
+    private static volatile StagePlaybackSessionPort defaultSessionPort = new StagePlaybackSessionPort() {
+        @Override
+        public boolean isSessionMember() {
+            return false;
+        }
+
+        @Override
+        public boolean isSessionHost() {
+            return false;
+        }
+
+        @Override
+        public boolean isUseHostCamera() {
+            return true;
+        }
+
+        @Override
+        public UUID getSessionId() {
+            return null;
+        }
+
+        @Override
+        public UUID getHostPlayerId() {
+            return null;
+        }
+
+        @Override
+        public java.util.Set<UUID> getAcceptedMembers() {
+            return java.util.Collections.emptySet();
+        }
+
+        @Override
+        public boolean matchesCurrentSession(UUID hostUUID, UUID incomingSessionId) {
+            return false;
+        }
+
+        @Override
+        public boolean onInviteReceived(UUID hostUUID, UUID incomingSessionId) {
+            return false;
+        }
+
+        @Override
+        public void onSessionDissolved(UUID hostUUID, UUID incomingSessionId) {
+        }
+
+        @Override
+        public void onPlaybackStopped(UUID hostUUID) {
+        }
+
+        @Override
+        public void onPlaybackStarted(UUID hostUUID, StageDescriptor descriptor) {
+        }
+
+        @Override
+        public void stopWatchingStageOnly() {
+        }
+
+        @Override
+        public void leaveSession() {
+        }
+
+        @Override
+        public void closeHostedSession() {
+        }
+    };
+
+    private static final StageHostPlaybackService INSTANCE = new StageHostPlaybackService();
+
+    private volatile StagePlaybackRuntimePort runtime;
+    private volatile StagePlaybackBroadcastPort broadcast;
+    private volatile StagePlaybackSessionPort sessionPort;
+
+    private StageHostPlaybackService() {
+        resetCollaborators();
+    }
+
+    public static StageHostPlaybackService getInstance() {
+        return INSTANCE;
+    }
+
+    public synchronized void configureRuntimeCollaborators(StagePlaybackRuntimePort runtime,
+                                                           StagePlaybackBroadcastPort broadcast,
+                                                           StagePlaybackSessionPort sessionPort) {
+        defaultRuntime = Objects.requireNonNull(runtime, "runtime");
+        defaultBroadcast = Objects.requireNonNull(broadcast, "broadcast");
+        defaultSessionPort = Objects.requireNonNull(sessionPort, "sessionPort");
+        resetCollaborators();
+    }
+
+    synchronized void setCollaboratorsForTesting(StagePlaybackRuntimePort runtime,
+                                                 StagePlaybackBroadcastPort broadcast,
+                                                 StagePlaybackSessionPort sessionPort) {
         this.runtime = Objects.requireNonNull(runtime, "runtime");
         this.broadcast = Objects.requireNonNull(broadcast, "broadcast");
         this.sessionPort = Objects.requireNonNull(sessionPort, "sessionPort");
     }
 
+    synchronized void resetCollaborators() {
+        this.runtime = defaultRuntime;
+        this.broadcast = defaultBroadcast;
+        this.sessionPort = defaultSessionPort;
+    }
+
     public boolean startPack(StagePack pack, boolean cinematicMode, float cameraHeightOffset,
                              String selectedMotionFileName) {
+        StagePlaybackRuntimePort runtime = this.runtime;
+        StagePlaybackBroadcastPort broadcast = this.broadcast;
         StagePlaybackRuntimePort.HostStartResult result = runtime.startHostPlayback(
                 pack,
                 cinematicMode,
@@ -36,20 +182,36 @@ public final class StageHostPlaybackService {
             return false;
         }
 
-        notifyMembers(result.sessionDescriptor(), cameraHeightOffset);
+        notifyMembers(broadcast, result.sessionDescriptor(), cameraHeightOffset);
         if (result.remoteDescriptor() != null) {
-            broadcast.sendRemoteStageStart(result.remoteDescriptor());
+            broadcast.sendRemoteStageStart(sessionPort.getSessionId(), result.remoteDescriptor());
         }
         return true;
     }
 
-    private void notifyMembers(StageDescriptor descriptor, float heightOffset) {
+    /**
+     * 启动纸娃娃模式：只有模型播放动画，玩家可以自由活动
+     */
+    public boolean startPuppetMode(StagePack pack, boolean cinematicMode, float cameraHeightOffset,
+                                   String selectedMotionFileName) {
+        StagePlaybackRuntimePort runtime = this.runtime;
+        StagePlaybackRuntimePort.HostStartResult result = runtime.startPuppetModePlayback(
+                pack,
+                cinematicMode,
+                cameraHeightOffset,
+                selectedMotionFileName
+        );
+        // 纸娃娃模式是单机模式，不需要通知其他成员
+        return result.started();
+    }
+
+    private void notifyMembers(StagePlaybackBroadcastPort broadcast, StageDescriptor descriptor, float heightOffset) {
         UUID sessionId = sessionPort.getSessionId();
         if (sessionId == null || descriptor == null || !descriptor.isValid()) {
             return;
         }
         for (UUID memberUUID : sessionPort.getAcceptedMembers()) {
-            broadcast.sendStageWatch(new StagePlaybackWatchRequest(memberUUID, sessionId, descriptor, heightOffset, 0.0f));
+            broadcast.sendStageWatch(memberUUID, sessionId, descriptor, heightOffset, 0.0f);
         }
     }
 }

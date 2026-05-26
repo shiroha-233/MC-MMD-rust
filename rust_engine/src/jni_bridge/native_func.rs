@@ -1,6 +1,6 @@
 //! JNI 原生函数实现
 
-use jni::objects::{JByteBuffer, JClass, JFloatArray, JIntArray, JString};
+use jni::objects::{JByteBuffer, JClass, JString};
 use jni::sys::{jboolean, jbyte, jfloat, jint, jlong, jstring};
 use jni::JNIEnv;
 use std::ptr;
@@ -13,23 +13,10 @@ use crate::texture::load_texture;
 
 use super::{
     register_animation, register_model, register_texture, ANIMATIONS, FBX_CACHE, MODELS, TEXTURES,
+    TEXTURE_PATH_INDEX,
 };
 
 const VERSION: &str = "v1.0.5";
-const BONE_OVERRIDE_TRANSFORM_STRIDE: usize = 7;
-
-fn make_override_rotation(qx: f32, qy: f32, qz: f32, qw: f32) -> Option<glam::Quat> {
-    if !qx.is_finite() || !qy.is_finite() || !qz.is_finite() || !qw.is_finite() {
-        return None;
-    }
-
-    let rotation = glam::Quat::from_xyzw(qx, qy, qz, qw);
-    if rotation.length_squared() <= f32::EPSILON {
-        return None;
-    }
-
-    Some(rotation.normalize())
-}
 
 /// 获取版本号
 #[no_mangle]
@@ -1576,7 +1563,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetLayerLoop(
 // 纹理相关函数
 // ============================================================================
 
-/// 加载纹理
+/// 加载纹理（带路径去重缓存）
 #[no_mangle]
 pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_LoadTexture(
     mut env: JNIEnv,
@@ -1588,8 +1575,28 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_LoadTexture(
         Err(_) => return 0,
     };
 
+    // 检查路径缓存：如果已加载过同一文件，直接返回已有句柄
+    {
+        let path_index = TEXTURE_PATH_INDEX.read().unwrap();
+        if let Some(&existing_id) = path_index.get(&filename_str) {
+            // 确认句柄仍然有效
+            let textures = TEXTURES.read().unwrap();
+            if textures.contains_key(&existing_id) {
+                return existing_id;
+            }
+        }
+    }
+
     match load_texture(&filename_str) {
-        Ok(texture) => register_texture(texture),
+        Ok(texture) => {
+            let id = register_texture(texture);
+            // 登记路径到句柄的映射
+            if id != 0 {
+                let mut path_index = TEXTURE_PATH_INDEX.write().unwrap();
+                path_index.insert(filename_str, id);
+            }
+            id
+        }
         Err(e) => {
             log::error!("Failed to load texture: {}", e);
             0
@@ -2672,214 +2679,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_ApplyVpdMorph(
     -2
 }
 
-/// 设置单个外部骨骼姿态覆盖。
-#[no_mangle]
-pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetBoneOverride(
-    _env: JNIEnv,
-    _class: JClass,
-    model: jlong,
-    bone_index: jint,
-    tx: jfloat,
-    ty: jfloat,
-    tz: jfloat,
-    qx: jfloat,
-    qy: jfloat,
-    qz: jfloat,
-    qw: jfloat,
-) -> jboolean {
-    if bone_index < 0 {
-        return 0;
-    }
-    let Some(rotation) = make_override_rotation(qx, qy, qz, qw) else {
-        return 0;
-    };
-
-    let models = MODELS.read().unwrap();
-    let Some(model_arc) = models.get(&model) else {
-        return 0;
-    };
-
-    let mut model = model_arc.lock().unwrap();
-    let bone_index = bone_index as usize;
-    if bone_index >= model.bone_manager.bone_count() {
-        return 0;
-    }
-
-    model.set_vpd_bone_override(bone_index, glam::Vec3::new(tx, ty, tz), rotation);
-    1
-}
-
-/// 通过骨骼名设置外部骨骼姿态覆盖。
-#[no_mangle]
-pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetBoneOverrideByName(
-    mut env: JNIEnv,
-    _class: JClass,
-    model: jlong,
-    bone_name: JString,
-    tx: jfloat,
-    ty: jfloat,
-    tz: jfloat,
-    qx: jfloat,
-    qy: jfloat,
-    qz: jfloat,
-    qw: jfloat,
-) -> jboolean {
-    let Some(rotation) = make_override_rotation(qx, qy, qz, qw) else {
-        return 0;
-    };
-
-    let bone_name: String = match env.get_string(&bone_name) {
-        Ok(s) => s.into(),
-        Err(_) => return 0,
-    };
-
-    let models = MODELS.read().unwrap();
-    let Some(model_arc) = models.get(&model) else {
-        return 0;
-    };
-
-    let mut model = model_arc.lock().unwrap();
-    let Some(bone_index) = model.bone_manager.find_bone_by_name(&bone_name) else {
-        return 0;
-    };
-
-    model.set_vpd_bone_override(bone_index, glam::Vec3::new(tx, ty, tz), rotation);
-    1
-}
-
-/// 清除所有外部骨骼姿态覆盖。
-#[no_mangle]
-pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_ClearBoneOverrides(
-    _env: JNIEnv,
-    _class: JClass,
-    model: jlong,
-) {
-    let models = MODELS.read().unwrap();
-    if let Some(model_arc) = models.get(&model) {
-        let mut model = model_arc.lock().unwrap();
-        model.clear_vpd_bone_overrides();
-    }
-}
-
-/// 批量设置外部骨骼姿态覆盖。transforms 的布局为 [tx, ty, tz, qx, qy, qz, qw]。
-#[no_mangle]
-pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetBoneOverrideBatch(
-    env: JNIEnv,
-    _class: JClass,
-    model: jlong,
-    bone_indices: JIntArray,
-    transforms: JFloatArray,
-) -> jint {
-    let index_len = match env.get_array_length(&bone_indices) {
-        Ok(len) if len > 0 => len as usize,
-        _ => return 0,
-    };
-    let transform_len = match env.get_array_length(&transforms) {
-        Ok(len) if len > 0 => len as usize,
-        _ => return 0,
-    };
-    let count = index_len.min(transform_len / BONE_OVERRIDE_TRANSFORM_STRIDE);
-    if count == 0 {
-        return 0;
-    }
-
-    let mut indices = vec![0i32; count];
-    if env
-        .get_int_array_region(&bone_indices, 0, &mut indices)
-        .is_err()
-    {
-        return 0;
-    }
-
-    let mut transform_values = vec![0.0f32; count * BONE_OVERRIDE_TRANSFORM_STRIDE];
-    if env
-        .get_float_array_region(&transforms, 0, &mut transform_values)
-        .is_err()
-    {
-        return 0;
-    }
-
-    let models = MODELS.read().unwrap();
-    let Some(model_arc) = models.get(&model) else {
-        return -1;
-    };
-
-    let mut model = model_arc.lock().unwrap();
-    let bone_count = model.bone_manager.bone_count();
-    let mut applied = 0i32;
-
-    for (i, &bone_index) in indices.iter().enumerate() {
-        if bone_index < 0 {
-            continue;
-        }
-
-        let bone_index = bone_index as usize;
-        if bone_index >= bone_count {
-            continue;
-        }
-
-        let off = i * BONE_OVERRIDE_TRANSFORM_STRIDE;
-        let Some(rotation) = make_override_rotation(
-            transform_values[off + 3],
-            transform_values[off + 4],
-            transform_values[off + 5],
-            transform_values[off + 6],
-        ) else {
-            continue;
-        };
-
-        model.set_vpd_bone_override(
-            bone_index,
-            glam::Vec3::new(
-                transform_values[off],
-                transform_values[off + 1],
-                transform_values[off + 2],
-            ),
-            rotation,
-        );
-        applied += 1;
-    }
-
-    applied
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetExternalIkOverride(
-    mut env: JNIEnv,
-    _class: JClass,
-    model: jlong,
-    ik_name: JString,
-    enabled: jboolean,
-) {
-    let ik_name: String = match env.get_string(&ik_name) {
-        Ok(s) => s.into(),
-        Err(_) => return,
-    };
-
-    let models = MODELS.read().unwrap();
-    let Some(model_arc) = models.get(&model) else {
-        return;
-    };
-
-    let mut model = model_arc.lock().unwrap();
-    model.set_external_ik_override(ik_name, enabled != 0);
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_ClearExternalIkOverrides(
-    _env: JNIEnv,
-    _class: JClass,
-    model: jlong,
-) {
-    let models = MODELS.read().unwrap();
-    let Some(model_arc) = models.get(&model) else {
-        return;
-    };
-
-    let mut model = model_arc.lock().unwrap();
-    model.clear_external_ik_overrides();
-}
-
+/// 重置所有 Morph 权重和 VPD 骨骼姿势覆盖
 #[no_mangle]
 pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_ResetAllMorphs(
     _env: JNIEnv,
@@ -3302,7 +3102,7 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetEyeBonePosition(
 // ============================================================================
 
 /// 批量获取所有子网格的渲染元数据，消除 Java 侧逐子网格 JNI 调用
-/// 每子网格 20 字节：materialID(i32) + beginIndex(i32) + vertexCount(i32) + alpha(f32) + isVisible(u8) + bothFace(u8) + hasEdge(u8) + pad(1)
+/// 每子网格 20 字节：materialID(i32) + beginIndex(i32) + vertexCount(i32) + alpha(f32) + isVisible(u8) + bothFace(u8) + pad(2)
 #[no_mangle]
 pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_BatchGetSubMeshData(
     env: JNIEnv,
@@ -3547,7 +3347,6 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetVRIKParams(
     }
 }
 
-/// 设置舞台模式腿部 IK 是否启用。
 /// 设置 VR 手部渲染模式（0=全身, 1=仅左手, 2=仅右手）
 #[no_mangle]
 pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetVRHandMode(

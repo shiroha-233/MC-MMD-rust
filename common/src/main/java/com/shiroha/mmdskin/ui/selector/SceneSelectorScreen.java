@@ -1,7 +1,7 @@
-/* 职责：以原生 GuiGraphics 渲染场景模型选择界面。 */
+/* 文件职责：提供场景模型选择原生界面。 */
 package com.shiroha.mmdskin.ui.selector;
 
-import com.shiroha.mmdskin.asset.catalog.ModelCatalogEntry;
+import com.shiroha.mmdskin.asset.catalog.ModelInfo;
 import com.shiroha.mmdskin.scene.client.SceneModelCatalog;
 import com.shiroha.mmdskin.scene.client.SceneModelManager;
 import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
@@ -16,7 +16,6 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 文件职责：提供场景模型选择原生界面。 */
 public class SceneSelectorScreen extends Screen {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final SceneModelCatalog SCENE_CATALOG = SceneModelCatalog.getInstance();
@@ -37,7 +36,6 @@ public class SceneSelectorScreen extends Screen {
 
     private String currentScene;
     private boolean pendingClose;
-
     private float targetScroll;
     private float animatedScroll;
     private int hoveredCard = -1;
@@ -70,7 +68,7 @@ public class SceneSelectorScreen extends Screen {
             updateLayout();
             updateHoverState(mouseX, mouseY);
             updateScrollAnimation();
-            renderFallback(guiGraphics);
+            renderScreen(guiGraphics);
             flushPendingActions(minecraft);
         } catch (Throwable throwable) {
             closeAfterFailure(throwable);
@@ -90,12 +88,10 @@ public class SceneSelectorScreen extends Screen {
             pendingClose = true;
             return true;
         }
-
         if (layout.secondaryButton.contains(mouseX, mouseY)) {
             performSecondaryAction();
             return true;
         }
-
         if (layout.listBox.contains(mouseX, mouseY) && hoveredCard >= 0 && hoveredCard < sceneCards.size()) {
             selectScene(sceneCards.get(hoveredCard));
             return true;
@@ -104,13 +100,11 @@ public class SceneSelectorScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (!layout.listBox.contains(mouseX, mouseY)) {
-            return super.mouseScrolled(mouseX, mouseY, delta);
+            return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
         }
-        float step = 12.0f;
-        targetScroll -= (float) delta * step;
-        targetScroll = Mth.clamp(targetScroll, 0.0f, maxScroll());
+        targetScroll = Mth.clamp(targetScroll - (float) scrollY * 12.0f, 0.0f, maxScroll());
         return true;
     }
 
@@ -165,28 +159,24 @@ public class SceneSelectorScreen extends Screen {
             hoveredButton = ButtonTarget.SECONDARY;
             return;
         }
-
         if (!layout.listBox.contains(mouseX, mouseY) || sceneCards.isEmpty()) {
             return;
         }
-        float listTop = layout.listBox.y + LIST_PADDING;
-        float itemStride = CARD_HEIGHT + CARD_GAP;
-        float localY = (float) mouseY - listTop + animatedScroll;
+
+        float localY = (float) mouseY - (layout.listBox.y + LIST_PADDING) + animatedScroll;
         if (localY < 0.0f) {
             return;
         }
-        int index = (int) (localY / itemStride);
+        int index = (int) (localY / (CARD_HEIGHT + CARD_GAP));
         if (index < 0 || index >= sceneCards.size()) {
             return;
         }
-        float offsetInItem = localY - index * itemStride;
-        if (offsetInItem <= CARD_HEIGHT) {
+        if (localY - index * (CARD_HEIGHT + CARD_GAP) <= CARD_HEIGHT) {
             hoveredCard = index;
         }
     }
 
     private void updateScrollAnimation() {
-        targetScroll = Mth.clamp(targetScroll, 0.0f, maxScroll());
         animatedScroll = Mth.lerp(0.24f, animatedScroll, targetScroll);
         if (Math.abs(animatedScroll - targetScroll) < 0.25f) {
             animatedScroll = targetScroll;
@@ -201,20 +191,22 @@ public class SceneSelectorScreen extends Screen {
         return Math.max(0.0f, contentHeight - layout.listBox.h);
     }
 
-    private void renderFallback(GuiGraphics guiGraphics) {
+    private void renderScreen(GuiGraphics guiGraphics) {
         SceneModelManager manager = SceneModelManager.getInstance();
         boolean hasScene = manager.isActive() || manager.isLoading();
         String secondaryText = hasScene
                 ? Component.translatable("gui.mmdskin.scene_selector.cancel").getString()
                 : Component.translatable("gui.mmdskin.refresh").getString();
+
         TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
         TranslucentTrayChrome.drawPanel(guiGraphics, layout.panel.x, layout.panel.y, layout.panel.w, layout.panel.h);
-
         guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
         guiGraphics.drawString(this.font, buildStatusText(), layout.header.x, layout.header.y + 10, TranslucentTrayChrome.SUBTITLE_TEXT, false);
 
-        drawFallbackButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredButton == ButtonTarget.DONE);
-        drawFallbackButton(guiGraphics, layout.secondaryButton, secondaryText, hoveredButton == ButtonTarget.SECONDARY);
+        TranslucentTrayChrome.drawButton(guiGraphics, this.font, layout.doneButton.x, layout.doneButton.y, layout.doneButton.w, layout.doneButton.h,
+                Component.translatable("gui.done").getString(), hoveredButton == ButtonTarget.DONE, true);
+        TranslucentTrayChrome.drawButton(guiGraphics, this.font, layout.secondaryButton.x, layout.secondaryButton.y, layout.secondaryButton.w, layout.secondaryButton.h,
+                secondaryText, hoveredButton == ButtonTarget.SECONDARY, true);
 
         UiRect list = layout.listBox;
         TranslucentTrayChrome.fillListArea(guiGraphics, list.x, list.y, list.w, list.h);
@@ -223,6 +215,7 @@ public class SceneSelectorScreen extends Screen {
             return;
         }
 
+        guiGraphics.enableScissor(list.x, list.y, list.x + list.w, list.y + list.h);
         int y = Math.round(list.y + LIST_PADDING - animatedScroll);
         for (int i = 0; i < sceneCards.size(); i++) {
             SceneCardEntry card = sceneCards.get(i);
@@ -235,21 +228,18 @@ public class SceneSelectorScreen extends Screen {
             }
             boolean selected = card.displayName.equals(currentScene);
             boolean hovered = i == hoveredCard;
-            int bg = TranslucentTrayChrome.cardBackground(selected, hovered);
-            guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, bg);
+            guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, TranslucentTrayChrome.cardBackground(selected, hovered));
             guiGraphics.drawString(this.font, shorten(card.displayName, 14), list.x + 7, y + 3, TranslucentTrayChrome.BODY_TEXT, false);
             y += CARD_HEIGHT + CARD_GAP;
         }
-    }
-
-    private void drawFallbackButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
-        TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, true);
+        guiGraphics.disableScissor();
+        TranslucentTrayChrome.drawScrollbar(guiGraphics, list.x + list.w - 3, list.y, list.y + list.h, animatedScroll, maxScroll());
     }
 
     private void loadAvailableScenes() {
         sceneCards.clear();
-        List<ModelCatalogEntry> models = SCENE_CATALOG.listModels();
-        for (ModelCatalogEntry info : models) {
+        List<ModelInfo> models = SCENE_CATALOG.listModels();
+        for (ModelInfo info : models) {
             sceneCards.add(new SceneCardEntry(info.getFolderName()));
         }
     }
@@ -263,20 +253,19 @@ public class SceneSelectorScreen extends Screen {
 
     private void performSecondaryAction() {
         SceneModelManager manager = SceneModelManager.getInstance();
-        boolean hasScene = manager.isActive() || manager.isLoading();
-        if (hasScene) {
+        if (manager.isActive() || manager.isLoading()) {
             manager.removeScene();
             currentScene = null;
             loadAvailableScenes();
-        } else {
-            refreshScenes();
+            return;
         }
+        refreshScenes();
     }
 
     private void selectScene(SceneCardEntry card) {
         currentScene = card.displayName;
         SceneModelManager.getInstance().placeScene(card.displayName);
-        LOGGER.info("Placed scene model: {}", card.displayName);
+        LOGGER.info("放置场景模型: {}", card.displayName);
     }
 
     private void flushPendingActions(Minecraft minecraft) {

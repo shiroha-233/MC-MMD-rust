@@ -1,4 +1,4 @@
-/* 职责：以原生 GuiGraphics 渲染材质显隐设置界面。 */
+/* 文件职责：提供材质可见性原生界面。 */
 package com.shiroha.mmdskin.ui.selector;
 
 import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-/** 文件职责：提供材质可见性原生界面。 */
 public class MaterialVisibilityScreen extends Screen {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final MaterialVisibilityApplicationService SERVICE = ModelSelectorServices.materialVisibility();
@@ -82,7 +81,7 @@ public class MaterialVisibilityScreen extends Screen {
             updateLayout();
             updateHoverState(mouseX, mouseY);
             updateScrollAnimation();
-            renderFallback(guiGraphics);
+            renderScreen(guiGraphics);
             flushPendingActions(minecraft);
         } catch (Throwable throwable) {
             closeAfterFailure(throwable);
@@ -114,23 +113,19 @@ public class MaterialVisibilityScreen extends Screen {
             pendingClose = true;
             return true;
         }
-
         if (layout.listBox.contains(mouseX, mouseY) && hoveredCard >= 0 && hoveredCard < materials.size()) {
             SERVICE.toggleMaterial(context, materials, hoveredCard);
             return true;
         }
-
         return true;
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (!layout.listBox.contains(mouseX, mouseY)) {
-            return super.mouseScrolled(mouseX, mouseY, delta);
+            return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
         }
-        float step = 12.0f;
-        targetScroll -= (float) delta * step;
-        targetScroll = Mth.clamp(targetScroll, 0.0f, maxScroll());
+        targetScroll = Mth.clamp(targetScroll - (float) scrollY * 12.0f, 0.0f, maxScroll());
         return true;
     }
 
@@ -208,28 +203,24 @@ public class MaterialVisibilityScreen extends Screen {
             hoveredButton = ButtonTarget.DONE;
             return;
         }
-
         if (!layout.listBox.contains(mouseX, mouseY) || materials.isEmpty()) {
             return;
         }
-        float listTop = layout.listBox.y + LIST_PADDING;
-        float itemStride = CARD_HEIGHT + CARD_GAP;
-        float localY = (float) mouseY - listTop + animatedScroll;
+
+        float localY = (float) mouseY - (layout.listBox.y + LIST_PADDING) + animatedScroll;
         if (localY < 0.0f) {
             return;
         }
-        int index = (int) (localY / itemStride);
+        int index = (int) (localY / (CARD_HEIGHT + CARD_GAP));
         if (index < 0 || index >= materials.size()) {
             return;
         }
-        float offsetInItem = localY - index * itemStride;
-        if (offsetInItem <= CARD_HEIGHT) {
+        if (localY - index * (CARD_HEIGHT + CARD_GAP) <= CARD_HEIGHT) {
             hoveredCard = index;
         }
     }
 
     private void updateScrollAnimation() {
-        targetScroll = Mth.clamp(targetScroll, 0.0f, maxScroll());
         animatedScroll = Mth.lerp(0.24f, animatedScroll, targetScroll);
         if (Math.abs(animatedScroll - targetScroll) < 0.25f) {
             animatedScroll = targetScroll;
@@ -244,18 +235,17 @@ public class MaterialVisibilityScreen extends Screen {
         return Math.max(0.0f, contentHeight - layout.listBox.h);
     }
 
-    private void renderFallback(GuiGraphics guiGraphics) {
+    private void renderScreen(GuiGraphics guiGraphics) {
         TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
         TranslucentTrayChrome.drawPanel(guiGraphics, layout.panel.x, layout.panel.y, layout.panel.w, layout.panel.h);
-
         guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
         guiGraphics.drawString(this.font, shorten(context.modelName(), 8), layout.header.x, layout.header.y + 10, TranslucentTrayChrome.SUBTITLE_TEXT, false);
         guiGraphics.drawString(this.font, visibleCount() + " / " + materials.size(), layout.header.x, layout.header.y + 19, TranslucentTrayChrome.DETAIL_TEXT, false);
 
-        drawFallbackButton(guiGraphics, layout.showAllButton, Component.translatable("gui.mmdskin.material_visibility.show_all").getString(), hoveredButton == ButtonTarget.SHOW_ALL);
-        drawFallbackButton(guiGraphics, layout.hideAllButton, Component.translatable("gui.mmdskin.material_visibility.hide_all").getString(), hoveredButton == ButtonTarget.HIDE_ALL);
-        drawFallbackButton(guiGraphics, layout.invertButton, Component.translatable("gui.mmdskin.material_visibility.invert").getString(), hoveredButton == ButtonTarget.INVERT);
-        drawFallbackButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredButton == ButtonTarget.DONE);
+        drawButton(guiGraphics, layout.showAllButton, Component.translatable("gui.mmdskin.material_visibility.show_all").getString(), hoveredButton == ButtonTarget.SHOW_ALL);
+        drawButton(guiGraphics, layout.hideAllButton, Component.translatable("gui.mmdskin.material_visibility.hide_all").getString(), hoveredButton == ButtonTarget.HIDE_ALL);
+        drawButton(guiGraphics, layout.invertButton, Component.translatable("gui.mmdskin.material_visibility.invert").getString(), hoveredButton == ButtonTarget.INVERT);
+        drawButton(guiGraphics, layout.doneButton, Component.translatable("gui.done").getString(), hoveredButton == ButtonTarget.DONE);
 
         UiRect list = layout.listBox;
         TranslucentTrayChrome.fillListArea(guiGraphics, list.x, list.y, list.w, list.h);
@@ -264,9 +254,10 @@ public class MaterialVisibilityScreen extends Screen {
             return;
         }
 
+        guiGraphics.enableScissor(list.x, list.y, list.x + list.w, list.y + list.h);
         int y = Math.round(list.y + LIST_PADDING - animatedScroll);
         for (int i = 0; i < materials.size(); i++) {
-            MaterialEntryState card = materials.get(i);
+            MaterialEntryState material = materials.get(i);
             if (y + CARD_HEIGHT < list.y) {
                 y += CARD_HEIGHT + CARD_GAP;
                 continue;
@@ -275,16 +266,18 @@ public class MaterialVisibilityScreen extends Screen {
                 break;
             }
             boolean hovered = i == hoveredCard;
-            int bg = card.visible()
+            int bg = material.visible()
                     ? TranslucentTrayChrome.cardBackground(false, hovered)
-                    : (hovered ? 0x66FFFFFF : TranslucentTrayChrome.BUTTON_HOVER);
+                    : hovered ? 0x66FFFFFF : TranslucentTrayChrome.BUTTON_HOVER;
             guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, bg);
-            guiGraphics.drawString(this.font, buildMaterialLabel(card), list.x + 7, y + 3, TranslucentTrayChrome.BODY_TEXT, false);
+            guiGraphics.drawString(this.font, buildMaterialLabel(material), list.x + 7, y + 3, TranslucentTrayChrome.BODY_TEXT, false);
             y += CARD_HEIGHT + CARD_GAP;
         }
+        guiGraphics.disableScissor();
+        TranslucentTrayChrome.drawScrollbar(guiGraphics, list.x + list.w - 3, list.y, list.y + list.h, animatedScroll, maxScroll());
     }
 
-    private void drawFallbackButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
+    private void drawButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
         TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, true);
     }
 
@@ -325,7 +318,7 @@ public class MaterialVisibilityScreen extends Screen {
     }
 
     private static String buildMaterialLabel(MaterialEntryState entry) {
-        String name = entry.name() == null || entry.name().isEmpty()
+        String name = entry.name().isEmpty()
                 ? Component.translatable("gui.mmdskin.material_visibility.unnamed").getString()
                 : entry.name();
         String state = Component.translatable(

@@ -63,6 +63,7 @@ public class StageSelectScreen extends Screen {
     private boolean hoveredPrimary;
     private boolean hoveredCancel;
     private boolean hoveredMergeAll;
+    private boolean hoveredPuppetMode;
 
     private int leftPanelX;
     private int leftPanelY;
@@ -76,6 +77,7 @@ public class StageSelectScreen extends Screen {
     private int footerButtonY;
     private int footerPrimaryX;
     private int footerSecondaryX;
+    private int footerPuppetModeX;
     private int footerButtonWidth;
     private int cameraSliderLabelY;
     private int cameraSliderTrackY;
@@ -147,6 +149,10 @@ public class StageSelectScreen extends Screen {
     }
 
     @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    }
+
+    @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button != 0) {
             return super.mouseClicked(mouseX, mouseY, button);
@@ -185,6 +191,10 @@ public class StageSelectScreen extends Screen {
             } else if (facade.canStartStage(state.selectedPack())) {
                 startStage();
             }
+            return true;
+        }
+        if (hoveredPuppetMode) {
+            startPuppetMode();
             return true;
         }
         if (hoveredCancel) {
@@ -236,23 +246,23 @@ public class StageSelectScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (assignPanel != null && assignPanel.mouseScrolled(mouseX, mouseY, delta)) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (assignPanel != null && assignPanel.mouseScrolled(mouseX, mouseY, scrollY)) {
             return true;
         }
         if (!containsLeftPanel(mouseX, mouseY)) {
-            return super.mouseScrolled(mouseX, mouseY, delta);
+            return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
         }
         float step = (float) ((LIST_ROW_HEIGHT + ROW_GAP) * 2.5);
         if (mouseY >= packListTop && mouseY <= packListBottom) {
-            packScroll = Mth.clamp(packScroll - (float) delta * step, 0.0f, maxPackScroll());
+            packScroll = Mth.clamp(packScroll - (float) scrollY * step, 0.0f, maxPackScroll());
             return true;
         }
         if (mouseY >= motionListTop && mouseY <= motionListBottom) {
-            motionScroll = Mth.clamp(motionScroll - (float) delta * step, 0.0f, maxMotionScroll());
+            motionScroll = Mth.clamp(motionScroll - (float) scrollY * step, 0.0f, maxMotionScroll());
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override
@@ -298,8 +308,9 @@ public class StageSelectScreen extends Screen {
         motionListBottom = footerTop - SECTION_GAP;
 
         footerButtonY = footerTop + footerHeight - BUTTON_HEIGHT - 8;
-        footerButtonWidth = (LEFT_PANEL_WIDTH - 24) / 2;
+        footerButtonWidth = (LEFT_PANEL_WIDTH - 32) / 3;
         footerPrimaryX = leftPanelX + 8;
+        footerPuppetModeX = leftPanelX + 8 + footerButtonWidth + 4;
         footerSecondaryX = leftPanelX + LEFT_PANEL_WIDTH - 8 - footerButtonWidth;
         cameraSliderLabelY = footerTop + 7;
         cameraSliderTrackY = footerTop + 20;
@@ -337,11 +348,13 @@ public class StageSelectScreen extends Screen {
         hoveredUseHostCamera = facade.isSessionMember() && isRectHovered(mouseX, mouseY, leftPanelX + 10, useHostCameraY, LEFT_PANEL_WIDTH - 20, 14);
         hoveredAudioSlider = isAudioSliderHovered(mouseX, mouseY);
         hoveredPrimary = isRectHovered(mouseX, mouseY, footerPrimaryX, footerButtonY, footerButtonWidth, BUTTON_HEIGHT);
+        hoveredPuppetMode = !facade.isSessionMember() && isRectHovered(mouseX, mouseY, footerPuppetModeX, footerButtonY, footerButtonWidth, BUTTON_HEIGHT);
         hoveredCancel = isRectHovered(mouseX, mouseY, footerSecondaryX, footerButtonY, footerButtonWidth, BUTTON_HEIGHT);
         hoveredMergeAll = false;
 
         hoveredPackIndex = resolveHoveredIndex(mouseX, mouseY, packListTop, packScroll, state.stagePacks().size());
-        if (!facade.isSessionMember() && state.selectedPack() != null && isRectHovered(mouseX, mouseY, leftPanelX + 10, motionListTop, LEFT_PANEL_WIDTH - 20, LIST_ROW_HEIGHT)) {
+        if (!facade.isSessionMember() && state.selectedPack() != null
+                && isRectHovered(mouseX, mouseY, leftPanelX + 10, motionListTop, LEFT_PANEL_WIDTH - 20, LIST_ROW_HEIGHT)) {
             hoveredMergeAll = true;
         }
         int motionRowTop = motionListTop + (!facade.isSessionMember() && state.selectedPack() != null ? LIST_ROW_HEIGHT + ROW_GAP : 0);
@@ -352,15 +365,18 @@ public class StageSelectScreen extends Screen {
         int titleY = leftPanelY + 8;
         int statsY = titleY + this.font.lineHeight + 5;
         graphics.drawString(this.font, this.title.getString(), leftPanelX + 10, titleY, COLOR_ACCENT, false);
-        String stats = wb("packs.count", state.stagePacks().size());
-        graphics.drawString(this.font, stats, leftPanelX + 10, statsY, COLOR_TEXT_MUTED, false);
+        graphics.drawString(this.font, StageScreenUtils.wb("packs.count", state.stagePacks().size()), leftPanelX + 10, statsY, COLOR_TEXT_MUTED, false);
         drawButton(graphics, leftPanelX + LEFT_PANEL_WIDTH - 70, leftPanelY + 8, 60, BUTTON_HEIGHT,
                 Component.translatable("gui.mmdskin.refresh").getString(), hoveredRefresh, false, false, true);
     }
 
     private void drawPackList(GuiGraphics graphics) {
-        drawSectionLabel(graphics, wb("packs.section"), leftPanelX + 10, packListTop - 14);
+        drawSectionLabel(graphics, StageScreenUtils.wb("packs.section"), leftPanelX + 10, packListTop - 14);
         drawListBackground(graphics, leftPanelX + 8, packListTop, LEFT_PANEL_WIDTH - 16, packListBottom - packListTop);
+        if (state.stagePacks().isEmpty()) {
+            graphics.drawCenteredString(this.font, StageScreenUtils.wb("packs.empty"), leftPanelX + LEFT_PANEL_WIDTH / 2, packListTop + 6, COLOR_TEXT_DIM);
+            return;
+        }
         graphics.enableScissor(leftPanelX + 8, packListTop, leftPanelX + LEFT_PANEL_WIDTH - 8, packListBottom);
         int y = rowY(packListTop, 0, packScroll);
         for (int i = 0; i < state.stagePacks().size(); i++) {
@@ -375,8 +391,8 @@ public class StageSelectScreen extends Screen {
             boolean selected = i == state.selectedPackIndex();
             boolean hovered = i == hoveredPackIndex;
             drawRow(graphics, leftPanelX + 10, y, LEFT_PANEL_WIDTH - 20, selected, hovered);
-            graphics.drawString(this.font, shorten(pack.getName(), 16), leftPanelX + 14, y + 4, COLOR_TEXT, false);
-            String stats = shortPackStats(pack);
+            graphics.drawString(this.font, StageScreenUtils.shorten(pack.getName(), 16), leftPanelX + 14, y + 4, COLOR_TEXT, false);
+            String stats = StageScreenUtils.shortPackStats(pack);
             graphics.drawString(this.font, stats, leftPanelX + LEFT_PANEL_WIDTH - 14 - this.font.width(stats), y + 4, COLOR_TEXT_MUTED, false);
             y += LIST_ROW_HEIGHT + ROW_GAP;
         }
@@ -385,11 +401,11 @@ public class StageSelectScreen extends Screen {
     }
 
     private void drawMotionSection(GuiGraphics graphics) {
-        drawSectionLabel(graphics, wb("playback.section.short"), leftPanelX + 10, motionHeaderY + 2);
+        drawSectionLabel(graphics, StageScreenUtils.wb("playback.section.short"), leftPanelX + 10, motionHeaderY + 2);
         drawListBackground(graphics, leftPanelX + 8, motionListTop, LEFT_PANEL_WIDTH - 16, motionListBottom - motionListTop);
 
         if (state.selectedPack() == null) {
-            graphics.drawString(this.font, wb("select_pack_hint"), leftPanelX + 12, motionListTop + 6, COLOR_TEXT_DIM, false);
+            graphics.drawString(this.font, StageScreenUtils.wb("select_pack_hint"), leftPanelX + 12, motionListTop + 6, COLOR_TEXT_DIM, false);
             return;
         }
 
@@ -398,7 +414,7 @@ public class StageSelectScreen extends Screen {
         int y = motionListTop;
         if (!facade.isSessionMember()) {
             drawRow(graphics, leftPanelX + 10, y, LEFT_PANEL_WIDTH - 20, state.selectedHostMotionFileName() == null, hoveredMergeAll);
-            graphics.drawString(this.font, wb("playback.merge_all.short"), leftPanelX + 14, y + 4, COLOR_TEXT, false);
+            graphics.drawString(this.font, StageScreenUtils.wb("playback.merge_all.short"), leftPanelX + 14, y + 4, COLOR_TEXT, false);
             y += LIST_ROW_HEIGHT + ROW_GAP;
         }
         y = rowY(y, 0, motionScroll);
@@ -413,8 +429,8 @@ public class StageSelectScreen extends Screen {
             }
             boolean selected = !facade.isSessionMember() && motionFile.name.equals(state.selectedHostMotionFileName());
             drawRow(graphics, leftPanelX + 10, y, LEFT_PANEL_WIDTH - 20, selected, i == hoveredMotionIndex);
-            graphics.drawString(this.font, shorten(stripExtension(motionFile.name), 14), leftPanelX + 14, y + 4, COLOR_TEXT, false);
-            String tag = motionTag(motionFile);
+            graphics.drawString(this.font, StageScreenUtils.shorten(StageScreenUtils.stripExtension(motionFile.name), 14), leftPanelX + 14, y + 4, COLOR_TEXT, false);
+            String tag = StageScreenUtils.motionTag(motionFile);
             graphics.drawString(this.font, tag, leftPanelX + LEFT_PANEL_WIDTH - 14 - this.font.width(tag), y + 4, COLOR_TEXT_MUTED, false);
             y += LIST_ROW_HEIGHT + ROW_GAP;
         }
@@ -438,17 +454,26 @@ public class StageSelectScreen extends Screen {
         String primaryText = facade.isSessionMember()
                 ? Component.translatable(facade.isLocalReady() ? "gui.mmdskin.stage.unready" : "gui.mmdskin.stage.ready").getString()
                 : Component.translatable("gui.mmdskin.stage.start").getString();
-        drawButton(graphics, footerPrimaryX, footerButtonY, footerButtonWidth, BUTTON_HEIGHT, primaryText, hoveredPrimary, !facade.isSessionMember(), !hostCanStart, facade.isSessionMember() || hostCanStart);
-        drawButton(graphics, footerSecondaryX, footerButtonY, footerButtonWidth, BUTTON_HEIGHT, Component.translatable("gui.cancel").getString(), hoveredCancel, false, false, true);
+        drawButton(graphics, footerPrimaryX, footerButtonY, footerButtonWidth, BUTTON_HEIGHT, primaryText,
+                hoveredPrimary, !facade.isSessionMember(), !hostCanStart, facade.isSessionMember() || hostCanStart);
+        
+        if (!facade.isSessionMember()) {
+            drawButton(graphics, footerPuppetModeX, footerButtonY, footerButtonWidth, BUTTON_HEIGHT,
+                    Component.translatable("gui.mmdskin.stage.puppet_mode").getString(),
+                    hoveredPuppetMode, false, !hostCanStart, hostCanStart);
+        }
+        
+        drawButton(graphics, footerSecondaryX, footerButtonY, footerButtonWidth, BUTTON_HEIGHT,
+                Component.translatable("gui.cancel").getString(), hoveredCancel, false, false, true);
 
         String footerText = facade.isSessionMember()
                 ? Component.translatable(facade.isLocalReady() ? "gui.mmdskin.stage.ready_done" : "gui.mmdskin.stage.waiting_host").getString()
-                : (hostCanStart ? wb("ready_to_launch") : Component.translatable("gui.mmdskin.stage.waiting_ready").getString());
-        graphics.drawString(this.font, shorten(footerText, 28), leftPanelX + 10, footerButtonY - 14, COLOR_TEXT_DIM, false);
+                : (hostCanStart ? StageScreenUtils.wb("ready_to_launch") : Component.translatable("gui.mmdskin.stage.waiting_ready").getString());
+        graphics.drawString(this.font, StageScreenUtils.shorten(footerText, 28), leftPanelX + 10, footerButtonY - 14, COLOR_TEXT_DIM, false);
     }
 
     private void drawCameraSlider(GuiGraphics graphics) {
-        String label = wb("camera_height.short") + ": " + String.format(Locale.ROOT, "%+.2f", state.cameraHeightOffset());
+        String label = StageScreenUtils.wb("camera_height.short") + ": " + String.format(Locale.ROOT, "%+.2f", state.cameraHeightOffset());
         graphics.drawString(this.font, label, leftPanelX + 10, cameraSliderLabelY, COLOR_TEXT_DIM, false);
         graphics.fill(cameraSliderX, cameraSliderTrackY, cameraSliderX + cameraSliderWidth, cameraSliderTrackY + 4, TranslucentTrayChrome.LIST_BACKGROUND);
         int thumbX = cameraSliderX + Math.round(((state.cameraHeightOffset() + 2.0f) / 4.0f) * (cameraSliderWidth - 6));
@@ -456,12 +481,12 @@ public class StageSelectScreen extends Screen {
     }
 
     private void drawAudioSlider(GuiGraphics graphics) {
-        String label = wb("audio_volume.short") + ": " + Math.round(state.audioVolume() * 100.0f) + "%";
+        String label = StageScreenUtils.wb("audio_volume.short") + ": " + Math.round(state.audioVolume() * 100.0f) + "%";
         graphics.drawString(this.font, label, leftPanelX + 10, audioSliderLabelY, COLOR_TEXT_DIM, false);
         graphics.fill(audioSliderX, audioSliderTrackY, audioSliderX + audioSliderWidth, audioSliderTrackY + 4, TranslucentTrayChrome.LIST_BACKGROUND);
         int filledWidth = Math.round(state.audioVolume() * audioSliderWidth);
         graphics.fill(audioSliderX, audioSliderTrackY, audioSliderX + filledWidth, audioSliderTrackY + 4,
-                hoveredAudioSlider || draggingAudioVolume ? brighten(COLOR_ACCENT) : COLOR_ACCENT);
+                hoveredAudioSlider || draggingAudioVolume ? StageScreenUtils.brighten(COLOR_ACCENT) : COLOR_ACCENT);
         int thumbX = audioSliderX + Math.round(state.audioVolume() * (audioSliderWidth - 6));
         graphics.fill(thumbX, audioSliderTrackY - 2, thumbX + 6, audioSliderTrackY + 6, COLOR_ACCENT);
     }
@@ -478,14 +503,15 @@ public class StageSelectScreen extends Screen {
         int trackX = x + width - trackWidth;
         int trackY = y + Math.max(0, (height - trackHeight) / 2);
         int trackColor = checked ? COLOR_TOGGLE_ON : COLOR_TOGGLE_OFF;
-        graphics.fill(trackX, trackY, trackX + trackWidth, trackY + trackHeight, hovered ? brighten(trackColor) : trackColor);
+        graphics.fill(trackX, trackY, trackX + trackWidth, trackY + trackHeight, hovered ? StageScreenUtils.brighten(trackColor) : trackColor);
         int knobSize = Math.max(8, trackHeight - 4);
         int knobX = checked ? trackX + trackWidth - knobSize - 2 : trackX + 2;
         int knobY = trackY + (trackHeight - knobSize) / 2;
         graphics.fill(knobX, knobY, knobX + knobSize, knobY + knobSize, 0xFFF5FAFF);
     }
 
-    private void drawButton(GuiGraphics graphics, int x, int y, int width, int height, String text, boolean hovered, boolean primary, boolean disabled, boolean enabled) {
+    private void drawButton(GuiGraphics graphics, int x, int y, int width, int height, String text,
+                            boolean hovered, boolean primary, boolean disabled, boolean enabled) {
         int color;
         if (!enabled || disabled) {
             color = COLOR_BUTTON_DISABLED;
@@ -497,7 +523,8 @@ public class StageSelectScreen extends Screen {
             color = hovered ? COLOR_BUTTON_HOVER : COLOR_BUTTON;
         }
         graphics.fill(x, y, x + width, y + height, color);
-        graphics.drawCenteredString(this.font, text, x + width / 2, y + 4, enabled && !disabled ? TranslucentTrayChrome.TITLE_TEXT : COLOR_TEXT_MUTED);
+        graphics.drawCenteredString(this.font, text, x + width / 2, y + 4,
+                enabled && !disabled ? TranslucentTrayChrome.TITLE_TEXT : COLOR_TEXT_MUTED);
     }
 
     private void drawPanel(GuiGraphics graphics, int x, int y, int width, int height) {
@@ -545,6 +572,19 @@ public class StageSelectScreen extends Screen {
         }
         persistPreferences();
         if (!facade.startStage(state.selectedPack(), state.cinematicMode(), state.cameraHeightOffset(), state.selectedHostMotionFileName())) {
+            return;
+        }
+        stageStarted = true;
+        Minecraft.getInstance().setScreen(null);
+    }
+
+    private void startPuppetMode() {
+        StagePack selectedPack = state.selectedPack();
+        if (selectedPack == null || !selectedPack.hasMotionVmd()) {
+            return;
+        }
+        persistPreferences();
+        if (!facade.startPuppetMode(selectedPack, state.cinematicMode(), state.cameraHeightOffset(), state.selectedHostMotionFileName())) {
             return;
         }
         stageStarted = true;
@@ -628,33 +668,5 @@ public class StageSelectScreen extends Screen {
         return selectedPack.getVmdFiles().stream()
                 .filter(info -> info.hasBones || info.hasMorphs)
                 .toList();
-    }
-
-    StageSelectState debugState() {
-        return state;
-    }
-
-    private static String shortPackStats(StagePack pack) {
-        return StageScreenUtils.shortPackStats(pack);
-    }
-
-    private static int brighten(int color) {
-        return StageScreenUtils.brighten(color);
-    }
-
-    private static String motionTag(StagePack.VmdFileInfo info) {
-        return StageScreenUtils.motionTag(info);
-    }
-
-    private static String stripExtension(String text) {
-        return StageScreenUtils.stripExtension(text);
-    }
-
-    private static String shorten(String text, int maxChars) {
-        return StageScreenUtils.shorten(text, maxChars);
-    }
-
-    private static String wb(String suffix, Object... args) {
-        return StageScreenUtils.wb(suffix, args);
     }
 }

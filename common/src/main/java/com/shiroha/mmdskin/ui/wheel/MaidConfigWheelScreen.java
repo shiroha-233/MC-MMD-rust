@@ -1,8 +1,9 @@
+/* 文件职责：提供女仆配置轮盘界面与按键释放选择语义。 */
 package com.shiroha.mmdskin.ui.wheel;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import com.shiroha.mmdskin.compat.maid.ui.MaidActionWheelScreen;
-import com.shiroha.mmdskin.compat.maid.ui.MaidModelSelectorScreen;
+import com.shiroha.mmdskin.maid.MaidActionWheelScreen;
+import com.shiroha.mmdskin.maid.MaidModelSelectorScreen;
 import com.shiroha.mmdskin.ui.selector.MaterialVisibilityScreen;
 import com.shiroha.mmdskin.util.KeyMappingUtil;
 import net.minecraft.client.KeyMapping;
@@ -15,7 +16,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/** 女仆配置轮盘界面。 */
 public class MaidConfigWheelScreen extends AbstractWheelScreen {
     private static final WheelStyle STYLE = createTranslucentWheelStyle(0.45f, 0.35f);
 

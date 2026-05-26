@@ -1,9 +1,8 @@
-/* 职责：驱动玩家动作轮盘的动作执行与同步。 */
 package com.shiroha.mmdskin.ui.wheel.service;
 
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
-import com.shiroha.mmdskin.player.sync.PlayerActionSyncService;
 import com.shiroha.mmdskin.ui.config.ActionWheelConfig;
+import com.shiroha.mmdskin.ui.network.ActionWheelNetworkHandler;
 import net.minecraft.client.Minecraft;
 
 import java.util.List;
@@ -17,7 +16,7 @@ public class DefaultActionWheelService implements ActionWheelService {
 
     public DefaultActionWheelService() {
         this(() -> ActionWheelConfig.getInstance().getDisplayedActions(), new MinecraftActionRuntimePort(),
-                PlayerActionSyncService.getInstance());
+                ActionWheelNetworkHandler.getInstance());
     }
 
     DefaultActionWheelService(Supplier<List<ActionWheelConfig.ActionEntry>> actionEntriesSupplier,

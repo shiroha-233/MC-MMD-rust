@@ -11,7 +11,7 @@ use mmd::pmx::joint::Joint as PmxJoint;
 use mmd::pmx::rigid_body::RigidBody as PmxRigidBody;
 
 use super::bullet_ffi::{self, BulletWorld};
-use super::config::get_config;
+use super::config::{get_config, PhysicsConfig};
 use super::mmd_joint::MmdJointData;
 use super::mmd_rigid_body::{MmdRigidBodyData, PhysicsMode};
 
@@ -173,21 +173,14 @@ impl MMDPhysics {
 
         self.world.set_kinematic_filter(config.kinematic_filter);
 
-        let kinematic_count = self
-            .rigid_bodies
-            .iter()
-            .filter(|rb| rb.physics_mode == PhysicsMode::FollowBone)
-            .count();
-        let dynamic_count = self
-            .rigid_bodies
-            .iter()
-            .filter(|rb| rb.physics_mode == PhysicsMode::Physics)
-            .count();
-        let dynamic_bone_count = self
-            .rigid_bodies
-            .iter()
-            .filter(|rb| rb.physics_mode == PhysicsMode::PhysicsWithBone)
-            .count();
+        let (kinematic_count, dynamic_count, dynamic_bone_count) =
+            self.rigid_bodies
+                .iter()
+                .fold((0, 0, 0), |(k, d, db), rb| match rb.physics_mode {
+                    PhysicsMode::FollowBone => (k + 1, d, db),
+                    PhysicsMode::Physics => (k, d + 1, db),
+                    PhysicsMode::PhysicsWithBone => (k, d, db + 1),
+                });
 
         log::info!(
             "Bullet3 物理构建完成: {} 刚体 ({}跟骨 + {}物理 + {}物理跟骨), {} 关节",
@@ -233,8 +226,8 @@ impl MMDPhysics {
         bone_transforms: &[Mat4],
         delta_time: f32,
         model_transform: Mat4,
+        config: &PhysicsConfig,
     ) {
-        let config = get_config();
         let dt = delta_time.max(0.001);
         let curr_pos = model_transform.w_axis.truncate();
 
@@ -301,13 +294,12 @@ impl MMDPhysics {
     ///
     /// Bullet3 没有内置全局速度限制，需在每步后手动截断超速刚体，
     /// 防止卡顿帧或极端力导致的物理爆炸。
-    pub fn step_simulation(&self, delta_time: f32) {
+    pub fn step_simulation(&self, delta_time: f32, config: &PhysicsConfig) {
         let fixed_dt = 1.0 / self.fps;
         self.world
             .step(delta_time, self.max_substep_count, fixed_dt);
 
         // 速度钳制
-        let config = get_config();
         let max_lin = config.max_linear_velocity;
         let max_ang = config.max_angular_velocity;
         let max_lin_sq = max_lin * max_lin;

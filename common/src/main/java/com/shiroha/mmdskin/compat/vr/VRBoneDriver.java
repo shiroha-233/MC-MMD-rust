@@ -1,6 +1,7 @@
-/* 文件职责：将 VR 跟踪数据转换并驱动模型骨骼。 */
+/* 文件职责：把 VR 追踪数据转换到模型局部空间并驱动原生 IK。 */
 package com.shiroha.mmdskin.compat.vr;
 
+import com.shiroha.mmdskin.bridge.runtime.NativeModelBridgePorts;
 import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import net.minecraft.util.Mth;
@@ -9,73 +10,21 @@ import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/** 文件职责：将 VR 跟踪数据转换并驱动模型骨骼。 */
+/**
+ * 文件职责：把 VR 追踪数据转换到模型局部空间并驱动原生 IK。
+ */
 public final class VRBoneDriver {
     static final int TRACKING_POINT_STRIDE = 7;
     static final int TRACKING_PACKET_LENGTH = TRACKING_POINT_STRIDE * 3;
 
     private static final Logger LOGGER = LogManager.getLogger();
-    private static final NativeModelPort NOOP_MODEL_PORT = new NativeModelPort() {
-        @Override
-        public boolean setLayerBoneMask(long modelHandle, int layer, String rootBoneName) {
-            return false;
-        }
-
-        @Override
-        public boolean setLayerBoneExclude(long modelHandle, int layer, String rootBoneName) {
-            return false;
-        }
-
-        @Override
-        public long getModelMemoryUsage(long modelHandle) {
-            return 0L;
-        }
-
-        @Override
-        public void setFirstPersonMode(long modelHandle, boolean enabled) {
-        }
-
-        @Override
-        public void getEyeBonePosition(long modelHandle, float[] output) {
-        }
-
-        @Override
-        public void applyVrTrackingInput(long modelHandle, float[] trackingData) {
-        }
-
-        @Override
-        public void setVrEnabled(long modelHandle, boolean enabled) {
-        }
-
-        @Override
-        public void setVrIkParams(long modelHandle, float armIkStrength) {
-        }
-
-        @Override
-        public int getMaterialCount(long modelHandle) {
-            return 0;
-        }
-
-        @Override
-        public void setMaterialVisible(long modelHandle, int materialIndex, boolean visible) {
-        }
-
-        @Override
-        public void setAllMaterialsVisible(long modelHandle, boolean visible) {
-        }
-
-        @Override
-        public void deleteModel(long modelHandle) {
-        }
-    };
-
-    private static volatile NativeModelPort modelPort = NOOP_MODEL_PORT;
+    private static volatile NativeModelPort modelPort = NativeModelBridgePorts.modelPort();
 
     private VRBoneDriver() {
     }
 
     public static void configureRuntimeCollaborators(NativeModelPort modelPort) {
-        VRBoneDriver.modelPort = modelPort != null ? modelPort : NOOP_MODEL_PORT;
+        VRBoneDriver.modelPort = modelPort != null ? modelPort : NativeModelBridgePorts.modelPort();
     }
 
     public static boolean isVRPlayer(Player player) {
@@ -103,20 +52,18 @@ public final class VRBoneDriver {
                 LOGGER.debug("Skipped VR bone drive because render origin was invalid");
                 return false;
             }
+
             float px = (float) renderOrigin.x;
             float py = (float) renderOrigin.y;
             float pz = (float) renderOrigin.z;
-
             float yawRad = VRDataProvider.getBodyYawRad(player, tickDelta);
             if (!Float.isFinite(yawRad)) {
                 LOGGER.debug("Skipped VR bone drive because body yaw was invalid");
                 return false;
             }
-            float cosY = Mth.cos(yawRad);
-            float sinY = Mth.sin(yawRad);
 
             float[] localTracking = new float[TRACKING_PACKET_LENGTH];
-            transformWorldTrackingToPlayerLocal(worldData, px, py, pz, cosY, sinY, localTracking);
+            transformWorldTrackingToPlayerLocal(worldData, px, py, pz, Mth.cos(yawRad), Mth.sin(yawRad), localTracking);
             if (!hasUsableTrackingData(localTracking)) {
                 LOGGER.debug("Skipped VR bone drive because transformed tracking packet became invalid");
                 return false;
@@ -161,6 +108,14 @@ public final class VRBoneDriver {
                 || isUsableTrackingPoint(trackingData, TRACKING_POINT_STRIDE * 2));
     }
 
+    static void transformRotationToPlayerLocal(float[] src,
+                                               int si,
+                                               float[] dst,
+                                               int di,
+                                               float yawRad) {
+        transformRotation(src, si, dst, di, Mth.cos(yawRad), Mth.sin(yawRad));
+    }
+
     private static boolean isUsableTrackingPoint(float[] trackingData, int offset) {
         return isFiniteTrackingSegment(trackingData, offset)
                 && isFiniteQuaternion(trackingData, offset + 3)
@@ -198,14 +153,6 @@ public final class VRBoneDriver {
                 && Double.isFinite(vec3.z);
     }
 
-    static void transformRotationToPlayerLocal(float[] src,
-                                               int si,
-                                               float[] dst,
-                                               int di,
-                                               float yawRad) {
-        transformRotation(src, si, dst, di, Mth.cos(yawRad), Mth.sin(yawRad));
-    }
-
     private static void transformRotation(float[] src, int si, float[] dst, int di, float cosY, float sinY) {
         float cosH = (float) Math.sqrt((1.0f + cosY) * 0.5f);
         float sinH = (float) Math.sqrt(Math.max(0.0f, (1.0f - cosY) * 0.5f));
@@ -225,7 +172,7 @@ public final class VRBoneDriver {
         float len = (float) Math.sqrt(
                 dst[di] * dst[di] + dst[di + 1] * dst[di + 1]
                         + dst[di + 2] * dst[di + 2] + dst[di + 3] * dst[di + 3]);
-        if (len > 1e-6f) {
+        if (len > 1.0e-6f) {
             float inv = 1.0f / len;
             dst[di] *= inv;
             dst[di + 1] *= inv;
