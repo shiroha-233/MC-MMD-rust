@@ -1,5 +1,6 @@
 package com.shiroha.mmdskin.fabric;
 
+import com.shiroha.mmdskin.compat.SparkleMorpherCompat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.LivingEntity;
 import net.fabricmc.loader.api.FabricLoader;
@@ -22,20 +23,28 @@ public class YsmCompat {
     private static Method booleanValueGetMethod = null;
 
     public static boolean isYsmActive(LivingEntity entity) {
-        if (!isYsmModelActive(entity)) {
-            return false;
-        }
-
         Minecraft mc = Minecraft.getInstance();
         boolean isLocalPlayer = mc.player != null && mc.player.getUUID().equals(entity.getUUID());
-        if (isLocalPlayer) {
-            return !isDisableSelfModel();
-        } else {
-            return !isDisableOtherModel();
+
+        // 官方 YSM：模型激活且未按自/他开关禁用。
+        if (isOfficialYsmModelActive(entity)) {
+            boolean disabled = isLocalPlayer
+                    ? getBooleanValue(disableSelfModelValue)
+                    : getBooleanValue(disableOtherModelValue);
+            if (!disabled) {
+                return true;
+            }
         }
+
+        // Sparkle's Morpher：自带自/他开关语义，激活时让出渲染权。
+        return SparkleMorpherCompat.isSparkleActive(entity);
     }
 
     public static boolean isYsmModelActive(LivingEntity entity) {
+        return isOfficialYsmModelActive(entity) || SparkleMorpherCompat.isSparkleModelActive(entity);
+    }
+
+    private static boolean isOfficialYsmModelActive(LivingEntity entity) {
         if (!ysmChecked) {
             ysmPresent = FabricLoader.getInstance().isModLoaded("yes_steve_model");
             if (ysmPresent) {
@@ -72,15 +81,15 @@ public class YsmCompat {
     }
 
     public static boolean isDisableSelfModel() {
-        return getBooleanValue(disableSelfModelValue);
+        return getBooleanValue(disableSelfModelValue) || SparkleMorpherCompat.isDisableSelfModel();
     }
 
     public static boolean isDisableOtherModel() {
-        return getBooleanValue(disableOtherModelValue);
+        return getBooleanValue(disableOtherModelValue) || SparkleMorpherCompat.isDisableOtherModel();
     }
 
     public static boolean isDisableSelfHands() {
-        return getBooleanValue(disableSelfHandsValue);
+        return getBooleanValue(disableSelfHandsValue) || SparkleMorpherCompat.isDisableSelfHands();
     }
 
     private static boolean getBooleanValue(Object valueObj) {
