@@ -1,5 +1,6 @@
 package com.shiroha.mmdskin.neoforge;
 
+import com.shiroha.mmdskin.compat.SparkleMorpherCompat;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import org.apache.logging.log4j.LogManager;
@@ -28,23 +29,28 @@ public class YsmCompat {
     * 判断实体是否应当显示 YSM 模型（而非原版/MMD）
     */
    public static boolean isYsmActive(LivingEntity entity) {
-      if (!isYsmModelActive(entity)) {
-         return false;
-      }
-      
       Minecraft mc = Minecraft.getInstance();
       boolean isLocalPlayer = mc.player != null && mc.player.getUUID().equals(entity.getUUID());
-      if (isLocalPlayer) {
-         return !isDisableSelfModel();
-      } else {
-         return !isDisableOtherModel();
+
+      // 官方 YSM：模型激活且未按自/他开关禁用。
+      if (isOfficialYsmModelActive(entity)) {
+         boolean disabled = isLocalPlayer
+                 ? getBooleanValue(disableSelfModelValue)
+                 : getBooleanValue(disableOtherModelValue);
+         if (!disabled) {
+            return true;
+         }
       }
+
+      // Sparkle's Morpher：自带自/他开关语义，激活时让出渲染权。
+      return SparkleMorpherCompat.isSparkleActive(entity);
    }
 
-   /**
-    * 判断实体是否配置了 YSM 模型（无论当前是否显示）
-    */
    public static boolean isYsmModelActive(LivingEntity entity) {
+      return isOfficialYsmModelActive(entity) || SparkleMorpherCompat.isSparkleModelActive(entity);
+   }
+
+   private static boolean isOfficialYsmModelActive(LivingEntity entity) {
       if (!ysmChecked) {
          ysmPresent = ModList.get().isLoaded("yes_steve_model");
          if (ysmPresent) {
@@ -89,17 +95,17 @@ public class YsmCompat {
 
    /** 获取 YSM 是否开启了“阻止自身模型渲染” */
    public static boolean isDisableSelfModel() {
-      return getBooleanValue(disableSelfModelValue);
+      return getBooleanValue(disableSelfModelValue) || SparkleMorpherCompat.isDisableSelfModel();
    }
 
    /** 获取 YSM 是否开启了“阻止其他玩家模型渲染” */
    public static boolean isDisableOtherModel() {
-      return getBooleanValue(disableOtherModelValue);
+      return getBooleanValue(disableOtherModelValue) || SparkleMorpherCompat.isDisableOtherModel();
    }
 
    /** 获取 YSM 是否开启了“阻止自身手臂渲染” */
    public static boolean isDisableSelfHands() {
-      return getBooleanValue(disableSelfHandsValue);
+      return getBooleanValue(disableSelfHandsValue) || SparkleMorpherCompat.isDisableSelfHands();
    }
 
    private static boolean getBooleanValue(Object valueObj) {
