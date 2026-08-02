@@ -63,6 +63,18 @@ final class OpenGlModelLifecycle {
 
         GL46C.glDeleteVertexArrays(target.vertexArrayObject);
         GL46C.glDeleteBuffers(target.indexBufferObject);
+        if (target.firstPersonIndexBufferObject > 0) {
+            GL46C.glDeleteBuffers(target.firstPersonIndexBufferObject);
+        }
+        if (target.firstPersonIndexBuffer != null) {
+            MemoryUtil.memFree(target.firstPersonIndexBuffer);
+            target.firstPersonIndexBuffer = null;
+        }
+        if (target.firstPersonMatrixBuffer != null) {
+            MemoryUtil.memFree(target.firstPersonMatrixBuffer);
+            target.firstPersonMatrixBuffer = null;
+            target.firstPersonMatrixFloatBuffer = null;
+        }
         GL46C.glDeleteBuffers(target.vertexBufferObject);
         GL46C.glDeleteBuffers(target.colorBufferObject);
         GL46C.glDeleteBuffers(target.normalBufferObject);
@@ -75,6 +87,8 @@ final class OpenGlModelLifecycle {
         long total = 0;
         int indexCount = (int) target.nativeBackendPort().getIndexCount(target.nativeModelHandle());
         total += (long) indexCount * target.indexElementSize;
+        total += target.nativeBackendPort().getFirstPersonIndexCount(target.nativeModelHandle())
+                * target.indexElementSize;
         total += (long) target.vertexCount * 12 * 2;
         total += (long) target.vertexCount * 16;
         total += (long) target.vertexCount * 8 * 3;

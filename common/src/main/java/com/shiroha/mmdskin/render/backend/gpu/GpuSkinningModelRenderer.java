@@ -11,6 +11,7 @@ import com.shiroha.mmdskin.render.material.ModelMaterial;
 import com.shiroha.mmdskin.render.material.SubMeshDrawHelper;
 import com.shiroha.mmdskin.render.pipeline.LightingHelper;
 import com.shiroha.mmdskin.render.pipeline.RenderPerformanceProfiler;
+import com.shiroha.mmdskin.render.scene.RenderScene;
 import com.shiroha.mmdskin.render.shader.SkinningComputeShader;
 import com.shiroha.mmdskin.render.shader.ToonRenderHelper;
 import com.shiroha.mmdskin.render.shader.ToonShaderCpu;
@@ -36,7 +37,8 @@ final class GpuSkinningModelRenderer {
                        float entityYaw,
                        float entityPitch,
                        Vector3f entityTrans,
-                       PoseStack deliverStack) {
+                       PoseStack deliverStack,
+                       RenderScene context) {
         Minecraft minecraft = Minecraft.getInstance();
         LightingHelper.LightData light = LightingHelper.sampleLight(entityIn, minecraft);
         var workingQuat = target.workingQuaternion();
@@ -56,6 +58,10 @@ final class GpuSkinningModelRenderer {
         deliverStack.scale(baseScale, baseScale, baseScale);
 
         updateGpuStateIfDirty(target, nativeBackend, modelHandle);
+        boolean firstPersonView = context != null && context.isFirstPerson();
+        boolean firstPersonIndexReady = firstPersonView
+                && refreshFirstPersonIndices(target, nativeBackend, modelHandle, deliverStack);
+        refreshSubMeshData(target, nativeBackend, modelHandle, firstPersonIndexReady);
 
         boolean useToon = initializeToonShaderIfNeeded();
 
@@ -71,7 +77,11 @@ final class GpuSkinningModelRenderer {
         deliverStack.last().pose().get(target.modelViewMatBuff);
         RenderSystem.getProjectionMatrix().get(target.projMatBuff);
 
-        GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.indexBufferObject);
+        // EBO 与子网格范围必须同时切换，避免异常帧沿用不匹配的索引偏移。
+        int activeIndexBufferObject = firstPersonIndexReady
+                ? target.firstPersonIndexBufferObject
+                : target.indexBufferObject;
+        GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, activeIndexBufferObject);
         target.currentDeliverStack = deliverStack;
 
         long drawTimer = RenderPerformanceProfiler.get().startTimer();
@@ -97,6 +107,33 @@ final class GpuSkinningModelRenderer {
         }
         BufferUploader.reset();
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+    }
+
+    private static boolean refreshFirstPersonIndices(GpuSkinningModelInstance target,
+                                                     NativeRenderBackendPort nativeBackend,
+                                                     long modelHandle,
+                                                     PoseStack deliverStack) {
+        if (target.firstPersonIndexBufferObject <= 0 || target.firstPersonIndexBuffer == null
+                || target.firstPersonMatrixBuffer == null) {
+            return false;
+        }
+        // Rust 只局部蒙皮预计算的头颈候选，避免 GPU readback。
+        target.firstPersonMatrixFloatBuffer.position(0);
+        deliverStack.last().pose().get(target.firstPersonMatrixFloatBuffer);
+        target.firstPersonMatrixFloatBuffer.position(16);
+        RenderSystem.getProjectionMatrix().get(target.firstPersonMatrixFloatBuffer);
+        target.firstPersonIndexBuffer.clear();
+        int indexCount = nativeBackend.refreshFirstPersonIndices(
+                modelHandle, target.firstPersonMatrixBuffer, true, target.firstPersonIndexBuffer);
+        if (indexCount <= 0) {
+            return false;
+        }
+        target.firstPersonIndexBuffer.position(0);
+        target.firstPersonIndexBuffer.limit(indexCount * target.indexElementSize);
+        GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.firstPersonIndexBufferObject);
+        GL46C.glBufferSubData(GL46C.GL_ELEMENT_ARRAY_BUFFER, 0, target.firstPersonIndexBuffer);
+        target.firstPersonIndexBuffer.clear();
+        return true;
     }
 
     private static boolean initializeToonShaderIfNeeded() {
@@ -151,12 +188,21 @@ final class GpuSkinningModelRenderer {
         GpuSkinningModelInstance.computeShader.dispatch(target.cachedDispatchParams);
         RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_COMPUTE_DISPATCH, computeTimer);
 
+        target.lastGpuUploadRevision = currentRevision;
+    }
+
+    private static void refreshSubMeshData(GpuSkinningModelInstance target,
+                                           NativeRenderBackendPort nativeBackend,
+                                           long modelHandle,
+                                           boolean firstPersonIndexReady) {
+        // 可见性属于单次 Draw，不能跟随动画 revision 缓存。
         long subMeshTimer = RenderPerformanceProfiler.get().startTimer();
         target.subMeshDataBuf.clear();
-        nativeBackend.batchGetSubMeshData(modelHandle, target.subMeshDataBuf);
+        nativeBackend.batchGetSubMeshData(
+                modelHandle,
+                target.subMeshDataBuf,
+                firstPersonIndexReady);
         RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_SUB_MESH_FETCH, subMeshTimer);
-
-        target.lastGpuUploadRevision = currentRevision;
     }
 
     private static void cleanupVertexAttributes(GpuSkinningModelInstance target) {

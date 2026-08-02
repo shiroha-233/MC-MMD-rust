@@ -3,6 +3,9 @@ architectury {
 }
 
 def nativeResourcesDir = layout.buildDirectory.dir("generated/native-resources")
+def bullet3Dir = rootProject.file("rust_engine/deps/bullet3")
+def bullet3Commit = "63c4d67e337017f9d8b298c900e9aabdb69296e7"
+def bullet3Repository = "https://github.com/bulletphysics/bullet3.git"
 
 def currentOs = System.getProperty("os.name").toLowerCase()
 def currentArch = System.getProperty("os.arch").toLowerCase()
@@ -59,9 +62,51 @@ if (isWindows) {
     nativeOutputFile = null
 }
 
+def isBullet3Ready = {
+    if (!new File(bullet3Dir, "src/LinearMath").isDirectory()) {
+        return false
+    }
+
+    def output = new ByteArrayOutputStream()
+    def result = project.exec {
+        commandLine "git", "-C", bullet3Dir.absolutePath, "rev-parse", "HEAD"
+        standardOutput = output
+        errorOutput = new ByteArrayOutputStream()
+        ignoreExitValue = true
+    }
+    return result.exitValue == 0 && output.toString().trim() == bullet3Commit
+}
+
+tasks.register("prepareBullet3Sources") {
+    group = "build"
+    description = "Download the pinned Bullet3 source used by the Rust native build."
+
+    doLast {
+        // Bullet3 是本地构建依赖，不纳入仓库，缺失时才按固定提交下载。
+        if (isBullet3Ready()) {
+            return
+        }
+        if (bullet3Dir.exists()) {
+            throw new GradleException(
+                "Bullet3 source at ${bullet3Dir} is not commit ${bullet3Commit}. " +
+                    "Remove this ignored directory and run the build again."
+            )
+        }
+
+        project.exec {
+            commandLine "git", "clone", "--no-checkout", bullet3Repository, bullet3Dir.absolutePath
+        }
+        project.exec {
+            workingDir bullet3Dir
+            commandLine "git", "checkout", "--detach", bullet3Commit
+        }
+    }
+}
+
 tasks.register("buildRustNative", Exec) {
     group = "build"
     description = "Build the Rust native library used by MMDSkin."
+    dependsOn tasks.named("prepareBullet3Sources")
     workingDir rootProject.projectDir
     commandLine cargoExecutable(), "build", "--release", "--manifest-path", "rust_engine/Cargo.toml"
 }

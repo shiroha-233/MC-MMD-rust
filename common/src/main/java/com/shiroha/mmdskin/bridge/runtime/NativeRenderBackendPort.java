@@ -23,6 +23,13 @@ public interface NativeRenderBackendPort extends NativeModelPort, NativeModelLoa
 
     long getIndexDataAddress(long modelHandle);
 
+    long getFirstPersonIndexCount(long modelHandle);
+
+    long getFirstPersonIndexDataAddress(long modelHandle);
+
+    int refreshFirstPersonIndices(long modelHandle, ByteBuffer matrices,
+                                  boolean gpuSkinning, ByteBuffer indices);
+
     long getPositionDataAddress(long modelHandle);
 
     long getNormalDataAddress(long modelHandle);
@@ -61,5 +68,5 @@ public interface NativeRenderBackendPort extends NativeModelPort, NativeModelLoa
 
     int getSubMeshCount(long modelHandle);
 
-    int batchGetSubMeshData(long modelHandle, ByteBuffer targetBuffer);
+    int batchGetSubMeshData(long modelHandle, ByteBuffer targetBuffer, boolean firstPersonView);
 }

@@ -147,6 +147,11 @@ public final class NativeRuntimeBridge implements
     }
 
     @Override
+    public void getFirstPersonCameraAnchorPosition(long modelHandle, float[] output) {
+        nativeFunc().GetFirstPersonCameraAnchorPosition(modelHandle, output);
+    }
+
+    @Override
     public void applyVrTrackingInput(long modelHandle, float[] trackingData) {
         nativeFunc().ApplyVRTrackingInput(modelHandle, trackingData);
     }
@@ -214,6 +219,22 @@ public final class NativeRuntimeBridge implements
     @Override
     public long getIndexDataAddress(long modelHandle) {
         return nativeFunc().GetIndices(modelHandle);
+    }
+
+    @Override
+    public long getFirstPersonIndexCount(long modelHandle) {
+        return nativeFunc().GetFirstPersonIndexCount(modelHandle);
+    }
+
+    @Override
+    public long getFirstPersonIndexDataAddress(long modelHandle) {
+        return nativeFunc().GetFirstPersonIndices(modelHandle);
+    }
+
+    @Override
+    public int refreshFirstPersonIndices(long modelHandle, ByteBuffer matrices,
+                                         boolean gpuSkinning, ByteBuffer indices) {
+        return nativeFunc().RefreshFirstPersonIndices(modelHandle, matrices, gpuSkinning, indices);
     }
 
     @Override
@@ -367,8 +388,8 @@ public final class NativeRuntimeBridge implements
     }
 
     @Override
-    public int batchGetSubMeshData(long modelHandle, ByteBuffer targetBuffer) {
-        return nativeFunc().BatchGetSubMeshData(modelHandle, targetBuffer);
+    public int batchGetSubMeshData(long modelHandle, ByteBuffer targetBuffer, boolean firstPersonView) {
+        return nativeFunc().BatchGetSubMeshData(modelHandle, targetBuffer, firstPersonView);
     }
 
     @Override

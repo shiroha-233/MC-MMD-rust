@@ -303,6 +303,34 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetIndices(
         .unwrap_or(0)
 }
 
+/// 获取第一人称专用索引数量；0 表示复用原始索引。
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetFirstPersonIndexCount(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+) -> jlong {
+    let models = MODELS.read().unwrap();
+    models
+        .get(&model)
+        .map(|m| m.lock().unwrap().first_person_index_count() as jlong)
+        .unwrap_or(0)
+}
+
+/// 获取第一人称专用索引数据指针。
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetFirstPersonIndices(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+) -> jlong {
+    let models = MODELS.read().unwrap();
+    models
+        .get(&model)
+        .map(|m| m.lock().unwrap().get_first_person_indices_ptr() as jlong)
+        .unwrap_or(0)
+}
+
 // ============================================================================
 // 材质相关函数
 // ============================================================================
@@ -3277,8 +3305,8 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetHeadBonePositionY(
     }
 }
 
-/// 获取眼睛骨骼的当前动画位置（模型局部空间）
-/// 每帧调用，返回经过动画/物理更新后的实时 [x, y, z]
+/// 获取眼睛骨骼的当前动画位置（模型局部空间）。
+/// 每帧调用，返回经过动画/物理更新后的实时 [x, y, z]。
 /// 如果传入的 out 数组长度 < 3 则不写入
 #[no_mangle]
 #[allow(unused_mut)]
@@ -3297,37 +3325,28 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetEyeBonePosition(
     }
 }
 
+/// 获取动画后左右眼世界位置中点作为桌面第一人称相机锚点。
+/// 缺少双眼骨骼时由模型运行时沿用单眼或无眼回退。
+#[no_mangle]
+#[allow(unused_mut)]
+pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_GetFirstPersonCameraAnchorPosition(
+    mut env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    out: jni::objects::JFloatArray,
+) {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut model = model_arc.lock().unwrap();
+        let pos = model.get_first_person_camera_anchor_position();
+        let buf: [f32; 3] = [pos.x, pos.y, pos.z];
+        let _ = env.set_float_array_region(&out, 0, &buf);
+    }
+}
+
 // ============================================================================
 // 批量子网格元数据（G3 优化）
 // ============================================================================
-
-/// 批量获取所有子网格的渲染元数据，消除 Java 侧逐子网格 JNI 调用
-/// 每子网格 20 字节：materialID(i32) + beginIndex(i32) + vertexCount(i32) + alpha(f32) + isVisible(u8) + bothFace(u8) + hasEdge(u8) + pad(1)
-#[no_mangle]
-pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_BatchGetSubMeshData(
-    env: JNIEnv,
-    _class: JClass,
-    model: jlong,
-    buffer: JByteBuffer,
-) -> jint {
-    let out_ptr = match env.get_direct_buffer_address(&buffer) {
-        Ok(p) => p,
-        Err(_) => return 0,
-    };
-    let out_cap = match env.get_direct_buffer_capacity(&buffer) {
-        Ok(c) => c,
-        Err(_) => return 0,
-    };
-    let output = unsafe { std::slice::from_raw_parts_mut(out_ptr, out_cap) };
-
-    let models = MODELS.read().unwrap();
-    if let Some(model_arc) = models.get(&model) {
-        let model = model_arc.lock().unwrap();
-        model.batch_get_sub_mesh_data(output) as jint
-    } else {
-        0
-    }
-}
 
 // ============================================================================
 // 公共 API 相关

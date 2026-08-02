@@ -1,7 +1,7 @@
 // 根项目配置 - 多模块项目
 plugins {
 	id 'architectury-plugin' version '3.4.162'
-	id 'dev.architectury.loom' version '1.7.435' apply false
+	id 'dev.architectury.loom' version '1.9.436' apply false
 }
 
 architectury {

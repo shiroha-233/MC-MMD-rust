@@ -3,6 +3,7 @@
 mod animation_handle;
 mod model_handle;
 mod native_func;
+mod render_view;
 
 pub use animation_handle::AnimationHandle;
 pub use model_handle::ModelHandle;

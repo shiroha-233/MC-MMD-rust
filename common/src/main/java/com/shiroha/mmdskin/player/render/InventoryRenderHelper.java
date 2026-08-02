@@ -24,8 +24,8 @@ public class InventoryRenderHelper {
         return className.contains("InventoryScreen") || className.contains("class_490");
     }
 
-    public static void renderInInventory(AbstractClientPlayer player, ModelInstance model, float entityYaw,
-                                        float tickDelta, PoseStack matrixStack, int packedLight, float[] size) {
+    public static void renderInInventory(AbstractClientPlayer player, ModelInstance model,
+                                         float tickDelta, PoseStack matrixStack, int packedLight, float[] size) {
         Minecraft mc = Minecraft.getInstance();
 
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
@@ -53,7 +53,9 @@ public class InventoryRenderHelper {
         modelViewStack.mulPose(rotation);
 
         RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
-        model.render(player, entityYaw, 0.0f, new Vector3f(0.0f), tickDelta, modelViewStack, packedLight, RenderScene.INVENTORY);
+        // 原版在背包 Draw 前会临时写入由光标驱动的 yBodyRot/yHeadRot。
+        model.render(player, player.yBodyRot, 0.0f, new Vector3f(0.0f), tickDelta,
+                modelViewStack, packedLight, RenderScene.INVENTORY);
 
         modelViewStack.popPose();
 
@@ -66,10 +68,9 @@ public class InventoryRenderHelper {
     private static Quaternionf calculateRotation(AbstractClientPlayer player) {
         Quaternionf quaternion = new Quaternionf().rotateZ((float)Math.PI);
         Quaternionf pitch = new Quaternionf().rotateX(-player.getXRot() * ((float)Math.PI / 180F));
-        Quaternionf yaw = new Quaternionf().rotateY(-player.yBodyRot * ((float)Math.PI / 180F));
 
+        // 水平旋转交给模型 renderer 的 entityYaw，避免身体 yaw 应用两次。
         quaternion.mul(pitch);
-        quaternion.mul(yaw);
 
         return quaternion;
     }

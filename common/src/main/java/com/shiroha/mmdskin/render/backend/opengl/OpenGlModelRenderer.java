@@ -12,6 +12,7 @@ import com.shiroha.mmdskin.render.shader.ToonRenderHelper;
 import com.shiroha.mmdskin.render.pipeline.LightingHelper;
 import com.shiroha.mmdskin.render.pipeline.RenderPerformanceProfiler;
 import com.shiroha.mmdskin.render.material.ModelMaterial;
+import com.shiroha.mmdskin.render.scene.RenderScene;
 import com.shiroha.mmdskin.render.material.SubMeshDrawHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
@@ -30,12 +31,13 @@ final class OpenGlModelRenderer {
     }
 
     static void render(OpenGlModelInstance target, Entity entityIn, float entityYaw, float entityPitch,
-                       Vector3f entityTrans, PoseStack deliverStack, int packedLight) {
+                       Vector3f entityTrans, PoseStack deliverStack, int packedLight, RenderScene context) {
         Minecraft minecraft = Minecraft.getInstance();
         LightingHelper.LightData light = LightingHelper.sampleLight(entityIn, minecraft);
         var workingQuat = target.workingQuaternion();
         var nativeBackend = target.nativeBackendPort();
         long modelHandle = target.nativeModelHandle();
+        boolean firstPersonView = context != null && context.isFirstPerson();
 
         target.light0Direction.set(1.0f, 0.75f, 0.0f).normalize();
         target.light1Direction.set(-1.0f, 0.75f, 0.0f).normalize();
@@ -49,13 +51,23 @@ final class OpenGlModelRenderer {
         float baseScale = target.modelScaleValue();
         deliverStack.scale(baseScale, baseScale, baseScale);
 
+        boolean firstPersonIndexReady = firstPersonView
+                && refreshFirstPersonIndices(target, nativeBackend, modelHandle, deliverStack);
+        // EBO 与子网格范围必须来自同一份布局；本帧刷新失败时一起回退。
+        target.activeIndexBufferObject = firstPersonIndexReady
+                ? target.firstPersonIndexBufferObject
+                : target.indexBufferObject;
+
         long materialMorphTimer = RenderPerformanceProfiler.get().startTimer();
         target.loadMaterialMorphResults();
         RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_MATERIAL_MORPH_FETCH, materialMorphTimer);
 
         long subMeshTimer = RenderPerformanceProfiler.get().startTimer();
         target.subMeshDataBuf.clear();
-        nativeBackend.batchGetSubMeshData(modelHandle, target.subMeshDataBuf);
+        nativeBackend.batchGetSubMeshData(
+                modelHandle,
+                target.subMeshDataBuf,
+                firstPersonIndexReady);
         RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_SUB_MESH_FETCH, subMeshTimer);
 
         boolean useToon = initializeToonShaderIfNeeded();
@@ -75,6 +87,33 @@ final class OpenGlModelRenderer {
         } finally {
             RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_DRAW, drawTimer);
         }
+    }
+
+    private static boolean refreshFirstPersonIndices(OpenGlModelInstance target,
+                                                     com.shiroha.mmdskin.bridge.runtime.NativeRenderBackendPort nativeBackend,
+                                                     long modelHandle,
+                                                     PoseStack deliverStack) {
+        if (target.firstPersonIndexBufferObject <= 0 || target.firstPersonIndexBuffer == null
+                || target.firstPersonMatrixBuffer == null) {
+            return false;
+        }
+        // 传入的矩阵与随后 shader 使用的矩阵完全相同，避免重新推导实体/相机坐标。
+        target.firstPersonMatrixFloatBuffer.position(0);
+        deliverStack.last().pose().get(target.firstPersonMatrixFloatBuffer);
+        target.firstPersonMatrixFloatBuffer.position(16);
+        RenderSystem.getProjectionMatrix().get(target.firstPersonMatrixFloatBuffer);
+        target.firstPersonIndexBuffer.clear();
+        int indexCount = nativeBackend.refreshFirstPersonIndices(
+                modelHandle, target.firstPersonMatrixBuffer, false, target.firstPersonIndexBuffer);
+        if (indexCount <= 0) {
+            return false;
+        }
+        target.firstPersonIndexBuffer.position(0);
+        target.firstPersonIndexBuffer.limit(indexCount * target.indexElementSize);
+        GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.firstPersonIndexBufferObject);
+        GL46C.glBufferSubData(GL46C.GL_ELEMENT_ARRAY_BUFFER, 0, target.firstPersonIndexBuffer);
+        target.firstPersonIndexBuffer.clear();
+        return true;
     }
 
     private static boolean initializeToonShaderIfNeeded() {
@@ -278,7 +317,7 @@ final class OpenGlModelRenderer {
             GL46C.glVertexAttribIPointer(target.uv1Location, 2, GL46C.GL_INT, 0, 0);
         }
 
-        GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.indexBufferObject);
+        GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.activeIndexBufferObject);
     }
 
     private static void bindCustomShaderAttributes(OpenGlModelInstance target) {
@@ -445,7 +484,7 @@ final class OpenGlModelRenderer {
         target.projMatBuff.clear();
         deliverStack.last().pose().get(target.modelViewMatBuff);
         RenderSystem.getProjectionMatrix().get(target.projMatBuff);
-        GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.indexBufferObject);
+        GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.activeIndexBufferObject);
 
         renderToonMainPass(target, minecraft, lightIntensity);
 

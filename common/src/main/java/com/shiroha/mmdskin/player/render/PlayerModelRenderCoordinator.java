@@ -3,6 +3,7 @@ package com.shiroha.mmdskin.player.render;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.shiroha.mmdskin.compat.iris.IrisCompat;
 import com.shiroha.mmdskin.config.ModelConfigManager;
 import com.shiroha.mmdskin.config.RuntimeConfigPortHolder;
 import com.shiroha.mmdskin.config.ModelConfigData;
@@ -39,6 +40,10 @@ final class PlayerModelRenderCoordinator {
 
         float[] size = PlayerRenderHelper.getModelSize(modelData);
         boolean isVr = selection.isLocalPlayer() && vrRuntime.isLocalPlayerInVr();
+        boolean shadowPass = IrisCompat.isRenderingShadows();
+        boolean inventoryRender = selection.isLocalPlayer()
+                && !shadowPass
+                && InventoryRenderScope.isActive();
         syncVrState(modelData, player, tickDelta, isVr, vrRuntime);
 
         ModelConfigData modelConfig = ModelConfigManager.getConfig(selection.selectedModel());
@@ -47,24 +52,33 @@ final class PlayerModelRenderCoordinator {
         if (selection.isLocalPlayer()) {
             FirstPersonManager.preRender(modelHandle, combinedScale, true);
         }
-        boolean isFirstPerson = !isVr && selection.isLocalPlayer() && FirstPersonManager.isActive();
+        boolean firstPersonView = selection.isLocalPlayer()
+                && !inventoryRender
+                && !shadowPass
+                && ((!isVr && FirstPersonManager.isActive())
+                || (isVr && FirstPersonManager.isVrEyeCameraActive()));
+        boolean reusePreparedFirstPersonPose = !isVr
+                && selection.isLocalPlayer()
+                && model instanceof BaseModelInstance baseModel
+                && baseModel.hasPreparedFirstPersonPose();
 
-        if (!isVr) {
+        // 相机预更新已经刷新过动画状态，正式 pass 只复用同一姿态。
+        if (!isVr && !reusePreparedFirstPersonPose) {
             AnimationStateManager.updateAnimationState(player, modelData);
         }
         consumePendingSignals(player, modelData, selection.isLocalPlayer());
 
         MutableRenderPose params = PlayerRenderHelper.calculateMutableRenderPose(player, modelData, tickDelta);
-        boolean needsPostRenderSync = selection.isLocalPlayer();
+        boolean needsPostRenderSync = selection.isLocalPlayer() && !inventoryRender && !shadowPass;
 
         matrixStack.pushPose();
         try {
-            if (InventoryRenderHelper.isInventoryScreen()) {
-                InventoryRenderHelper.renderInInventory(player, model, entityYaw, tickDelta, matrixStack, packedLight, size);
+            if (inventoryRender) {
+                InventoryRenderHelper.renderInInventory(player, model, tickDelta, matrixStack, packedLight, size);
             } else {
                 matrixStack.scale(size[0], size[0], size[0]);
                 RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
-                RenderScene context = isFirstPerson ? RenderScene.FIRST_PERSON : RenderScene.WORLD;
+                RenderScene context = firstPersonView ? RenderScene.FIRST_PERSON : RenderScene.WORLD;
                 model.render(player, params.bodyYaw, params.bodyPitch, params.translation, tickDelta, matrixStack, packedLight, context);
             }
 

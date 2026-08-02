@@ -1,5 +1,6 @@
 //! MMD 模型运行时管理
 
+mod first_person_mesh;
 mod loader;
 mod material;
 mod runtime;

@@ -14,6 +14,11 @@ public interface NativeModelPort {
 
     void getEyeBonePosition(long modelHandle, float[] output);
 
+    /** 获取桌面第一人称相机锚点；旧实现默认继续提供动画眼位。 */
+    default void getFirstPersonCameraAnchorPosition(long modelHandle, float[] output) {
+        getEyeBonePosition(modelHandle, output);
+    }
+
     void applyVrTrackingInput(long modelHandle, float[] trackingData);
 
     void setVrEnabled(long modelHandle, boolean enabled);

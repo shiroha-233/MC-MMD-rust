@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.bridge.runtime.NativeRenderBackendPort;
 import com.shiroha.mmdskin.render.backend.BaseModelInstance;
 import com.shiroha.mmdskin.render.material.ModelMaterial;
+import com.shiroha.mmdskin.render.scene.RenderScene;
 import com.shiroha.mmdskin.render.shader.ShaderProvider;
 import com.shiroha.mmdskin.render.shader.ToonConfig;
 import com.shiroha.mmdskin.render.shader.ToonShaderCpu;
@@ -65,6 +66,11 @@ public class OpenGlModelInstance extends BaseModelInstance {
     ByteBuffer uv2Buffer;
     int vertexArrayObject;
     int indexBufferObject;
+    int firstPersonIndexBufferObject;
+    ByteBuffer firstPersonIndexBuffer;
+    ByteBuffer firstPersonMatrixBuffer;
+    FloatBuffer firstPersonMatrixFloatBuffer;
+    int activeIndexBufferObject;
     int vertexBufferObject;
     int colorBufferObject;
     int normalBufferObject;
@@ -153,8 +159,9 @@ public class OpenGlModelInstance extends BaseModelInstance {
                                  float entityPitch,
                                  Vector3f entityTrans,
                                  PoseStack deliverStack,
-                                 int packedLight) {
-        OpenGlModelRenderer.render(this, entityIn, entityYaw, entityPitch, entityTrans, deliverStack, packedLight);
+                                 int packedLight,
+                                 RenderScene context) {
+        OpenGlModelRenderer.render(this, entityIn, entityYaw, entityPitch, entityTrans, deliverStack, packedLight, context);
     }
 
     void updateLocation(int shaderProgram) {

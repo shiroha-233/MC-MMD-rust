@@ -54,6 +54,13 @@ public class NativeFunc {
 
     public native long GetIndices(long model);
 
+    public native long GetFirstPersonIndexCount(long model);
+
+    public native long GetFirstPersonIndices(long model);
+
+    public native int RefreshFirstPersonIndices(long model, ByteBuffer matrices,
+                                                boolean gpuSkinning, ByteBuffer indices);
+
     public native long GetMaterialCount(long model);
 
     public native String GetMaterialTex(long model, long pos);
@@ -294,7 +301,7 @@ public class NativeFunc {
 
     public native int CopyMaterialMorphResultsToBuffer(long model, java.nio.ByteBuffer buffer);
 
-    public native int BatchGetSubMeshData(long model, java.nio.ByteBuffer buffer);
+    public native int BatchGetSubMeshData(long model, java.nio.ByteBuffer buffer, boolean firstPersonView);
 
     public native void SetPhysicsConfig(
         boolean enabled,
@@ -316,6 +323,8 @@ public class NativeFunc {
     public native float GetHeadBonePositionY(long model);
 
     public native void GetEyeBonePosition(long model, float[] out);
+
+    public native void GetFirstPersonCameraAnchorPosition(long model, float[] out);
 
     public native String GetBoneNames(long model);
 

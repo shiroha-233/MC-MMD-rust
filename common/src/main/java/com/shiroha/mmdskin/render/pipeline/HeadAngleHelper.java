@@ -34,10 +34,8 @@ public final class HeadAngleHelper {
         headAngleY = Mth.clamp(headAngleY, -MAX_YAW, MAX_YAW);
 
         float pitchRad = headAngleX * ((float) Math.PI / 180F);
+        // 原版背包临时角度已经表达头部相对身体的反向关系，不能再次取反。
         float yawRad = headAngleY * ((float) Math.PI / 180F);
-        if (context.isInventoryScene()) {
-            yawRad = -yawRad;
-        }
 
         scenePort.setHeadAngle(modelHandle, pitchRad, yawRad, 0.0f, context.isWorldScene());
     }

@@ -6,6 +6,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.bridge.runtime.NativeRenderBackendPort;
 import com.shiroha.mmdskin.render.backend.BaseModelInstance;
 import com.shiroha.mmdskin.render.material.ModelMaterial;
+import com.shiroha.mmdskin.render.scene.RenderScene;
 import com.shiroha.mmdskin.render.shader.ShaderConstants;
 import com.shiroha.mmdskin.render.shader.SkinningComputeShader;
 import com.shiroha.mmdskin.render.shader.ToonConfig;
@@ -34,6 +35,10 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
 
     int vertexArrayObject;
     int indexBufferObject;
+    int firstPersonIndexBufferObject;
+    ByteBuffer firstPersonIndexBuffer;
+    ByteBuffer firstPersonMatrixBuffer;
+    FloatBuffer firstPersonMatrixFloatBuffer;
 
     int positionBufferObject;
     int normalBufferObject;
@@ -151,6 +156,7 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
 
         int vao = 0;
         int indexVbo = 0;
+        int firstPersonIndexVbo = 0;
         int posVbo = 0;
         int norVbo = 0;
         int uv0Vbo = 0;
@@ -172,6 +178,8 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
         int skinnedUvBuf = 0;
         ByteBuffer matMorphResultsByteBuf = null;
         ByteBuffer subMeshDataBufLocal = null;
+        ByteBuffer firstPersonIndexBuffer = null;
+        ByteBuffer firstPersonMatrixBuffer = null;
         ModelMaterial lightMapMaterial = null;
         List<String> textureKeys = new ArrayList<>();
 
@@ -208,6 +216,18 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
             indexBuffer.position(0);
             GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, indexVbo);
             GL46C.glBufferData(GL46C.GL_ELEMENT_ARRAY_BUFFER, indexBuffer, GL46C.GL_STATIC_DRAW);
+
+            long firstPersonIndexCount = nativeBackend.getFirstPersonIndexCount(model);
+            if (firstPersonIndexCount > 0) {
+                // GPU 后端同样只预分配原始索引容量，不从 compute 输出回读顶点。
+                firstPersonIndexBuffer = MemoryUtil.memAlloc(indexSize);
+                firstPersonIndexBuffer.order(ByteOrder.nativeOrder());
+                firstPersonMatrixBuffer = MemoryUtil.memAlloc(32 * Float.BYTES);
+                firstPersonMatrixBuffer.order(ByteOrder.nativeOrder());
+                firstPersonIndexVbo = GL46C.glGenBuffers();
+                GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, firstPersonIndexVbo);
+                GL46C.glBufferData(GL46C.GL_ELEMENT_ARRAY_BUFFER, indexSize, GL46C.GL_DYNAMIC_DRAW);
+            }
 
             int indexType = switch (indexElementSize) {
                 case 1 -> GL46C.GL_UNSIGNED_BYTE;
@@ -373,6 +393,11 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
             result.vertexCount = vertexCount;
             result.vertexArrayObject = vao;
             result.indexBufferObject = indexVbo;
+            result.firstPersonIndexBufferObject = firstPersonIndexVbo;
+            result.firstPersonIndexBuffer = firstPersonIndexBuffer;
+            result.firstPersonMatrixBuffer = firstPersonMatrixBuffer;
+            result.firstPersonMatrixFloatBuffer = firstPersonMatrixBuffer != null
+                    ? firstPersonMatrixBuffer.asFloatBuffer() : null;
             result.positionBufferObject = posVbo;
             result.normalBufferObject = norVbo;
             result.uv0BufferObject = uv0Vbo;
@@ -454,6 +479,7 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
 
             if (vao > 0) GL46C.glDeleteVertexArrays(vao);
             if (indexVbo > 0) GL46C.glDeleteBuffers(indexVbo);
+            if (firstPersonIndexVbo > 0) GL46C.glDeleteBuffers(firstPersonIndexVbo);
             if (posVbo > 0) GL46C.glDeleteBuffers(posVbo);
             if (norVbo > 0) GL46C.glDeleteBuffers(norVbo);
             if (uv0Vbo > 0) GL46C.glDeleteBuffers(uv0Vbo);
@@ -488,6 +514,8 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
             if (uvMorphWeightsBuf != null) MemoryUtil.memFree(uvMorphWeightsBuf);
             if (matMorphResultsByteBuf != null) MemoryUtil.memFree(matMorphResultsByteBuf);
             if (subMeshDataBufLocal != null) MemoryUtil.memFree(subMeshDataBufLocal);
+            if (firstPersonIndexBuffer != null) MemoryUtil.memFree(firstPersonIndexBuffer);
+            if (firstPersonMatrixBuffer != null) MemoryUtil.memFree(firstPersonMatrixBuffer);
             if (!textureKeys.isEmpty()) TextureRepository.releaseAll(textureKeys);
             return null;
         }
@@ -527,8 +555,9 @@ public class GpuSkinningModelInstance extends BaseModelInstance {
                                  float entityPitch,
                                  Vector3f entityTrans,
                                  PoseStack deliverStack,
-                                 int packedLight) {
-        GpuSkinningModelRenderer.render(this, entityIn, entityYaw, entityPitch, entityTrans, deliverStack);
+                                 int packedLight,
+                                 RenderScene context) {
+        GpuSkinningModelRenderer.render(this, entityIn, entityYaw, entityPitch, entityTrans, deliverStack, context);
     }
 
     void updateLocation(int program) {

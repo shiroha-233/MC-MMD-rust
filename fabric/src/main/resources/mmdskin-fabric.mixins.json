@@ -12,6 +12,7 @@
     "compat.VivecraftVRPlayerRendererMixin",
     "CameraMixin",
     "GameRendererMixin",
+    "InventoryScreenMixin",
     "KeyMappingAccessor",
     "LevelRendererMixin",
     "ItemInHandRendererMixin",

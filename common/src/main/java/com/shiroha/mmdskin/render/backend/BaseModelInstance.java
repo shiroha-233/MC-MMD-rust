@@ -52,10 +52,49 @@ public abstract class BaseModelInstance implements ModelInstance {
     protected final AtomicLong nativeUpdateRevision = new AtomicLong(0L);
     private boolean physicsStateInitialized = false;
     private boolean physicsEnabled = true;
+    private final FirstPersonPoseState firstPersonPoseState = new FirstPersonPoseState();
 
     public void setVrActive(boolean active) { this.vrActive = active; }
 
     public boolean isVrActive() { return vrActive; }
+
+    /**
+     * 在 Camera.setup 前计算一次本地第一人称姿态。
+     */
+    public boolean prepareFirstPersonPose(LivingEntity entity, float entityYaw, float tickDelta) {
+        firstPersonPoseState.beginPreparation();
+        if (entity == null || model == 0 || !isReady()) {
+            return false;
+        }
+
+        boolean stagePlaying = MMDCameraController.getInstance().isStagePlayingModel(model);
+        applyPhysicsState(RuntimeConfigPortHolder.get().isPhysicsEnabled());
+
+        long syncTimer = RenderPerformanceProfiler.get().startTimer();
+        LivingEntityModelStateHelper.syncModelState(
+                model,
+                entity,
+                entityYaw,
+                tickDelta,
+                RenderScene.FIRST_PERSON,
+                getModelName(),
+                stagePlaying,
+                vrActive);
+        RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_LIVING_STATE_SYNC, syncTimer);
+
+        // 即使是模型第一帧，也执行一次零步长求值来生成当前骨骼矩阵。
+        update(true);
+        firstPersonPoseState.markPrepared();
+        return true;
+    }
+
+    public boolean hasPreparedFirstPersonPose() {
+        return firstPersonPoseState.isPrepared();
+    }
+
+    public void discardPreparedFirstPersonPose() {
+        firstPersonPoseState.discard();
+    }
 
     protected final NativeRenderBackendPort backendPort() {
         if (nativeRenderBackendPort == null) {
@@ -90,7 +129,7 @@ public abstract class BaseModelInstance implements ModelInstance {
         if (worldDecision.shouldUpdate()) {
             update();
         }
-        doRenderModel(entityIn, entityYaw, entityPitch, entityTrans, mat, packedLight);
+        doRenderModel(entityIn, entityYaw, entityPitch, entityTrans, mat, packedLight, context);
     }
 
     @Override
@@ -150,10 +189,11 @@ public abstract class BaseModelInstance implements ModelInstance {
                                      Vector3f entityTrans, float tickDelta, PoseStack mat,
                                      int packedLight, RenderScene context, WorldRenderPolicy.Decision worldDecision) {
         boolean stagePlaying = MMDCameraController.getInstance().isStagePlayingModel(model);
+        boolean reusePreparedPose = firstPersonPoseState.isPrepared();
 
         applyPhysicsState(worldDecision.physicsEnabled());
 
-        if (worldDecision.shouldUpdate()) {
+        if (worldDecision.shouldUpdate() && !reusePreparedPose) {
             long syncTimer = RenderPerformanceProfiler.get().startTimer();
             LivingEntityModelStateHelper.syncModelState(
                     model,
@@ -168,20 +208,31 @@ public abstract class BaseModelInstance implements ModelInstance {
 
             update();
         }
-        doRenderModel(entityIn, entityYaw, entityPitch, entityTrans, mat, packedLight);
+        try {
+            doRenderModel(entityIn, entityYaw, entityPitch, entityTrans, mat, packedLight, context);
+        } finally {
+            firstPersonPoseState.finishRender(context != null && context.isFirstPerson());
+        }
     }
 
     protected boolean update() {
+        return update(false);
+    }
+
+    private boolean update(boolean forceEvaluation) {
         long currentTime = System.currentTimeMillis();
         if (lastUpdateTime < 0) {
             lastUpdateTime = currentTime;
-            return false;
+            if (!forceEvaluation) {
+                return false;
+            }
         }
 
         float deltaTime = (currentTime - lastUpdateTime) / 1000.0f;
         lastUpdateTime = currentTime;
 
-        if (deltaTime <= 0.0f) return false;
+        if (deltaTime <= 0.0f && !forceEvaluation) return false;
+        if (deltaTime < 0.0f) deltaTime = 0.0f;
         if (deltaTime > MAX_DELTA_TIME) deltaTime = MAX_DELTA_TIME;
 
         long updateTimer = RenderPerformanceProfiler.get().startTimer();
@@ -283,7 +334,8 @@ public abstract class BaseModelInstance implements ModelInstance {
     }
 
     protected abstract void doRenderModel(Entity entityIn, float entityYaw, float entityPitch,
-                                           Vector3f entityTrans, PoseStack mat, int packedLight);
+                                           Vector3f entityTrans, PoseStack mat, int packedLight,
+                                           RenderScene context);
 
     protected abstract void onUpdate(float deltaTime);
 
