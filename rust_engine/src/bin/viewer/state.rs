@@ -9,6 +9,7 @@ pub struct ViewerPersistedState {
     pub model_path: String,
     pub animation_path: String,
     pub selected_fbx_stack: Option<String>,
+    pub static_collider_scale: f32,
 }
 
 impl ViewerPersistedState {
@@ -30,6 +31,12 @@ impl ViewerPersistedState {
                 .get("selected_fbx_stack")
                 .and_then(Value::as_str)
                 .map(ToString::to_string),
+            static_collider_scale: value
+                .get("static_collider_scale")
+                .and_then(Value::as_f64)
+                .map(|value| value as f32)
+                .unwrap_or(0.75)
+                .clamp(0.1, 1.0),
         })
     }
 
@@ -43,6 +50,7 @@ impl ViewerPersistedState {
             "model_path": self.model_path,
             "animation_path": self.animation_path,
             "selected_fbx_stack": self.selected_fbx_stack,
+            "static_collider_scale": self.static_collider_scale,
         }))
         .map_err(|error| format!("序列化 viewer 配置失败: {}", error))?;
 

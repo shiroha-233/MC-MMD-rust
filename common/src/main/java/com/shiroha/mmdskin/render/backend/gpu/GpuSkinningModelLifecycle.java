@@ -17,6 +17,8 @@ final class GpuSkinningModelLifecycle {
         long total = 0;
         int indexCount = (int) target.nativeBackendPort().getIndexCount(target.nativeModelHandle());
         total += (long) indexCount * target.indexElementSize;
+        total += target.nativeBackendPort().getFirstPersonIndexCount(target.nativeModelHandle())
+                * target.indexElementSize;
         total += (long) target.vertexCount * 12 * 2;
         total += (long) target.vertexCount * 8;
         total += (long) target.vertexCount * 16 * 2;
@@ -83,6 +85,9 @@ final class GpuSkinningModelLifecycle {
 
         GL46C.glDeleteVertexArrays(target.vertexArrayObject);
         GL46C.glDeleteBuffers(target.indexBufferObject);
+        if (target.firstPersonIndexBufferObject > 0) {
+            GL46C.glDeleteBuffers(target.firstPersonIndexBufferObject);
+        }
         GL46C.glDeleteBuffers(target.positionBufferObject);
         GL46C.glDeleteBuffers(target.normalBufferObject);
         GL46C.glDeleteBuffers(target.uv0BufferObject);
@@ -141,6 +146,15 @@ final class GpuSkinningModelLifecycle {
         if (target.subMeshDataBuf != null) {
             MemoryUtil.memFree(target.subMeshDataBuf);
             target.subMeshDataBuf = null;
+        }
+        if (target.firstPersonIndexBuffer != null) {
+            MemoryUtil.memFree(target.firstPersonIndexBuffer);
+            target.firstPersonIndexBuffer = null;
+        }
+        if (target.firstPersonMatrixBuffer != null) {
+            MemoryUtil.memFree(target.firstPersonMatrixBuffer);
+            target.firstPersonMatrixBuffer = null;
+            target.firstPersonMatrixFloatBuffer = null;
         }
     }
 }

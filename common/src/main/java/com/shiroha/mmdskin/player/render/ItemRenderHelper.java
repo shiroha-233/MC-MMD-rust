@@ -3,8 +3,11 @@ package com.shiroha.mmdskin.player.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.bridge.runtime.NativeMatrixPort;
+import com.shiroha.mmdskin.compat.tacz.TaczGunDetector;
+import com.shiroha.mmdskin.compat.tacz.TaczThirdPersonGunTransform;
 import com.shiroha.mmdskin.config.ModelConfigData;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
+import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -112,6 +115,14 @@ public class ItemRenderHelper {
             return;
         }
 
+        // 本地第一人称 TaCZ 枪模由 TaCZ 自己定位瞄具；这里跳过主手，避免重复绘制第三人称物品模型。
+        if (hand == InteractionHand.MAIN_HAND
+                && player == Minecraft.getInstance().player
+                && FirstPersonManager.shouldRenderFirstPerson()
+                && TaczGunDetector.isGun(itemStack)) {
+            return;
+        }
+
         boolean isMainHand = (hand == InteractionHand.MAIN_HAND);
         NativeMatrixPort runtimeBridge = matrixPort;
         long modelHandle = model.modelInstance().getModelHandle();
@@ -123,6 +134,7 @@ public class ItemRenderHelper {
         matrixStack.pushPose();
         matrixStack.last().pose().mul(convertToMatrix4f(runtimeBridge, handMat, model.entityState().matBuffer));
 
+        TaczThirdPersonGunTransform.apply(matrixStack, hand, itemStack);
         matrixStack.mulPose(new Quaternionf().rotateX(90.0f * DEG_TO_RAD));
         matrixStack.mulPose(new Quaternionf().rotateY(180.0f * DEG_TO_RAD));
 

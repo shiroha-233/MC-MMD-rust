@@ -32,6 +32,38 @@ typedef struct BW_Shape BW_Shape;
 typedef struct BW_RigidBody BW_RigidBody;
 typedef struct BW_Constraint BW_Constraint;
 
+/* 当前求解步中的真实穿透接触，用于只读诊断。 */
+typedef struct {
+    BW_RigidBody* body_a;
+    BW_RigidBody* body_b;
+    int contact_count;
+    float max_penetration_depth;
+    float max_applied_impulse;
+    float total_applied_impulse;
+    float point_a[3];
+    float point_b[3];
+    float normal_on_b[3];
+} BW_ContactManifold;
+
+/* 完整回读 Bullet 实际持有的 6DOF 参数，避免由 Rust 侧公式自证。 */
+typedef struct {
+    float linear_position[3];
+    float angular_position[3];
+    float linear_violation[3];
+    float angular_violation[3];
+    float frame_a[16];
+    float frame_b[16];
+    float linear_lower[3];
+    float linear_upper[3];
+    float angular_lower[3];
+    float angular_upper[3];
+    float stiffness[6];
+    float damping[6];
+    float equilibrium[6];
+    int spring_enabled[6];
+    int use_frame_offset;
+} BW_ConstraintDiagnostic;
+
 /* Bullet3 激活状态常量 */
 #define BW_ACTIVE_TAG 1
 #define BW_ISLAND_SLEEPING 2
@@ -62,12 +94,17 @@ typedef struct {
 BW_World* bw_world_create(float gravity_x, float gravity_y, float gravity_z);
 void bw_world_destroy(BW_World* world);
 void bw_world_step(BW_World* world, float dt, int max_substeps, float fixed_dt);
+/* 仅更新宽相/窄相接触，不推进时间、不执行约束或接触求解。 */
+void bw_world_detect_collisions(BW_World* world);
 void bw_world_set_gravity(BW_World* world, float x, float y, float z);
 void bw_world_add_rigid_body(BW_World* world, BW_RigidBody* rb, int group, int mask);
 void bw_world_remove_rigid_body(BW_World* world, BW_RigidBody* rb);
 void bw_world_add_constraint(BW_World* world, BW_Constraint* c, bool disable_collision);
 void bw_world_remove_constraint(BW_World* world, BW_Constraint* c);
 void bw_world_set_kinematic_filter(BW_World* world, bool enabled);
+int bw_world_get_contact_manifold_count(BW_World* world);
+int bw_world_copy_contact_manifolds(
+    BW_World* world, BW_ContactManifold* output, int capacity);
 
 /* ===== 碰撞形状 ===== */
 BW_Shape* bw_shape_sphere(float radius);
@@ -80,6 +117,7 @@ BW_RigidBody* bw_rigid_body_create(const BW_RigidBodyInfo* info);
 void bw_rigid_body_destroy(BW_RigidBody* rb);
 void bw_rigid_body_get_transform(BW_RigidBody* rb, float* matrix4x4);
 void bw_rigid_body_set_transform(BW_RigidBody* rb, const float* matrix4x4);
+void bw_rigid_body_set_kinematic_target(BW_RigidBody* rb, const float* matrix4x4);
 void bw_rigid_body_get_position(BW_RigidBody* rb, float* x, float* y, float* z);
 void bw_rigid_body_get_rotation(BW_RigidBody* rb, float* x, float* y, float* z, float* w);
 void bw_rigid_body_set_linear_velocity(BW_RigidBody* rb, float x, float y, float z);
@@ -95,6 +133,9 @@ void bw_rigid_body_set_kinematic(BW_RigidBody* rb, bool kinematic);
 float bw_rigid_body_get_mass(BW_RigidBody* rb);
 void bw_rigid_body_clear_forces(BW_RigidBody* rb);
 void bw_rigid_body_apply_central_force(BW_RigidBody* rb, float x, float y, float z);
+void bw_rigid_body_set_ignore_collision_check(
+    BW_RigidBody* rb, BW_RigidBody* other, bool ignore);
+bool bw_rigid_body_check_collide_with(BW_RigidBody* rb, BW_RigidBody* other);
 
 /* ===== 6DOF 弹簧约束 ===== */
 BW_Constraint* bw_6dof_spring_create(
@@ -112,6 +153,8 @@ void bw_6dof_spring_set_damping(BW_Constraint* c, int index, float damping);
 void bw_6dof_spring_set_equilibrium_point(BW_Constraint* c);
 void bw_6dof_spring_set_param(BW_Constraint* c, int param, float value, int axis);
 void bw_6dof_spring_use_frame_offset(BW_Constraint* c, bool on);
+bool bw_6dof_spring_get_diagnostic(
+    BW_Constraint* c, BW_ConstraintDiagnostic* output);
 
 #ifdef __cplusplus
 }

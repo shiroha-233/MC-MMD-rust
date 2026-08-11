@@ -12,14 +12,12 @@ use glium::{
     uniform, DrawParameters, Frame, Surface,
 };
 use mmd_engine::{
-    animation::{
-        fbx_loader::{FbxCache, FbxRetargetOptions},
-        VmdAnimation, VmdFile,
-    },
+    animation::{fbx_loader::FbxCache, VmdAnimation, VmdFile},
     model::{load_pmx, MmdModel},
+    physics::STATIC_COLLISION_SHAPE_SCALE,
 };
 
-use super::camera::Camera;
+use super::{camera::Camera, collision_debug::build_collision_lines};
 
 const PRIMARY_ANIMATION_LAYER: usize = 0;
 fn mat4_to_array(matrix: &Mat4) -> [[f32; 4]; 4] {
@@ -79,6 +77,8 @@ pub struct Renderer {
     line_program: glium::Program,
     show_mesh: bool,
     show_bones: bool,
+    show_colliders: bool,
+    static_collider_scale: f32,
     show_axes: bool,
     wireframe: bool,
     playing: bool,
@@ -107,6 +107,8 @@ impl Renderer {
             line_program,
             show_mesh: true,
             show_bones: true,
+            show_colliders: false,
+            static_collider_scale: STATIC_COLLISION_SHAPE_SCALE,
             show_axes: true,
             wireframe: false,
             playing: true,
@@ -136,9 +138,27 @@ impl Renderer {
         self.current_frame
     }
 
+    pub fn shows_colliders(&self) -> bool {
+        self.show_colliders
+    }
+
+    pub fn static_collider_scale(&self) -> f32 {
+        self.static_collider_scale
+    }
+
+    pub fn set_static_collider_scale(&mut self, scale: f32) {
+        self.static_collider_scale = scale.clamp(0.1, 1.0);
+    }
+
+    pub fn rigid_body_count(&self) -> usize {
+        self.model
+            .as_ref()
+            .map(|model| model.rigid_bodies.len())
+            .unwrap_or(0)
+    }
+
     pub fn load_model(&mut self, display: &impl Facade, path: &str) -> Result<(), String> {
-        let mut model = load_pmx(path).map_err(|error| error.to_string())?;
-        model.reset_to_rest_pose();
+        let model = load_pmx(path).map_err(|error| error.to_string())?;
 
         self.model_dir = Path::new(path).parent().map(Path::to_path_buf);
         self.model = Some(model);
@@ -161,20 +181,10 @@ impl Renderer {
 
     pub fn load_animation(&mut self, path: &str, stack_name: Option<&str>) -> Result<(), String> {
         let animation = if Self::is_fbx_file(path) {
-            let arm_positions = self
-                .model
-                .as_ref()
-                .map(Self::collect_retarget_bone_positions);
-            let animation = {
-                let cache = self.get_or_load_fbx_cache(path)?;
-                cache
-                    .load_animation_with_options(FbxRetargetOptions {
-                        stack_name,
-                        target_bone_positions: arm_positions.as_ref(),
-                        ..Default::default()
-                    })
-                    .map_err(|error| error.to_string())?
-            };
+            let cache = self.get_or_load_fbx_cache(path)?;
+            let animation = cache
+                .load_animation(stack_name)
+                .map_err(|error| error.to_string())?;
             Arc::new(animation)
         } else {
             let vmd = VmdFile::load(path).map_err(|error| error.to_string())?;
@@ -209,7 +219,8 @@ impl Renderer {
         if let Some(model) = self.model.as_mut() {
             model.stop_layer(PRIMARY_ANIMATION_LAYER);
             model.set_layer_animation(PRIMARY_ANIMATION_LAYER, None);
-            model.reset_to_rest_pose();
+            // 当前引擎会在清空动画层后的零步更新中恢复基础姿态。
+            model.tick_animation(0.0);
         }
     }
 
@@ -278,6 +289,12 @@ impl Renderer {
                 self.render_bones(display, target, model, &vp);
             }
         }
+
+        if self.show_colliders {
+            if let Some(model) = &self.model {
+                self.render_colliders(display, target, model, &vp);
+            }
+        }
     }
 
     pub fn toggle_animation(&mut self) {
@@ -308,13 +325,17 @@ impl Renderer {
                     model.pause_layer(PRIMARY_ANIMATION_LAYER);
                 }
             } else {
-                model.reset_to_rest_pose();
+                model.tick_animation(0.0);
             }
         }
     }
 
     pub fn toggle_bones(&mut self) {
         self.show_bones = !self.show_bones;
+    }
+
+    pub fn toggle_colliders(&mut self) {
+        self.show_colliders = !self.show_colliders;
     }
 
     pub fn toggle_mesh(&mut self) {
@@ -460,27 +481,6 @@ impl Renderer {
 
     fn is_fbx_file(path: &str) -> bool {
         path.to_ascii_lowercase().ends_with(".fbx")
-    }
-
-    fn collect_retarget_bone_positions(model: &MmdModel) -> HashMap<String, Vec3> {
-        let mut positions = HashMap::new();
-        for name in [
-            "左肩",
-            "左腕",
-            "左ひじ",
-            "左手首",
-            "右肩",
-            "右腕",
-            "右ひじ",
-            "右手首",
-        ] {
-            if let Some(index) = model.bone_manager.find_bone_by_name(name) {
-                if let Some(bone) = model.bone_manager.get_bone(index) {
-                    positions.insert(name.to_string(), bone.initial_position);
-                }
-            }
-        }
-        positions
     }
 
     fn render_grid(&self, target: &mut Frame, vp: &Mat4, params: &DrawParameters<'_>) {
@@ -748,6 +748,54 @@ impl Renderer {
         let uniforms = uniform! {
             vp: mat4_to_array(vp),
         };
+
+        let _ = target.draw(
+            &vertex_buffer,
+            NoIndices(PrimitiveType::LinesList),
+            &self.line_program,
+            &uniforms,
+            &params,
+        );
+    }
+
+    fn render_colliders(
+        &self,
+        display: &impl Facade,
+        target: &mut Frame,
+        model: &MmdModel,
+        vp: &Mat4,
+    ) {
+        let lines = build_collision_lines(model, self.static_collider_scale);
+        if lines.is_empty() {
+            return;
+        }
+
+        let mut vertices = Vec::with_capacity(lines.len() * 2);
+        for line in lines {
+            vertices.push(LineVertex {
+                position: vec3_to_array(line.start),
+                color: line.color,
+            });
+            vertices.push(LineVertex {
+                position: vec3_to_array(line.end),
+                color: line.color,
+            });
+        }
+
+        let Ok(vertex_buffer) = glium::VertexBuffer::new(display, &vertices) else {
+            return;
+        };
+        let params = DrawParameters {
+            depth: glium::Depth {
+                test: glium::DepthTest::IfLessOrEqual,
+                write: false,
+                ..Default::default()
+            },
+            blend: glium::Blend::alpha_blending(),
+            line_width: Some(1.5),
+            ..Default::default()
+        };
+        let uniforms = uniform! { vp: mat4_to_array(vp) };
 
         let _ = target.draw(
             &vertex_buffer,

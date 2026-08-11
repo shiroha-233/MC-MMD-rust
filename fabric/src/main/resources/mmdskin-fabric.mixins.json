@@ -12,13 +12,17 @@
     "compat.VivecraftVRPlayerRendererMixin",
     "CameraMixin",
     "GameRendererMixin",
+    "InventoryScreenMixin",
     "KeyMappingAccessor",
     "LevelRendererMixin",
     "ItemInHandRendererMixin",
     "MinecraftMixin",
     "MouseHandlerMixin",
     "KeyboardInputMixin",
-    "EntityMixin"
+    "EntityMixin",
+    "compat.tacz.TaczGunItemRendererWrapperMixin",
+    "compat.tacz.TaczRightHandRenderMixin",
+    "compat.tacz.TaczLeftHandRenderMixin"
   ],
   "injectors": {
     "defaultRequire": 1

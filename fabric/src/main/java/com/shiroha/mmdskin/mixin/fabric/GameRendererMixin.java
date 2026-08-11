@@ -36,6 +36,13 @@ public abstract class GameRendererMixin {
         }
     }
 
+    @Inject(method = "renderLevel", at = @At("HEAD"))
+    private void mmdskin$prepareFirstPersonCameraFrame(
+            float partialTick, long finishTimeNano, PoseStack poseStack, CallbackInfo ci) {
+        // 在 Camera.setup 前准备本帧第一人称双眼锚点。
+        FirstPersonManager.prepareCameraFrame(partialTick);
+    }
+
     @Inject(
             method = "renderLevel",
             at = @At(

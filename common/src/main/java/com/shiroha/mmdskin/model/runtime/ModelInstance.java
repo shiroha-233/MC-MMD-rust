@@ -25,6 +25,9 @@ public interface ModelInstance {
     default void setLayerLoop(long layer, boolean loop) {
     }
 
+    default void setLayerWeight(long layer, float weight) {
+    }
+
     void resetPhysics();
 
     long getModelHandle();
@@ -52,6 +55,11 @@ public interface ModelInstance {
 
     default long getVramUsage() {
         return 0L;
+    }
+
+    /** 返回实例实际使用的渲染后端，供调试 HUD 展示回退结果。 */
+    default String getRenderBackendName() {
+        return "UNKNOWN";
     }
 
     long getRamUsage();

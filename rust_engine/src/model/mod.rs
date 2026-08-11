@@ -1,9 +1,12 @@
 //! MMD 模型运行时管理
 
+mod first_person_mesh;
+pub(crate) mod hand_attachment;
 mod loader;
 mod material;
 mod runtime;
 mod submesh;
+pub mod tacz_arm_targets;
 
 mod bone_mapping;
 mod vrm_extensions;

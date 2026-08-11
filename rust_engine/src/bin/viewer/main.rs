@@ -17,6 +17,7 @@ use glium::{
 };
 
 mod camera;
+mod collision_debug;
 mod gui;
 mod input;
 mod renderer;
@@ -48,6 +49,10 @@ fn main() {
     let startup_fbx_stack = persisted_state
         .as_ref()
         .and_then(|state| state.selected_fbx_stack.clone());
+    let startup_static_collider_scale = persisted_state
+        .as_ref()
+        .map(|state| state.static_collider_scale)
+        .unwrap_or(0.75);
 
     println!("=== MMD Model Viewer ===");
     println!("用法: viewer <pmx文件> [vmd/fbx文件]");
@@ -66,6 +71,7 @@ fn main() {
         startup_model,
         startup_animation,
         startup_fbx_stack,
+        startup_static_collider_scale,
     );
     if let Err(error) = event_loop.run_app(&mut app) {
         eprintln!("viewer 退出失败: {}", error);
@@ -91,8 +97,10 @@ impl ViewerApp {
         startup_model: Option<String>,
         startup_animation: Option<String>,
         startup_fbx_stack: Option<String>,
+        startup_static_collider_scale: f32,
     ) -> Self {
         let mut renderer = Renderer::new(&display);
+        renderer.set_static_collider_scale(startup_static_collider_scale);
         let mut gui = ViewerGuiState::new(startup_model.clone(), startup_animation.clone());
 
         if let Some(model_path) = startup_model {
@@ -143,6 +151,9 @@ impl ViewerApp {
             has_animation: self.renderer.has_animation(),
             playing: self.renderer.is_playing(),
             current_frame: self.renderer.current_frame(),
+            show_colliders: self.renderer.shows_colliders(),
+            static_collider_scale: self.renderer.static_collider_scale(),
+            rigid_body_count: self.renderer.rigid_body_count(),
         }
     }
 
@@ -228,6 +239,13 @@ impl ViewerApp {
                     self.renderer.reset_animation();
                     self.gui.set_info("动画已重置到第 0 帧");
                 }
+                ViewerAction::ToggleColliders => {
+                    self.renderer.toggle_colliders();
+                }
+                ViewerAction::SetStaticColliderScale(scale) => {
+                    self.renderer.set_static_collider_scale(scale);
+                    should_save_state = true;
+                }
                 ViewerAction::PersistState => {
                     should_save_state = true;
                 }
@@ -244,6 +262,7 @@ impl ViewerApp {
             model_path: self.gui.model_path().to_string(),
             animation_path: self.gui.animation_path().to_string(),
             selected_fbx_stack: self.gui.selected_stack_name(),
+            static_collider_scale: self.renderer.static_collider_scale(),
         };
 
         if let Err(error) = state.save() {
@@ -256,6 +275,7 @@ impl ViewerApp {
             KeyCode::Space => self.renderer.toggle_animation(),
             KeyCode::KeyR => self.renderer.reset_animation(),
             KeyCode::KeyB => self.renderer.toggle_bones(),
+            KeyCode::KeyC => self.renderer.toggle_colliders(),
             KeyCode::KeyG => self.renderer.toggle_mesh(),
             KeyCode::KeyX => self.renderer.toggle_axes(),
             KeyCode::KeyF => self.renderer.toggle_wireframe(),

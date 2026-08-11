@@ -20,19 +20,19 @@ pluginManagement {
 		mavenCentral()
 		
 		// 中国镜像源（作为备用）
-		maven { url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
-		maven { url = 'https://maven.aliyun.com/repository/public/' }
-		maven { url = 'https://repo.huaweicloud.com/repository/maven/' }
+		//maven { url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
+		//maven { url = 'https://maven.aliyun.com/repository/public/' }
+		//maven { url = 'https://repo.huaweicloud.com/repository/maven/' }
 	}
 }
 
 dependencyResolutionManagement {
 	repositories {
 		// 中国镜像源
-		maven { url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
-		maven { url = 'https://maven.aliyun.com/repository/public/' }
-		maven { url = 'https://repo.huaweicloud.com/repository/maven/' }
-		
+		//maven { url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
+		//maven { url = 'https://maven.aliyun.com/repository/public/' }
+		//maven { url = 'https://repo.huaweicloud.com/repository/maven/' }
+
 		mavenCentral()
 		maven { url = 'https://maven.fabricmc.net/' }
 		maven { url = 'https://api.modrinth.com/maven' }

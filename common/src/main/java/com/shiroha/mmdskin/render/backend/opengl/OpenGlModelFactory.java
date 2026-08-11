@@ -54,6 +54,7 @@ final class OpenGlModelFactory {
 
         int vertexArrayObject = 0;
         int indexBufferObject = 0;
+        int firstPersonIndexBufferObject = 0;
         int positionBufferObject = 0;
         int colorBufferObject = 0;
         int normalBufferObject = 0;
@@ -66,6 +67,8 @@ final class OpenGlModelFactory {
         FloatBuffer light0Buff = null;
         FloatBuffer light1Buff = null;
         ByteBuffer matMorphResultsByteBuf = null;
+        ByteBuffer firstPersonIndexBuffer = null;
+        ByteBuffer firstPersonMatrixBuffer = null;
 
         try {
             vertexArrayObject = GL46C.glGenVertexArrays();
@@ -99,6 +102,18 @@ final class OpenGlModelFactory {
             GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, indexBufferObject);
             GL46C.glBufferData(GL46C.GL_ELEMENT_ARRAY_BUFFER, indexBuffer, GL46C.GL_STATIC_DRAW);
             MemoryUtil.memFree(indexBuffer);
+
+            long firstPersonIndexCount = nativeBackend.getFirstPersonIndexCount(model);
+            if (firstPersonIndexCount > 0) {
+                // 动态结果不会超过原始索引容量，EBO 在模型生命周期内只分配一次。
+                firstPersonIndexBuffer = MemoryUtil.memAlloc(indexSize);
+                firstPersonIndexBuffer.order(ByteOrder.nativeOrder());
+                firstPersonMatrixBuffer = MemoryUtil.memAlloc(32 * Float.BYTES);
+                firstPersonMatrixBuffer.order(ByteOrder.nativeOrder());
+                firstPersonIndexBufferObject = GL46C.glGenBuffers();
+                GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, firstPersonIndexBufferObject);
+                GL46C.glBufferData(GL46C.GL_ELEMENT_ARRAY_BUFFER, indexSize, GL46C.GL_DYNAMIC_DRAW);
+            }
 
             int indexType = switch (indexElementSize) {
                 case 1 -> GL46C.GL_UNSIGNED_BYTE;
@@ -196,6 +211,12 @@ final class OpenGlModelFactory {
             result.uv1Buffer = uv1Buffer;
             result.uv2Buffer = uv2Buffer;
             result.indexBufferObject = indexBufferObject;
+            result.firstPersonIndexBufferObject = firstPersonIndexBufferObject;
+            result.firstPersonIndexBuffer = firstPersonIndexBuffer;
+            result.firstPersonMatrixBuffer = firstPersonMatrixBuffer;
+            result.firstPersonMatrixFloatBuffer = firstPersonMatrixBuffer != null
+                    ? firstPersonMatrixBuffer.asFloatBuffer() : null;
+            result.activeIndexBufferObject = indexBufferObject;
             result.vertexBufferObject = positionBufferObject;
             result.colorBufferObject = colorBufferObject;
             result.texcoordBufferObject = uv0BufferObject;
@@ -237,6 +258,7 @@ final class OpenGlModelFactory {
 
             if (vertexArrayObject > 0) GL46C.glDeleteVertexArrays(vertexArrayObject);
             if (indexBufferObject > 0) GL46C.glDeleteBuffers(indexBufferObject);
+            if (firstPersonIndexBufferObject > 0) GL46C.glDeleteBuffers(firstPersonIndexBufferObject);
             if (positionBufferObject > 0) GL46C.glDeleteBuffers(positionBufferObject);
             if (colorBufferObject > 0) GL46C.glDeleteBuffers(colorBufferObject);
             if (normalBufferObject > 0) GL46C.glDeleteBuffers(normalBufferObject);
@@ -251,6 +273,8 @@ final class OpenGlModelFactory {
             if (light0Buff != null) MemoryUtil.memFree(light0Buff);
             if (light1Buff != null) MemoryUtil.memFree(light1Buff);
             if (matMorphResultsByteBuf != null) MemoryUtil.memFree(matMorphResultsByteBuf);
+            if (firstPersonIndexBuffer != null) MemoryUtil.memFree(firstPersonIndexBuffer);
+            if (firstPersonMatrixBuffer != null) MemoryUtil.memFree(firstPersonMatrixBuffer);
             return null;
         }
     }

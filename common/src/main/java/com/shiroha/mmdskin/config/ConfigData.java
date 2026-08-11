@@ -59,7 +59,13 @@ public class ConfigData {
     public float physicsMaxLinearVelocity = 20.0f;
     public float physicsMaxAngularVelocity = 20.0f;
     public boolean physicsJointsEnabled = true;
-    public boolean physicsKinematicFilter = true;
+    /** 实验性过滤器：禁用所有运动学刚体与动态刚体之间的碰撞。 */
+    public boolean physicsKinematicFilter = false;
+    /** 刚体接触碰撞开关；默认开启以遵循 PMX 碰撞组并防止衣物穿模。 */
+    public boolean physicsCollisionEnabled = true;
+    /** 默认忽略关节图距离不超过 2 的内部碰撞，减少接触与关节约束竞争。 */
+    public PhysicsCollisionStabilityMode physicsCollisionStabilityMode =
+            PhysicsCollisionStabilityMode.STABLE;
     public boolean physicsDebugLog = false;
     public int maxPhysicsModelsPerFrame = 10;
     public float physicsLodMaxDistance = 24.0f;
@@ -119,6 +125,9 @@ public class ConfigData {
     private void normalize() {
         if (mobModelReplacements == null) {
             mobModelReplacements = new LinkedHashMap<>();
+        }
+        if (physicsCollisionStabilityMode == null) {
+            physicsCollisionStabilityMode = PhysicsCollisionStabilityMode.STABLE;
         }
 
         performanceLogIntervalSeconds = Math.max(1, performanceLogIntervalSeconds);

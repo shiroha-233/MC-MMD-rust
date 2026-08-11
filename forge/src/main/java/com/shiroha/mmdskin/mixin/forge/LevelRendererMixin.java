@@ -50,12 +50,14 @@ public abstract class LevelRendererMixin {
 
             if (YsmCompat.isYsmModelActive(player)) {
                 if (YsmCompat.isDisableSelfModel()) {
-                    return camera.getXRot() >= 0;
+                    // MMD 第一人称需要稳定进入玩家渲染入口，不能随抬头角度被世界 pass 剔除。
+                    return true;
                 }
                 return false;
             }
 
-            return camera.getXRot() >= 0;
+            // 第一人称网格会自行裁掉头部，这里只负责保证本地 MMD 模型参与渲染。
+            return true;
         }
 
         return camera.isDetached();

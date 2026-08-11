@@ -26,7 +26,9 @@ final class MmdClientResourceBootstrap {
             "itemActive_minecraft.shield_Left_using.vmd", "itemActive_minecraft.shield_Right_using.vmd",
             "lieDown.vmd", "onClimbable.vmd", "onClimbableDown.vmd", "onClimbableUp.vmd",
             "onHorse.vmd", "ride.vmd", "sleep.vmd", "sneak.vmd",
-            "sprint.vmd", "swim.vmd", "swingLeft.vmd", "swingRight.vmd", "walk.vmd"
+            "sprint.vmd", "swim.vmd", "swingLeft.vmd", "swingRight.vmd", "walk.vmd",
+            // v5 使用重新录制的挂点动作，并由运行时兼容不同模型的 Dummy 名称。
+            "tacz_hold_rifle_ads_v5.vmd"
     };
 
     private MmdClientResourceBootstrap() {

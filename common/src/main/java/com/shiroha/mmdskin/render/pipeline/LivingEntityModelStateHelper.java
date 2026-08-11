@@ -75,7 +75,9 @@ public final class LivingEntityModelStateHelper {
         float posX = (float) (renderOrigin.x * MODEL_SCALE);
         float posY = (float) (renderOrigin.y * MODEL_SCALE);
         float posZ = (float) (renderOrigin.z * MODEL_SCALE);
-        float bodyYaw = entity instanceof Player player
+        float bodyYaw = context.isInventoryScene()
+                ? entityYaw * ((float) Math.PI / 180F)
+                : entity instanceof Player player
                 ? resolveBodyYaw(player, tickDelta)
                 : Mth.rotLerp(tickDelta, entity.yBodyRotO, entity.yBodyRot) * ((float) Math.PI / 180F);
         scenePort.setModelPositionAndYaw(modelHandle, posX, posY, posZ, bodyYaw);

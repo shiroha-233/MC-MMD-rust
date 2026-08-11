@@ -22,7 +22,13 @@ public interface IPhysicsConfig {
 
     default boolean isPhysicsJointsEnabled() { return true; }
 
-    default boolean isPhysicsKinematicFilter() { return true; }
+    default boolean isPhysicsKinematicFilter() { return false; }
+
+    default boolean isPhysicsCollisionEnabled() { return true; }
+
+    default PhysicsCollisionStabilityMode getPhysicsCollisionStabilityMode() {
+        return PhysicsCollisionStabilityMode.STABLE;
+    }
 
     default boolean isPhysicsDebugLog() { return false; }
 

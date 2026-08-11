@@ -15,7 +15,8 @@ public final class PlayerRenderHelper {
         MutableRenderPose params = new MutableRenderPose();
         ModelRenderProperties renderProperties = modelData.renderProperties();
         float vrBodyYaw = FirstPersonManager.vrRuntime().getBodyYawDegrees(player, tickDelta);
-        params.bodyYaw = Float.isFinite(vrBodyYaw) ? vrBodyYaw : player.yBodyRot;
+        float fallbackYaw = Float.isFinite(vrBodyYaw) ? vrBodyYaw : player.yBodyRot;
+        params.bodyYaw = FirstPersonManager.resolveFirstPersonModelYaw(player, tickDelta, fallbackYaw);
         params.bodyPitch = 0.0f;
         params.translation.zero();
 

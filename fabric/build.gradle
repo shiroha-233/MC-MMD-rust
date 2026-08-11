@@ -124,7 +124,6 @@ dependencies {
 	modCompileOnly "maven.modrinth:touhoulittlemaid-orihime:${rootProject.touhou_little_maid_fabric_version}"
 	modLocalRuntime "maven.modrinth:touhoulittlemaid-orihime:${rootProject.touhou_little_maid_fabric_version}"
 	modLocalRuntime "maven.modrinth:forge-config-api-port:${rootProject.forge_config_api_port_version}"
-	
 }
 
 processResources {

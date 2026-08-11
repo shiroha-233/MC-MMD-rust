@@ -9,6 +9,10 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import org.apache.logging.log4j.LogManager;
@@ -128,13 +132,45 @@ public final class NativeLibraryLoader {
     private static void loadBundledLibrary(NativeLibrarySpec library) {
         Path extractedPath = extractBundledLibrary(library);
         try {
-            System.load(extractedPath.toAbsolutePath().toString());
+            Path absolutePath = extractedPath.toAbsolutePath().normalize();
+            System.load(absolutePath.toString());
+            logLoadedLibraryIdentity(library, absolutePath);
         } catch (Error error) {
             throw buildLinkError(
                     "无法加载内置原生库: " + library.resourcePath() + " -> " + extractedPath + "，原因: " + error.getMessage(),
                     error
             );
         }
+    }
+
+    /** 输出真正传给 System.load 的文件身份，避免开发环境误用旧 DLL。 */
+    private static void logLoadedLibraryIdentity(NativeLibrarySpec library, Path absolutePath) {
+        try {
+            long size = Files.size(absolutePath);
+            Instant modified = Files.getLastModifiedTime(absolutePath).toInstant();
+            logger.info(
+                    "原生库已加载: resource={} path={} size={} modified={} sha256={}",
+                    library.resourcePath(),
+                    absolutePath,
+                    size,
+                    modified,
+                    sha256(absolutePath)
+            );
+        } catch (IOException | NoSuchAlgorithmException exception) {
+            logger.warn("原生库已加载，但读取文件身份失败: " + absolutePath, exception);
+        }
+    }
+
+    private static String sha256(Path path) throws IOException, NoSuchAlgorithmException {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (InputStream input = Files.newInputStream(path)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                digest.update(buffer, 0, read);
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
     }
 
     private static Path extractBundledLibrary(NativeLibrarySpec library) {

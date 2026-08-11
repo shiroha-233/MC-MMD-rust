@@ -1,0 +1,104 @@
+﻿
+=== profile=Grass Wonder skirt case=default collision_enabled=true ===
+frame=0
+  Sp_Hi_MSkirt0_B_00: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_B_01: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_F_00: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_F_01: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_L_00: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_L_01: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  joint 'Sp_Hi_MSkirt0_B_00_skirt_vertical_joint' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_F_00_skirt_vertical_joint' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_L_00_skirt_vertical_joint' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, true, true]
+frame=1
+  Sp_Hi_MSkirt0_B_00: distance=0.01583 angle=0.00169 delta=(-0.00010,-0.01062,0.01174)
+  Sp_Hi_MSkirt0_B_01: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_F_00: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,-0.00000)
+  Sp_Hi_MSkirt0_F_01: distance=0.00000 angle=0.00000 delta=(-0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_L_00: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_L_01: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  joint 'Sp_Hi_MSkirt0_B_00_skirt_vertical_joint' anchor_error=0.01583 linear_violation=(0.00000,0.00011,0.01583) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_F_00_skirt_vertical_joint' anchor_error=0.00000 linear_violation=(0.00000,0.00004,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_L_00_skirt_vertical_joint' anchor_error=0.00000 linear_violation=(0.00000,0.00006,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, true, true]
+frame=10
+  Sp_Hi_MSkirt0_B_00: distance=0.00945 angle=0.28964 delta=(-0.00002,-0.00694,0.00641)
+  Sp_Hi_MSkirt0_B_01: distance=0.67320 angle=0.13731 delta=(0.01810,-0.38350,0.55299)
+  Sp_Hi_MSkirt0_F_00: distance=0.00128 angle=0.23819 delta=(-0.00001,-0.00123,0.00035)
+  Sp_Hi_MSkirt0_F_01: distance=0.53375 angle=0.02967 delta=(0.00429,-0.18005,-0.50244)
+  Sp_Hi_MSkirt0_L_00: distance=0.01790 angle=0.25140 delta=(-0.01113,-0.01068,-0.00909)
+  Sp_Hi_MSkirt0_L_01: distance=0.57415 angle=0.04198 delta=(-0.48812,-0.28179,0.10943)
+  joint 'Sp_Hi_MSkirt0_B_00_skirt_vertical_joint' anchor_error=0.00945 linear_violation=(0.00005,0.00285,0.00652) angular_violation=(0.01501,0.00000,0.00000) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_F_00_skirt_vertical_joint' anchor_error=0.00128 linear_violation=(0.00005,0.00127,0.00052) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_L_00_skirt_vertical_joint' anchor_error=0.01791 linear_violation=(0.00706,0.00258,0.01529) angular_violation=(0.00000,0.00000,0.00793) spring=[false, false, false, true, true, true]
+frame=60
+  Sp_Hi_MSkirt0_B_00: distance=0.00211 angle=0.28869 delta=(0.00005,-0.00170,-0.00125)
+  Sp_Hi_MSkirt0_B_01: distance=0.67044 angle=0.32181 delta=(-0.01221,-0.37651,0.55459)
+  Sp_Hi_MSkirt0_F_00: distance=0.01099 angle=0.28269 delta=(0.01097,-0.00028,-0.00059)
+  Sp_Hi_MSkirt0_F_01: distance=0.63592 angle=0.30066 delta=(0.01162,-0.19758,-0.60433)
+  Sp_Hi_MSkirt0_L_00: distance=0.01531 angle=0.20391 delta=(-0.01133,-0.00650,-0.00800)
+  Sp_Hi_MSkirt0_L_01: distance=0.51278 angle=0.16261 delta=(-0.44245,-0.25280,0.05720)
+  joint 'Sp_Hi_MSkirt0_B_00_skirt_vertical_joint' anchor_error=0.00211 linear_violation=(0.00005,0.00222,0.00027) angular_violation=(0.00758,0.00000,0.00000) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_F_00_skirt_vertical_joint' anchor_error=0.01099 linear_violation=(0.00629,0.00013,0.00009) angular_violation=(0.00333,0.00000,0.00352) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_L_00_skirt_vertical_joint' anchor_error=0.01531 linear_violation=(0.00922,0.00084,0.01226) angular_violation=(0.00000,0.00000,0.00846) spring=[false, false, false, true, true, true]
+frame=300
+  Sp_Hi_MSkirt0_B_00: distance=0.00210 angle=0.28793 delta=(0.00005,-0.00171,-0.00121)
+  Sp_Hi_MSkirt0_B_01: distance=0.67064 angle=0.30947 delta=(-0.00599,-0.37659,0.55490)
+  Sp_Hi_MSkirt0_F_00: distance=0.01087 angle=0.28254 delta=(0.01085,-0.00029,-0.00059)
+  Sp_Hi_MSkirt0_F_01: distance=0.63638 angle=0.30889 delta=(0.01169,-0.19759,-0.60482)
+  Sp_Hi_MSkirt0_L_00: distance=0.01496 angle=0.18985 delta=(-0.01114,-0.00650,-0.00758)
+  Sp_Hi_MSkirt0_L_01: distance=0.47810 angle=0.13863 delta=(-0.41053,-0.23866,0.05558)
+  joint 'Sp_Hi_MSkirt0_B_00_skirt_vertical_joint' anchor_error=0.00210 linear_violation=(0.00005,0.00207,0.00024) angular_violation=(0.00700,0.00000,0.00000) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_F_00_skirt_vertical_joint' anchor_error=0.01087 linear_violation=(0.01097,0.00001,0.00064) angular_violation=(0.00295,0.00000,0.00841) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_L_00_skirt_vertical_joint' anchor_error=0.01496 linear_violation=(0.00853,0.00076,0.01220) angular_violation=(0.00000,0.00000,0.00770) spring=[false, false, false, true, true, true]
+
+=== profile=Grass Wonder skirt case=collision-off collision_enabled=false ===
+frame=0
+  Sp_Hi_MSkirt0_B_00: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_B_01: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_F_00: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_F_01: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_L_00: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_L_01: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  joint 'Sp_Hi_MSkirt0_B_00_skirt_vertical_joint' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_F_00_skirt_vertical_joint' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_L_00_skirt_vertical_joint' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, true, true]
+frame=1
+  Sp_Hi_MSkirt0_B_00: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_B_01: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_F_00: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,-0.00000)
+  Sp_Hi_MSkirt0_F_01: distance=0.00000 angle=0.00000 delta=(-0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_L_00: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  Sp_Hi_MSkirt0_L_01: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  joint 'Sp_Hi_MSkirt0_B_00_skirt_vertical_joint' anchor_error=0.00000 linear_violation=(0.00000,0.00008,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_F_00_skirt_vertical_joint' anchor_error=0.00000 linear_violation=(0.00000,0.00004,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_L_00_skirt_vertical_joint' anchor_error=0.00000 linear_violation=(0.00000,0.00006,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, true, true]
+frame=10
+  Sp_Hi_MSkirt0_B_00: distance=0.00272 angle=0.27218 delta=(0.00006,-0.00103,-0.00252)
+  Sp_Hi_MSkirt0_B_01: distance=0.63601 angle=0.10741 delta=(-0.02664,-0.36627,0.51927)
+  Sp_Hi_MSkirt0_F_00: distance=0.00128 angle=0.23818 delta=(-0.00001,-0.00123,0.00035)
+  Sp_Hi_MSkirt0_F_01: distance=0.53374 angle=0.02968 delta=(0.00430,-0.18005,-0.50244)
+  Sp_Hi_MSkirt0_L_00: distance=0.00234 angle=0.25433 delta=(0.00101,-0.00203,-0.00058)
+  Sp_Hi_MSkirt0_L_01: distance=0.59075 angle=0.04629 delta=(-0.50849,-0.28537,0.09479)
+  joint 'Sp_Hi_MSkirt0_B_00_skirt_vertical_joint' anchor_error=0.00272 linear_violation=(0.00020,0.00172,0.00083) angular_violation=(0.00329,0.00000,0.00000) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_F_00_skirt_vertical_joint' anchor_error=0.00128 linear_violation=(0.00055,0.00136,0.00022) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_L_00_skirt_vertical_joint' anchor_error=0.00234 linear_violation=(0.00023,0.00252,0.00017) angular_violation=(0.00000,0.00000,0.00233) spring=[false, false, false, true, true, true]
+frame=60
+  Sp_Hi_MSkirt0_B_00: distance=0.00205 angle=0.28992 delta=(0.00006,0.00110,-0.00173)
+  Sp_Hi_MSkirt0_B_01: distance=0.67359 angle=0.32276 delta=(-0.03163,-0.37524,0.55850)
+  Sp_Hi_MSkirt0_F_00: distance=0.00091 angle=0.28368 delta=(0.00040,0.00034,0.00075)
+  Sp_Hi_MSkirt0_F_01: distance=0.63406 angle=0.30032 delta=(-0.00126,-0.19703,-0.60267)
+  Sp_Hi_MSkirt0_L_00: distance=0.00147 angle=0.21517 delta=(0.00085,-0.00120,-0.00009)
+  Sp_Hi_MSkirt0_L_01: distance=0.50891 angle=0.17551 delta=(-0.43867,-0.25201,0.05525)
+  joint 'Sp_Hi_MSkirt0_B_00_skirt_vertical_joint' anchor_error=0.00205 linear_violation=(0.00012,0.00017,0.00207) angular_violation=(0.00795,0.00000,0.00012) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_F_00_skirt_vertical_joint' anchor_error=0.00091 linear_violation=(0.00043,0.00004,0.00088) angular_violation=(0.00450,0.00000,0.00125) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_L_00_skirt_vertical_joint' anchor_error=0.00147 linear_violation=(0.00001,0.00110,0.00001) angular_violation=(0.00000,0.00000,0.00541) spring=[false, false, false, true, true, true]
+frame=300
+  Sp_Hi_MSkirt0_B_00: distance=0.00225 angle=0.28890 delta=(0.00008,0.00044,-0.00221)
+  Sp_Hi_MSkirt0_B_01: distance=0.67229 angle=0.32254 delta=(-0.03109,-0.37535,0.55689)
+  Sp_Hi_MSkirt0_F_00: distance=0.00100 angle=0.28351 delta=(0.00024,0.00001,0.00097)
+  Sp_Hi_MSkirt0_F_01: distance=0.63347 angle=0.30739 delta=(0.00182,-0.19725,-0.60197)
+  Sp_Hi_MSkirt0_L_00: distance=0.00108 angle=0.21415 delta=(0.00061,-0.00089,-0.00007)
+  Sp_Hi_MSkirt0_L_01: distance=0.50756 angle=0.16751 delta=(-0.43632,-0.25088,0.06553)
+  joint 'Sp_Hi_MSkirt0_B_00_skirt_vertical_joint' anchor_error=0.00225 linear_violation=(0.00013,0.00064,0.00198) angular_violation=(0.00749,0.00000,0.00052) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_F_00_skirt_vertical_joint' anchor_error=0.00100 linear_violation=(0.00032,0.00027,0.00085) angular_violation=(0.00431,0.00000,0.00070) spring=[false, false, false, true, true, true]
+  joint 'Sp_Hi_MSkirt0_L_00_skirt_vertical_joint' anchor_error=0.00108 linear_violation=(0.00001,0.00142,0.00001) angular_violation=(0.00000,0.00000,0.00330) spring=[false, false, false, true, true, true]

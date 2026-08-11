@@ -6,7 +6,9 @@
 
 #include "bw_api.h"
 
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 
 /* 
  * Bullet3 classes override operator new (btAlignedAlloc), 
@@ -149,6 +151,12 @@ void bw_world_step(BW_World* w, float dt, int max_substeps, float fixed_dt) {
     w->world->stepSimulation(dt, max_substeps, fixed_dt);
 }
 
+void bw_world_detect_collisions(BW_World* w) {
+    if (!w) return;
+    // 初始化阶段只需要建立真实接触流形，不能让求解器改写刚体状态。
+    w->world->performDiscreteCollisionDetection();
+}
+
 void bw_world_set_gravity(BW_World* w, float x, float y, float z) {
     if (!w) return;
     w->world->setGravity(btVector3(x, y, z));
@@ -190,6 +198,63 @@ void bw_world_set_kinematic_filter(BW_World* w, bool enabled) {
         delete w->kinematicFilter;
         w->kinematicFilter = nullptr;
     }
+}
+
+int bw_world_get_contact_manifold_count(BW_World* w) {
+    if (!w || !w->dispatcher) return 0;
+    int count = 0;
+    for (int i = 0; i < w->dispatcher->getNumManifolds(); ++i) {
+        btPersistentManifold* manifold = w->dispatcher->getManifoldByIndexInternal(i);
+        bool penetrating = false;
+        for (int j = 0; j < manifold->getNumContacts(); ++j) {
+            if (manifold->getContactPoint(j).getDistance() < 0.0f) {
+                penetrating = true;
+                break;
+            }
+        }
+        if (penetrating) ++count;
+    }
+    return count;
+}
+
+int bw_world_copy_contact_manifolds(
+    BW_World* w, BW_ContactManifold* output, int capacity)
+{
+    if (!w || !w->dispatcher || !output || capacity <= 0) return 0;
+    int written = 0;
+    for (int i = 0; i < w->dispatcher->getNumManifolds() && written < capacity; ++i) {
+        btPersistentManifold* manifold = w->dispatcher->getManifoldByIndexInternal(i);
+        BW_ContactManifold item{};
+        item.body_a = (BW_RigidBody*)manifold->getBody0();
+        item.body_b = (BW_RigidBody*)manifold->getBody1();
+
+        const btManifoldPoint* deepest = nullptr;
+        for (int j = 0; j < manifold->getNumContacts(); ++j) {
+            const btManifoldPoint& point = manifold->getContactPoint(j);
+            if (point.getDistance() >= 0.0f) continue;
+            ++item.contact_count;
+            const float depth = -point.getDistance();
+            item.total_applied_impulse += point.getAppliedImpulse();
+            item.max_applied_impulse = std::max(
+                item.max_applied_impulse, (float)point.getAppliedImpulse());
+            if (!deepest || depth > item.max_penetration_depth) {
+                deepest = &point;
+                item.max_penetration_depth = depth;
+            }
+        }
+        if (!deepest) continue;
+
+        const btVector3& point_a = deepest->getPositionWorldOnA();
+        const btVector3& point_b = deepest->getPositionWorldOnB();
+        const btVector3& normal = deepest->m_normalWorldOnB;
+        for (int axis = 0; axis < 3; ++axis) {
+            item.point_a[axis] = point_a[axis];
+            item.point_b[axis] = point_b[axis];
+            item.normal_on_b[axis] = normal[axis];
+        }
+        output[written++] = item;
+    }
+    return written;
 }
 
 /* ===== 碰撞形状 ===== */
@@ -292,7 +357,25 @@ void bw_rigid_body_set_transform(BW_RigidBody* rb, const float* matrix4x4) {
     btRigidBody* body = (btRigidBody*)rb;
     btTransform t = mat4_to_bt(matrix4x4);
     body->setWorldTransform(t);
+    body->setInterpolationWorldTransform(t);
     body->getMotionState()->setWorldTransform(t);
+}
+
+void bw_rigid_body_set_kinematic_target(BW_RigidBody* rb, const float* matrix4x4) {
+    if (!rb || !matrix4x4) return;
+    btRigidBody* body = (btRigidBody*)rb;
+    btTransform t = mat4_to_bt(matrix4x4);
+
+    /*
+     * 运动学目标只写入 MotionState。Bullet 会在 saveKinematicState 中
+     * 使用上一物理姿态和当前目标计算线速度及角速度。
+     */
+    if (body->getMotionState()) {
+        body->getMotionState()->setWorldTransform(t);
+    } else {
+        body->setWorldTransform(t);
+    }
+    body->activate(true);
 }
 
 void bw_rigid_body_get_position(BW_RigidBody* rb, float* x, float* y, float* z) {
@@ -410,6 +493,18 @@ void bw_rigid_body_apply_central_force(BW_RigidBody* rb, float x, float y, float
     body->applyCentralForce(btVector3(x, y, z));
 }
 
+void bw_rigid_body_set_ignore_collision_check(
+    BW_RigidBody* rb, BW_RigidBody* other, bool ignore)
+{
+    if (!rb || !other) return;
+    ((btRigidBody*)rb)->setIgnoreCollisionCheck((btRigidBody*)other, ignore);
+}
+
+bool bw_rigid_body_check_collide_with(BW_RigidBody* rb, BW_RigidBody* other) {
+    if (!rb || !other) return false;
+    return ((btRigidBody*)rb)->checkCollideWith((btRigidBody*)other);
+}
+
 /* ===== 6DOF 弹簧约束 ===== */
 
 BW_Constraint* bw_6dof_spring_create(
@@ -496,4 +591,55 @@ void bw_6dof_spring_use_frame_offset(BW_Constraint* c, bool on) {
     if (!c) return;
     btGeneric6DofSpringConstraint* con = (btGeneric6DofSpringConstraint*)c;
     con->setUseFrameOffset(on);
+}
+
+static float limit_violation(float value, float lower, float upper) {
+    if (lower > upper) return 0.0f;
+    if (value < lower) return lower - value;
+    if (value > upper) return value - upper;
+    return 0.0f;
+}
+
+bool bw_6dof_spring_get_diagnostic(
+    BW_Constraint* c, BW_ConstraintDiagnostic* output)
+{
+    if (!c || !output) return false;
+    auto* con = (btGeneric6DofSpringConstraint*)c;
+
+    // Refresh Bullet's cached values so diagnostics work before the first step.
+    con->calculateTransforms(
+        con->getRigidBodyA().getCenterOfMassTransform(),
+        con->getRigidBodyB().getCenterOfMassTransform());
+    bt_to_mat4(con->getFrameOffsetA(), output->frame_a);
+    bt_to_mat4(con->getFrameOffsetB(), output->frame_b);
+
+    btVector3 linear_lower;
+    btVector3 linear_upper;
+    btVector3 angular_lower;
+    btVector3 angular_upper;
+    con->getLinearLowerLimit(linear_lower);
+    con->getLinearUpperLimit(linear_upper);
+    con->getAngularLowerLimit(angular_lower);
+    con->getAngularUpperLimit(angular_upper);
+
+    for (int axis = 0; axis < 3; ++axis) {
+        output->linear_position[axis] = con->getRelativePivotPosition(axis);
+        output->angular_position[axis] = con->getAngle(axis);
+        output->linear_lower[axis] = linear_lower[axis];
+        output->linear_upper[axis] = linear_upper[axis];
+        output->angular_lower[axis] = angular_lower[axis];
+        output->angular_upper[axis] = angular_upper[axis];
+        output->linear_violation[axis] = limit_violation(
+            output->linear_position[axis], linear_lower[axis], linear_upper[axis]);
+        output->angular_violation[axis] = limit_violation(
+            output->angular_position[axis], angular_lower[axis], angular_upper[axis]);
+    }
+    for (int axis = 0; axis < 6; ++axis) {
+        output->stiffness[axis] = con->getStiffness(axis);
+        output->damping[axis] = con->getDamping(axis);
+        output->equilibrium[axis] = con->getEquilibriumPoint(axis);
+        output->spring_enabled[axis] = con->isSpringEnabled(axis) ? 1 : 0;
+    }
+    output->use_frame_offset = con->getUseFrameOffset() ? 1 : 0;
+    return true;
 }

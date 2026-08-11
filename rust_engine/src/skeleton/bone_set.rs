@@ -310,7 +310,8 @@ impl BoneSet {
     /// 参考 nphysics Multibody::update_kinematics
     pub fn update_transforms(&mut self, after_physics: bool) {
         // 1. 更新本地变换（跳过物理骨骼）
-        for &idx in &self.sorted_indices.clone() {
+        for order in 0..self.sorted_indices.len() {
+            let idx = self.sorted_indices[order];
             if self.links[idx].deform_after_physics() != after_physics {
                 continue;
             }
@@ -321,7 +322,8 @@ impl BoneSet {
         }
 
         // 2. 从根骨骼递归更新全局变换
-        for &idx in &self.sorted_indices.clone() {
+        for order in 0..self.sorted_indices.len() {
+            let idx = self.sorted_indices[order];
             if self.links[idx].deform_after_physics() != after_physics {
                 continue;
             }
@@ -331,7 +333,8 @@ impl BoneSet {
         }
 
         // 3. 处理附加变换和 IK
-        for &idx in &self.sorted_indices.clone() {
+        for order in 0..self.sorted_indices.len() {
+            let idx = self.sorted_indices[order];
             if self.links[idx].deform_after_physics() != after_physics {
                 continue;
             }
@@ -351,7 +354,8 @@ impl BoneSet {
         }
 
         // 4. 最终更新全局变换
-        for &idx in &self.sorted_indices.clone() {
+        for order in 0..self.sorted_indices.len() {
+            let idx = self.sorted_indices[order];
             if self.links[idx].deform_after_physics() != after_physics {
                 continue;
             }
@@ -368,8 +372,8 @@ impl BoneSet {
         // 跳过物理骨骼（它们的变换由物理系统设置）
         if self.physics_bone_indices.contains(&index) {
             // 仍需递归更新子骨骼
-            let children = self.children_cache[index].clone();
-            for child_idx in children {
+            for child_order in 0..self.children_cache[index].len() {
+                let child_idx = self.children_cache[index][child_order];
                 self.update_global_transform_recursive(child_idx);
             }
             return;
@@ -387,8 +391,8 @@ impl BoneSet {
         }
 
         // 递归更新子骨骼
-        let children = self.children_cache[index].clone();
-        for child_idx in children {
+        for child_order in 0..self.children_cache[index].len() {
+            let child_idx = self.children_cache[index][child_order];
             self.update_global_transform_recursive(child_idx);
         }
     }
@@ -454,8 +458,7 @@ impl BoneSet {
             .iter()
             .position(|s| s.bone_index == bone_index);
         if let Some(idx) = solver_idx {
-            let solver = self.ik_solvers[idx].clone();
-            solver.solve(&mut self.links, &self.children_cache);
+            self.ik_solvers[idx].solve(&mut self.links, &self.children_cache);
             self.update_global_transform_recursive(bone_index);
         }
     }
@@ -589,9 +592,8 @@ impl BoneSet {
     /// 递归更新子骨骼全局变换
     fn update_children_global_transform(&mut self, parent_index: usize) {
         let parent_global = self.links[parent_index].local_to_world;
-        let children = self.children_cache[parent_index].clone();
-
-        for child_idx in children {
+        for child_order in 0..self.children_cache[parent_index].len() {
+            let child_idx = self.children_cache[parent_index][child_order];
             self.links[child_idx].local_to_world =
                 parent_global * self.links[child_idx].local_to_parent;
             self.update_children_global_transform(child_idx);
@@ -616,7 +618,8 @@ impl BoneSet {
 
     /// 批量更新物理骨骼后，更新非物理骨骼
     pub fn update_non_physics_children(&mut self, physics_bone_indices: &HashSet<usize>) {
-        for &idx in &self.sorted_indices.clone() {
+        for order in 0..self.sorted_indices.len() {
+            let idx = self.sorted_indices[order];
             if physics_bone_indices.contains(&idx) {
                 continue;
             }

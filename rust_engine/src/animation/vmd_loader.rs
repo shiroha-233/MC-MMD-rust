@@ -7,6 +7,9 @@ use std::path::Path;
 use byteorder::{LittleEndian, ReadBytesExt};
 use glam::{Quat, Vec3};
 
+use crate::model::hand_attachment::{
+    find_vmd_attachment_target, is_preferred_vmd_attachment_track,
+};
 use crate::morph::MorphManager;
 use crate::skeleton::BoneManager;
 use crate::{MmdError, Result};
@@ -530,7 +533,14 @@ impl VmdAnimation {
 
         // 应用骨骼动画
         for bone_name in self.motion.bone_track_names() {
-            if let Some(bone_idx) = bone_manager.find_bone_by_name(bone_name) {
+            // TaCZ 主手录制模型与目标模型可能分别使用 Hand_Attach_R、ダミー.R 或右ダミー。
+            // 精确名称优先；只重定向右挂点，左手与普通骨骼仍保持严格名称匹配。
+            let bone_idx = bone_manager.find_bone_by_name(bone_name).or_else(|| {
+                is_preferred_vmd_attachment_track(bone_name, self.motion.bone_track_names())
+                    .then(|| find_vmd_attachment_target(bone_manager, bone_name))
+                    .flatten()
+            });
+            if let Some(bone_idx) = bone_idx {
                 let raw = self
                     .motion
                     .find_bone_transform(bone_name, frame_index, amount);

@@ -1,7 +1,7 @@
 // 根项目配置 - 多模块项目
 plugins {
 	id 'architectury-plugin' version '3.4.162'
-	id 'dev.architectury.loom' version '1.7.435' apply false
+	id 'dev.architectury.loom' version '1.9.436' apply false
 }
 
 architectury {
@@ -16,6 +16,13 @@ allprojects {
 	version = '1.0.5-1.20.1'
 	
 			repositories {
+			// Loom 会把本地生产环境 Mod 重映射为开发环境坐标，必须优先从本地缓存解析。
+			maven {
+				url = rootProject.file('.gradle/loom-cache/remapped_mods')
+				content {
+					includeGroupByRegex 'loom_mappings_.*'
+				}
+			}
 			maven { url = 'https://maven.architectury.dev/' }
 			maven { url = 'https://maven.fabricmc.net/' }
 			maven { url = 'https://maven.minecraftforge.net/' }

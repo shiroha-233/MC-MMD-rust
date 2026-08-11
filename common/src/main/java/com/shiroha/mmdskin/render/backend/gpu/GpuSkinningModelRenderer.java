@@ -10,7 +10,10 @@ import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.render.material.ModelMaterial;
 import com.shiroha.mmdskin.render.material.SubMeshDrawHelper;
 import com.shiroha.mmdskin.render.pipeline.LightingHelper;
+import com.shiroha.mmdskin.render.pipeline.GpuTimerQueryPool;
 import com.shiroha.mmdskin.render.pipeline.RenderPerformanceProfiler;
+import com.shiroha.mmdskin.render.pipeline.RenderPerformanceProfiler.TransferKind;
+import com.shiroha.mmdskin.render.scene.RenderScene;
 import com.shiroha.mmdskin.render.shader.SkinningComputeShader;
 import com.shiroha.mmdskin.render.shader.ToonRenderHelper;
 import com.shiroha.mmdskin.render.shader.ToonShaderCpu;
@@ -27,6 +30,8 @@ import org.lwjgl.system.MemoryUtil;
 /** 文件职责：执行 GPU skinning 模型实例的渲染流程。 */
 final class GpuSkinningModelRenderer {
     private static final Logger logger = LogManager.getLogger();
+    private static final long FIRST_PERSON_DIAGNOSTIC_INTERVAL_NANOS = 5_000_000_000L;
+    private static long lastFirstPersonDiagnosticNanos;
 
     private GpuSkinningModelRenderer() {
     }
@@ -36,7 +41,8 @@ final class GpuSkinningModelRenderer {
                        float entityYaw,
                        float entityPitch,
                        Vector3f entityTrans,
-                       PoseStack deliverStack) {
+                       PoseStack deliverStack,
+                       RenderScene context) {
         Minecraft minecraft = Minecraft.getInstance();
         LightingHelper.LightData light = LightingHelper.sampleLight(entityIn, minecraft);
         var workingQuat = target.workingQuaternion();
@@ -49,13 +55,13 @@ final class GpuSkinningModelRenderer {
         target.light0Direction.rotate(workingQuat.identity().rotateY(yawRad));
         target.light1Direction.rotate(workingQuat.identity().rotateY(yawRad));
 
-        deliverStack.mulPose(workingQuat.identity().rotateY(-yawRad));
-        deliverStack.mulPose(workingQuat.identity().rotateX(entityPitch * ((float) Math.PI / 180F)));
-        deliverStack.translate(entityTrans.x, entityTrans.y, entityTrans.z);
-        float baseScale = target.modelScaleValue();
-        deliverStack.scale(baseScale, baseScale, baseScale);
+        target.applyModelRootTransform(deliverStack, entityYaw, entityPitch, entityTrans);
 
         updateGpuStateIfDirty(target, nativeBackend, modelHandle);
+        boolean firstPersonView = context != null && context.isFirstPerson();
+        boolean firstPersonIndexReady = firstPersonView
+                && refreshFirstPersonIndices(target, nativeBackend, modelHandle, deliverStack);
+        refreshSubMeshData(target, nativeBackend, modelHandle, firstPersonIndexReady);
 
         boolean useToon = initializeToonShaderIfNeeded();
 
@@ -71,10 +77,15 @@ final class GpuSkinningModelRenderer {
         deliverStack.last().pose().get(target.modelViewMatBuff);
         RenderSystem.getProjectionMatrix().get(target.projMatBuff);
 
-        GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.indexBufferObject);
+        // EBO 与子网格范围必须同时切换，避免异常帧沿用不匹配的索引偏移。
+        int activeIndexBufferObject = firstPersonIndexReady
+                ? target.firstPersonIndexBufferObject
+                : target.indexBufferObject;
+        GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, activeIndexBufferObject);
         target.currentDeliverStack = deliverStack;
 
         long drawTimer = RenderPerformanceProfiler.get().startTimer();
+        GpuTimerQueryPool.draw().begin();
         try {
             if (useToon && GpuSkinningModelInstance.toonShaderCpu != null && GpuSkinningModelInstance.toonShaderCpu.isInitialized()) {
                 renderToon(target, minecraft, light.intensity());
@@ -82,6 +93,7 @@ final class GpuSkinningModelRenderer {
                 renderNormal(target, minecraft, light.intensity(), light.blockLight(), light.skyLight(), light.skyDarken());
             }
         } finally {
+            GpuTimerQueryPool.draw().end();
             RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_DRAW, drawTimer);
         }
 
@@ -97,6 +109,53 @@ final class GpuSkinningModelRenderer {
         }
         BufferUploader.reset();
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+    }
+
+    private static boolean refreshFirstPersonIndices(GpuSkinningModelInstance target,
+                                                     NativeRenderBackendPort nativeBackend,
+                                                     long modelHandle,
+                                                     PoseStack deliverStack) {
+        if (target.firstPersonIndexBufferObject <= 0 || target.firstPersonIndexBuffer == null
+                || target.firstPersonMatrixBuffer == null) {
+            return false;
+        }
+        // Rust 只局部蒙皮预计算的头颈候选，避免 GPU readback。
+        target.firstPersonMatrixFloatBuffer.position(0);
+        deliverStack.last().pose().get(target.firstPersonMatrixFloatBuffer);
+        target.firstPersonMatrixFloatBuffer.position(16);
+        RenderSystem.getProjectionMatrix().get(target.firstPersonMatrixFloatBuffer);
+        target.firstPersonIndexBuffer.clear();
+        int indexCount = nativeBackend.refreshFirstPersonIndices(
+                modelHandle, target.firstPersonMatrixBuffer, true, target.firstPersonIndexBuffer);
+        diagnoseFirstPersonIndices(nativeBackend, modelHandle, indexCount);
+        if (indexCount <= 0) {
+            return false;
+        }
+        target.firstPersonIndexBuffer.position(0);
+        target.firstPersonIndexBuffer.limit(indexCount * target.indexElementSize);
+        // EBO 绑定属于当前 VAO 状态。此处发生在绑定 MMD VAO 之前，不能污染 Minecraft 正在使用的 VAO。
+        GL46C.glNamedBufferSubData(target.firstPersonIndexBufferObject, 0, target.firstPersonIndexBuffer);
+        RenderPerformanceProfiler.get().recordTransfer(TransferKind.FIRST_PERSON_INDEX,
+                (long) indexCount * target.indexElementSize);
+        target.firstPersonIndexBuffer.clear();
+        return true;
+    }
+
+    /** 低频记录最终上传的第一人称几何量，用于区分网格为空与姿态离屏。 */
+    private static void diagnoseFirstPersonIndices(NativeRenderBackendPort nativeBackend,
+                                                   long modelHandle, int firstPersonIndexCount) {
+        long now = System.nanoTime();
+        if (now - lastFirstPersonDiagnosticNanos < FIRST_PERSON_DIAGNOSTIC_INTERVAL_NANOS) {
+            return;
+        }
+        lastFirstPersonDiagnosticNanos = now;
+        long originalIndexCount = nativeBackend.getIndexCount(modelHandle);
+        double ratio = originalIndexCount > 0
+                ? (double) firstPersonIndexCount / (double) originalIndexCount
+                : 0.0;
+        logger.info("MMD 第一人称索引: backend=GPU, kept={}, original={}, ratio={}",
+                firstPersonIndexCount, originalIndexCount,
+                String.format(java.util.Locale.ROOT, "%.4f", ratio));
     }
 
     private static boolean initializeToonShaderIfNeeded() {
@@ -123,6 +182,11 @@ final class GpuSkinningModelRenderer {
                                               long modelHandle) {
         long currentRevision = target.nativeUpdateRevisionValue();
         if (target.lastGpuUploadRevision == currentRevision) {
+            RenderPerformanceProfiler profiler = RenderPerformanceProfiler.get();
+            profiler.recordAvoidedUpload(TransferKind.BONE, target.lastBoneUploadBytes);
+            profiler.recordAvoidedUpload(TransferKind.VERTEX_MORPH, target.lastVertexMorphUploadBytes);
+            profiler.recordAvoidedUpload(TransferKind.UV_MORPH, target.lastUvMorphUploadBytes);
+            profiler.recordAvoidedUpload(TransferKind.MATERIAL_MORPH, target.lastMaterialMorphTransferBytes);
             return;
         }
 
@@ -144,19 +208,37 @@ final class GpuSkinningModelRenderer {
         if (target.materialMorphResultCountValue() > 0) {
             long materialMorphTimer = RenderPerformanceProfiler.get().startTimer();
             target.loadMaterialMorphResults();
+            target.lastMaterialMorphTransferBytes = (long) target.materialMorphResultCountValue() * 56L * Float.BYTES;
+            RenderPerformanceProfiler.get().recordTransfer(TransferKind.MATERIAL_MORPH,
+                    target.lastMaterialMorphTransferBytes);
             RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_MATERIAL_MORPH_FETCH, materialMorphTimer);
         }
 
         long computeTimer = RenderPerformanceProfiler.get().startTimer();
-        GpuSkinningModelInstance.computeShader.dispatch(target.cachedDispatchParams);
-        RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_COMPUTE_DISPATCH, computeTimer);
-
-        long subMeshTimer = RenderPerformanceProfiler.get().startTimer();
-        target.subMeshDataBuf.clear();
-        nativeBackend.batchGetSubMeshData(modelHandle, target.subMeshDataBuf);
-        RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_SUB_MESH_FETCH, subMeshTimer);
+        GpuTimerQueryPool.compute().begin();
+        try {
+            GpuSkinningModelInstance.computeShader.dispatch(target.cachedDispatchParams);
+        } finally {
+            GpuTimerQueryPool.compute().end();
+            RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_COMPUTE_DISPATCH, computeTimer);
+        }
 
         target.lastGpuUploadRevision = currentRevision;
+    }
+
+    private static void refreshSubMeshData(GpuSkinningModelInstance target,
+                                           NativeRenderBackendPort nativeBackend,
+                                           long modelHandle,
+                                           boolean firstPersonIndexReady) {
+        // 可见性属于单次 Draw，不能跟随动画 revision 缓存。
+        long subMeshTimer = RenderPerformanceProfiler.get().startTimer();
+        target.subMeshDataBuf.clear();
+        int copiedSubMeshes = nativeBackend.batchGetSubMeshData(
+                modelHandle,
+                target.subMeshDataBuf,
+                firstPersonIndexReady);
+        RenderPerformanceProfiler.get().recordTransfer(TransferKind.SUB_MESH, (long) copiedSubMeshes * 20L);
+        RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_SUB_MESH_FETCH, subMeshTimer);
     }
 
     private static void cleanupVertexAttributes(GpuSkinningModelInstance target) {
@@ -275,6 +357,7 @@ final class GpuSkinningModelRenderer {
         target.uv2Buffer.flip();
         GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.uv2BufferObject);
         GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv2Buffer);
+        RenderPerformanceProfiler.get().recordTransfer(TransferKind.LIGHT, (long) target.vertexCount * 8L);
         target.lastBlockBrightness = blockBrightness;
         target.lastSkyBrightness = skyBrightness;
     }

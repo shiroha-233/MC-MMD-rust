@@ -2,6 +2,7 @@ package com.shiroha.mmdskin.mixin.forge;
 
 import com.shiroha.mmdskin.compat.vr.VRArmHider;
 import com.shiroha.mmdskin.compat.vr.VRHandRenderer;
+import com.shiroha.mmdskin.compat.tacz.TaczGunDetector;
 import com.shiroha.mmdskin.forge.YsmCompat;
 import com.shiroha.mmdskin.player.runtime.FirstPersonManager;
 import com.shiroha.mmdskin.player.sync.PlayerModelSyncService;
@@ -47,7 +48,10 @@ public abstract class ItemInHandRendererMixin {
             return;
         }
 
-        if (FirstPersonManager.shouldRenderFirstPerson() && isMmdActive && !isVanilaMmdModel) {
+        // TaCZ 必须继续执行原生第一人称枪模流程，才能使用每把枪和瞄具的数据驱动 ADS 节点。
+        boolean taczMainHand = TaczGunDetector.isGun(player.getMainHandItem());
+        if (FirstPersonManager.shouldRenderFirstPerson() && isMmdActive && !isVanilaMmdModel
+                && !taczMainHand) {
             ci.cancel();
         }
     }
@@ -61,6 +65,13 @@ public abstract class ItemInHandRendererMixin {
 
             VRHandRenderer.renderHandItem(poseStack, buffer, combinedLight, hand);
             ci.cancel();
+            return;
+        }
+        if (hand == InteractionHand.OFF_HAND
+                && FirstPersonManager.shouldRenderFirstPerson()
+                && TaczGunDetector.isGun(player.getMainHandItem())) {
+            // 放行 TaCZ 主手枪模时仍由 MMD 绘制副手，避免副手物品出现两份。
+            ci.cancel();
         }
     }
 
@@ -69,6 +80,13 @@ public abstract class ItemInHandRendererMixin {
             int combinedLight, float equippedProgress, float swingProgress,
             HumanoidArm side, CallbackInfo ci) {
         if (VRArmHider.shouldHideVRArms()) {
+            ci.cancel();
+            return;
+        }
+        LocalPlayer player = net.minecraft.client.Minecraft.getInstance().player;
+        if (player != null && FirstPersonManager.shouldRenderFirstPerson()
+                && TaczGunDetector.isGun(player.getMainHandItem())) {
+            // 保留 TaCZ 枪模，但隐藏原版手臂，手臂由 MMD 第一人称模型负责。
             ci.cancel();
         }
     }

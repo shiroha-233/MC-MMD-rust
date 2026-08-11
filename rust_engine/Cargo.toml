@@ -54,7 +54,7 @@ pollster = { version = "0.3", optional = true }
 
 [features]
 default = []
-viewer = ["glium", "winit", "glutin", "glutin-winit", "raw-window-handle", "env_logger", "egui", "egui_glium"]
+viewer = ["glium", "winit", "glutin", "glutin-winit", "raw-window-handle", "env_logger", "egui", "egui_glium", "rfd"]
 vr_demo = [
     "winit",
     "env_logger",

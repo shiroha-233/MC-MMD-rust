@@ -34,9 +34,12 @@ import com.shiroha.mmdskin.render.pipeline.LivingEntityModelStateHelper;
 import com.shiroha.mmdskin.render.port.RenderBackendSettingsPort;
 import com.shiroha.mmdskin.scene.client.SceneModelManager;
 import com.shiroha.mmdskin.texture.runtime.TextureRepository;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /** 文件职责：作为客户端渲染运行时的唯一组合根，统一持有仓储与后端服务。 */
 public final class ClientRenderRuntime {
+    private static final Logger logger = LogManager.getLogger();
     private static volatile ClientRenderRuntime instance;
 
     private final NativeRuntimePort nativeRuntimePort;
@@ -48,6 +51,11 @@ public final class ClientRenderRuntime {
         this.nativeRuntimePort = NativeRuntimeBridgeHolder.get();
         this.runtimeConfigPort = RuntimeConfigPort.fromConfigManager();
         RuntimeConfigPortHolder.set(runtimeConfigPort);
+        PhysicsConfigSnapshot startupPhysicsConfig = PhysicsConfigSnapshot.fromConfigManager();
+        this.nativeRuntimePort.applyPhysicsConfig(startupPhysicsConfig);
+        if (startupPhysicsConfig.debugLog()) {
+            logger.info("[Bullet3][诊断] 启动物理配置已同步，模型加载后将自动输出聚合诊断");
+        }
         NativeRenderBackendPort nativeRenderBackendPort = nativeRuntimePort;
         PlatformCapabilityPort platformCapabilityPort = nativeRuntimePort;
         this.renderBackendRegistry = new RenderBackendRegistry(nativeRenderBackendPort, platformCapabilityPort, runtimeConfigPort);

@@ -1,0 +1,274 @@
+﻿
+=== profile=Rin ribbons case=default collision_enabled=true ===
+frame=0
+  裙_1_8: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  裙_1_10: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  左衣帶_0_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  左衣帶_4_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  左衣帶_8_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  右衣帶_0_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  右衣帶_4_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  右衣帶_8_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  joint '左衣帶_0_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, false, false, false]
+  joint '左衣帶_1_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_2_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_3_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_4_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_5_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_6_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_7_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_8_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_0_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, false, false, false]
+  joint '右衣帶_1_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_2_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_3_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_4_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_5_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_6_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_7_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_8_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+frame=1
+  裙_1_8: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  裙_1_10: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  左衣帶_0_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  左衣帶_4_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  左衣帶_8_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  右衣帶_0_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  右衣帶_4_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  右衣帶_8_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  joint '左衣帶_0_1' anchor_error=0.00000 linear_violation=(0.00130,0.00061,0.00003) angular_violation=(0.00510,0.00193,0.00116) spring=[false, false, false, false, false, false]
+  joint '左衣帶_1_1' anchor_error=0.00000 linear_violation=(0.00266,0.00263,0.00170) angular_violation=(0.00000,0.00010,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_2_1' anchor_error=0.00000 linear_violation=(0.00243,0.00436,0.00016) angular_violation=(0.00000,0.00181,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_3_1' anchor_error=0.00000 linear_violation=(0.00102,0.00086,0.00000) angular_violation=(0.00000,0.00004,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_4_1' anchor_error=0.00000 linear_violation=(0.00038,0.00000,0.00000) angular_violation=(0.00000,0.00002,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_5_1' anchor_error=0.00000 linear_violation=(0.00174,0.00706,0.00001) angular_violation=(0.00000,0.00032,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_6_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_7_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_8_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_0_1' anchor_error=0.00000 linear_violation=(0.00195,0.00285,0.00048) angular_violation=(0.00675,0.00259,0.00110) spring=[false, false, false, false, false, false]
+  joint '右衣帶_1_1' anchor_error=0.00000 linear_violation=(0.00226,0.00195,0.00000) angular_violation=(0.00000,0.00024,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_2_1' anchor_error=0.00000 linear_violation=(0.00146,0.00140,0.00002) angular_violation=(0.00000,0.00237,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_3_1' anchor_error=0.00000 linear_violation=(0.00070,0.00000,0.00000) angular_violation=(0.00000,0.00005,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_4_1' anchor_error=0.00000 linear_violation=(0.00078,0.00163,0.00001) angular_violation=(0.00000,0.00003,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_5_1' anchor_error=0.00000 linear_violation=(0.00200,0.00812,0.00002) angular_violation=(0.00000,0.00035,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_6_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_7_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_8_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+frame=10
+  裙_1_8: distance=0.10126 angle=0.21406 delta=(-0.02711,-0.05109,0.08311)
+  裙_1_10: distance=0.11021 angle=0.21474 delta=(0.02788,-0.05355,0.09221)
+  左衣帶_0_1: distance=0.21163 angle=0.16586 delta=(-0.02613,-0.16424,0.13087)
+  左衣帶_4_1: distance=0.44926 angle=0.01061 delta=(-0.20180,-0.33534,0.22061)
+  左衣帶_8_1: distance=0.43949 angle=0.03861 delta=(-0.14699,-0.35894,0.20667)
+  右衣帶_0_1: distance=0.22282 angle=0.17238 delta=(0.03902,-0.17215,0.13598)
+  右衣帶_4_1: distance=0.44086 angle=0.01516 delta=(0.20716,-0.32076,0.22035)
+  右衣帶_8_1: distance=0.44142 angle=0.03962 delta=(0.14622,-0.36227,0.20550)
+  joint '左衣帶_0_1' anchor_error=0.00781 linear_violation=(0.00540,0.00575,0.00183) angular_violation=(0.05029,0.01505,0.00105) spring=[false, false, false, false, false, false]
+  joint '左衣帶_1_1' anchor_error=0.03339 linear_violation=(0.01193,0.02658,0.01364) angular_violation=(0.01559,0.00999,0.01025) spring=[false, false, false, true, false, false]
+  joint '左衣帶_2_1' anchor_error=0.05039 linear_violation=(0.02359,0.04338,0.00456) angular_violation=(0.00000,0.00224,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_3_1' anchor_error=0.02223 linear_violation=(0.01585,0.01559,0.00095) angular_violation=(0.00000,0.00053,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_4_1' anchor_error=0.01689 linear_violation=(0.01080,0.01280,0.00065) angular_violation=(0.00000,0.00174,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_5_1' anchor_error=0.00658 linear_violation=(0.00648,0.00004,0.00008) angular_violation=(0.00000,0.00010,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_6_1' anchor_error=0.01888 linear_violation=(0.00942,0.01601,0.00018) angular_violation=(0.00000,0.00092,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_7_1' anchor_error=0.01899 linear_violation=(0.00828,0.01674,0.00016) angular_violation=(0.00000,0.00124,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_8_1' anchor_error=0.00421 linear_violation=(0.00415,0.00011,0.00009) angular_violation=(0.00000,0.00014,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_0_1' anchor_error=0.00879 linear_violation=(0.00689,0.00699,0.00296) angular_violation=(0.04963,0.00715,0.00032) spring=[false, false, false, false, false, false]
+  joint '右衣帶_1_1' anchor_error=0.05379 linear_violation=(0.02505,0.04448,0.01487) angular_violation=(0.01482,0.00884,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_2_1' anchor_error=0.02556 linear_violation=(0.01832,0.01809,0.00196) angular_violation=(0.00000,0.00491,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_3_1' anchor_error=0.02081 linear_violation=(0.01479,0.01537,0.00058) angular_violation=(0.00000,0.00083,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_4_1' anchor_error=0.00693 linear_violation=(0.00699,0.00010,0.00005) angular_violation=(0.00000,0.00056,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_5_1' anchor_error=0.02155 linear_violation=(0.01106,0.01855,0.00006) angular_violation=(0.00000,0.00145,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_6_1' anchor_error=0.02521 linear_violation=(0.01101,0.02291,0.00019) angular_violation=(0.00000,0.00218,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_7_1' anchor_error=0.00445 linear_violation=(0.00446,0.00011,0.00008) angular_violation=(0.00000,0.00028,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_8_1' anchor_error=0.01178 linear_violation=(0.00639,0.00998,0.00016) angular_violation=(0.00000,0.00092,0.00000) spring=[false, false, false, true, false, false]
+frame=60
+  裙_1_8: distance=0.12221 angle=0.28553 delta=(-0.03176,-0.05725,0.10319)
+  裙_1_10: distance=0.13275 angle=0.25738 delta=(0.03266,-0.05927,0.11421)
+  左衣帶_0_1: distance=0.26835 angle=0.24495 delta=(-0.03743,-0.20524,0.16879)
+  左衣帶_4_1: distance=1.47029 angle=0.42092 delta=(-0.72368,-0.53985,1.16043)
+  左衣帶_8_1: distance=3.62686 angle=0.52585 delta=(-1.96765,-0.93170,2.90076)
+  右衣帶_0_1: distance=0.26326 angle=0.22505 delta=(0.04866,-0.19638,0.16844)
+  右衣帶_4_1: distance=1.46702 angle=0.41960 delta=(0.78093,-0.52080,1.12742)
+  右衣帶_8_1: distance=3.63190 angle=0.51242 delta=(2.02690,-0.93037,2.86649)
+  joint '左衣帶_0_1' anchor_error=0.00917 linear_violation=(0.00592,0.00665,0.00213) angular_violation=(0.04330,0.01189,0.01089) spring=[false, false, false, false, false, false]
+  joint '左衣帶_1_1' anchor_error=0.03006 linear_violation=(0.00601,0.02881,0.00587) angular_violation=(0.00000,0.00047,0.03962) spring=[false, false, false, true, false, false]
+  joint '左衣帶_2_1' anchor_error=0.04302 linear_violation=(0.01178,0.04136,0.00124) angular_violation=(0.00000,0.00055,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_3_1' anchor_error=0.01931 linear_violation=(0.01262,0.01462,0.00027) angular_violation=(0.00000,0.00012,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_4_1' anchor_error=0.01534 linear_violation=(0.00961,0.01194,0.00015) angular_violation=(0.00000,0.00002,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_5_1' anchor_error=0.00587 linear_violation=(0.00590,0.00002,0.00000) angular_violation=(0.00000,0.00051,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_6_1' anchor_error=0.01697 linear_violation=(0.00839,0.01478,0.00012) angular_violation=(0.00000,0.00052,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_7_1' anchor_error=0.01711 linear_violation=(0.00751,0.01540,0.00032) angular_violation=(0.00000,0.00039,0.00063) spring=[false, false, false, true, false, false]
+  joint '左衣帶_8_1' anchor_error=0.00371 linear_violation=(0.00371,0.00014,0.00001) angular_violation=(0.00000,0.00019,0.00020) spring=[false, false, false, true, false, false]
+  joint '右衣帶_0_1' anchor_error=0.00995 linear_violation=(0.00587,0.00763,0.00234) angular_violation=(0.04215,0.00992,0.01938) spring=[false, false, false, false, false, false]
+  joint '右衣帶_1_1' anchor_error=0.04784 linear_violation=(0.00264,0.04655,0.01058) angular_violation=(0.00137,0.00723,0.03410) spring=[false, false, false, true, false, false]
+  joint '右衣帶_2_1' anchor_error=0.02079 linear_violation=(0.01203,0.01695,0.00066) angular_violation=(0.00000,0.00318,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_3_1' anchor_error=0.01882 linear_violation=(0.01227,0.01427,0.00029) angular_violation=(0.00000,0.00027,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_4_1' anchor_error=0.00648 linear_violation=(0.00646,0.00000,0.00000) angular_violation=(0.00000,0.00003,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_5_1' anchor_error=0.01975 linear_violation=(0.01008,0.01700,0.00015) angular_violation=(0.00000,0.00061,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_6_1' anchor_error=0.02324 linear_violation=(0.00996,0.02105,0.00028) angular_violation=(0.00000,0.00054,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_7_1' anchor_error=0.00400 linear_violation=(0.00401,0.00012,0.00000) angular_violation=(0.00000,0.00065,0.00012) spring=[false, false, false, true, false, false]
+  joint '右衣帶_8_1' anchor_error=0.01082 linear_violation=(0.00549,0.00931,0.00025) angular_violation=(0.00000,0.00005,0.00048) spring=[false, false, false, true, false, false]
+frame=300
+  裙_1_8: distance=0.11922 angle=0.28136 delta=(-0.03195,-0.05638,0.10007)
+  裙_1_10: distance=0.12936 angle=0.25075 delta=(0.03245,-0.05829,0.11083)
+  左衣帶_0_1: distance=0.26346 angle=0.24167 delta=(-0.03905,-0.20279,0.16360)
+  左衣帶_4_1: distance=1.41265 angle=0.39790 delta=(-0.69789,-0.53706,1.10458)
+  左衣帶_8_1: distance=3.29078 angle=0.40520 delta=(-1.79275,-0.94062,2.59432)
+  右衣帶_0_1: distance=0.25672 angle=0.21800 delta=(0.04770,-0.19222,0.16334)
+  右衣帶_4_1: distance=1.40652 angle=0.39809 delta=(0.74868,-0.51592,1.07313)
+  右衣帶_8_1: distance=3.29294 angle=0.40545 delta=(1.84648,-0.93711,2.56043)
+  joint '左衣帶_0_1' anchor_error=0.00907 linear_violation=(0.00625,0.00627,0.00218) angular_violation=(0.04270,0.01054,0.01084) spring=[false, false, false, false, false, false]
+  joint '左衣帶_1_1' anchor_error=0.02925 linear_violation=(0.00487,0.02857,0.00505) angular_violation=(0.00000,0.00020,0.03755) spring=[false, false, false, true, false, false]
+  joint '左衣帶_2_1' anchor_error=0.04307 linear_violation=(0.01251,0.04129,0.00115) angular_violation=(0.00000,0.00058,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_3_1' anchor_error=0.01929 linear_violation=(0.01260,0.01463,0.00019) angular_violation=(0.00000,0.00022,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_4_1' anchor_error=0.01533 linear_violation=(0.00962,0.01195,0.00011) angular_violation=(0.00000,0.00015,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_5_1' anchor_error=0.00605 linear_violation=(0.00605,0.00000,0.00000) angular_violation=(0.00000,0.00001,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_6_1' anchor_error=0.01716 linear_violation=(0.00877,0.01476,0.00011) angular_violation=(0.00000,0.00019,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_7_1' anchor_error=0.01710 linear_violation=(0.00764,0.01530,0.00007) angular_violation=(0.00000,0.00011,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_8_1' anchor_error=0.00374 linear_violation=(0.00374,0.00000,0.00000) angular_violation=(0.00000,0.00001,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_0_1' anchor_error=0.00998 linear_violation=(0.00624,0.00738,0.00247) angular_violation=(0.04158,0.00830,0.01778) spring=[false, false, false, false, false, false]
+  joint '右衣帶_1_1' anchor_error=0.04733 linear_violation=(0.00400,0.04620,0.00897) angular_violation=(0.00021,0.00551,0.03138) spring=[false, false, false, true, false, false]
+  joint '右衣帶_2_1' anchor_error=0.02098 linear_violation=(0.01235,0.01691,0.00045) angular_violation=(0.00000,0.00200,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_3_1' anchor_error=0.01883 linear_violation=(0.01224,0.01428,0.00021) angular_violation=(0.00000,0.00001,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_4_1' anchor_error=0.00644 linear_violation=(0.00643,0.00000,0.00000) angular_violation=(0.00000,0.00002,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_5_1' anchor_error=0.01990 linear_violation=(0.01024,0.01704,0.00014) angular_violation=(0.00000,0.00007,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_6_1' anchor_error=0.02345 linear_violation=(0.01028,0.02106,0.00013) angular_violation=(0.00000,0.00015,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_7_1' anchor_error=0.00406 linear_violation=(0.00406,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_8_1' anchor_error=0.01072 linear_violation=(0.00582,0.00900,0.00003) angular_violation=(0.00000,0.00006,0.00000) spring=[false, false, false, true, false, false]
+
+=== profile=Rin ribbons case=collision-off collision_enabled=false ===
+frame=0
+  裙_1_8: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  裙_1_10: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  左衣帶_0_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  左衣帶_4_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  左衣帶_8_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  右衣帶_0_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  右衣帶_4_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  右衣帶_8_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  joint '左衣帶_0_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, false, false, false]
+  joint '左衣帶_1_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_2_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_3_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_4_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_5_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_6_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_7_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_8_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_0_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, false, false, false]
+  joint '右衣帶_1_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_2_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_3_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_4_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_5_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_6_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_7_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_8_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+frame=1
+  裙_1_8: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  裙_1_10: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  左衣帶_0_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  左衣帶_4_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  左衣帶_8_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  右衣帶_0_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  右衣帶_4_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  右衣帶_8_1: distance=0.00000 angle=0.00000 delta=(0.00000,0.00000,0.00000)
+  joint '左衣帶_0_1' anchor_error=0.00000 linear_violation=(0.00132,0.00062,0.00004) angular_violation=(0.00507,0.00193,0.00113) spring=[false, false, false, false, false, false]
+  joint '左衣帶_1_1' anchor_error=0.00000 linear_violation=(0.00267,0.00265,0.00168) angular_violation=(0.00000,0.00002,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_2_1' anchor_error=0.00000 linear_violation=(0.00244,0.00438,0.00016) angular_violation=(0.00000,0.00175,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_3_1' anchor_error=0.00000 linear_violation=(0.00103,0.00086,0.00000) angular_violation=(0.00000,0.00004,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_4_1' anchor_error=0.00000 linear_violation=(0.00038,0.00000,0.00000) angular_violation=(0.00000,0.00002,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_5_1' anchor_error=0.00000 linear_violation=(0.00174,0.00707,0.00001) angular_violation=(0.00000,0.00032,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_6_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_7_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_8_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_0_1' anchor_error=0.00000 linear_violation=(0.00193,0.00285,0.00046) angular_violation=(0.00677,0.00261,0.00094) spring=[false, false, false, false, false, false]
+  joint '右衣帶_1_1' anchor_error=0.00000 linear_violation=(0.00224,0.00194,0.00000) angular_violation=(0.00000,0.00042,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_2_1' anchor_error=0.00000 linear_violation=(0.00145,0.00139,0.00002) angular_violation=(0.00000,0.00251,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_3_1' anchor_error=0.00000 linear_violation=(0.00069,0.00000,0.00000) angular_violation=(0.00000,0.00005,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_4_1' anchor_error=0.00000 linear_violation=(0.00077,0.00162,0.00001) angular_violation=(0.00000,0.00003,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_5_1' anchor_error=0.00000 linear_violation=(0.00199,0.00808,0.00002) angular_violation=(0.00000,0.00035,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_6_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_7_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_8_1' anchor_error=0.00000 linear_violation=(0.00000,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+frame=10
+  裙_1_8: distance=0.11028 angle=0.20867 delta=(-0.02316,-0.05367,0.09352)
+  裙_1_10: distance=0.08732 angle=0.22504 delta=(0.01983,-0.04639,0.07127)
+  左衣帶_0_1: distance=0.21678 angle=0.16148 delta=(-0.02284,-0.16451,0.13931)
+  左衣帶_4_1: distance=0.44715 angle=0.00846 delta=(-0.20122,-0.33492,0.21744)
+  左衣帶_8_1: distance=0.43987 angle=0.03775 delta=(-0.14677,-0.35972,0.20626)
+  右衣帶_0_1: distance=0.22131 angle=0.15319 delta=(0.01204,-0.17958,0.12877)
+  右衣帶_4_1: distance=0.43972 angle=0.02754 delta=(0.20852,-0.31400,0.22643)
+  右衣帶_8_1: distance=0.43763 angle=0.04554 delta=(0.14794,-0.35530,0.20832)
+  joint '左衣帶_0_1' anchor_error=0.00774 linear_violation=(0.00546,0.00531,0.00169) angular_violation=(0.05096,0.01529,0.00217) spring=[false, false, false, false, false, false]
+  joint '左衣帶_1_1' anchor_error=0.03344 linear_violation=(0.01269,0.02622,0.01372) angular_violation=(0.01568,0.00964,0.00917) spring=[false, false, false, true, false, false]
+  joint '左衣帶_2_1' anchor_error=0.05079 linear_violation=(0.02377,0.04334,0.00447) angular_violation=(0.00000,0.00175,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_3_1' anchor_error=0.02243 linear_violation=(0.01588,0.01574,0.00091) angular_violation=(0.00000,0.00020,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_4_1' anchor_error=0.01703 linear_violation=(0.01085,0.01288,0.00075) angular_violation=(0.00000,0.00181,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_5_1' anchor_error=0.00663 linear_violation=(0.00652,0.00004,0.00006) angular_violation=(0.00000,0.00015,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_6_1' anchor_error=0.01899 linear_violation=(0.00948,0.01608,0.00018) angular_violation=(0.00000,0.00097,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_7_1' anchor_error=0.01908 linear_violation=(0.00835,0.01686,0.00014) angular_violation=(0.00000,0.00130,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_8_1' anchor_error=0.00424 linear_violation=(0.00420,0.00011,0.00007) angular_violation=(0.00000,0.00014,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_0_1' anchor_error=0.01580 linear_violation=(0.01347,0.00682,0.00641) angular_violation=(0.07773,0.02187,0.01974) spring=[false, false, false, false, false, false]
+  joint '右衣帶_1_1' anchor_error=0.02779 linear_violation=(0.01866,0.01964,0.00210) angular_violation=(0.00000,0.00089,0.00004) spring=[false, false, false, true, false, false]
+  joint '右衣帶_2_1' anchor_error=0.02505 linear_violation=(0.01693,0.01761,0.00212) angular_violation=(0.00000,0.00537,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_3_1' anchor_error=0.00943 linear_violation=(0.00947,0.00024,0.00009) angular_violation=(0.00000,0.00132,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_4_1' anchor_error=0.02370 linear_violation=(0.01234,0.01978,0.00031) angular_violation=(0.00000,0.00167,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_5_1' anchor_error=0.03171 linear_violation=(0.01326,0.02814,0.00023) angular_violation=(0.00000,0.00183,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_6_1' anchor_error=0.00566 linear_violation=(0.00555,0.00003,0.00013) angular_violation=(0.00000,0.00024,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_7_1' anchor_error=0.01513 linear_violation=(0.00735,0.01292,0.00021) angular_violation=(0.00000,0.00069,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_8_1' anchor_error=0.01193 linear_violation=(0.00631,0.00989,0.00018) angular_violation=(0.00000,0.00067,0.00000) spring=[false, false, false, true, false, false]
+frame=60
+  裙_1_8: distance=0.13860 angle=0.27541 delta=(-0.02948,-0.06104,0.12089)
+  裙_1_10: distance=0.11217 angle=0.29911 delta=(0.02269,-0.05396,0.09568)
+  左衣帶_0_1: distance=0.27727 angle=0.23687 delta=(-0.03671,-0.20505,0.18299)
+  左衣帶_4_1: distance=1.47713 angle=0.41942 delta=(-0.73316,-0.54046,1.16287)
+  左衣帶_8_1: distance=3.64772 angle=0.54227 delta=(-1.98013,-0.93024,2.91884)
+  右衣帶_0_1: distance=0.27793 angle=0.27834 delta=(0.00803,-0.21954,0.17024)
+  右衣帶_4_1: distance=1.46574 angle=0.41630 delta=(0.71232,-0.52227,1.16971)
+  右衣帶_8_1: distance=3.65443 angle=0.53967 delta=(1.97215,-0.92836,2.93320)
+  joint '左衣帶_0_1' anchor_error=0.00880 linear_violation=(0.00577,0.00626,0.00202) angular_violation=(0.04332,0.01228,0.01567) spring=[false, false, false, false, false, false]
+  joint '左衣帶_1_1' anchor_error=0.02954 linear_violation=(0.00554,0.02845,0.00617) angular_violation=(0.00000,0.00126,0.03823) spring=[false, false, false, true, false, false]
+  joint '左衣帶_2_1' anchor_error=0.04275 linear_violation=(0.01204,0.04097,0.00130) angular_violation=(0.00000,0.00081,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_3_1' anchor_error=0.01918 linear_violation=(0.01253,0.01449,0.00028) angular_violation=(0.00000,0.00012,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_4_1' anchor_error=0.01525 linear_violation=(0.00956,0.01182,0.00015) angular_violation=(0.00000,0.00007,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_5_1' anchor_error=0.00579 linear_violation=(0.00581,0.00002,0.00000) angular_violation=(0.00000,0.00045,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_6_1' anchor_error=0.01683 linear_violation=(0.00832,0.01463,0.00013) angular_violation=(0.00000,0.00061,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_7_1' anchor_error=0.01697 linear_violation=(0.00741,0.01525,0.00031) angular_violation=(0.00000,0.00045,0.00064) spring=[false, false, false, true, false, false]
+  joint '左衣帶_8_1' anchor_error=0.00367 linear_violation=(0.00366,0.00033,0.00001) angular_violation=(0.00000,0.00026,0.00020) spring=[false, false, false, true, false, false]
+  joint '右衣帶_0_1' anchor_error=0.01602 linear_violation=(0.01555,0.00331,0.00057) angular_violation=(0.03603,0.01075,0.05535) spring=[false, false, false, false, false, false]
+  joint '右衣帶_1_1' anchor_error=0.02529 linear_violation=(0.01769,0.01804,0.00016) angular_violation=(0.00000,0.00506,0.00246) spring=[false, false, false, true, false, false]
+  joint '右衣帶_2_1' anchor_error=0.02007 linear_violation=(0.01144,0.01647,0.00040) angular_violation=(0.00000,0.00193,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_3_1' anchor_error=0.00813 linear_violation=(0.00813,0.00000,0.00000) angular_violation=(0.00000,0.00004,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_4_1' anchor_error=0.02168 linear_violation=(0.01103,0.01862,0.00025) angular_violation=(0.00000,0.00006,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_5_1' anchor_error=0.02873 linear_violation=(0.01222,0.02601,0.00040) angular_violation=(0.00000,0.00018,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_6_1' anchor_error=0.00484 linear_violation=(0.00488,0.00004,0.00001) angular_violation=(0.00000,0.00084,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_7_1' anchor_error=0.01370 linear_violation=(0.00661,0.01201,0.00022) angular_violation=(0.00000,0.00064,0.00032) spring=[false, false, false, true, false, false]
+  joint '右衣帶_8_1' anchor_error=0.01072 linear_violation=(0.00543,0.00925,0.00030) angular_violation=(0.00000,0.00006,0.00056) spring=[false, false, false, true, false, false]
+frame=300
+  裙_1_8: distance=0.13837 angle=0.27384 delta=(-0.02954,-0.06103,0.12062)
+  裙_1_10: distance=0.10989 angle=0.29189 delta=(0.02218,-0.05324,0.09354)
+  左衣帶_0_1: distance=0.27580 angle=0.23493 delta=(-0.03858,-0.20428,0.18123)
+  左衣帶_4_1: distance=1.42274 angle=0.39632 delta=(-0.70561,-0.53991,1.11121)
+  左衣帶_8_1: distance=3.29113 angle=0.40277 delta=(-1.79674,-0.94336,2.59101)
+  右衣帶_0_1: distance=0.27152 angle=0.27040 delta=(0.00905,-0.21537,0.16510)
+  右衣帶_4_1: distance=1.41546 angle=0.39472 delta=(0.69444,-0.51747,1.11959)
+  右衣帶_8_1: distance=3.29587 angle=0.40126 delta=(1.78703,-0.93855,2.60546)
+  joint '左衣帶_0_1' anchor_error=0.00964 linear_violation=(0.00689,0.00666,0.00264) angular_violation=(0.04314,0.00788,0.01510) spring=[false, false, false, false, false, false]
+  joint '左衣帶_1_1' anchor_error=0.02894 linear_violation=(0.00397,0.02850,0.00603) angular_violation=(0.00000,0.00108,0.03609) spring=[false, false, false, true, false, false]
+  joint '左衣帶_2_1' anchor_error=0.04306 linear_violation=(0.01313,0.04152,0.00112) angular_violation=(0.00000,0.00021,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_3_1' anchor_error=0.01923 linear_violation=(0.01268,0.01471,0.00020) angular_violation=(0.00000,0.00017,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_4_1' anchor_error=0.01528 linear_violation=(0.00968,0.01200,0.00011) angular_violation=(0.00000,0.00012,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_5_1' anchor_error=0.00603 linear_violation=(0.00608,0.00000,0.00000) angular_violation=(0.00000,0.00001,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_6_1' anchor_error=0.01710 linear_violation=(0.00881,0.01483,0.00010) angular_violation=(0.00000,0.00015,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_7_1' anchor_error=0.01703 linear_violation=(0.00767,0.01535,0.00007) angular_violation=(0.00000,0.00010,0.00000) spring=[false, false, false, true, false, false]
+  joint '左衣帶_8_1' anchor_error=0.00372 linear_violation=(0.00374,0.00000,0.00000) angular_violation=(0.00000,0.00001,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_0_1' anchor_error=0.01562 linear_violation=(0.01554,0.00329,0.00058) angular_violation=(0.03609,0.01109,0.05441) spring=[false, false, false, false, false, false]
+  joint '右衣帶_1_1' anchor_error=0.02530 linear_violation=(0.01784,0.01810,0.00010) angular_violation=(0.00000,0.00493,0.00184) spring=[false, false, false, true, false, false]
+  joint '右衣帶_2_1' anchor_error=0.02014 linear_violation=(0.01163,0.01649,0.00033) angular_violation=(0.00000,0.00155,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_3_1' anchor_error=0.00811 linear_violation=(0.00813,0.00002,0.00000) angular_violation=(0.00000,0.00002,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_4_1' anchor_error=0.02168 linear_violation=(0.01116,0.01864,0.00022) angular_violation=(0.00000,0.00010,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_5_1' anchor_error=0.02896 linear_violation=(0.01246,0.02613,0.00022) angular_violation=(0.00000,0.00031,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_6_1' anchor_error=0.00519 linear_violation=(0.00519,0.00000,0.00000) angular_violation=(0.00000,0.00000,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_7_1' anchor_error=0.01374 linear_violation=(0.00684,0.01189,0.00006) angular_violation=(0.00000,0.00013,0.00000) spring=[false, false, false, true, false, false]
+  joint '右衣帶_8_1' anchor_error=0.01072 linear_violation=(0.00580,0.00898,0.00003) angular_violation=(0.00000,0.00007,0.00000) spring=[false, false, false, true, false, false]

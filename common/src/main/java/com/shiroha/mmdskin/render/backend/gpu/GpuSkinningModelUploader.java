@@ -6,6 +6,8 @@ import java.nio.FloatBuffer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.system.MemoryUtil;
+import com.shiroha.mmdskin.render.pipeline.RenderPerformanceProfiler;
+import com.shiroha.mmdskin.render.pipeline.RenderPerformanceProfiler.TransferKind;
 
 /** 文件职责：同步 GPU skinning 模型实例需要的骨骼与 morph 数据。 */
 final class GpuSkinningModelUploader {
@@ -31,6 +33,9 @@ final class GpuSkinningModelUploader {
         target.boneMatricesBuffer.flip();
 
         GpuSkinningModelInstance.computeShader.uploadBoneMatrices(target.boneMatrixSSBO, target.boneMatricesBuffer, copiedBones);
+        target.lastBoneUploadBytes = (long) Math.min(copiedBones,
+                com.shiroha.mmdskin.render.shader.ShaderConstants.MAX_BONES) * 16L * Float.BYTES;
+        RenderPerformanceProfiler.get().recordTransfer(TransferKind.BONE, target.lastBoneUploadBytes);
     }
 
     static void uploadMorphData(GpuSkinningModelInstance target) {
@@ -51,6 +56,7 @@ final class GpuSkinningModelUploader {
                     try {
                         nativeBackend.copyGpuMorphOffsetsToBuffer(target.nativeModelHandle(), offsetsBuffer);
                         GpuSkinningModelInstance.computeShader.uploadMorphOffsets(target.morphOffsetsSSBO, offsetsBuffer);
+                        RenderPerformanceProfiler.get().recordTransfer(TransferKind.VERTEX_MORPH, offsetsBuffer.remaining());
                         target.morphDataUploaded = true;
                     } finally {
                         MemoryUtil.memFree(offsetsBuffer);
@@ -67,6 +73,9 @@ final class GpuSkinningModelUploader {
             target.morphWeightsBuffer.put(target.morphWeightsByteBuffer.asFloatBuffer());
             target.morphWeightsBuffer.flip();
             GpuSkinningModelInstance.computeShader.updateMorphWeights(target.morphWeightsSSBO, target.morphWeightsBuffer);
+            target.lastVertexMorphUploadBytes = (long) target.morphWeightsBuffer.remaining() * Float.BYTES;
+            RenderPerformanceProfiler.get().recordTransfer(TransferKind.VERTEX_MORPH,
+                    target.lastVertexMorphUploadBytes);
         }
     }
 
@@ -84,6 +93,7 @@ final class GpuSkinningModelUploader {
                 try {
                     nativeBackend.copyGpuUvMorphOffsetsToBuffer(target.nativeModelHandle(), offsetsBuffer);
                     GpuSkinningModelInstance.computeShader.uploadUvMorphOffsets(target.uvMorphOffsetsSSBO, offsetsBuffer);
+                    RenderPerformanceProfiler.get().recordTransfer(TransferKind.UV_MORPH, offsetsBuffer.remaining());
                     target.uvMorphDataUploaded = true;
                 } finally {
                     MemoryUtil.memFree(offsetsBuffer);
@@ -99,6 +109,9 @@ final class GpuSkinningModelUploader {
             target.uvMorphWeightsBuffer.put(target.uvMorphWeightsByteBuffer.asFloatBuffer());
             target.uvMorphWeightsBuffer.flip();
             GpuSkinningModelInstance.computeShader.updateUvMorphWeights(target.uvMorphWeightsSSBO, target.uvMorphWeightsBuffer);
+            target.lastUvMorphUploadBytes = (long) target.uvMorphWeightsBuffer.remaining() * Float.BYTES;
+            RenderPerformanceProfiler.get().recordTransfer(TransferKind.UV_MORPH,
+                    target.lastUvMorphUploadBytes);
         }
     }
 }

@@ -7,6 +7,9 @@ pub struct ViewerSnapshot {
     pub has_animation: bool,
     pub playing: bool,
     pub current_frame: f32,
+    pub show_colliders: bool,
+    pub static_collider_scale: f32,
+    pub rigid_body_count: usize,
 }
 
 pub enum ViewerAction {
@@ -19,6 +22,8 @@ pub enum ViewerAction {
     ClearAnimation,
     ToggleAnimation,
     ResetAnimation,
+    ToggleColliders,
+    SetStaticColliderScale(f32),
     PersistState,
 }
 
@@ -301,10 +306,40 @@ impl ViewerGuiState {
                 ui.label(format!("当前帧: {:.2}", snapshot.current_frame));
 
                 ui.separator();
+                ui.label(RichText::new("物理调试").strong());
+                let collider_label = if snapshot.show_colliders {
+                    "隐藏碰撞体"
+                } else {
+                    "显示碰撞体"
+                };
+                if ui
+                    .add_enabled(snapshot.has_model, egui::Button::new(collider_label))
+                    .clicked()
+                {
+                    actions.push(ViewerAction::ToggleColliders);
+                }
+                let mut static_scale = snapshot.static_collider_scale;
+                if ui
+                    .add(
+                        egui::Slider::new(&mut static_scale, 0.1..=1.0)
+                            .text("绿色人体碰撞体倍率")
+                            .step_by(0.01),
+                    )
+                    .changed()
+                {
+                    actions.push(ViewerAction::SetStaticColliderScale(static_scale));
+                }
+                ui.label(format!("刚体数量: {}", snapshot.rigid_body_count));
+                ui.colored_label(Color32::from_rgb(25, 220, 65), "绿色: 跟随骨骼");
+                ui.colored_label(Color32::from_rgb(245, 45, 30), "红色: 完全物理");
+                ui.colored_label(Color32::from_rgb(30, 135, 245), "蓝色: 物理旋转/骨骼位置");
+
+                ui.separator();
                 ui.label(RichText::new("视图快捷键").strong());
                 ui.label("WASD/QE 移动，右键旋转，滚轮缩放");
                 ui.label("Space 播放/暂停，R 重置动画");
                 ui.label("B/G/X/F 切换骨骼、网格、坐标轴、线框");
+                ui.label("C 切换碰撞体显示");
                 ui.label("1/2/3/4 切换正面、侧面、顶部、自由视角");
             });
 

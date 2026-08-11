@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.bridge.runtime.NativeRenderBackendPort;
 import com.shiroha.mmdskin.render.backend.BaseModelInstance;
 import com.shiroha.mmdskin.render.material.ModelMaterial;
+import com.shiroha.mmdskin.render.scene.RenderScene;
 import com.shiroha.mmdskin.render.shader.ShaderProvider;
 import com.shiroha.mmdskin.render.shader.ToonConfig;
 import com.shiroha.mmdskin.render.shader.ToonShaderCpu;
@@ -65,6 +66,11 @@ public class OpenGlModelInstance extends BaseModelInstance {
     ByteBuffer uv2Buffer;
     int vertexArrayObject;
     int indexBufferObject;
+    int firstPersonIndexBufferObject;
+    ByteBuffer firstPersonIndexBuffer;
+    ByteBuffer firstPersonMatrixBuffer;
+    FloatBuffer firstPersonMatrixFloatBuffer;
+    int activeIndexBufferObject;
     int vertexBufferObject;
     int colorBufferObject;
     int normalBufferObject;
@@ -90,6 +96,8 @@ public class OpenGlModelInstance extends BaseModelInstance {
     int lastBlockBrightness = Integer.MIN_VALUE;
     int lastSkyBrightness = Integer.MIN_VALUE;
     long lastPositionRevision = -1L;
+    long lastMaterialMorphRevision = -1L;
+    long lastMaterialMorphTransferBytes;
 
     OpenGlModelInstance() {
     }
@@ -153,8 +161,9 @@ public class OpenGlModelInstance extends BaseModelInstance {
                                  float entityPitch,
                                  Vector3f entityTrans,
                                  PoseStack deliverStack,
-                                 int packedLight) {
-        OpenGlModelRenderer.render(this, entityIn, entityYaw, entityPitch, entityTrans, deliverStack, packedLight);
+                                 int packedLight,
+                                 RenderScene context) {
+        OpenGlModelRenderer.render(this, entityIn, entityYaw, entityPitch, entityTrans, deliverStack, packedLight, context);
     }
 
     void updateLocation(int shaderProgram) {
@@ -249,5 +258,10 @@ public class OpenGlModelInstance extends BaseModelInstance {
     void applyMaterialMorphState(int resultCount, ByteBuffer resultBuffer) {
         this.materialMorphResultCount = resultCount;
         this.materialMorphResultsByteBuffer = resultBuffer;
+    }
+
+    @Override
+    public String getRenderBackendName() {
+        return "CPU_SKINNING";
     }
 }

@@ -7,6 +7,7 @@ public interface NativeRuntimePort extends
         NativeRenderBackendPort,
         NativeMorphPort,
         NativeBoneOverridePort,
+        NativeTaczArmTargetPort,
         NativeMatrixPort,
         PlatformCapabilityPort {
 

@@ -3,6 +3,7 @@ package com.shiroha.mmdskin.fabric.config;
 
 import com.shiroha.mmdskin.asset.catalog.ModelCatalogEntry;
 import com.shiroha.mmdskin.config.ConfigData;
+import com.shiroha.mmdskin.config.PhysicsCollisionStabilityMode;
 import com.shiroha.mmdskin.config.PhysicsConfigSnapshot;
 import com.shiroha.mmdskin.config.UIConstants;
 import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
@@ -40,7 +41,7 @@ public class ModConfigScreen {
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.opengl_lighting"),
                 data.openGLEnableLighting)
-            .setDefaultValue(true)
+            .setDefaultValue(false)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.opengl_lighting.tooltip"))
             .setSaveConsumer(value -> data.openGLEnableLighting = value)
             .build());
@@ -347,9 +348,32 @@ public class ModConfigScreen {
             .startBooleanToggle(
                 Component.translatable("gui.mmdskin.mod_settings.physics_kinematic_filter"),
                 data.physicsKinematicFilter)
-            .setDefaultValue(true)
+            .setDefaultValue(false)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_kinematic_filter.tooltip"))
             .setSaveConsumer(value -> data.physicsKinematicFilter = value)
+            .build());
+
+        physicsCategory.addEntry(entryBuilder
+            .startBooleanToggle(
+                Component.translatable("gui.mmdskin.mod_settings.physics_collision_enabled"),
+                data.physicsCollisionEnabled)
+            .setDefaultValue(true)
+            .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_collision_enabled.tooltip"))
+            .setSaveConsumer(value -> data.physicsCollisionEnabled = value)
+            .build());
+
+        physicsCategory.addEntry(entryBuilder
+            .startEnumSelector(
+                Component.translatable("gui.mmdskin.mod_settings.physics_collision_stability"),
+                PhysicsCollisionStabilityMode.class,
+                data.physicsCollisionStabilityMode)
+            .setDefaultValue(PhysicsCollisionStabilityMode.STABLE)
+            .setEnumNameProvider(value -> Component.translatable(
+                "gui.mmdskin.mod_settings.physics_collision_stability."
+                    + value.name().toLowerCase(java.util.Locale.ROOT)))
+            .setTooltip(Component.translatable(
+                "gui.mmdskin.mod_settings.physics_collision_stability.tooltip"))
+            .setSaveConsumer(value -> data.physicsCollisionStabilityMode = value)
             .build());
 
         physicsCategory.addEntry(entryBuilder

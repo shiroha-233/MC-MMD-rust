@@ -1,10 +1,22 @@
 package com.shiroha.mmdskin.player.runtime;
 
 import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
+import com.shiroha.mmdskin.compat.tacz.TaczGunDetector;
+import com.shiroha.mmdskin.config.ModelConfigData;
+import com.shiroha.mmdskin.config.ModelConfigManager;
 import com.shiroha.mmdskin.config.RuntimeConfigPortHolder;
+import com.shiroha.mmdskin.model.runtime.ManagedModel;
+import com.shiroha.mmdskin.player.animation.AnimationStateManager;
+import com.shiroha.mmdskin.player.model.PlayerModelResolver;
 import com.shiroha.mmdskin.player.port.VrRuntimePort;
+import com.shiroha.mmdskin.player.render.InventoryRenderHelper;
+import com.shiroha.mmdskin.player.render.PlayerRenderHelper;
+import com.shiroha.mmdskin.render.backend.BaseModelInstance;
+import com.shiroha.mmdskin.render.scene.MutableRenderPose;
+import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -41,7 +53,9 @@ public final class FirstPersonManager {
     private static boolean activeDesktopFirstPerson = false;
     private static boolean activeVrEyeCamera = false;
     private static final float[] eyeBonePos = new float[3];
+    private static final float[] preparedEyeBonePos = new float[3];
     private static boolean eyeBoneValid = false;
+    private static BaseModelInstance preparedFirstPersonModel;
 
     private static Vec3 vrModelRootOffset = Vec3.ZERO;
     private static boolean vrModelRootOffsetValid = false;
@@ -77,33 +91,95 @@ public final class FirstPersonManager {
         return mc.player != null && MmdSkinRendererPlayerHelper.isUsingMmdModel(mc.player);
     }
 
+    /**
+     * 在 Camera.setup 前准备本地玩家当前帧的双眼锚点。
+     */
+    public static void prepareCameraFrame(float partialTick) {
+        discardPreparedFirstPersonPose();
+
+        Minecraft minecraft = Minecraft.getInstance();
+        AbstractClientPlayer player = minecraft.player;
+        if (player == null) {
+            deactivateDesktopCameraState();
+            return;
+        }
+        if (isLocalVrMmdModelActive()) {
+            syncVrCameraActivationState();
+            return;
+        }
+        if (!shouldRenderFirstPerson()
+                || InventoryRenderHelper.isInventoryScreen()
+                || isStageCameraActive()) {
+            deactivateDesktopCameraState();
+            return;
+        }
+
+        BaseModelInstance preparingModel = null;
+        try {
+            PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
+            if (resolved == null) {
+                deactivateDesktopCameraState();
+                return;
+            }
+
+            ManagedModel managedModel = resolved.model();
+            if (!(managedModel.modelInstance() instanceof BaseModelInstance baseModel)) {
+                deactivateDesktopCameraState();
+                return;
+            }
+            preparingModel = baseModel;
+
+            long modelHandle = baseModel.getModelHandle();
+            if (modelHandle == 0L) {
+                deactivateDesktopCameraState();
+                return;
+            }
+
+            ModelConfigData modelConfig = ModelConfigManager.getConfig(managedModel.requestKey().modelName());
+            float combinedScale = managedModel.renderProperties().modelScale() * modelConfig.modelScale;
+            preRender(modelHandle, combinedScale, true);
+
+            float safePartialTick = Float.isFinite(partialTick) ? Mth.clamp(partialTick, 0.0f, 1.0f) : 0.0f;
+            exitVrForDesktopPreparation(player, managedModel, baseModel, modelHandle);
+            AnimationStateManager.updateAnimationState(player, managedModel);
+            MutableRenderPose pose = PlayerRenderHelper.calculateMutableRenderPose(player, managedModel, safePartialTick);
+            if (!baseModel.prepareFirstPersonPose(player, pose.bodyYaw, safePartialTick)) {
+                deactivateDesktopCameraState();
+                return;
+            }
+
+            if (!cacheCameraAnchor(modelHandle)) {
+                baseModel.discardPreparedFirstPersonPose();
+                deactivateDesktopCameraState();
+                return;
+            }
+
+            preparedFirstPersonModel = baseModel;
+        } catch (RuntimeException | LinkageError e) {
+            if (preparingModel != null) {
+                preparingModel.discardPreparedFirstPersonPose();
+            }
+            deactivateDesktopCameraState();
+            logger.warn("Failed to prepare current first-person camera frame", e);
+        }
+    }
+
     public static void preRender(long modelHandle, float modelScale, boolean isLocalPlayer) {
         if (!isLocalPlayer) return;
 
+        if (modelHandle != trackedModelHandle) {
+            trackedModelHandle = modelHandle;
+            clearEyeBoneState();
+        }
+
         boolean desktopFirstPerson = shouldRenderFirstPerson();
         boolean vrModelActive = isLocalVrMmdModelActive();
-        boolean vrEyeCamera = vrModelActive && isVrFirstPersonRequested() && vrRuntimePort.isLocalPlayerEyePass();
-        activeVrEyeCamera = vrEyeCamera;
+        activeDesktopFirstPerson = desktopFirstPerson;
+        activeVrEyeCamera = vrModelActive
+                && isVrFirstPersonRequested()
+                && vrRuntimePort.isLocalPlayerEyePass();
 
-        // 切换模型时先关闭旧模型的第一人称模式
-        if (modelHandle != trackedModelHandle) {
-            if (trackedModelHandle != 0 && activeDesktopFirstPerson) {
-                disableTrackedModel();
-            }
-            trackedModelHandle = modelHandle;
-            activeDesktopFirstPerson = false;
-        }
-
-        // 仅桌面第一人称需要驱动 native SetFirstPersonMode
-        if (desktopFirstPerson != activeDesktopFirstPerson) {
-            try {
-                modelPort.setFirstPersonMode(modelHandle, desktopFirstPerson);
-            } catch (Exception e) {
-                logger.warn("SetFirstPersonMode failed for model {}", modelHandle, e);
-            }
-            activeDesktopFirstPerson = desktopFirstPerson;
-        }
-
+        // 可见性由单次 RenderScene Draw 决定，这里只维护相机相关状态。
         if (desktopFirstPerson || vrModelActive) {
             cachedModelScale = modelScale;
         }
@@ -112,10 +188,11 @@ public final class FirstPersonManager {
     public static void postRender(long modelHandle, Player player, float tickDelta) {
         if (activeDesktopFirstPerson && modelHandle != 0) {
             try {
-                modelPort.getEyeBonePosition(modelHandle, eyeBonePos);
-                eyeBoneValid = (eyeBonePos[0] != 0.0f || eyeBonePos[1] != 0.0f || eyeBonePos[2] != 0.0f);
-            } catch (Exception e) {
-                logger.warn("GetEyeBonePosition failed for model {}", modelHandle, e);
+                if (!cacheCameraAnchor(modelHandle)) {
+                    clearEyeBoneState();
+                }
+            } catch (Exception | LinkageError e) {
+                logger.warn("GetFirstPersonCameraAnchorPosition failed for model {}", modelHandle, e);
                 clearEyeBoneState();
             }
         } else {
@@ -176,7 +253,7 @@ public final class FirstPersonManager {
         double pz = renderOrigin.z;
 
         float bodyYaw = entity instanceof Player player
-                ? fallbackBodyYawDegrees(player, partialTick)
+                ? resolveFirstPersonModelYaw(player, partialTick, fallbackBodyYawDegrees(player, partialTick))
                 : entity instanceof LivingEntity livingEntity
                 ? Mth.rotLerp(partialTick, livingEntity.yBodyRotO, livingEntity.yBodyRot)
                 : Mth.rotLerp(partialTick, entity.yRotO, entity.getYRot());
@@ -186,6 +263,17 @@ public final class FirstPersonManager {
         double worldOffX = eyeOffset[0] * cosYaw - eyeOffset[2] * sinYaw;
         double worldOffZ = eyeOffset[0] * sinYaw + eyeOffset[2] * cosYaw;
         return new Vec3(px + worldOffX, py + eyeOffset[1], pz + worldOffZ);
+    }
+
+    /** TaCZ 第一人称枪械以镜头为基准，姿态、眼位和模型根必须使用同一个 yaw。 */
+    public static float resolveFirstPersonModelYaw(Player player, float tickDelta, float fallbackYaw) {
+        if (player != null && activeDesktopFirstPerson && TaczGunDetector.isGun(player.getMainHandItem())) {
+            float viewYaw = player.getViewYRot(tickDelta);
+            if (Float.isFinite(viewYaw)) {
+                return viewYaw;
+            }
+        }
+        return fallbackYaw;
     }
 
     public static Vec3 getVanillaEyePosition(LivingEntity entity, float partialTick) {
@@ -214,7 +302,7 @@ public final class FirstPersonManager {
     }
 
     public static void reset() {
-        disableTrackedModel();
+        discardPreparedFirstPersonPose();
         activeDesktopFirstPerson = false;
         activeVrEyeCamera = false;
         trackedModelHandle = 0;
@@ -253,6 +341,27 @@ public final class FirstPersonManager {
         return Minecraft.getInstance().options.getCameraType() == CameraType.FIRST_PERSON;
     }
 
+    private static void syncVrCameraActivationState() {
+        // 切入 VR 时只刷新激活标志，保留 VR 正常使用的锚点与模型缩放。
+        activeDesktopFirstPerson = false;
+        activeVrEyeCamera = isVrFirstPersonRequested() && vrRuntimePort.isLocalPlayerEyePass();
+    }
+
+    private static void exitVrForDesktopPreparation(AbstractClientPlayer player,
+                                                    ManagedModel managedModel,
+                                                    BaseModelInstance baseModel,
+                                                    long modelHandle) {
+        vrRuntimePort.applyMmdRenderState(false);
+        if (!baseModel.isVrActive()) {
+            return;
+        }
+
+        // 与正式渲染协调器保持相同顺序，确保普通动画基于非 VR 姿态求值。
+        vrRuntimePort.setModelVrEnabled(modelHandle, false);
+        baseModel.setVrActive(false);
+        MmdSkinRendererPlayerHelper.resetModelAnimationState(player, managedModel);
+    }
+
     private static Vec3 fallbackRenderOrigin(Player player, float tickDelta) {
         Vec3 renderOrigin = vrRuntimePort.getRenderOrigin(player, tickDelta);
         if (renderOrigin != null) return renderOrigin;
@@ -279,13 +388,49 @@ public final class FirstPersonManager {
         vrModelRootOffsetValid = true;
     }
 
-    private static void disableTrackedModel() {
-        if (!activeDesktopFirstPerson || trackedModelHandle == 0) return;
+    private static boolean isStageCameraActive() {
         try {
-            modelPort.setFirstPersonMode(trackedModelHandle, false);
-        } catch (Exception e) {
-            logger.warn("Failed to disable first-person mode for model {}", trackedModelHandle, e);
+            return MMDCameraController.getInstance().isActive();
+        } catch (RuntimeException | LinkageError e) {
+            logger.debug("Stage camera state is not ready during first-person preparation", e);
+            return false;
         }
+    }
+
+    private static boolean cacheCameraAnchor(long modelHandle) {
+        preparedEyeBonePos[0] = 0.0f;
+        preparedEyeBonePos[1] = 0.0f;
+        preparedEyeBonePos[2] = 0.0f;
+        modelPort.getFirstPersonCameraAnchorPosition(modelHandle, preparedEyeBonePos);
+        if (!isValidCameraAnchor(preparedEyeBonePos)) {
+            return false;
+        }
+        System.arraycopy(preparedEyeBonePos, 0, eyeBonePos, 0, eyeBonePos.length);
+        eyeBoneValid = true;
+        return true;
+    }
+
+    private static boolean isValidCameraAnchor(float[] anchor) {
+        if (anchor == null || anchor.length < 3) return false;
+        if (!Float.isFinite(anchor[0]) || !Float.isFinite(anchor[1]) || !Float.isFinite(anchor[2])) return false;
+        return anchor[0] != 0.0f || anchor[1] != 0.0f || anchor[2] != 0.0f;
+    }
+
+    private static void discardPreparedFirstPersonPose() {
+        if (preparedFirstPersonModel != null) {
+            preparedFirstPersonModel.discardPreparedFirstPersonPose();
+            preparedFirstPersonModel = null;
+        }
+    }
+
+    private static void deactivateDesktopCameraState() {
+        discardPreparedFirstPersonPose();
+        activeDesktopFirstPerson = false;
+        activeVrEyeCamera = false;
+        trackedModelHandle = 0L;
+        cachedModelScale = 1.0f;
+        clearEyeBoneState();
+        lastCameraPos = Vec3.ZERO;
     }
 
     private static void clearEyeBoneState() {

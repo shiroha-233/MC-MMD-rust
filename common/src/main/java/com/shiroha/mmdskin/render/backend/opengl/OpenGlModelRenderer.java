@@ -11,7 +11,9 @@ import com.shiroha.mmdskin.render.shader.ToonShaderCpu;
 import com.shiroha.mmdskin.render.shader.ToonRenderHelper;
 import com.shiroha.mmdskin.render.pipeline.LightingHelper;
 import com.shiroha.mmdskin.render.pipeline.RenderPerformanceProfiler;
+import com.shiroha.mmdskin.render.pipeline.RenderPerformanceProfiler.TransferKind;
 import com.shiroha.mmdskin.render.material.ModelMaterial;
+import com.shiroha.mmdskin.render.scene.RenderScene;
 import com.shiroha.mmdskin.render.material.SubMeshDrawHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
@@ -25,17 +27,20 @@ import org.lwjgl.system.MemoryUtil;
 
 final class OpenGlModelRenderer {
     private static final Logger logger = LogManager.getLogger();
+    private static final long FIRST_PERSON_DIAGNOSTIC_INTERVAL_NANOS = 5_000_000_000L;
+    private static long lastFirstPersonDiagnosticNanos;
 
     private OpenGlModelRenderer() {
     }
 
     static void render(OpenGlModelInstance target, Entity entityIn, float entityYaw, float entityPitch,
-                       Vector3f entityTrans, PoseStack deliverStack, int packedLight) {
+                       Vector3f entityTrans, PoseStack deliverStack, int packedLight, RenderScene context) {
         Minecraft minecraft = Minecraft.getInstance();
         LightingHelper.LightData light = LightingHelper.sampleLight(entityIn, minecraft);
         var workingQuat = target.workingQuaternion();
         var nativeBackend = target.nativeBackendPort();
         long modelHandle = target.nativeModelHandle();
+        boolean firstPersonView = context != null && context.isFirstPerson();
 
         target.light0Direction.set(1.0f, 0.75f, 0.0f).normalize();
         target.light1Direction.set(-1.0f, 0.75f, 0.0f).normalize();
@@ -43,19 +48,24 @@ final class OpenGlModelRenderer {
         target.light0Direction.rotate(workingQuat.identity().rotateY(yawRad));
         target.light1Direction.rotate(workingQuat.identity().rotateY(yawRad));
 
-        deliverStack.mulPose(workingQuat.identity().rotateY(-yawRad));
-        deliverStack.mulPose(workingQuat.identity().rotateX(entityPitch * ((float) Math.PI / 180F)));
-        deliverStack.translate(entityTrans.x, entityTrans.y, entityTrans.z);
-        float baseScale = target.modelScaleValue();
-        deliverStack.scale(baseScale, baseScale, baseScale);
+        target.applyModelRootTransform(deliverStack, entityYaw, entityPitch, entityTrans);
 
-        long materialMorphTimer = RenderPerformanceProfiler.get().startTimer();
-        target.loadMaterialMorphResults();
-        RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_MATERIAL_MORPH_FETCH, materialMorphTimer);
+        boolean firstPersonIndexReady = firstPersonView
+                && refreshFirstPersonIndices(target, nativeBackend, modelHandle, deliverStack);
+        // EBO 与子网格范围必须来自同一份布局；本帧刷新失败时一起回退。
+        target.activeIndexBufferObject = firstPersonIndexReady
+                ? target.firstPersonIndexBufferObject
+                : target.indexBufferObject;
+
+        updateMaterialMorphIfDirty(target);
 
         long subMeshTimer = RenderPerformanceProfiler.get().startTimer();
         target.subMeshDataBuf.clear();
-        nativeBackend.batchGetSubMeshData(modelHandle, target.subMeshDataBuf);
+        int copiedSubMeshes = nativeBackend.batchGetSubMeshData(
+                modelHandle,
+                target.subMeshDataBuf,
+                firstPersonIndexReady);
+        RenderPerformanceProfiler.get().recordTransfer(TransferKind.SUB_MESH, (long) copiedSubMeshes * 20L);
         RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_SUB_MESH_FETCH, subMeshTimer);
 
         boolean useToon = initializeToonShaderIfNeeded();
@@ -77,6 +87,54 @@ final class OpenGlModelRenderer {
         }
     }
 
+    private static boolean refreshFirstPersonIndices(OpenGlModelInstance target,
+                                                     com.shiroha.mmdskin.bridge.runtime.NativeRenderBackendPort nativeBackend,
+                                                     long modelHandle,
+                                                     PoseStack deliverStack) {
+        if (target.firstPersonIndexBufferObject <= 0 || target.firstPersonIndexBuffer == null
+                || target.firstPersonMatrixBuffer == null) {
+            return false;
+        }
+        // 传入的矩阵与随后 shader 使用的矩阵完全相同，避免重新推导实体/相机坐标。
+        target.firstPersonMatrixFloatBuffer.position(0);
+        deliverStack.last().pose().get(target.firstPersonMatrixFloatBuffer);
+        target.firstPersonMatrixFloatBuffer.position(16);
+        RenderSystem.getProjectionMatrix().get(target.firstPersonMatrixFloatBuffer);
+        target.firstPersonIndexBuffer.clear();
+        int indexCount = nativeBackend.refreshFirstPersonIndices(
+                modelHandle, target.firstPersonMatrixBuffer, false, target.firstPersonIndexBuffer);
+        diagnoseFirstPersonIndices(nativeBackend, modelHandle, indexCount);
+        if (indexCount <= 0) {
+            return false;
+        }
+        target.firstPersonIndexBuffer.position(0);
+        target.firstPersonIndexBuffer.limit(indexCount * target.indexElementSize);
+        // EBO 绑定属于当前 VAO 状态。使用 DSA 上传，避免破坏 Minecraft 动画方块共用的 VAO。
+        GL46C.glNamedBufferSubData(target.firstPersonIndexBufferObject, 0, target.firstPersonIndexBuffer);
+        RenderPerformanceProfiler.get().recordTransfer(TransferKind.FIRST_PERSON_INDEX,
+                (long) indexCount * target.indexElementSize);
+        target.firstPersonIndexBuffer.clear();
+        return true;
+    }
+
+    /** 低频记录最终上传的第一人称几何量，用于区分网格为空与姿态离屏。 */
+    private static void diagnoseFirstPersonIndices(
+            com.shiroha.mmdskin.bridge.runtime.NativeRenderBackendPort nativeBackend,
+            long modelHandle, int firstPersonIndexCount) {
+        long now = System.nanoTime();
+        if (now - lastFirstPersonDiagnosticNanos < FIRST_PERSON_DIAGNOSTIC_INTERVAL_NANOS) {
+            return;
+        }
+        lastFirstPersonDiagnosticNanos = now;
+        long originalIndexCount = nativeBackend.getIndexCount(modelHandle);
+        double ratio = originalIndexCount > 0
+                ? (double) firstPersonIndexCount / (double) originalIndexCount
+                : 0.0;
+        logger.info("MMD 第一人称索引: backend=OpenGL, kept={}, original={}, ratio={}",
+                firstPersonIndexCount, originalIndexCount,
+                String.format(java.util.Locale.ROOT, "%.4f", ratio));
+    }
+
     private static boolean initializeToonShaderIfNeeded() {
         if (!ConfigManager.isToonRenderingEnabled()) {
             return false;
@@ -96,6 +154,27 @@ final class OpenGlModelRenderer {
         }
 
         return OpenGlModelInstance.toonShaderCpu.isInitialized();
+    }
+
+    private static void updateMaterialMorphIfDirty(OpenGlModelInstance target) {
+        if (target.materialMorphResultCountValue() <= 0) {
+            return;
+        }
+        long currentRevision = target.nativeUpdateRevisionValue();
+        if (target.lastMaterialMorphRevision == currentRevision) {
+            RenderPerformanceProfiler.get().recordAvoidedUpload(
+                    TransferKind.MATERIAL_MORPH, target.lastMaterialMorphTransferBytes);
+            return;
+        }
+
+        long timer = RenderPerformanceProfiler.get().startTimer();
+        target.loadMaterialMorphResults();
+        RenderPerformanceProfiler.get().endTimer(RenderPerformanceProfiler.SECTION_MATERIAL_MORPH_FETCH, timer);
+        target.lastMaterialMorphTransferBytes =
+                (long) target.materialMorphResultCountValue() * 56L * Float.BYTES;
+        RenderPerformanceProfiler.get().recordTransfer(
+                TransferKind.MATERIAL_MORPH, target.lastMaterialMorphTransferBytes);
+        target.lastMaterialMorphRevision = currentRevision;
     }
 
     private static void renderStandard(OpenGlModelInstance target, Minecraft minecraft,
@@ -175,7 +254,15 @@ final class OpenGlModelRenderer {
                 GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv0Buffer);
             }
 
+            long vertexUploadBytes = (long) posAndNorSize * 2L
+                    + (target.hasUvMorph ? (long) target.vertexCount * 8L : 0L);
+            RenderPerformanceProfiler.get().recordTransfer(TransferKind.CPU_VERTEX, vertexUploadBytes);
+
             target.lastPositionRevision = currentRevision;
+        } else {
+            long avoidedBytes = (long) target.vertexCount * 12L * 2L
+                    + (target.hasUvMorph ? (long) target.vertexCount * 8L : 0L);
+            RenderPerformanceProfiler.get().recordAvoidedUpload(TransferKind.CPU_VERTEX, avoidedBytes);
         }
 
         int blockBrightness = LightingHelper.computeBlockBrightness(blockLight);
@@ -198,6 +285,7 @@ final class OpenGlModelRenderer {
         target.uv2Buffer.flip();
         GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, target.uv2BufferObject);
         GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv2Buffer);
+        RenderPerformanceProfiler.get().recordTransfer(TransferKind.LIGHT, (long) target.vertexCount * 8L);
         target.lastBlockBrightness = blockBrightness;
         target.lastSkyBrightness = skyBrightness;
     }
@@ -278,7 +366,7 @@ final class OpenGlModelRenderer {
             GL46C.glVertexAttribIPointer(target.uv1Location, 2, GL46C.GL_INT, 0, 0);
         }
 
-        GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.indexBufferObject);
+        GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.activeIndexBufferObject);
     }
 
     private static void bindCustomShaderAttributes(OpenGlModelInstance target) {
@@ -438,14 +526,22 @@ final class OpenGlModelRenderer {
                 GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, target.uv0Buffer);
             }
 
+            long vertexUploadBytes = (long) posAndNorSize * 2L
+                    + (target.hasUvMorph ? (long) target.vertexCount * 8L : 0L);
+            RenderPerformanceProfiler.get().recordTransfer(TransferKind.CPU_VERTEX, vertexUploadBytes);
+
             target.lastPositionRevision = currentRevision;
+        } else {
+            long avoidedBytes = (long) target.vertexCount * 12L * 2L
+                    + (target.hasUvMorph ? (long) target.vertexCount * 8L : 0L);
+            RenderPerformanceProfiler.get().recordAvoidedUpload(TransferKind.CPU_VERTEX, avoidedBytes);
         }
 
         target.modelViewMatBuff.clear();
         target.projMatBuff.clear();
         deliverStack.last().pose().get(target.modelViewMatBuff);
         RenderSystem.getProjectionMatrix().get(target.projMatBuff);
-        GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.indexBufferObject);
+        GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.activeIndexBufferObject);
 
         renderToonMainPass(target, minecraft, lightIntensity);
 
@@ -552,4 +648,3 @@ final class OpenGlModelRenderer {
         return target.effectiveMaterialAlpha(materialId, baseAlpha);
     }
 }
-

@@ -1,5 +1,6 @@
 package com.shiroha.mmdskin.player.animation;
 
+import com.shiroha.mmdskin.compat.tacz.TaczGunDetector;
 import com.shiroha.mmdskin.player.runtime.EntityAnimState;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import com.shiroha.mmdskin.player.sync.PlayerActionSyncService;
@@ -18,6 +19,8 @@ public class AnimationStateManager {
 
     private static final float TRANSITION_TIME = 0.25f;
     static final String DRINK_ANIMATION = "Drink";
+    // 使用版本化名称，确保已提取 v4 的游戏目录仍会获得重新录制的动作。
+    static final String TACZ_RIFLE_ADS_ANIMATION = "tacz_hold_rifle_ads_v5";
 
     public static void updateAnimationState(AbstractClientPlayer player, ManagedModel model) {
         if (model.entityState().playCustomAnim) {
@@ -75,6 +78,21 @@ public class AnimationStateManager {
     }
 
     private static void updateLayer1Animation(AbstractClientPlayer player, ManagedModel model) {
+        // TaCZ 枪械统一使用完整权重的持枪动作，不区分本地、远端或视角。
+        if (shouldApplyTaczRifleHold(TaczGunDetector.isGun(player.getMainHandItem()),
+                player.isSleeping(), player.hurtTime)) {
+            applyTaczRifleHoldAnimation(model);
+            return;
+        }
+
+        // 受伤时原有分支不会更新手部状态，需先清掉上一帧的 TaCZ 动作。
+        if (Objects.equals(model.entityState().layerAnimationKeys[1], TACZ_RIFLE_ADS_ANIMATION)) {
+            clearLayer1Animation(model);
+        }
+
+        // 离开 TaCZ 持枪状态后，后续普通物品动画必须恢复为完整层权重。
+        model.modelInstance().setLayerWeight(1, 1.0f);
+
         if ((!player.isUsingItem() && !player.swinging && player.hurtTime <= 0) || player.isSleeping()) {
             if (model.entityState().stateLayers[1] != EntityAnimState.State.Idle) {
                 model.entityState().stateLayers[1] = EntityAnimState.State.Idle;
@@ -85,6 +103,43 @@ public class AnimationStateManager {
         } else if (player.hurtTime <= 0) {
             updateHandAnimation(player, model);
         }
+    }
+
+    /**
+     * 该规则与玩家类型及本地相机无关，便于本地和远端玩家保持一致。
+     */
+    static boolean shouldApplyTaczRifleHold(boolean isTaczGun, boolean isSleeping, int hurtTime) {
+        return isTaczGun && !isSleeping && hurtTime <= 0;
+    }
+
+    private static void applyTaczRifleHoldAnimation(ManagedModel model) {
+        long animation = model.animationLibrary().animation(TACZ_RIFLE_ADS_ANIMATION);
+        if (animation == 0L) {
+            clearLayer1Animation(model);
+            return;
+        }
+
+        if (!Objects.equals(model.entityState().layerAnimationKeys[1], TACZ_RIFLE_ADS_ANIMATION)) {
+            model.entityState().stateLayers[1] = EntityAnimState.State.ItemRight;
+            model.entityState().layerAnimationKeys[1] = TACZ_RIFLE_ADS_ANIMATION;
+            model.modelInstance().setLayerLoop(1, true);
+            // 持枪姿势直接切入并循环播放，避免叠加普通物品动画的过渡。
+            model.modelInstance().transitionAnim(animation, 1, 0.0f);
+        }
+        model.modelInstance().setLayerWeight(1, 1.0f);
+    }
+
+    private static void clearLayer1Animation(ManagedModel model) {
+        if (model.entityState().stateLayers[1] == EntityAnimState.State.Idle
+                && model.entityState().layerAnimationKeys[1] == null) {
+            return;
+        }
+        model.entityState().stateLayers[1] = EntityAnimState.State.Idle;
+        model.entityState().layerAnimationKeys[1] = null;
+        model.modelInstance().setLayerLoop(1, true);
+        // 普通物品动画仍按完整权重工作，不能继承上一次 ADS 的零权重。
+        model.modelInstance().setLayerWeight(1, 1.0f);
+        model.modelInstance().transitionAnim(0, 1, TRANSITION_TIME);
     }
 
     private static void updateHandAnimation(AbstractClientPlayer player, ManagedModel model) {

@@ -24,6 +24,8 @@ public class NativeFunc {
 
     public native String GetVersion();
 
+    public native String TakeRustLogs();
+
     public native byte ReadByte(long data, long pos);
 
     public native void CopyDataToByteBuffer(ByteBuffer buffer, long data, long pos);
@@ -53,6 +55,13 @@ public class NativeFunc {
     public native long GetIndexCount(long model);
 
     public native long GetIndices(long model);
+
+    public native long GetFirstPersonIndexCount(long model);
+
+    public native long GetFirstPersonIndices(long model);
+
+    public native int RefreshFirstPersonIndices(long model, ByteBuffer matrices,
+                                                boolean gpuSkinning, ByteBuffer indices);
 
     public native long GetMaterialCount(long model);
 
@@ -102,6 +111,8 @@ public class NativeFunc {
 
     public native void SetLayerLoop(long model, long layer, boolean loop);
 
+    public native void SetLayerWeight(long model, long layer, float weight);
+
     public native boolean IsLayerAnimationFinished(long model, long layer);
 
     public native boolean SetLayerBoneMask(long model, long layer, String rootBoneName);
@@ -121,6 +132,18 @@ public class NativeFunc {
     public native void GetRightHandMat(long model, long mat);
 
     public native void GetLeftHandMat(long model, long mat);
+
+    /** 提交本帧 TaCZ 手部模型局部目标；validMask 位 0 为左手、位 1 为右手。 */
+    public native boolean SetTaczArmTargets(long model, float[] matrices, int validMask);
+
+    /** 清除尚未被 native 更新周期取走的 TaCZ 瞬态双臂目标。 */
+    public native void ClearTaczArmTargets(long model);
+
+    /** 读取并清除最近一次更新结果：低 2 位为收到目标，高 2 位为成功应用。 */
+    public native int GetLastTaczArmApplyResult(long model);
+
+    /** 读取并清除左右手最终挂点诊断；output 必须恰有 24 项。 */
+    public native boolean GetLastTaczArmDiagnostics(long model, float[] output);
 
     public native long LoadTexture(String filename);
 
@@ -191,6 +214,8 @@ public class NativeFunc {
     public native boolean HasPhysics(long model);
 
     public native String GetPhysicsDebugInfo(long model);
+
+    public native String TakePhysicsDebugDiagnostic(long model);
 
     public native boolean IsMaterialVisible(long model, int index);
 
@@ -294,7 +319,7 @@ public class NativeFunc {
 
     public native int CopyMaterialMorphResultsToBuffer(long model, java.nio.ByteBuffer buffer);
 
-    public native int BatchGetSubMeshData(long model, java.nio.ByteBuffer buffer);
+    public native int BatchGetSubMeshData(long model, java.nio.ByteBuffer buffer, boolean firstPersonView);
 
     public native void SetPhysicsConfig(
         boolean enabled,
@@ -306,6 +331,8 @@ public class NativeFunc {
         float maxAngularVelocity,
         boolean jointsEnabled,
         boolean kinematicFilter,
+        boolean collisionEnabled,
+        int collisionStabilityMode,
         boolean debugLog
     );
 
@@ -316,6 +343,8 @@ public class NativeFunc {
     public native float GetHeadBonePositionY(long model);
 
     public native void GetEyeBonePosition(long model, float[] out);
+
+    public native void GetFirstPersonCameraAnchorPosition(long model, float[] out);
 
     public native String GetBoneNames(long model);
 

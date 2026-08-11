@@ -2,6 +2,7 @@
 
 pub mod animation;
 pub mod jni_bridge;
+mod jni_log;
 pub mod model;
 pub mod morph;
 pub mod physics;

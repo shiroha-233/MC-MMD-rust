@@ -11,6 +11,10 @@ public interface NativeRenderBackendPort extends NativeModelPort, NativeModelLoa
 
     void setLayerLoop(long modelHandle, long layer, boolean loop);
 
+    default void setLayerWeight(long modelHandle, long layer, float weight) {
+        // 兼容不需要动画混合能力的轻量测试后端。
+    }
+
     void resetModelPhysics(long modelHandle);
 
     void setPhysicsEnabled(long modelHandle, boolean enabled);
@@ -19,9 +23,26 @@ public interface NativeRenderBackendPort extends NativeModelPort, NativeModelLoa
 
     void updateAnimationOnly(long modelHandle, float deltaTime);
 
+    default String takePhysicsDebugDiagnostic(long modelHandle) {
+        // 测试替身和不支持诊断的后端默认没有待输出消息。
+        return null;
+    }
+
+    default String takeRustLogs() {
+        // Rust 日志是进程级队列，轻量测试后端无需实现。
+        return null;
+    }
+
     int getIndexElementSize(long modelHandle);
 
     long getIndexDataAddress(long modelHandle);
+
+    long getFirstPersonIndexCount(long modelHandle);
+
+    long getFirstPersonIndexDataAddress(long modelHandle);
+
+    int refreshFirstPersonIndices(long modelHandle, ByteBuffer matrices,
+                                  boolean gpuSkinning, ByteBuffer indices);
 
     long getPositionDataAddress(long modelHandle);
 
@@ -61,5 +82,5 @@ public interface NativeRenderBackendPort extends NativeModelPort, NativeModelLoa
 
     int getSubMeshCount(long modelHandle);
 
-    int batchGetSubMeshData(long modelHandle, ByteBuffer targetBuffer);
+    int batchGetSubMeshData(long modelHandle, ByteBuffer targetBuffer, boolean firstPersonView);
 }

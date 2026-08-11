@@ -5,6 +5,9 @@ import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.model.runtime.ManagedModel;
 import com.shiroha.mmdskin.model.runtime.ModelInstance;
 import com.shiroha.mmdskin.render.bootstrap.ClientRenderRuntime;
+import com.shiroha.mmdskin.render.pipeline.PerformanceSampleWindow;
+import com.shiroha.mmdskin.render.pipeline.RenderPerformanceProfiler;
+import com.shiroha.mmdskin.render.pipeline.RenderPerformanceProfiler.TransferKind;
 import com.shiroha.mmdskin.texture.runtime.TextureRepository;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +58,8 @@ public class PerformanceHud {
             return;
         }
 
+        RenderPerformanceProfiler.get().markPresentedFrame();
+
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.options.hideGui || minecraft.options.renderDebug) {
             return;
@@ -104,6 +109,8 @@ public class PerformanceHud {
         }
 
         addLine("", VALUE_COLOR);
+        appendPerformanceLines();
+        addLine("", VALUE_COLOR);
         addLine("MMD", TITLE_COLOR);
 
         List<ManagedModel> models = ClientRenderRuntime.get().modelDiagnostics().loadedModels();
@@ -152,6 +159,8 @@ public class PerformanceHud {
                 }
                 addLine("  " + modelName, VALUE_COLOR);
 
+                addLine("    Backend " + model.getRenderBackendName(), LABEL_COLOR);
+
                 long ram = model.getRamUsage();
                 long vram = model.getVramUsage();
                 addLine(String.format("    RAM %-10s  VRAM %s", fmtB(ram), fmtB(vram)), vram > 50 * 1024 * 1024 ? WARN_COLOR : LABEL_COLOR);
@@ -179,6 +188,90 @@ public class PerformanceHud {
 
     private static void addLine(String text, int color) {
         cachedLines.add(new HudLine(text, color));
+    }
+
+    private static void appendPerformanceLines() {
+        RenderPerformanceProfiler.Snapshot snapshot = RenderPerformanceProfiler.get().snapshot();
+        PerformanceSampleWindow.Snapshot frame = snapshot.frameTime();
+
+        addLine("Performance", TITLE_COLOR);
+        if (frame.count() > 0) {
+            addLine(String.format("  Frame  %.2f ms  avg %.2f  P95 %.2f  P99 %.2f",
+                    ms(frame.currentNanos()), ms(frame.averageNanos()),
+                    ms(frame.p95Nanos()), ms(frame.p99Nanos())), VALUE_COLOR);
+        } else {
+            addLine("  Frame  collecting...", LABEL_COLOR);
+        }
+
+        long update = average(snapshot, RenderPerformanceProfiler.SECTION_LIVING_STATE_SYNC)
+                + average(snapshot, RenderPerformanceProfiler.SECTION_NATIVE_MODEL_UPDATE);
+        long upload = average(snapshot, RenderPerformanceProfiler.SECTION_BONE_UPLOAD)
+                + average(snapshot, RenderPerformanceProfiler.SECTION_MORPH_UPLOAD)
+                + average(snapshot, RenderPerformanceProfiler.SECTION_MATERIAL_MORPH_FETCH)
+                + average(snapshot, RenderPerformanceProfiler.SECTION_SUB_MESH_FETCH);
+        long submit = average(snapshot, RenderPerformanceProfiler.SECTION_COMPUTE_DISPATCH);
+        long draw = average(snapshot, RenderPerformanceProfiler.SECTION_DRAW);
+        long cpuTotal = update + upload + submit + draw;
+        addLine(String.format("  MMD CPU %.2f ms  update %.2f  upload %.2f  draw %.2f",
+                ms(cpuTotal), ms(update), ms(upload + submit), ms(draw)), VALUE_COLOR);
+        if (cpuTotal > 0L) {
+            addLine(String.format("    Share update %.0f%%  transfer %.0f%%  draw %.0f%%",
+                    percent(update, cpuTotal), percent(upload + submit, cpuTotal), percent(draw, cpuTotal)),
+                    LABEL_COLOR);
+        }
+
+        PerformanceSampleWindow.Snapshot gpuCompute = snapshot.section(RenderPerformanceProfiler.GPU_SECTION_COMPUTE);
+        PerformanceSampleWindow.Snapshot gpuDraw = snapshot.section(RenderPerformanceProfiler.GPU_SECTION_DRAW);
+        if (gpuCompute.count() > 0 || gpuDraw.count() > 0) {
+            long gpuTotal = gpuCompute.averageNanos() + gpuDraw.averageNanos();
+            addLine(String.format("  MMD GPU %.2f ms  compute %.2f  draw %.2f",
+                    ms(gpuTotal), ms(gpuCompute.averageNanos()), ms(gpuDraw.averageNanos())), VALUE_COLOR);
+            if (gpuTotal > 0L) {
+                addLine(String.format("    Share compute %.0f%%  draw %.0f%%",
+                        percent(gpuCompute.averageNanos(), gpuTotal),
+                        percent(gpuDraw.averageNanos(), gpuTotal)), LABEL_COLOR);
+            }
+        } else {
+            addLine("  MMD GPU N/A (CPU backend or collecting)", LABEL_COLOR);
+        }
+
+        addLine(String.format("  Load   visible %d  physics %d  passes %d  dispatches %d",
+                snapshot.visibleModels(), snapshot.physicsModels(),
+                snapshot.calls(RenderPerformanceProfiler.SECTION_DRAW),
+                snapshot.calls(RenderPerformanceProfiler.SECTION_COMPUTE_DISPATCH)), LABEL_COLOR);
+
+        RenderPerformanceProfiler.TransferSnapshot transfers = snapshot.transfers();
+        addLine(String.format("  GPU upload %s  avoided %s  readback %s",
+                fmtB(transfers.totalGpuUploaded()), fmtB(transfers.totalGpuUploadAvoided()),
+                fmtB(transfers.uploaded(TransferKind.GPU_READBACK))), LABEL_COLOR);
+        addLine(String.format("    bone %s  morph %s  uv %s  material %s",
+                fmtB(transfers.uploaded(TransferKind.BONE)),
+                fmtB(transfers.uploaded(TransferKind.VERTEX_MORPH)),
+                fmtB(transfers.uploaded(TransferKind.UV_MORPH)),
+                fmtB(transfers.uploaded(TransferKind.MATERIAL_MORPH))), LABEL_COLOR);
+        addLine(String.format("    vertex %s  first-person %s  light %s",
+                fmtB(transfers.uploaded(TransferKind.CPU_VERTEX)),
+                fmtB(transfers.uploaded(TransferKind.FIRST_PERSON_INDEX)),
+                fmtB(transfers.uploaded(TransferKind.LIGHT))), LABEL_COLOR);
+        addLine(String.format("  CPU transfer %s  avoided %s",
+                fmtB(transfers.totalCpuTransfer()), fmtB(transfers.totalCpuTransferAvoided())), LABEL_COLOR);
+        addLine(String.format("    material %s  submesh %s",
+                fmtB(transfers.uploaded(TransferKind.MATERIAL_MORPH)),
+                fmtB(transfers.uploaded(TransferKind.SUB_MESH))), LABEL_COLOR);
+        addLine("  Placement CPU animation/bones/IK/physics/material", LABEL_COLOR);
+        addLine("            GPU morph/UV/skinning/normal/draw (GPU backend)", LABEL_COLOR);
+    }
+
+    private static long average(RenderPerformanceProfiler.Snapshot snapshot, String section) {
+        return snapshot.section(section).averageNanos();
+    }
+
+    private static double ms(long nanos) {
+        return nanos / 1_000_000.0d;
+    }
+
+    private static double percent(long value, long total) {
+        return total > 0L ? value * 100.0d / total : 0.0d;
     }
 
     private static void detectGpuVendor() {

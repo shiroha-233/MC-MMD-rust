@@ -111,6 +111,29 @@ tasks.named('processResources', ProcessResources).configure {
     }
 }
 
+// 可选的本地 TaCZ 生产包，用于 Forge 开发环境兼容验证。
+def defaultTaczDevJar = rootProject.file(".tmp-tacz/mods/tacz-1.20.1-1.1.6-hotfix.jar")
+def configuredTaczDevJar = providers.gradleProperty("tacz_dev_jar").orNull
+def taczDevJar = configuredTaczDevJar == null || configuredTaczDevJar.isBlank()
+        ? defaultTaczDevJar
+        : rootProject.file(configuredTaczDevJar)
+def taczDevRuntimeDir = layout.buildDirectory.dir("tacz-dev-runtime")
+def prepareTaczDevRuntime = tasks.register("prepareTaczDevRuntime", Sync) {
+    onlyIf { taczDevJar.isFile() }
+    from({ zipTree(taczDevJar) }) {
+        include("META-INF/jarjar/*.jar")
+        eachFile { details ->
+            details.path = details.name
+        }
+        includeEmptyDirs = false
+    }
+    into(taczDevRuntimeDir)
+}
+
+tasks.withType(JavaExec).configureEach {
+    dependsOn(prepareTaczDevRuntime)
+}
+
 dependencies {
     // Common 模块 - 添加源代码到编译路径
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
@@ -134,6 +157,15 @@ dependencies {
     // TouhouLittleMaid - 可选依赖，用于联动
     modCompileOnly("maven.modrinth:touhou-little-maid:1.5.0-forge+mc1.20.1")
     modLocalRuntime("maven.modrinth:touhou-little-maid:1.5.0-forge+mc1.20.1")
+
+    // 本地 TaCZ 生产包必须经 Loom 重映射后才能进入命名开发环境。
+    if (taczDevJar.isFile()) {
+        modLocalRuntime(files(taczDevJar))
+        // Loom 的 classpath Mod 不会展开 Jar-in-Jar，将未混淆依赖提取为真实文件后加入运行时。
+        runtimeOnly(files(fileTree(taczDevRuntimeDir) {
+            include("*.jar")
+        }).builtBy(prepareTaczDevRuntime))
+    }
     
     // Cloth Config API - 配置界面
     modApi("me.shedaniel.cloth:cloth-config-forge:11.1.136")
