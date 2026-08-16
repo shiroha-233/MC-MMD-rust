@@ -9,10 +9,11 @@ import com.shiroha.mmdskin.client.frame.MmdModelMotion;
 import com.shiroha.mmdskin.client.frame.MmdRenderSnapshot;
 import com.shiroha.mmdskin.client.frame.ModelTransform;
 import com.shiroha.mmdskin.client.model.ModelKey;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.world.entity.Entity;
 
 public final class LegacyEntityMmdRenderer<T extends Entity>
@@ -52,13 +53,10 @@ public final class LegacyEntityMmdRenderer<T extends Entity>
     }
 
     @Override
-    public void render(State state, PoseStack poseStack, MultiBufferSource buffers, int packedLight) {
-        if (MmdRenderRouter.route(state.snapshot, poseStack, packedLight, false)
-                == MmdRenderRouter.Result.FALLTHROUGH) {
-            super.render(state, poseStack, buffers, packedLight);
-            return;
-        }
-        super.render(state, poseStack, buffers, packedLight);
+    public void submit(State state, PoseStack poseStack, SubmitNodeCollector collector,
+                       CameraRenderState camera) {
+        MmdRenderRouter.route(state.snapshot, poseStack, state.lightCoords, false);
+        super.submit(state, poseStack, collector, camera);
     }
 
     public static final class State extends EntityRenderState {

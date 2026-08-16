@@ -4,8 +4,7 @@ package com.shiroha.mmdskin.compat.vr;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemDisplayContext;
 import org.apache.logging.log4j.LogManager;
@@ -21,7 +20,7 @@ public final class VRHandRenderer {
 
     private VRHandRenderer() {}
 
-    public static void renderHandItem(PoseStack poseStack, MultiBufferSource buffer,
+    public static void renderHandItem(PoseStack poseStack, SubmitNodeCollector collector,
                                        int packedLight, InteractionHand hand) {
         try {
             LocalPlayer player = Minecraft.getInstance().player;
@@ -37,10 +36,8 @@ public final class VRHandRenderer {
 
             poseStack.pushPose();
             try {
-                Minecraft.getInstance().getItemRenderer().renderStatic(
-                        player, itemStack, ctx,
-                        poseStack, buffer, player.level(),
-                        packedLight, OverlayTexture.NO_OVERLAY, 0);
+                Minecraft.getInstance().gameRenderer.itemInHandRenderer.renderItem(
+                        player, itemStack, ctx, poseStack, collector, packedLight);
             } finally {
                 poseStack.popPose();
             }

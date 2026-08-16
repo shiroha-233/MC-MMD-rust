@@ -3,8 +3,7 @@
   "minVersion": "0.8",
   "package": "com.shiroha.mmdskin.mixin.fabric",
   "plugin": "com.shiroha.mmdskin.mixin.fabric.compat.MmdFabricMixinPlugin",
-  "compatibilityLevel": "JAVA_21",
-  "refmap": "mmdskin-fabric-refmap.json",
+  "compatibilityLevel": "JAVA_25",
   "mixins": [],
   "client": [
     "FabricPlayerRendererMixin",
@@ -18,9 +17,14 @@
     "KeyMappingAccessor",
     "ItemInHandRendererMixin",
     "MinecraftMixin",
+    "MinecraftGuiMixin",
     "MouseHandlerMixin",
     "KeyboardInputMixin",
-    "EntityMixin"
+    "EntityMixin",
+    "LevelRendererFrameMixin",
+    "HudDebugMixin",
+    "PictureInPictureRendererMixin",
+    "GuiEntityRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

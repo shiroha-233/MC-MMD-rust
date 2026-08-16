@@ -3,7 +3,9 @@ package com.shiroha.mmdskin.ui.config;
 
 import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
@@ -60,7 +62,7 @@ public class ActionWheelConfigScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick) {
         updateLayout();
         updateHoverState(mouseX, mouseY);
         updateScrollAnimation();
@@ -68,40 +70,40 @@ public class ActionWheelConfigScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0) {
-            return super.mouseClicked(mouseX, mouseY, button);
+    public boolean mouseClicked(MouseButtonEvent event, boolean triggerDoubleClick) {
+        if (event.button() != 0) {
+            return super.mouseClicked(event, triggerDoubleClick);
         }
-        if (!layout.panel.contains(mouseX, mouseY)) {
-            return super.mouseClicked(mouseX, mouseY, button);
+        if (!layout.panel.contains(event.x(), event.y())) {
+            return super.mouseClicked(event, triggerDoubleClick);
         }
 
-        if (layout.refreshButton.contains(mouseX, mouseY)) {
+        if (layout.refreshButton.contains(event.x(), event.y())) {
             rescan();
             return true;
         }
-        if (layout.selectAllButton.contains(mouseX, mouseY)) {
+        if (layout.selectAllButton.contains(event.x(), event.y())) {
             selectAll();
             return true;
         }
-        if (layout.clearAllButton.contains(mouseX, mouseY)) {
+        if (layout.clearAllButton.contains(event.x(), event.y())) {
             clearAll();
             return true;
         }
-        if (layout.saveButton.contains(mouseX, mouseY)) {
+        if (layout.saveButton.contains(event.x(), event.y())) {
             saveAndClose();
             return true;
         }
-        if (layout.cancelButton.contains(mouseX, mouseY)) {
+        if (layout.cancelButton.contains(event.x(), event.y())) {
             this.onClose();
             return true;
         }
-        if (layout.availableList.contains(mouseX, mouseY) && hoveredAvailableIndex >= 0) {
+        if (layout.availableList.contains(event.x(), event.y()) && hoveredAvailableIndex >= 0) {
             state.moveAvailableToSelected(hoveredAvailableIndex);
             clampScrollOffsets();
             return true;
         }
-        if (layout.selectedList.contains(mouseX, mouseY) && hoveredSelectedIndex >= 0) {
+        if (layout.selectedList.contains(event.x(), event.y()) && hoveredSelectedIndex >= 0) {
             state.moveSelectedToAvailable(hoveredSelectedIndex);
             clampScrollOffsets();
             return true;
@@ -123,19 +125,19 @@ public class ActionWheelConfigScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) {
+    public boolean keyPressed(KeyEvent event) {
+        if (event.key() == 256) {
             this.onClose();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override
     public void onClose() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.screen == this) {
-            minecraft.setScreen(parent);
+        if (minecraft.gui.screen() == this) {
+            minecraft.gui.setScreen(parent);
             return;
         }
         super.onClose();
@@ -251,7 +253,7 @@ public class ActionWheelConfigScreen extends Screen {
         return Math.abs(next - target) < 0.25f ? target : next;
     }
 
-    private void renderScreen(GuiGraphics guiGraphics) {
+    private void renderScreen(GuiGraphicsExtractor guiGraphics) {
         TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
         drawPanel(guiGraphics, layout.panel);
         drawHeader(guiGraphics);
@@ -264,16 +266,16 @@ public class ActionWheelConfigScreen extends Screen {
         drawFooter(guiGraphics);
     }
 
-    private void drawHeader(GuiGraphics guiGraphics) {
-        guiGraphics.drawString(this.font, this.title, layout.header.x, layout.header.y + 2, TranslucentTrayChrome.TITLE_TEXT, false);
+    private void drawHeader(GuiGraphicsExtractor guiGraphics) {
+        guiGraphics.text(this.font, this.title, layout.header.x, layout.header.y + 2, TranslucentTrayChrome.TITLE_TEXT, false);
         Component stats = Component.translatable("gui.mmdskin.config.stats", state.availableCount(), state.selectedCount());
-        guiGraphics.drawString(this.font, stats, layout.header.x, layout.header.y + 16, TranslucentTrayChrome.SUBTITLE_TEXT, false);
-        guiGraphics.drawString(this.font,
+        guiGraphics.text(this.font, stats, layout.header.x, layout.header.y + 16, TranslucentTrayChrome.SUBTITLE_TEXT, false);
+        guiGraphics.text(this.font,
                 Component.translatable("gui.mmdskin.action_wheel.click_select"),
                 layout.header.x, layout.header.y + 28, TranslucentTrayChrome.MUTED_TEXT, false);
     }
 
-    private void drawColumn(GuiGraphics guiGraphics,
+    private void drawColumn(GuiGraphicsExtractor guiGraphics,
                             UiRect columnRect,
                             UiRect listRect,
                             String title,
@@ -281,12 +283,12 @@ public class ActionWheelConfigScreen extends Screen {
                             int hoveredIndex,
                             float scrollOffset) {
         drawPanel(guiGraphics, columnRect);
-        guiGraphics.drawString(this.font, title, columnRect.x + 6, columnRect.y + 6, TranslucentTrayChrome.TITLE_TEXT, false);
+        guiGraphics.text(this.font, title, columnRect.x + 6, columnRect.y + 6, TranslucentTrayChrome.TITLE_TEXT, false);
         TranslucentTrayChrome.drawSeparator(guiGraphics, columnRect.x + 6, columnRect.y + 16, columnRect.w - 12);
         TranslucentTrayChrome.fillListArea(guiGraphics, listRect.x, listRect.y, listRect.w, listRect.h);
 
         if (items.isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, "-", listRect.centerX(), listRect.centerY() - 4, TranslucentTrayChrome.DIM_TEXT);
+            guiGraphics.centeredText(this.font, "-", listRect.centerX(), listRect.centerY() - 4, TranslucentTrayChrome.DIM_TEXT);
             return;
         }
 
@@ -307,17 +309,17 @@ public class ActionWheelConfigScreen extends Screen {
         drawScrollBar(guiGraphics, listRect, items.size(), scrollOffset);
     }
 
-    private void drawEntryCard(GuiGraphics guiGraphics, UiRect listRect, int y,
+    private void drawEntryCard(GuiGraphicsExtractor guiGraphics, UiRect listRect, int y,
                                ActionWheelConfig.ActionEntry entry, boolean hovered) {
         int x = listRect.x + 4;
         int w = listRect.w - 12;
         guiGraphics.fill(x, y, x + w, y + CARD_HEIGHT, TranslucentTrayChrome.cardBackground(false, hovered));
         guiGraphics.fill(x, y, x + 2, y + CARD_HEIGHT, hovered ? TranslucentTrayChrome.ACCENT_STRIP_ACTIVE : TranslucentTrayChrome.ACCENT_STRIP);
-        guiGraphics.drawString(this.font, buildEntryTitle(entry), x + 8, y + 4, TranslucentTrayChrome.BODY_TEXT, false);
-        guiGraphics.drawString(this.font, buildEntryMeta(entry), x + 8, y + 15, TranslucentTrayChrome.DETAIL_TEXT, false);
+        guiGraphics.text(this.font, buildEntryTitle(entry), x + 8, y + 4, TranslucentTrayChrome.BODY_TEXT, false);
+        guiGraphics.text(this.font, buildEntryMeta(entry), x + 8, y + 15, TranslucentTrayChrome.DETAIL_TEXT, false);
     }
 
-    private void drawFooter(GuiGraphics guiGraphics) {
+    private void drawFooter(GuiGraphicsExtractor guiGraphics) {
         drawButton(guiGraphics, layout.refreshButton, Component.translatable("gui.mmdskin.refresh").getString(), hoveredButton == ButtonTarget.REFRESH);
         drawButton(guiGraphics, layout.selectAllButton, Component.translatable("gui.mmdskin.select_all").getString(), hoveredButton == ButtonTarget.SELECT_ALL);
         drawButton(guiGraphics, layout.clearAllButton, Component.translatable("gui.mmdskin.clear_all").getString(), hoveredButton == ButtonTarget.CLEAR_ALL);
@@ -325,15 +327,15 @@ public class ActionWheelConfigScreen extends Screen {
         drawButton(guiGraphics, layout.cancelButton, Component.translatable("gui.cancel").getString(), hoveredButton == ButtonTarget.CANCEL);
     }
 
-    private void drawButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
+    private void drawButton(GuiGraphicsExtractor guiGraphics, UiRect rect, String text, boolean hovered) {
         TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, true);
     }
 
-    private void drawPanel(GuiGraphics guiGraphics, UiRect rect) {
+    private void drawPanel(GuiGraphicsExtractor guiGraphics, UiRect rect) {
         TranslucentTrayChrome.drawPanel(guiGraphics, rect.x, rect.y, rect.w, rect.h);
     }
 
-    private void drawScrollBar(GuiGraphics guiGraphics, UiRect listRect, int itemCount, float scrollOffset) {
+    private void drawScrollBar(GuiGraphicsExtractor guiGraphics, UiRect listRect, int itemCount, float scrollOffset) {
         float maxScroll = Math.max(0.0f, itemCount * (CARD_HEIGHT + CARD_GAP) - CARD_GAP + LIST_PADDING * 2.0f - listRect.h);
         if (maxScroll <= 0.0f) {
             return;

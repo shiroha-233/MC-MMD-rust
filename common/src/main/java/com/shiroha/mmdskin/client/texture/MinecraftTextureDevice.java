@@ -1,15 +1,13 @@
-// 负责使用 Minecraft 1.21.5 GpuTexture API 创建并上传 RGBA8 纹理。
+// 负责使用 Minecraft 26.2 GpuTexture API 创建并上传 RGBA8 纹理。
 package com.shiroha.mmdskin.client.texture;
 
+import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.TextureFormat;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.IntBuffer;
 
 public final class MinecraftTextureDevice implements TextureDevice {
     @Override
@@ -22,16 +20,17 @@ public final class MinecraftTextureDevice implements TextureDevice {
         assertRenderThread();
         GpuTexture texture = RenderSystem.getDevice().createTexture(
                 () -> "MMD texture " + upload.key().nativePath(),
-                TextureFormat.RGBA8,
+                GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_DST,
+                GpuFormat.RGBA8_UNORM,
                 upload.width(),
                 upload.height(),
+                1,
                 1);
         try {
-            texture.setTextureFilter(FilterMode.LINEAR, false);
             ByteBuffer bytes = upload.rgbaPixels().duplicate().order(ByteOrder.nativeOrder());
-            IntBuffer pixels = bytes.asIntBuffer();
+            // 26.2 签名: (texture, buffer, mipLevel, z, x, y, width, height)
             RenderSystem.getDevice().createCommandEncoder().writeToTexture(
-                    texture, pixels, NativeImage.Format.RGBA, 0, 0, 0, upload.width(), upload.height());
+                    texture, bytes, 0, 0, 0, 0, upload.width(), upload.height());
             return new MinecraftTextureResource(texture, upload.width(), upload.height(), upload.hasAlpha());
         } catch (RuntimeException exception) {
             texture.close();

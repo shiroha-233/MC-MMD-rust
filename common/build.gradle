@@ -1,14 +1,15 @@
 // 负责公共模块的跨加载器依赖、映射与测试配置。
 architectury {
-    common("fabric", "neoforge")
+    common("fabric")
 }
 
 dependencies {
-    modImplementation("dev.architectury:architectury:${project.architectury_version}")
+    // 26.x 无反混淆，使用标准 Gradle 配置；本模块未使用 Architectury API，不引入
     compileOnly("net.fabricmc:fabric-loader:${project.loader_version}")
     compileOnly("javazoom:jlayer:1.0.1") { transitive = false }
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 test {

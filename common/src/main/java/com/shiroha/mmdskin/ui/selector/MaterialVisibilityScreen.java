@@ -6,7 +6,9 @@ import com.shiroha.mmdskin.ui.selector.application.MaterialVisibilityApplication
 import com.shiroha.mmdskin.ui.selector.application.MaterialVisibilityApplicationService.MaterialEntryState;
 import com.shiroha.mmdskin.ui.selector.application.MaterialVisibilityApplicationService.MaterialScreenContext;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
@@ -70,7 +72,7 @@ public class MaterialVisibilityScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick) {
         Minecraft minecraft = Minecraft.getInstance();
         try {
             updateLayout();
@@ -84,31 +86,31 @@ public class MaterialVisibilityScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0) {
-            return super.mouseClicked(mouseX, mouseY, button);
+    public boolean mouseClicked(MouseButtonEvent event, boolean triggerDoubleClick) {
+        if (event.button() != 0) {
+            return super.mouseClicked(event, triggerDoubleClick);
         }
-        if (!layout.panel.contains(mouseX, mouseY)) {
-            return super.mouseClicked(mouseX, mouseY, button);
+        if (!layout.panel.contains(event.x(), event.y())) {
+            return super.mouseClicked(event, triggerDoubleClick);
         }
 
-        if (layout.showAllButton.contains(mouseX, mouseY)) {
+        if (layout.showAllButton.contains(event.x(), event.y())) {
             SERVICE.setAllVisible(context, materials, true);
             return true;
         }
-        if (layout.hideAllButton.contains(mouseX, mouseY)) {
+        if (layout.hideAllButton.contains(event.x(), event.y())) {
             SERVICE.setAllVisible(context, materials, false);
             return true;
         }
-        if (layout.invertButton.contains(mouseX, mouseY)) {
+        if (layout.invertButton.contains(event.x(), event.y())) {
             SERVICE.invertSelection(context, materials);
             return true;
         }
-        if (layout.doneButton.contains(mouseX, mouseY)) {
+        if (layout.doneButton.contains(event.x(), event.y())) {
             pendingClose = true;
             return true;
         }
-        if (layout.listBox.contains(mouseX, mouseY) && hoveredCard >= 0 && hoveredCard < materials.size()) {
+        if (layout.listBox.contains(event.x(), event.y()) && hoveredCard >= 0 && hoveredCard < materials.size()) {
             SERVICE.toggleMaterial(context, materials, hoveredCard);
             return true;
         }
@@ -125,12 +127,12 @@ public class MaterialVisibilityScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) {
+    public boolean keyPressed(KeyEvent event) {
+        if (event.key() == 256) {
             this.onClose();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override
@@ -230,12 +232,12 @@ public class MaterialVisibilityScreen extends Screen {
         return Math.max(0.0f, contentHeight - layout.listBox.h);
     }
 
-    private void renderScreen(GuiGraphics guiGraphics) {
+    private void renderScreen(GuiGraphicsExtractor guiGraphics) {
         TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
         TranslucentTrayChrome.drawPanel(guiGraphics, layout.panel.x, layout.panel.y, layout.panel.w, layout.panel.h);
-        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
-        guiGraphics.drawString(this.font, shorten(context.modelName(), 8), layout.header.x, layout.header.y + 10, TranslucentTrayChrome.SUBTITLE_TEXT, false);
-        guiGraphics.drawString(this.font, visibleCount() + " / " + materials.size(), layout.header.x, layout.header.y + 19, TranslucentTrayChrome.DETAIL_TEXT, false);
+        guiGraphics.text(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
+        guiGraphics.text(this.font, shorten(context.modelName(), 8), layout.header.x, layout.header.y + 10, TranslucentTrayChrome.SUBTITLE_TEXT, false);
+        guiGraphics.text(this.font, visibleCount() + " / " + materials.size(), layout.header.x, layout.header.y + 19, TranslucentTrayChrome.DETAIL_TEXT, false);
 
         drawButton(guiGraphics, layout.showAllButton, Component.translatable("gui.mmdskin.material_visibility.show_all").getString(), hoveredButton == ButtonTarget.SHOW_ALL);
         drawButton(guiGraphics, layout.hideAllButton, Component.translatable("gui.mmdskin.material_visibility.hide_all").getString(), hoveredButton == ButtonTarget.HIDE_ALL);
@@ -245,7 +247,7 @@ public class MaterialVisibilityScreen extends Screen {
         UiRect list = layout.listBox;
         TranslucentTrayChrome.fillListArea(guiGraphics, list.x, list.y, list.w, list.h);
         if (materials.isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, "-", list.centerX(), list.centerY() - 4, TranslucentTrayChrome.BODY_TEXT);
+            guiGraphics.centeredText(this.font, "-", list.centerX(), list.centerY() - 4, TranslucentTrayChrome.BODY_TEXT);
             return;
         }
 
@@ -265,14 +267,14 @@ public class MaterialVisibilityScreen extends Screen {
                     ? TranslucentTrayChrome.cardBackground(false, hovered)
                     : hovered ? 0x66FFFFFF : TranslucentTrayChrome.BUTTON_HOVER;
             guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, bg);
-            guiGraphics.drawString(this.font, buildMaterialLabel(material), list.x + 7, y + 3, TranslucentTrayChrome.BODY_TEXT, false);
+            guiGraphics.text(this.font, buildMaterialLabel(material), list.x + 7, y + 3, TranslucentTrayChrome.BODY_TEXT, false);
             y += CARD_HEIGHT + CARD_GAP;
         }
         guiGraphics.disableScissor();
         TranslucentTrayChrome.drawScrollbar(guiGraphics, list.x + list.w - 3, list.y, list.y + list.h, animatedScroll, maxScroll());
     }
 
-    private void drawButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered) {
+    private void drawButton(GuiGraphicsExtractor guiGraphics, UiRect rect, String text, boolean hovered) {
         TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, true);
     }
 
@@ -298,17 +300,17 @@ public class MaterialVisibilityScreen extends Screen {
     }
 
     private void flushPendingActions(Minecraft minecraft) {
-        if (pendingClose && minecraft.screen == this) {
+        if (pendingClose && minecraft.gui.screen() == this) {
             pendingClose = false;
-            minecraft.setScreen(null);
+            minecraft.gui.setScreen(null);
         }
     }
 
     private void closeAfterFailure(Throwable throwable) {
         LOGGER.error("[MaterialVisibility] Native material visibility render failed and will close", throwable);
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.screen == this) {
-            minecraft.setScreen(null);
+        if (minecraft.gui.screen() == this) {
+            minecraft.gui.setScreen(null);
         }
     }
 

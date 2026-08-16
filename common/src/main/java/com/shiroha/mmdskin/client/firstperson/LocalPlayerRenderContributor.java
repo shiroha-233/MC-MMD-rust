@@ -22,11 +22,10 @@ import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
-import net.minecraft.client.renderer.entity.state.PlayerRenderState;
 import org.joml.Matrix4f;
 
 import java.util.Objects;
@@ -47,7 +46,7 @@ public final class LocalPlayerRenderContributor {
 
     public boolean contribute(Minecraft minecraft, Camera camera, float partialTick,
                               long frameId, float deltaSeconds, boolean compatibilityConflict,
-                              PoseStack worldPose, MultiBufferSource buffers) {
+                              PoseStack worldPose, SubmitNodeCollector collector) {
         LocalPlayer player = minecraft.player;
         if (IrisCompatibility.isShadowPass()) {
             return false;
@@ -82,9 +81,11 @@ public final class LocalPlayerRenderContributor {
             } else if (prepared.leftVr()) {
                 MmdSkinRendererPlayerHelper.resetModelAnimationState(player, model);
             }
-            double x = state.x - camera.getPosition().x;
-            double y = state.y - camera.getPosition().y;
-            double z = state.z - camera.getPosition().z;
+            // modelMat 使用相机相对坐标（state - camera）：与 26.2 官方例程一致，
+            // ModelView（CameraMatrices）只含视图旋转，顶点自身携带 -pos。
+            double x = state.x - camera.position().x;
+            double y = state.y - camera.position().y;
+            double z = state.z - camera.position().z;
             int packedLight = minecraft.getEntityRenderDispatcher().getPackedLightCoords(player, partialTick);
             Matrix4f matrix = new Matrix4f()
                     .translation((float) x, (float) y, (float) z)
@@ -104,11 +105,11 @@ public final class LocalPlayerRenderContributor {
                     transparent), lease);
             queued = true;
 
-            if (state instanceof PlayerRenderState playerState && worldPose != null && buffers != null) {
+            if (worldPose != null && collector != null) {
                 worldPose.pushPose();
                 try {
                     worldPose.translate(x, y, z);
-                    MmdHeldItemRenderer.render(playerState, model, worldPose, buffers,
+                    MmdHeldItemRenderer.render(model, worldPose, collector, player,
                             packedLight, state.bodyRot);
                 } finally {
                     worldPose.popPose();

@@ -1,375 +1,181 @@
-name: Build & Release
+# 26.2 全流程自动构建：Rust 原生引擎编译 → Gradle 打包 → 产物上传/发布。
+#
+# 两种打包模式：
+#   A) 单平台（每个平台 job 自带该平台原生库的完整 mod jar）
+#   B) universal（收集所有平台原生库 → common/src/main/resources/natives/ → 打一个全平台 jar）
+#
+# 平台：windows-x64 / linux-x64 / macos-x64（macos-latest 为 arm64 runner，
+#       交叉编译 x86_64-apple-darwin）。框架矩阵当前仅 fabric（26.2 迁移范围；
+#       neoforge 完成后在框架矩阵追加即可，并放开 settings.gradle 的 include）。
+# 注意：bullet3 是原始项目的 git submodule 但源码未入库，CI 按 tag 3.27 拉取。
+name: Build & Release (26.2)
 
 on:
   push:
     tags:
       - 'v*'
   pull_request:
-    branches: [main]
+    branches: [main, 26.2]
   workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # ==================== Rust 原生库构建 ====================
-  build-rust-windows-x64:
-    runs-on: windows-latest
+  # ==================== Rust 原生库构建（每个平台一个 artifact） ====================
+  build-rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            os: windows-latest
+            native: mmd_engine.dll
+            cargo-target: ""
+          - platform: linux-x64
+            os: ubuntu-latest
+            native: libmmd_engine.so
+            cargo-target: ""
+          - platform: macos-x64
+            os: macos-latest
+            native: libmmd_engine.dylib
+            cargo-target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Build Windows x64 DLL
-        run: cargo build --release --manifest-path rust_engine/Cargo.toml
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-windows-x64
-          path: rust_engine/target/release/mmd_engine.dll
-
-  build-rust-windows-arm64:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-pc-windows-msvc
-
-      - name: Build Windows ARM64 DLL
-        run: cargo build --release --manifest-path rust_engine/Cargo.toml --target aarch64-pc-windows-msvc
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-windows-arm64
-          path: rust_engine/target/aarch64-pc-windows-msvc/release/mmd_engine.dll
-
-  build-rust-linux-x64:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Build Linux x64 SO
-        run: cargo build --release --manifest-path rust_engine/Cargo.toml
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-linux-x64
-          path: rust_engine/target/release/libmmd_engine.so
-
-  build-rust-linux-arm64:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-unknown-linux-gnu
-
-      - name: Install cross-compilation tools
+      # bullet3 源码不在仓库（原 submodule 未入库），按原项目所用版本拉取。
+      # 注意：bullet3 的持续版本号（VERSION 文件）为 3.27 但并未打 tag（最新 tag 为 3.25），
+      # 因此克隆默认分支 master（VERSION=3.27，与原项目一致）。
+      - name: Fetch Bullet3 sources
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-
-      - name: Build Linux ARM64 SO
-        run: cargo build --release --manifest-path rust_engine/Cargo.toml --target aarch64-unknown-linux-gnu
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
-          CXX_aarch64_unknown_linux_gnu: aarch64-linux-gnu-g++
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-linux-arm64
-          path: rust_engine/target/aarch64-unknown-linux-gnu/release/libmmd_engine.so
-
-  build-rust-linux-loongarch64:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+          rm -rf rust_engine/deps/bullet3
+          git clone --depth 1 https://github.com/bulletphysics/bullet3.git \
+            rust_engine/deps/bullet3
+          test -d rust_engine/deps/bullet3/src/LinearMath \
+            && echo "bullet3 ready"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: loongarch64-unknown-linux-gnu
+          targets: ${{ matrix.cargo-target }}
 
-      - name: Install LoongArch64 cross-compilation tools
+      - name: Build Rust native (${{ matrix.platform }})
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install gcc-14-loongarch64-linux-gnu g++-14-loongarch64-linux-gnu -y
-          sudo update-alternatives \
-            --install /usr/bin/loongarch64-linux-gnu-gcc loongarch64-linux-gnu-gcc /usr/bin/loongarch64-linux-gnu-gcc-14 100 \
-            --slave /usr/bin/loongarch64-linux-gnu-g++ loongarch64-linux-gnu-g++ /usr/bin/loongarch64-linux-gnu-g++-14 \
-            --slave /usr/bin/loongarch64-linux-gnu-gcc-ar loongarch64-linux-gnu-gcc-ar /usr/bin/loongarch64-linux-gnu-gcc-ar-14 \
-            --slave /usr/bin/loongarch64-linux-gnu-gcc-nm loongarch64-linux-gnu-gcc-nm /usr/bin/loongarch64-linux-gnu-gcc-nm-14 \
-            --slave /usr/bin/loongarch64-linux-gnu-gcc-ranlib loongarch64-linux-gnu-gcc-ranlib /usr/bin/loongarch64-linux-gnu-gcc-ranlib-14 \
-            --slave /usr/bin/loongarch64-linux-gnu-gcov loongarch64-linux-gnu-gcov /usr/bin/loongarch64-linux-gnu-gcov-14
-          sudo update-alternatives \
-            --install /usr/bin/loongarch64-linux-gnu-cpp loongarch64-linux-gnu-cpp /usr/bin/loongarch64-linux-gnu-cpp-14 100
+          if [ -n "${{ matrix.cargo-target }}" ]; then
+            cargo build --release --locked \
+              --manifest-path rust_engine/Cargo.toml \
+              --target ${{ matrix.cargo-target }}
+            mkdir -p rust_engine/target/release
+            cp rust_engine/target/${{ matrix.cargo-target }}/release/${{ matrix.native }} \
+              rust_engine/target/release/
+          else
+            cargo build --release --locked --manifest-path rust_engine/Cargo.toml
+          fi
+          test -f rust_engine/target/release/${{ matrix.native }} \
+            && echo "native library ready"
 
-      - name: Build Linux LoongArch64 SO
-        run: cargo build --release --manifest-path rust_engine/Cargo.toml --target loongarch64-unknown-linux-gnu
-        env:
-          CARGO_TARGET_LOONGARCH64_UNKNOWN_LINUX_GNU_LINKER: loongarch64-linux-gnu-gcc
-          CC_loongarch64_unknown_linux_gnu: loongarch64-linux-gnu-gcc
-          CXX_loongarch64_unknown_linux_gnu: loongarch64-linux-gnu-g++
-          AR_loongarch64_unknown_linux_gnu: loongarch64-linux-gnu-ar
-
-      - name: Upload artifact
+      - name: Upload native artifact
         uses: actions/upload-artifact@v4
         with:
-          name: native-linux-loongarch64
-          path: rust_engine/target/loongarch64-unknown-linux-gnu/release/libmmd_engine.so
+          name: native-${{ matrix.platform }}
+          path: rust_engine/target/release/${{ matrix.native }}
+          if-no-files-found: error
 
-  build-rust-linux-riscv64:
-    runs-on: ubuntu-latest
+  # ==================== 单平台完整 mod jar（自带本平台原生库） ====================
+  build-mod:
+    needs: build-rust
+    strategy:
+      fail-fast: false
+      matrix:
+        framework: [fabric]
+        include:
+          - platform: windows-x64
+            os: windows-latest
+            native: mmd_engine.dll
+          - platform: linux-x64
+            os: ubuntu-latest
+            native: libmmd_engine.so
+          - platform: macos-x64
+            os: macos-latest
+            native: libmmd_engine.dylib
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: riscv64gc-unknown-linux-gnu
-
-      - name: Install RISC-V 64 cross-compilation tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-riscv64-linux-gnu g++-riscv64-linux-gnu
-
-      - name: Build Linux RISC-V 64 SO
-        run: cargo build --release --manifest-path rust_engine/Cargo.toml --target riscv64gc-unknown-linux-gnu
-        env:
-          CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER: riscv64-linux-gnu-gcc
-          CC_riscv64gc_unknown_linux_gnu: riscv64-linux-gnu-gcc
-          CXX_riscv64gc_unknown_linux_gnu: riscv64-linux-gnu-g++
-          AR_riscv64gc_unknown_linux_gnu: riscv64-linux-gnu-ar
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-linux-riscv64
-          path: rust_engine/target/riscv64gc-unknown-linux-gnu/release/libmmd_engine.so
-
-  build-rust-macos-x64:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-apple-darwin
-
-      - name: Build macOS x64 dylib
-        run: cargo build --release --manifest-path rust_engine/Cargo.toml --target x86_64-apple-darwin
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-macos-x64
-          path: rust_engine/target/x86_64-apple-darwin/release/libmmd_engine.dylib
-
-  build-rust-macos-arm64:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin
-
-      - name: Build macOS ARM64 dylib
-        run: cargo build --release --manifest-path rust_engine/Cargo.toml --target aarch64-apple-darwin
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-macos-arm64
-          path: rust_engine/target/aarch64-apple-darwin/release/libmmd_engine.dylib
-
-  build-rust-android-arm64:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android
-
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        id: setup-ndk
-        with:
-          ndk-version: r27c
-
-      - name: Build Android ARM64 SO
-        run: cargo build --release --manifest-path rust_engine/Cargo.toml --target aarch64-linux-android
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
-          CC_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
-          CXX_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++
-          AR_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-android-arm64
-          path: rust_engine/target/aarch64-linux-android/release/libmmd_engine.so
-
-  build-rust-android-amd64:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-linux-android
-
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        id: setup-ndk
-        with:
-          ndk-version: r27c
-
-      - name: Build Android AMD64 SO
-        run: cargo build --release --manifest-path rust_engine/Cargo.toml --target x86_64-linux-android
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-          CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang
-          CC_x86_64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang
-          CXX_x86_64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang++
-          AR_x86_64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-android-amd64
-          path: rust_engine/target/x86_64-linux-android/release/libmmd_engine.so
-
-  # ==================== Java 模组构建（轻量版：仅包含常用平台） ====================
-  build-java:
-    needs: [build-rust-windows-x64, build-rust-linux-x64, build-rust-android-arm64]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Extract mod version
-        id: version
-        run: |
-          MOD_VERSION=$(grep "version = '" build.gradle | head -1 | sed "s/.*version = '//" | sed "s/'.*//")
-          echo "mod_version=$MOD_VERSION" >> $GITHUB_OUTPUT
-          echo "提取到模组版本: $MOD_VERSION"
-
-      - name: Download native libraries
-        uses: actions/download-artifact@v4
-        with:
-          pattern: native-*
-          path: native-libs
-
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        id: setup-ndk
-        with:
-          ndk-version: r27c
-
-      - name: Copy natives to resources (only Windows/Linux x64 + Android ARM64)
-        env:
-          NDK_PATH: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: |
-          mkdir -p common/src/main/resources/natives/windows-x64
-          mkdir -p common/src/main/resources/natives/linux-x64
-          mkdir -p common/src/main/resources/natives/android-arm64
-          cp native-libs/native-windows-x64/mmd_engine.dll common/src/main/resources/natives/windows-x64/
-          cp native-libs/native-linux-x64/libmmd_engine.so common/src/main/resources/natives/linux-x64/
-          cp native-libs/native-android-arm64/libmmd_engine.so common/src/main/resources/natives/android-arm64/
-          cp "$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" common/src/main/resources/natives/android-arm64/
-
-      - name: Setup JDK 21
+      - name: Setup JDK 25
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
+          java-version: '25'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build with Gradle
-        run: ./gradlew build --no-daemon -x test
+      - name: Extract mod version
+        id: version
+        shell: bash
+        run: |
+          MOD_VERSION=$(grep "version = '" build.gradle | head -1 | sed "s/.*version = '//" | sed "s/'.*//")
+          echo "mod_version=$MOD_VERSION" >> "$GITHUB_OUTPUT"
+          echo "提取到模组版本: $MOD_VERSION"
 
-      - name: Upload Fabric Mod
+      # 复用 build-rust 的原生库产物：放入 target/release 后，
+      # buildRustEngine（onlyIf 原生库不存在）自动跳过 cargo，无需 bullet3。
+      - name: Download native library
+        uses: actions/download-artifact@v4
+        with:
+          name: native-${{ matrix.platform }}
+          path: rust_engine/target/release
+
+      - name: Verify native library present
+        shell: bash
+        run: |
+          find rust_engine/target/release -type f
+          test -n "$(find rust_engine/target/release -type f -name '${{ matrix.native }}')" \
+            && echo "native library ready for gradle"
+
+      - name: Build mod with Gradle (${{ matrix.framework }})
+        shell: bash
+        run: ./gradlew :${{ matrix.framework }}:build --no-daemon -x test
+
+      - name: Upload mod JAR
         uses: actions/upload-artifact@v4
         with:
-          name: mmdskin-fabric-${{ steps.version.outputs.mod_version }}
-          path: |
-            fabric/build/libs/mmdskin-fabric-*.jar
-            !fabric/build/libs/*-dev*.jar
-            !fabric/build/libs/*-sources*.jar
+          name: mmdskin-${{ matrix.framework }}-${{ matrix.platform }}-${{ steps.version.outputs.mod_version }}
+          path: ${{ matrix.framework }}/build/libs/*.jar
           if-no-files-found: error
 
-      - name: Upload NeoForge Mod
-        uses: actions/upload-artifact@v4
-        with:
-          name: mmdskin-neoforge-${{ steps.version.outputs.mod_version }}
-          path: |
-            neoforge/build/libs/mmdskin-neoforge-*.jar
-            !neoforge/build/libs/*-dev*.jar
-            !neoforge/build/libs/*-sources*.jar
-          if-no-files-found: error
-
-  # ==================== Java 模组构建（通用版：包含所有平台） ====================
-  build-java-universal:
-    needs: [build-rust-windows-x64, build-rust-windows-arm64, build-rust-linux-x64, build-rust-linux-arm64, build-rust-linux-loongarch64, build-rust-linux-riscv64, build-rust-macos-x64, build-rust-macos-arm64, build-rust-android-arm64, build-rust-android-amd64]
+  # ==================== Universal jar（收集所有平台原生库 → 单一全平台 jar） ====================
+  build-universal:
+    needs: build-rust
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup JDK 25
+        uses: actions/setup-java@v4
         with:
-          submodules: recursive
+          java-version: '25'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
       - name: Extract mod version
         id: version
+        shell: bash
         run: |
           MOD_VERSION=$(grep "version = '" build.gradle | head -1 | sed "s/.*version = '//" | sed "s/'.*//")
-          echo "mod_version=$MOD_VERSION" >> $GITHUB_OUTPUT
+          echo "mod_version=$MOD_VERSION" >> "$GITHUB_OUTPUT"
           echo "提取到模组版本: $MOD_VERSION"
 
       - name: Download all native libraries
@@ -378,86 +184,41 @@ jobs:
           pattern: native-*
           path: native-libs
 
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        id: setup-ndk
-        with:
-          ndk-version: r27c
-
-      - name: Copy ALL natives to resources
-        env:
-          NDK_PATH: ${{ steps.setup-ndk.outputs.ndk-path }}
+      - name: Copy natives into resources
+        shell: bash
         run: |
+          # 目录结构必须与 NativeLibraryLoader 一致（/natives/<archDir>/<file>）
           mkdir -p common/src/main/resources/natives/windows-x64
-          mkdir -p common/src/main/resources/natives/windows-arm64
           mkdir -p common/src/main/resources/natives/linux-x64
-          mkdir -p common/src/main/resources/natives/linux-arm64
-          mkdir -p common/src/main/resources/natives/linux-loongarch64
-          mkdir -p common/src/main/resources/natives/linux-riscv64
           mkdir -p common/src/main/resources/natives/macos-x64
-          mkdir -p common/src/main/resources/natives/macos-arm64
-          mkdir -p common/src/main/resources/natives/android-arm64
-          mkdir -p common/src/main/resources/natives/android-amd64
-          cp native-libs/native-windows-x64/mmd_engine.dll common/src/main/resources/natives/windows-x64/
-          cp native-libs/native-windows-arm64/mmd_engine.dll common/src/main/resources/natives/windows-arm64/
-          cp native-libs/native-linux-x64/libmmd_engine.so common/src/main/resources/natives/linux-x64/
-          cp native-libs/native-linux-arm64/libmmd_engine.so common/src/main/resources/natives/linux-arm64/
-          cp native-libs/native-linux-loongarch64/libmmd_engine.so common/src/main/resources/natives/linux-loongarch64/
-          cp native-libs/native-linux-riscv64/libmmd_engine.so common/src/main/resources/natives/linux-riscv64/
+          cp native-libs/native-windows-x64/mmd_engine.dll   common/src/main/resources/natives/windows-x64/
+          cp native-libs/native-linux-x64/libmmd_engine.so   common/src/main/resources/natives/linux-x64/
           cp native-libs/native-macos-x64/libmmd_engine.dylib common/src/main/resources/natives/macos-x64/
-          cp native-libs/native-macos-arm64/libmmd_engine.dylib common/src/main/resources/natives/macos-arm64/
-          cp native-libs/native-android-arm64/libmmd_engine.so common/src/main/resources/natives/android-arm64/
-          cp native-libs/native-android-amd64/libmmd_engine.so common/src/main/resources/natives/android-amd64/
-          cp "$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" common/src/main/resources/natives/android-arm64/
-          cp "$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/libc++_shared.so" common/src/main/resources/natives/android-amd64/
+          find common/src/main/resources/natives -type f
 
-      - name: Setup JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
+      - name: Build universal mod (fabric)
+        shell: bash
+        run: ./gradlew :fabric:build --no-daemon -x test -PskipRustBuild=true
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Build with Gradle
-        run: ./gradlew build --no-daemon -x test
-
-      - name: Rename JARs to universal
+      - name: Rename JAR to universal
+        shell: bash
         run: |
           cd fabric/build/libs
           for f in mmdskin-fabric-*.jar; do
-            case "$f" in *-dev*|*-sources*) continue;; esac
-            mv "$f" "${f%.jar}-universal.jar"
-          done
-          cd ../../../neoforge/build/libs
-          for f in mmdskin-neoforge-*.jar; do
-            case "$f" in *-dev*|*-sources*) continue;; esac
-            mv "$f" "${f%.jar}-universal.jar"
+            case "$f" in *-sources*|*-raw*) continue;; esac
+            mv "$f" "mmdskin-fabric-${{ steps.version.outputs.mod_version }}-universal.jar"
           done
 
-      - name: Upload Universal Fabric Mod
+      - name: Upload universal mod JAR
         uses: actions/upload-artifact@v4
         with:
-          name: mmdskin-fabric-${{ steps.version.outputs.mod_version }}-universal
-          path: |
-            fabric/build/libs/*-universal.jar
+          name: mmdskin-fabric-universal-${{ steps.version.outputs.mod_version }}
+          path: fabric/build/libs/*universal.jar
           if-no-files-found: error
 
-      - name: Upload Universal NeoForge Mod
-        uses: actions/upload-artifact@v4
-        with:
-          name: mmdskin-neoforge-${{ steps.version.outputs.mod_version }}-universal
-          path: |
-            neoforge/build/libs/*-universal.jar
-          if-no-files-found: error
-
-  # ==================== 统一发布 ====================
+  # ==================== 统一发布（仅 tag） ====================
   release:
-    needs: [build-rust-windows-x64, build-rust-windows-arm64, build-rust-linux-x64, build-rust-linux-arm64, build-rust-macos-x64, build-rust-macos-arm64, build-rust-android-arm64, build-rust-android-amd64, build-rust-linux-loongarch64, build-rust-linux-riscv64, build-java, build-java-universal]
+    needs: [build-mod, build-universal]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -468,35 +229,8 @@ jobs:
         with:
           path: artifacts
 
-      - name: Rename artifacts for clarity
-        run: |
-          mv artifacts/native-windows-x64/mmd_engine.dll "artifacts/native-windows-x64/mmd_engine-windows-x64_${GITHUB_REF_NAME}.dll"
-          mv artifacts/native-windows-arm64/mmd_engine.dll "artifacts/native-windows-arm64/mmd_engine-windows-arm64_${GITHUB_REF_NAME}.dll"
-          mv artifacts/native-linux-x64/libmmd_engine.so "artifacts/native-linux-x64/libmmd_engine-linux-x64_${GITHUB_REF_NAME}.so"
-          mv artifacts/native-linux-arm64/libmmd_engine.so "artifacts/native-linux-arm64/libmmd_engine-linux-arm64_${GITHUB_REF_NAME}.so"
-          mv artifacts/native-linux-loongarch64/libmmd_engine.so "artifacts/native-linux-loongarch64/libmmd_engine-linux-loongarch64_${GITHUB_REF_NAME}.so"
-          mv artifacts/native-linux-riscv64/libmmd_engine.so "artifacts/native-linux-riscv64/libmmd_engine-linux-riscv64_${GITHUB_REF_NAME}.so"
-          mv artifacts/native-macos-x64/libmmd_engine.dylib "artifacts/native-macos-x64/libmmd_engine-macos-x64_${GITHUB_REF_NAME}.dylib"
-          mv artifacts/native-macos-arm64/libmmd_engine.dylib "artifacts/native-macos-arm64/libmmd_engine-macos-arm64_${GITHUB_REF_NAME}.dylib"
-          mv artifacts/native-android-arm64/libmmd_engine.so "artifacts/native-android-arm64/libmmd_engine-android-arm64_${GITHUB_REF_NAME}.so"
-          mv artifacts/native-android-amd64/libmmd_engine.so "artifacts/native-android-amd64/libmmd_engine-android-amd64_${GITHUB_REF_NAME}.so"
-
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            artifacts/mmdskin-fabric-*/*.jar
-            artifacts/mmdskin-neoforge-*/*.jar
-            artifacts/mmdskin-fabric-*-universal/*.jar
-            artifacts/mmdskin-neoforge-*-universal/*.jar
-            artifacts/native-windows-x64/*.dll
-            artifacts/native-windows-arm64/*.dll
-            artifacts/native-linux-x64/*.so
-            artifacts/native-linux-arm64/*.so
-            artifacts/native-linux-loongarch64/*.so
-            artifacts/native-linux-riscv64/*.so
-            artifacts/native-macos-x64/*.dylib
-            artifacts/native-macos-arm64/*.dylib
-            artifacts/native-android-arm64/*.so
-            artifacts/native-android-amd64/*.so
+          files: artifacts/**/*.jar
           generate_release_notes: true

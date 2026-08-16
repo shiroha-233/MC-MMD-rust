@@ -1,4 +1,5 @@
 package com.shiroha.mmdskin.fabric.register;
+import net.minecraft.resources.Identifier;
 
 import com.shiroha.mmdskin.fabric.network.MmdSkinPayload;
 import com.shiroha.mmdskin.fabric.stage.FabricStageSessionRegistry;
@@ -22,8 +23,8 @@ public class MmdSkinRegisterCommon {
     private static final Logger logger = LogManager.getLogger();
 
     public static void Register() {
-        PayloadTypeRegistry.playC2S().register(MmdSkinPayload.TYPE, MmdSkinPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(MmdSkinPayload.TYPE, MmdSkinPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(MmdSkinPayload.TYPE, MmdSkinPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(MmdSkinPayload.TYPE, MmdSkinPayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(MmdSkinPayload.TYPE, (payload, context) -> {
             ServerPlayer player = context.player();

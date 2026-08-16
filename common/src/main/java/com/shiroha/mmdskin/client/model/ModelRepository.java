@@ -13,6 +13,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -109,6 +110,14 @@ public final class ModelRepository implements ModelLoadMetricsPort, AutoCloseabl
         return (int) entries.values().stream()
                 .filter(entry -> entry.pending != null && !entry.pending.isDone())
                 .count();
+    }
+
+    /** Returns a stable snapshot of loaded instances for diagnostic UI only. */
+    public List<MmdModelInstance> loadedInstances() {
+        return entries.values().stream()
+                .map(entry -> entry.instance)
+                .filter(java.util.Objects::nonNull)
+                .toList();
     }
 
     public ModelBounds loadedBounds(String modelName) {

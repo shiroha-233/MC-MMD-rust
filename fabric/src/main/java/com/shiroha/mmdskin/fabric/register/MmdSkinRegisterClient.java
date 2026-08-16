@@ -11,12 +11,14 @@ import com.shiroha.mmdskin.util.KeyMappingUtil;
 import java.io.File;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.resources.Identifier;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.glfw.GLFW;
@@ -29,7 +31,7 @@ public final class MmdSkinRegisterClient {
         "key.mmdskin.config_wheel",
         InputConstants.Type.KEYSYM,
         GLFW.GLFW_KEY_LEFT_ALT,
-        "key.categories.mmdskin"
+        new KeyMapping.Category(Identifier.fromNamespaceAndPath("mmdskin", "key.categories.mmdskin"))
     );
 
     static final KeyMapping[] KEY_QUICK_MODELS = new KeyMapping[4];
@@ -44,7 +46,7 @@ public final class MmdSkinRegisterClient {
                 "key.mmdskin.quick_model_" + (i + 1),
                 InputConstants.Type.KEYSYM,
                 InputConstants.UNKNOWN.getValue(),
-                "key.categories.mmdskin"
+                new KeyMapping.Category(Identifier.fromNamespaceAndPath("mmdskin", "key.categories.mmdskin"))
             );
         }
     }
@@ -62,9 +64,9 @@ public final class MmdSkinRegisterClient {
             return InputConstants.UNKNOWN;
         });
 
-        KeyBindingHelper.registerKeyBinding(KEY_CONFIG_WHEEL);
+        KeyMappingHelper.registerKeyMapping(KEY_CONFIG_WHEEL);
         for (KeyMapping keyQuickModel : KEY_QUICK_MODELS) {
-            KeyBindingHelper.registerKeyBinding(keyQuickModel);
+            KeyMappingHelper.registerKeyMapping(keyQuickModel);
         }
 
         ConfigWheelScreen.setModSettingsScreenFactory(() -> ModConfigScreen.create(null));
@@ -90,11 +92,13 @@ public final class MmdSkinRegisterClient {
             }
 
             String entityTypeId = name.replace('.', ':');
-            EntityType.byString(entityTypeId).ifPresentOrElse(
-                entityType -> EntityRendererRegistry.register(entityType,
-                        context -> new LegacyEntityMmdRenderer<>(context, name)),
-                () -> LOGGER.warn("{} 实体不存在，跳过渲染注册", entityTypeId)
-            );
+            EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.getOptional(Identifier.tryParse(entityTypeId)).orElse(null);
+            if (entityType != null) {
+                EntityRendererRegistry.register(entityType,
+                        context -> new LegacyEntityMmdRenderer<>(context, name));
+            } else {
+                LOGGER.warn("{} 实体不存在，跳过渲染注册", entityTypeId);
+            }
         }
     }
 

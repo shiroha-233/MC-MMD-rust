@@ -61,6 +61,7 @@ dependencyResolutionManagement {
 }
 rootProject.name = 'mmdskin'
 // 包含子项目
+// 注意: neoforge 模块保留原样，不参与 26.2 构建（迁移范围仅 common + fabric）
 include 'common'
 include 'fabric'
-include 'neoforge'
+// include 'neoforge'

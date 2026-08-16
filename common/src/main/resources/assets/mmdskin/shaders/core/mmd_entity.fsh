@@ -1,26 +1,32 @@
-#version 150
+#version 330
 // 文件职责：计算 MMD 实体主通道、Toon、描边与发光片元颜色。
+// 26.2 适配：uniform 改为 std140 UBO 块，雾使用原版 apply_fog（Fog 块）。
 
 #moj_import <minecraft:fog.glsl>
 
 uniform sampler2D Sampler0;
-uniform vec4 ColorModulator;
-uniform vec4 FogColor;
-uniform float FogStart;
-uniform float FogEnd;
-uniform vec4 MmdMaterialColor;
-uniform float MmdAlpha;
-uniform float MmdLightFactor;
-uniform float MmdEmission;
-uniform vec3 MmdOutlineColor;
-uniform int MmdToonLevels;
-uniform vec3 MmdToonShadowColor;
-uniform float MmdRimPower;
-uniform float MmdRimIntensity;
-uniform float MmdSpecularPower;
-uniform float MmdSpecularIntensity;
 
-in float vertexDistance;
+// 与 mmd_entity.vsh 的 MmdModel 块保持完全相同的成员顺序与 std140 布局
+layout(std140) uniform MmdModel {
+    mat4 MmdModelMat;
+    vec3 MmdLight0Direction;
+    vec3 MmdLight1Direction;
+    float MmdOutlineWidth;
+    vec4 MmdMaterialColor;
+    float MmdAlpha;
+    float MmdLightFactor;
+    float MmdEmission;
+    vec3 MmdOutlineColor;
+    int MmdToonLevels;
+    vec3 MmdToonShadowColor;
+    float MmdRimPower;
+    float MmdRimIntensity;
+    float MmdSpecularPower;
+    float MmdSpecularIntensity;
+};
+
+in float sphericalVertexDistance;
+in float cylindricalVertexDistance;
 in vec4 vertexColor;
 in vec2 texCoord0;
 in vec3 viewNormal;
@@ -37,7 +43,7 @@ void main() {
     vec4 color = vec4(MmdOutlineColor * mix(1.0, luminance, 0.4),
         texel.a * MmdAlpha * outlineFade);
 #else
-    vec4 color = texture(Sampler0, texCoord0) * vertexColor * ColorModulator;
+    vec4 color = texture(Sampler0, texCoord0) * vertexColor;
     color.rgb *= MmdMaterialColor.rgb;
     color.rgb *= mix(MmdLightFactor, 1.0, MmdEmission);
     color.a *= MmdAlpha;
@@ -70,5 +76,7 @@ void main() {
     if (color.a <= 0.1) {
         discard;
     }
-    fragColor = linear_fog(color, vertexDistance, FogStart, FogEnd, FogColor);
+    fragColor = apply_fog(color, sphericalVertexDistance, cylindricalVertexDistance,
+        FogEnvironmentalStart, FogEnvironmentalEnd,
+        FogRenderDistanceStart, FogRenderDistanceEnd, FogColor);
 }

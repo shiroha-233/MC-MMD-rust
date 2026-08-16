@@ -54,8 +54,8 @@ public final class FirstPersonCamera {
         }
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.options.getCameraType() == CameraType.FIRST_PERSON
-                && camera.isInitialized() && camera.getEntity() == entity) {
-            return Optional.of(camera.getPosition());
+                && camera.isInitialized() && camera.entity() == entity) {
+            return Optional.of(camera.position());
         }
         if (session.vrEyePassActive()) {
             return Optional.of(resolveVrEyePosition(entity, partialTick));
@@ -67,10 +67,10 @@ public final class FirstPersonCamera {
         Minecraft minecraft = Minecraft.getInstance();
         if (!isLocalCameraEntity(entity) || !session.eyeCameraActive()
                 || minecraft.options.getCameraType() != CameraType.FIRST_PERSON
-                || !camera.isInitialized() || camera.getEntity() != entity) {
+                || !camera.isInitialized() || camera.entity() != entity) {
             return Optional.empty();
         }
-        return Optional.of(viewVector(camera.getYRot(), camera.getXRot()));
+        return Optional.of(viewVector(camera.yRot(), camera.xRot()));
     }
 
     public boolean shouldValidateVanillaReach(LivingEntity entity) {

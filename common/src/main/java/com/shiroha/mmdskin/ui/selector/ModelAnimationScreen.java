@@ -9,8 +9,10 @@ import com.shiroha.mmdskin.player.runtime.EntityAnimState;
 import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.apache.logging.log4j.LogManager;
@@ -183,7 +185,7 @@ public class ModelAnimationScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick) {
         TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
         TranslucentTrayChrome.drawPanel(guiGraphics, panelX, panelY, PANEL_WIDTH, panelH);
 
@@ -194,17 +196,17 @@ public class ModelAnimationScreen extends Screen {
         renderScrollbar(guiGraphics);
         renderFooterStats(guiGraphics);
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        super.extractRenderState(guiGraphics, mouseX, mouseY, partialTick);
     }
 
-    private void renderHeader(GuiGraphics guiGraphics) {
+    private void renderHeader(GuiGraphicsExtractor guiGraphics) {
         int centerX = panelX + PANEL_WIDTH / 2;
-        guiGraphics.drawCenteredString(this.font, this.title, centerX, panelY + 4, TranslucentTrayChrome.TITLE_TEXT);
-        guiGraphics.drawCenteredString(this.font, truncate(modelName, 22), centerX, panelY + 16, COLOR_TEXT_DIM);
+        guiGraphics.centeredText(this.font, this.title, centerX, panelY + 4, TranslucentTrayChrome.TITLE_TEXT);
+        guiGraphics.centeredText(this.font, truncate(modelName, 22), centerX, panelY + 16, COLOR_TEXT_DIM);
         TranslucentTrayChrome.drawSeparator(guiGraphics, panelX + 8, listTop - 2, PANEL_WIDTH - 16);
     }
 
-    private void renderSlotList(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+    private void renderSlotList(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY) {
         int y = listTop - scrollOffset;
         int itemX = panelX + 4;
         int itemW = PANEL_WIDTH - 12;
@@ -231,7 +233,7 @@ public class ModelAnimationScreen extends Screen {
                     int clearBg = clearHovered ? COLOR_VMD_ITEM_HOVER : COLOR_VMD_ITEM_BG;
                     guiGraphics.fill(itemX + 8, y, itemX + itemW, y + ITEM_HEIGHT, clearBg);
                     String clearLabel = Component.translatable("gui.mmdskin.model_anim.clear_slot").getString();
-                    guiGraphics.drawString(this.font, "× " + clearLabel, itemX + 12, y + 4, COLOR_TEXT_DIM);
+                    guiGraphics.text(this.font, "× " + clearLabel, itemX + 12, y + 4, COLOR_TEXT_DIM);
                 }
                 y += ITEM_HEIGHT + ITEM_SPACING;
 
@@ -247,7 +249,7 @@ public class ModelAnimationScreen extends Screen {
                             guiGraphics.fill(itemX + 8, y + 1, itemX + 10, y + ITEM_HEIGHT - 1, COLOR_MAPPED);
                         }
                         String display = truncate(vmd.replace(".vmd", "").replace(".VMD", ""), 18);
-                        guiGraphics.drawString(this.font, display, itemX + 14, y + 4, selected ? COLOR_MAPPED : COLOR_TEXT);
+                        guiGraphics.text(this.font, display, itemX + 14, y + 4, selected ? COLOR_MAPPED : COLOR_TEXT);
                     }
                     y += ITEM_HEIGHT + ITEM_SPACING;
                 }
@@ -255,43 +257,43 @@ public class ModelAnimationScreen extends Screen {
         }
     }
 
-    private void renderSlotItem(GuiGraphics guiGraphics, SlotEntry slot, String mapped,
+    private void renderSlotItem(GuiGraphicsExtractor guiGraphics, SlotEntry slot, String mapped,
                                 boolean isMapped, boolean isExpanded, boolean isHovered,
                                 int x, int y, int w) {
         guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, TranslucentTrayChrome.cardBackground(false, isHovered || isExpanded));
         guiGraphics.fill(x, y + 1, x + 2, y + ITEM_HEIGHT - 1, isMapped ? COLOR_MAPPED : COLOR_UNMAPPED);
 
-        guiGraphics.drawString(this.font, isExpanded ? "▼" : "▶", x + 4, y + 4, COLOR_TEXT_DIM);
-        guiGraphics.drawString(this.font, slot.displayName, x + 16, y + 4, COLOR_TEXT);
+        guiGraphics.text(this.font, isExpanded ? "▼" : "▶", x + 4, y + 4, COLOR_TEXT_DIM);
+        guiGraphics.text(this.font, slot.displayName, x + 16, y + 4, COLOR_TEXT);
         if (isMapped) {
             String vmdName = truncate(mapped.replace(".vmd", ""), 8);
             int width = this.font.width(vmdName);
-            guiGraphics.drawString(this.font, vmdName, x + w - width - 2, y + 4, COLOR_MAPPED);
+            guiGraphics.text(this.font, vmdName, x + w - width - 2, y + 4, COLOR_MAPPED);
         }
     }
 
-    private void renderScrollbar(GuiGraphics guiGraphics) {
+    private void renderScrollbar(GuiGraphicsExtractor guiGraphics) {
         if (maxScroll <= 0) {
             return;
         }
         TranslucentTrayChrome.drawScrollbar(guiGraphics, panelX + PANEL_WIDTH - 4, listTop, listBottom, scrollOffset, maxScroll);
     }
 
-    private void renderFooterStats(GuiGraphics guiGraphics) {
+    private void renderFooterStats(GuiGraphicsExtractor guiGraphics) {
         int centerX = panelX + PANEL_WIDTH / 2;
         int statsY = panelY + panelH - 10;
         long mappedCount = editMapping.values().stream().filter(value -> value != null && !value.isEmpty()).count();
         String stats = mappedCount + " / " + slots.size() + " 路 VMD: " + availableVmds.size();
-        guiGraphics.drawCenteredString(this.font, stats, centerX, statsY, COLOR_TEXT_DIM);
+        guiGraphics.centeredText(this.font, stats, centerX, statsY, COLOR_TEXT_DIM);
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0 && mouseX >= panelX && mouseX <= panelX + PANEL_WIDTH
-                && mouseY >= listTop && mouseY <= listBottom) {
-            return handleListClick(mouseX, mouseY);
+    public boolean mouseClicked(MouseButtonEvent event, boolean triggerDoubleClick) {
+        if (event.button() == 0 && event.x() >= panelX && event.x() <= panelX + PANEL_WIDTH
+                && event.y() >= listTop && event.y() <= listBottom) {
+            return handleListClick(event.x(), event.y());
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, triggerDoubleClick);
     }
 
     private boolean handleListClick(double mouseX, double mouseY) {
@@ -340,17 +342,17 @@ public class ModelAnimationScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) {
+    public boolean keyPressed(KeyEvent event) {
+        if (event.key() == 256) {
             this.onClose();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override
     public void onClose() {
-        Minecraft.getInstance().setScreen(parentScreen);
+        Minecraft.getInstance().gui.setScreen(parentScreen);
     }
 
     @Override

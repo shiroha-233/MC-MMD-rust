@@ -1,7 +1,7 @@
 // 根项目配置 - 保留构建基础设施与 Rust 引擎编译/复制
 plugins {
-	id 'architectury-plugin' version '3.4-SNAPSHOT'
-	id 'dev.architectury.loom' version '1.10.455' apply false
+	id 'architectury-plugin' version '3.5-SNAPSHOT'
+	id 'dev.architectury.loom-no-remap' version '1.17-SNAPSHOT' apply false
 }
 
 def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
@@ -11,7 +11,7 @@ if (isWindows) {
 }
 
 architectury {
-	minecraft = '1.21.5'
+	minecraft = '26.2'
 }
 
 allprojects {
@@ -19,7 +19,7 @@ allprojects {
 	apply plugin: 'architectury-plugin'
 
 	group = maven_group
-	version = '1.0.5-1.21.5-1'
+	version = '1.0.6-26.2-1'
 	
 	repositories {
 		maven { url = 'https://maven.architectury.dev/' }
@@ -50,31 +50,27 @@ allprojects {
 
 	tasks.withType(JavaCompile).configureEach {
 		options.encoding = 'UTF-8'
-		options.release = 21
+		options.release = 25
 	}
 
 	java {
 		toolchain {
-			languageVersion = JavaLanguageVersion.of(21)
+			languageVersion = JavaLanguageVersion.of(25)
 		}
 		withSourcesJar()
 	}
 }
 
 subprojects {
-	apply plugin: 'dev.architectury.loom'
+	apply plugin: 'dev.architectury.loom-no-remap'
 
 	base {
 		archivesName = "mmdskin-${project.name}"
 	}
 	
-	loom {
-		silentMojangMappingsLicense()
-	}
-	
 	dependencies {
-		minecraft "com.mojang:minecraft:1.21.5"
-		mappings loom.officialMojangMappings()
+		// 26.1+ 原版已反混淆，无需 mappings
+		minecraft "com.mojang:minecraft:26.2"
 	}
 }
 
@@ -103,7 +99,13 @@ def rustBuildInputs = fileTree(rustEngineDir) {
 	exclude 'target/**'
 }
 
+// CI 多平台收集 + universal jar 模式：-PskipRustBuild=true 时跳过 cargo 与
+// copyRustNatives（原生库已由 CI 直接放入 common/src/main/resources/natives/<platform>/）。
+def skipRustBuild = project.hasProperty('skipRustBuild')
+
 task buildRustEngine {
+	// 已有预编译原生库（如用户提供的 mmd_engine.dll）时跳过 cargo
+	onlyIf { !skipRustBuild && !rustNativeLibrary.exists() }
 	inputs.files(rustBuildInputs)
 	outputs.file(rustNativeLibrary)
 
@@ -126,6 +128,7 @@ task buildRustEngine {
 
 task copyRustNatives(type: Copy) {
 	dependsOn buildRustEngine
+	onlyIf { !skipRustBuild }
 	into generatedNativeResourcesDir
 	
 	def osName = System.getProperty('os.name').toLowerCase()

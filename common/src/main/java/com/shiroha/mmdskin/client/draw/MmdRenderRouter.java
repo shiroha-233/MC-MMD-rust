@@ -8,8 +8,9 @@ import com.shiroha.mmdskin.client.frame.ModelTransform;
 import com.shiroha.mmdskin.client.gpu.MmdRenderPipelines;
 import com.shiroha.mmdskin.compat.iris.IrisCompatibility;
 import com.shiroha.mmdskin.config.ConfigManager;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.entity.state.PlayerRenderState;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
+import net.minecraft.world.entity.LivingEntity;
 import org.joml.Matrix4f;
 
 public final class MmdRenderRouter {
@@ -18,17 +19,18 @@ public final class MmdRenderRouter {
 
     public static Result route(MmdRenderSnapshot extractedSnapshot, PoseStack poseStack,
                                int packedLight, boolean compatibilityConflict) {
-        return route(extractedSnapshot, poseStack, null, null, packedLight, compatibilityConflict);
+        return route(extractedSnapshot, poseStack, null, null, null, packedLight, compatibilityConflict);
     }
 
-    public static Result routePlayer(MmdRenderSnapshot extractedSnapshot, PlayerRenderState playerState,
-                                     PoseStack poseStack, MultiBufferSource buffers,
+    public static Result routePlayer(MmdRenderSnapshot extractedSnapshot, LivingEntityRenderState playerState,
+                                     LivingEntity player, PoseStack poseStack, SubmitNodeCollector collector,
                                      int packedLight, boolean compatibilityConflict) {
-        return route(extractedSnapshot, poseStack, playerState, buffers, packedLight, compatibilityConflict);
+        return route(extractedSnapshot, poseStack, playerState, player, collector, packedLight, compatibilityConflict);
     }
 
     private static Result route(MmdRenderSnapshot extractedSnapshot, PoseStack poseStack,
-                                PlayerRenderState playerState, MultiBufferSource buffers,
+                                LivingEntityRenderState playerState, LivingEntity player,
+                                SubmitNodeCollector collector,
                                 int packedLight, boolean compatibilityConflict) {
         if (extractedSnapshot == null || compatibilityConflict || IrisCompatibility.isShadowPass()
                 || !MmdRenderPipelines.isReady()) {
@@ -50,6 +52,8 @@ public final class MmdRenderRouter {
         boolean queued = false;
         try {
             var model = lease.instance();
+            // 26.2 实体 submit 的 poseStack 只含相机相对平移，不含朝向，
+            // 需要按实体 bodyYaw 自行旋转（1.21.5 约定，26.2 未变）。
             Matrix4f modelMatrix = new Matrix4f(poseStack.last().pose())
                     .rotateY((float) Math.toRadians(-extractedSnapshot.pose().bodyYaw()));
             MmdRenderSnapshot snapshot = extractedSnapshot.withRenderTransform(
@@ -61,13 +65,19 @@ public final class MmdRenderRouter {
                     model, snapshot, pipeline,
                     snapshot.visibility() == MmdRenderSnapshot.Visibility.TRANSLUCENT);
             if (snapshot.context() == MmdRenderSnapshot.Context.INVENTORY) {
+                // 26.2 的 EntityRenderState 可复用：物品栏提交阶段（begin/finish 内）创建的
+                // INVENTORY snapshot 会在 GUI 画中画阶段（inventory session 未 active）被再次
+                // 提交。此时入队会抛 IllegalStateException，直接回退原版渲染。
+                if (!runtime.inventory().active()) {
+                    return Result.FALLTHROUGH;
+                }
                 runtime.inventory().enqueue(request, lease);
             } else {
                 runtime.frameQueue().enqueue(request, lease);
             }
             queued = true;
-            if (playerState != null && buffers != null) {
-                MmdHeldItemRenderer.render(playerState, model, poseStack, buffers,
+            if (playerState != null && player != null && collector != null) {
+                MmdHeldItemRenderer.render(model, poseStack, collector, player,
                         packedLight, snapshot.pose().bodyYaw());
             }
             return Result.QUEUED;
