@@ -3,6 +3,8 @@
 use once_cell::sync::Lazy;
 use std::sync::RwLock;
 
+use super::collision_topology::CollisionStabilityMode;
+
 /// 物理配置
 #[derive(Debug, Clone)]
 pub struct PhysicsConfig {
@@ -22,7 +24,11 @@ pub struct PhysicsConfig {
     pub max_angular_velocity: f32,
     /// 是否启用关节
     pub joints_enabled: bool,
-    /// 运动学-动态碰撞过滤（解决头发穿透胸部抖动）
+    /// 是否启用刚体接触碰撞；关闭时仍保留重力和关节模拟
+    pub collision_enabled: bool,
+    /// 关节拓扑内部的成对碰撞稳定模式
+    pub collision_stability_mode: CollisionStabilityMode,
+    /// 是否禁用所有运动学刚体与动态刚体之间的碰撞（实验性）
     pub kinematic_filter: bool,
     /// 调试日志
     pub debug_log: bool,
@@ -39,7 +45,9 @@ impl Default for PhysicsConfig {
             max_linear_velocity: 20.0,
             max_angular_velocity: 20.0,
             joints_enabled: true,
-            kinematic_filter: true,
+            collision_enabled: true,
+            collision_stability_mode: CollisionStabilityMode::Stable,
+            kinematic_filter: false,
             debug_log: false,
         }
     }
@@ -61,4 +69,20 @@ pub fn set_config(config: PhysicsConfig) {
 
 pub fn reset_config() {
     *PHYSICS_CONFIG.write().unwrap_or_else(|e| e.into_inner()) = PhysicsConfig::default();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PhysicsConfig;
+
+    #[test]
+    fn normal_collision_mode_is_enabled_by_default() {
+        let config = PhysicsConfig::default();
+        assert!(config.collision_enabled);
+        assert_eq!(
+            config.collision_stability_mode,
+            super::CollisionStabilityMode::Stable
+        );
+        assert!(!config.kinematic_filter);
+    }
 }

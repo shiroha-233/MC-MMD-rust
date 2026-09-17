@@ -484,6 +484,8 @@ public final class ModConfigScreen {
                 data.physicsMaxAngularVelocity,
                 data.physicsJointsEnabled,
                 data.physicsKinematicFilter,
+                data.physicsCollisionEnabled,
+                data.physicsCollisionStabilityMode,
                 data.physicsDebugLog
             );
         } catch (UnsatisfiedLinkError error) {

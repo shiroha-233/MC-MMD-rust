@@ -54,7 +54,7 @@ public final class MmdSnapshotFactory {
                 motion,
                 ModelTransform.identity(),
                 visibility,
-                state.appearsGlowing,
+                state.appearsGlowing(),
                 0,
                 Math.max(0.0D, state.distanceToCameraSq),
                 context);

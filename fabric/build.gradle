@@ -1,6 +1,6 @@
-// 负责 Fabric 平台的依赖装配、阴影打包与重映射发布。
+// 负责 Fabric 平台的依赖装配、阴影打包与产物合并（26.x 无 remap，loom-no-remap 直出）。
 plugins {
-	id 'com.gradleup.shadow' version '8.3.6'
+	id 'com.gradleup.shadow' version '9.4.2'
 }
 
 def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
@@ -11,9 +11,6 @@ architectury {
 }
 
 loom {
-	mixin {
-		defaultRefmapName = "mmdskin-fabric-refmap.json"
-	}
 	runs {
 		client {
 			client()
@@ -47,9 +44,15 @@ loom {
 }
 
 configurations {
-	common
+	common {
+		canBeResolved = true
+		canBeConsumed = false
+	}
 	shadowCommon // Don't use shadow from the shadow plugin since it conflicts with Loom.
-	shadowBundle
+	shadowBundle {
+		canBeResolved = true
+		canBeConsumed = false
+	}
 	compileClasspath.extendsFrom common
 	runtimeClasspath.extendsFrom common
 	developmentFabric.extendsFrom common
@@ -77,32 +80,23 @@ repositories {
 
 dependencies {
 	implementation project(":common")
-	common(project(path: ":common", configuration: "namedElements")) { transitive = false }
-	shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive = false }
+	common(project(path: ":common")) { transitive = false }
+	shadowCommon(project(path: ":common")) { transitive = false }
 	
 	// JLayer 运行时由平台包私有化，避免与其他模组的 JPMS 模块导出冲突。
 	common("javazoom:jlayer:1.0.1") { transitive = false }
 	shadowBundle("javazoom:jlayer:1.0.1") { transitive = false }
 	
-	// Fabric Loader
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	// Fabric Loader（26.x 无反混淆，直接用标准配置）
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	
 	// Fabric API
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 	
-	// Architectury API - 内嵌到模组中
-	modImplementation("dev.architectury:architectury-fabric:${project.architectury_version}") {
-		exclude group: "net.fabricmc.fabric-api"
-	}
-	include("dev.architectury:architectury-fabric:${project.architectury_version}")
-	
-	// Cloth Config API - 配置界面
-	modApi("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}") {
+	// Cloth Config API - 配置界面（内嵌到模组中）
+	include(implementation("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}") {
 		exclude(group: "net.fabricmc.fabric-api")
-	}
-	include("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}")
-	
-	// Cardinal Components API v3 - Touhou Little Maid Orihime 的传递依赖
+	})
 	
 	// Nashorn 脚本引擎 - Java 21 不再内置，Touhou Little Maid JS 动画需要
 	
@@ -122,37 +116,36 @@ processResources {
 	}
 }
 
-shadowJar {
-    exclude "architectury.common.json"
-    configurations = [project.configurations.shadowCommon, project.configurations.shadowBundle]
-    archiveClassifier.set("dev-shadow")
-    relocate "javazoom", "com.shiroha.mmdskin.shadow.javazoom"
-
-    // 包含 common 模块的资源（原生库、默认动画等）
-    from(project(":common").sourceSets.main.resources)
-
-    // 排除不需要的文件
-    exclude 'META-INF/versions/**'
-
-    // 强制更新 META-INF/services 里的类名
-    mergeServiceFiles()
-
-    // 排除 module-info.class 避免 JPMS 冲突
-    exclude 'module-info.class'
-}
-
-remapJar {
-	inputFile.set shadowJar.archiveFile
-	dependsOn shadowJar
-	archiveClassifier.set(null)
-}
-
+// 26.x 无反混淆：jar 产出原始源码集 + include() 的 jar-in-jar 嵌套，
+// shadowJar 在其之上合并 shadowCommon/shadowBundle，作为最终产物。
 jar {
-	archiveClassifier.set("dev")
+	archiveClassifier.set("raw")
 	from("${rootProject.projectDir}/LICENSE") {
 		rename { "${it}_${base.archivesName.get()}"}
 	}
 }
+
+shadowJar {
+	dependsOn jar
+	mainSpec.sourcePaths.clear()
+	from(zipTree(jar.archiveFile))
+	exclude "architectury.common.json"
+	configurations = [project.configurations.shadowCommon, project.configurations.shadowBundle]
+	archiveClassifier.set(null)
+	relocate "javazoom", "com.shiroha.mmdskin.shadow.javazoom"
+
+	// 排除不需要的文件
+	exclude 'META-INF/versions/**'
+
+	// 强制更新 META-INF/services 里的类名
+	mergeServiceFiles()
+
+	// 排除 module-info.class 避免 JPMS 冲突
+	exclude 'module-info.class'
+}
+
+assemble.dependsOn shadowJar
+
 sourcesJar {
     // Avoid duplicate entries when merging common sources
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE

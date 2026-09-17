@@ -140,7 +140,15 @@ public final class ConfigManager {
     }
 
     public static boolean isPhysicsKinematicFilter() {
-        return provider != null ? provider.isPhysicsKinematicFilter() : true;
+        return provider != null ? provider.isPhysicsKinematicFilter() : false;
+    }
+
+    public static boolean isPhysicsCollisionEnabled() {
+        return provider != null ? provider.isPhysicsCollisionEnabled() : true;
+    }
+
+    public static int getPhysicsCollisionStabilityMode() {
+        return provider != null ? provider.getPhysicsCollisionStabilityMode() : 1;
     }
 
     public static boolean isPhysicsDebugLog() {

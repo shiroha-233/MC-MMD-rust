@@ -10,7 +10,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import me.shedaniel.clothconfig2.api.AbstractConfigListEntry;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarratableEntry;
@@ -49,11 +49,11 @@ final class MobReplacementListEntry extends AbstractConfigListEntry<String> {
     }
 
     private void openPicker() {
-        Screen parent = Minecraft.getInstance().screen;
+        Screen parent = Minecraft.getInstance().gui.screen();
         if (parent == null) {
             return;
         }
-        Minecraft.getInstance().setScreen(new MobReplacementPickerScreen(
+        Minecraft.getInstance().gui.setScreen(new MobReplacementPickerScreen(
             parent,
             target.displayName(),
             value,
@@ -116,7 +116,7 @@ final class MobReplacementListEntry extends AbstractConfigListEntry<String> {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int index, int y, int x, int entryWidth, int entryHeight,
+    public void extractRenderState(GuiGraphicsExtractor guiGraphics, int index, int y, int x, int entryWidth, int entryHeight,
                        int mouseX, int mouseY, boolean isHovered, float delta) {
         int resetX = x + entryWidth - RESET_BUTTON_WIDTH;
         int chooseX = resetX - BUTTON_GAP - CHOOSE_BUTTON_WIDTH;
@@ -128,17 +128,17 @@ final class MobReplacementListEntry extends AbstractConfigListEntry<String> {
         resetButton.setY(buttonY);
 
         Minecraft minecraft = Minecraft.getInstance();
-        guiGraphics.drawString(minecraft.font, target.displayName(), x, y + 6, COLOR_LABEL, false);
+        guiGraphics.text(minecraft.font, target.displayName(), x, y + 6, COLOR_LABEL, false);
 
         String summary = trimToWidth(
             ModConfigScreen.toModelSelectionComponent(value).getString(),
             Math.max(40, chooseX - x - 12)
         );
         int summaryWidth = minecraft.font.width(summary);
-        guiGraphics.drawString(minecraft.font, summary, chooseX - 8 - summaryWidth, y + 6, COLOR_VALUE, false);
+        guiGraphics.text(minecraft.font, summary, chooseX - 8 - summaryWidth, y + 6, COLOR_VALUE, false);
 
-        chooseButton.render(guiGraphics, mouseX, mouseY, delta);
-        resetButton.render(guiGraphics, mouseX, mouseY, delta);
+        chooseButton.extractRenderState(guiGraphics, mouseX, mouseY, delta);
+        resetButton.extractRenderState(guiGraphics, mouseX, mouseY, delta);
     }
 
     private static String trimToWidth(String value, int maxWidth) {

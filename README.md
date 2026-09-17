@@ -1,6 +1,13 @@
 # MC-MMD-rust
 
-面向 Minecraft 1.21.5 的 MMD（MikuMikuDance）模型、动画和物理模组，同时支持 Fabric 与 NeoForge。
+面向 Minecraft 26.2 的 MMD（MikuMikuDance）模型、动画和物理模组，只支持fabric
+
+> [!WARNING]
+>
+> 1. 该分支修改自https://github.com/shiroha-233/MC-MMD-rust/tree/1.21.5 。并非主分支
+> 2. 该分支并没有对neoforge做适配
+> 3. 该分支可能存在大量的bug
+> 4. README文件并未得到全面更新
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -69,13 +76,13 @@
 
 存放玩家可用的 MMD 模型。**每个模型必须放在独立的子文件夹中**。
 
-| 文件类型 | 扩展名 | 说明 |
-|---------|--------|------|
-| 模型文件 | `.pmx` / `.pmd` | 必需，PMX 优先于 PMD |
-| 贴图文件 | `.png` / `.jpg` / `.bmp` / `.tga` | 模型引用的贴图 |
-| 专属动画 | `.vmd` | 可选，推荐放入 `anims/` 子文件夹 |
-| 动画映射 | `animations.json` | 可选，通过 UI 自动生成 |
-| 专属表情 | `.vpd` | 可选，仅该模型可用 |
+| 文件类型 | 扩展名                            | 说明                             |
+| -------- | --------------------------------- | -------------------------------- |
+| 模型文件 | `.pmx` / `.pmd`                   | 必需，PMX 优先于 PMD             |
+| 贴图文件 | `.png` / `.jpg` / `.bmp` / `.tga` | 模型引用的贴图                   |
+| 专属动画 | `.vmd`                            | 可选，推荐放入 `anims/` 子文件夹 |
+| 动画映射 | `animations.json`                 | 可选，通过 UI 自动生成           |
+| 专属表情 | `.vpd`                            | 可选，仅该模型可用               |
 
 **模型识别规则**：
 - 扫描每个子文件夹，查找 `.pmx` 或 `.pmd` 文件
@@ -99,25 +106,25 @@ EntityPlayer/
 
 模组首次启动时自动从内置资源释放，包含游戏状态对应的基础动画：
 
-| 动画文件名 | 触发条件 |
-|-----------|----------|
-| `idle.vmd` | 站立静止 |
-| `walk.vmd` | 行走 |
-| `sprint.vmd` | 疾跑 |
-| `sneak.vmd` | 潜行 |
-| `swim.vmd` | 游泳 |
-| `crawl.vmd` | 匍匐 |
-| `sleep.vmd` | 睡觉 |
-| `die.vmd` | 死亡 |
-| `elytraFly.vmd` | 鞘翅飞行 |
-| `onClimbable.vmd` | 攀爬（静止） |
-| `onClimbableUp.vmd` | 攀爬（上） |
-| `onClimbableDown.vmd` | 攀爬（下） |
-| `onHorse.vmd` / `ride.vmd` | 骑乘 |
-| `lieDown.vmd` | 躺下 |
-| `swingLeft.vmd` | 左手挥动 |
-| `swingRight.vmd` | 右手挥动 |
-| `itemActive_*.vmd` | 物品使用动画 |
+| 动画文件名                 | 触发条件     |
+| -------------------------- | ------------ |
+| `idle.vmd`                 | 站立静止     |
+| `walk.vmd`                 | 行走         |
+| `sprint.vmd`               | 疾跑         |
+| `sneak.vmd`                | 潜行         |
+| `swim.vmd`                 | 游泳         |
+| `crawl.vmd`                | 匍匐         |
+| `sleep.vmd`                | 睡觉         |
+| `die.vmd`                  | 死亡         |
+| `elytraFly.vmd`            | 鞘翅飞行     |
+| `onClimbable.vmd`          | 攀爬（静止） |
+| `onClimbableUp.vmd`        | 攀爬（上）   |
+| `onClimbableDown.vmd`      | 攀爬（下）   |
+| `onHorse.vmd` / `ride.vmd` | 骑乘         |
+| `lieDown.vmd`              | 躺下         |
+| `swingLeft.vmd`            | 左手挥动     |
+| `swingRight.vmd`           | 右手挥动     |
+| `itemActive_*.vmd`         | 物品使用动画 |
 
 > **注意**：可直接替换这些文件来自定义基础动画，但建议备份原文件。
 
@@ -139,13 +146,13 @@ EntityPlayer/
 
 当需要播放动画时，模组按以下顺序查找（从高到低）：
 
-| 优先级 | 来源 | 路径 | 说明 |
-|:---:|------|------|------|
-| 1 | **animations.json 映射** | `EntityPlayer/模型名/animations.json` | 用户通过 UI 显式配置 |
-| 2 | **anims/ 子文件夹** | `EntityPlayer/模型名/anims/*.vmd` | 同名自动匹配 |
-| 3 | **模型根目录** | `EntityPlayer/模型名/*.vmd` | 同名自动匹配（向后兼容） |
-| 4 | **自定义动画目录** | `CustomAnim/*.vmd` | 全局自定义动画 |
-| 5 | **默认动画目录** | `DefaultAnim/*.vmd` | 系统预设（最低） |
+| 优先级 | 来源                     | 路径                                  | 说明                     |
+| :----: | ------------------------ | ------------------------------------- | ------------------------ |
+|   1    | **animations.json 映射** | `EntityPlayer/模型名/animations.json` | 用户通过 UI 显式配置     |
+|   2    | **anims/ 子文件夹**      | `EntityPlayer/模型名/anims/*.vmd`     | 同名自动匹配             |
+|   3    | **模型根目录**           | `EntityPlayer/模型名/*.vmd`           | 同名自动匹配（向后兼容） |
+|   4    | **自定义动画目录**       | `CustomAnim/*.vmd`                    | 全局自定义动画           |
+|   5    | **默认动画目录**         | `DefaultAnim/*.vmd`                   | 系统预设（最低）         |
 
 只需配置想要覆盖的槽位，未配置的自动 fallback 到低优先级来源。
 
@@ -171,19 +178,19 @@ EntityPlayer/
 
 可用的槽位名称（即文件名）：
 
-| 槽位名 | 触发条件 | 槽位名 | 触发条件 |
-|--------|----------|--------|----------|
-| `idle` | 站立静止 | `walk` | 行走 |
-| `sprint` | 疾跑 | `sneak` | 潜行 |
-| `air` | 空中 | `swim` | 游泳 |
-| `crawl` | 匍匐 | `sleep` | 睡觉 |
-| `die` | 死亡 | `ride` | 骑乘 |
-| `elytraFly` | 鞘翅飞行 | `onHorse` | 骑马 |
-| `onClimbable` | 攀爬（静止） | `onClimbableUp` | 攀爬（上） |
-| `onClimbableDown` | 攀爬（下） | `lieDown` | 趴下 |
-| `swingRight` | 右手挥动 | `swingLeft` | 左手挥动 |
-| `itemRight` | 右手物品 | `itemLeft` | 左手物品 |
-| `ridden` | 被骑乘 | `driven` | 驾驶 |
+| 槽位名            | 触发条件     | 槽位名          | 触发条件   |
+| ----------------- | ------------ | --------------- | ---------- |
+| `idle`            | 站立静止     | `walk`          | 行走       |
+| `sprint`          | 疾跑         | `sneak`         | 潜行       |
+| `air`             | 空中         | `swim`          | 游泳       |
+| `crawl`           | 匍匐         | `sleep`         | 睡觉       |
+| `die`             | 死亡         | `ride`          | 骑乘       |
+| `elytraFly`       | 鞘翅飞行     | `onHorse`       | 骑马       |
+| `onClimbable`     | 攀爬（静止） | `onClimbableUp` | 攀爬（上） |
+| `onClimbableDown` | 攀爬（下）   | `lieDown`       | 趴下       |
+| `swingRight`      | 右手挥动     | `swingLeft`     | 左手挥动   |
+| `itemRight`       | 右手物品     | `itemLeft`      | 左手物品   |
+| `ridden`          | 被骑乘       | `driven`        | 驾驶       |
 
 #### 方式二：UI 映射（自定义文件名）
 
@@ -209,11 +216,11 @@ EntityPlayer/
 
 在模型选择界面中选中模型后，可进入模型独立设置界面，包含以下功能：
 
-| 设置项 | 说明 |
-|--------|------|
-| **眼球追踪** | 开启/关闭眼球追踪，调整最大转动角度 |
-| **模型缩放** | 调整模型整体大小（0.5x ~ 2.0x） |
-| **快捷绑定** | 将模型绑定到快捷键槽位（1~4），按键快速切换 |
+| 设置项       | 说明                                             |
+| ------------ | ------------------------------------------------ |
+| **眼球追踪** | 开启/关闭眼球追踪，调整最大转动角度              |
+| **模型缩放** | 调整模型整体大小（0.5x ~ 2.0x）                  |
+| **快捷绑定** | 将模型绑定到快捷键槽位（1~4），按键快速切换      |
 | **动画配置** | 打开动画映射界面，为模型配置专属动画（详见上文） |
 
 ### 快捷键操作
@@ -222,13 +229,13 @@ EntityPlayer/
 
 按住 `Alt` 键打开主配置轮盘，移动鼠标选择功能，松开 `Alt` 确认：
 
-| 选项 | 功能 |
-|------|------|
-| 🎭 **模型切换** | 打开模型选择界面，切换玩家使用的 MMD 模型 |
+| 选项           | 功能                                          |
+| -------------- | --------------------------------------------- |
+| 🎭 **模型切换** | 打开模型选择界面，切换玩家使用的 MMD 模型     |
 | 🎬 **动作选择** | 打开动作轮盘，手动播放 `CustomAnim/` 中的动画 |
-| 😊 **表情选择** | 打开表情轮盘，应用 `CustomMorph/` 中的表情 |
-| 👕 **材质控制** | 控制模型各部位材质的显示/隐藏 |
-| ⚙ **模组设置** | 打开模组配置界面 |
+| 😊 **表情选择** | 打开表情轮盘，应用 `CustomMorph/` 中的表情    |
+| 👕 **材质控制** | 控制模型各部位材质的显示/隐藏                 |
+| ⚙ **模组设置** | 打开模组配置界面                              |
 
 #### 女仆配置轮盘（对准女仆按 `B` 键）
 
@@ -289,21 +296,21 @@ cargo build --release --locked
 
 ### 核心依赖
 
-| 库 | 许可证 | 说明 |
-|----|--------|------|
-| [Bullet3](https://github.com/bulletphysics/bullet3) | zlib | 3D 物理引擎 |
-| [glam](https://github.com/bitshifter/glam-rs) | MIT/Apache-2.0 | 3D 数学库 |
-| [mmd-rs](https://github.com/aankor/mmd-rs) | BSD-2-Clause | MMD 格式解析器 |
+| 库                                                  | 许可证         | 说明           |
+| --------------------------------------------------- | -------------- | -------------- |
+| [Bullet3](https://github.com/bulletphysics/bullet3) | zlib           | 3D 物理引擎    |
+| [glam](https://github.com/bitshifter/glam-rs)       | MIT/Apache-2.0 | 3D 数学库      |
+| [mmd-rs](https://github.com/aankor/mmd-rs)          | BSD-2-Clause   | MMD 格式解析器 |
 
 ### 设计参考
 
-| 项目 | 许可证 | 参考内容 |
-|------|--------|----------|
-| [KAIMyEntity](https://github.com/kjkjkAIStudio/KAIMyEntity) | MIT | 原始 Minecraft MMD 模组 |
-| [KAIMyEntity-C](https://github.com/Gengorou-C/KAIMyEntity-C) | MIT | 本项目的直接前身（二次开发基础） |
-| [Saba](https://github.com/benikabocha/saba) | MIT | 物理系统架构 |
-| [nphysics](https://github.com/dimforge/nphysics) | Apache-2.0 | 骨骼层次设计 |
-| [mdanceio](https://github.com/ReaNAiveD/mdanceio) | MIT | 动画系统 |
+| 项目                                                         | 许可证     | 参考内容                         |
+| ------------------------------------------------------------ | ---------- | -------------------------------- |
+| [KAIMyEntity](https://github.com/kjkjkAIStudio/KAIMyEntity)  | MIT        | 原始 Minecraft MMD 模组          |
+| [KAIMyEntity-C](https://github.com/Gengorou-C/KAIMyEntity-C) | MIT        | 本项目的直接前身（二次开发基础） |
+| [Saba](https://github.com/benikabocha/saba)                  | MIT        | 物理系统架构                     |
+| [nphysics](https://github.com/dimforge/nphysics)             | Apache-2.0 | 骨骼层次设计                     |
+| [mdanceio](https://github.com/ReaNAiveD/mdanceio)            | MIT        | 动画系统                         |
 
 完整的第三方许可证信息请参阅 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
 

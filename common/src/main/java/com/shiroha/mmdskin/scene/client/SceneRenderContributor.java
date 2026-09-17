@@ -28,6 +28,7 @@ public final class SceneRenderContributor {
     public void contribute(ScenePlacement placement, MmdModelInstance model,
                            double cameraX, double cameraY, double cameraZ, int packedLight,
                            long frameId, float deltaSeconds) {
+        // modelMat 使用相机相对坐标（与 26.2 官方例程一致，ModelView 只含视图旋转）
         double offsetX = placement.x() - cameraX;
         double offsetY = placement.y() - cameraY;
         double offsetZ = placement.z() - cameraZ;

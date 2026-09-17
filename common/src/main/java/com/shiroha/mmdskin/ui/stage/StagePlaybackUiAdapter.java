@@ -21,9 +21,9 @@ public final class StagePlaybackUiAdapter implements StagePlaybackUiPort, StageC
     public void markStageSelectionStartedAndClose() {
         Minecraft mc = Minecraft.getInstance();
         Runnable action = () -> {
-            if (mc.screen instanceof StageSelectScreen screen) {
+            if (mc.gui.screen() instanceof StageSelectScreen screen) {
                 screen.markStartedByHost();
-                mc.setScreen(null);
+                mc.gui.setScreen(null);
             }
         };
         if (mc.isSameThread()) {
@@ -36,7 +36,7 @@ public final class StagePlaybackUiAdapter implements StagePlaybackUiPort, StageC
     @Override
     public void openStageSelection() {
         Minecraft mc = Minecraft.getInstance();
-        Runnable action = () -> mc.setScreen(new StageSelectScreen());
+        Runnable action = () -> mc.gui.setScreen(new StageSelectScreen());
         if (mc.isSameThread()) {
             action.run();
         } else {
@@ -48,9 +48,9 @@ public final class StagePlaybackUiAdapter implements StagePlaybackUiPort, StageC
     public void closeStageSelectionIfOpen() {
         Minecraft mc = Minecraft.getInstance();
         Runnable action = () -> {
-            if (mc.screen instanceof StageSelectScreen screen) {
+            if (mc.gui.screen() instanceof StageSelectScreen screen) {
                 screen.prepareForExternalClose();
-                mc.setScreen(null);
+                mc.gui.setScreen(null);
             }
         };
         if (mc.isSameThread()) {

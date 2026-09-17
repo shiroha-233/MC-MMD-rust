@@ -18,7 +18,12 @@ public interface IPhysicsConfig {
 
     default boolean isPhysicsJointsEnabled() { return true; }
 
-    default boolean isPhysicsKinematicFilter() { return true; }
+    default boolean isPhysicsKinematicFilter() { return false; }
+
+    default boolean isPhysicsCollisionEnabled() { return true; }
+
+    /** 0=STRICT, 1=STABLE(默认), 2=RELAXED（与 Rust CollisionStabilityMode 一致） */
+    default int getPhysicsCollisionStabilityMode() { return 1; }
 
     default boolean isPhysicsDebugLog() { return false; }
 

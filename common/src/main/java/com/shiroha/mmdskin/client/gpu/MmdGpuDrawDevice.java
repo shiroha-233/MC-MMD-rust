@@ -1,24 +1,27 @@
-// 负责把帧绘制请求批量准备并提交到 Minecraft 1.21.5 RenderPass。
+// 负责把帧绘制请求批量准备并提交到 Minecraft 26.2 RenderPass。
+// 26.2 适配：uniform 全部通过 std140 UBO 块 + transient memory 上传；
+// 采样器与纹理视图由 GpuTextureView/GpuSampler 提供；深度方向已反转。
 package com.shiroha.mmdskin.client.gpu;
 
-import com.mojang.blaze3d.buffers.BufferType;
-import com.mojang.blaze3d.buffers.BufferUsage;
+import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
+import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.TextureFormat;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import com.shiroha.mmdskin.bridge.render.NativeDrawCommand;
-import com.shiroha.mmdskin.bridge.render.NativeRenderDataPort;
+import com.shiroha.mmdskin.bridge.render.NativeDrawCommand;import com.shiroha.mmdskin.bridge.render.NativeRenderDataPort;
 import com.shiroha.mmdskin.client.draw.MmdDrawDevice;
 import com.shiroha.mmdskin.client.draw.MmdDrawRequest;
 import com.shiroha.mmdskin.client.draw.PipelineVariant;
 import com.shiroha.mmdskin.client.metrics.ModelGpuMetricsPort;
+import com.shiroha.mmdskin.client.render.state.CameraMatrices;
 import com.shiroha.mmdskin.client.texture.MinecraftTextureResource;
 import com.shiroha.mmdskin.client.texture.TextureLease;
 import com.shiroha.mmdskin.client.texture.TextureRepository;
@@ -36,8 +39,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalDouble;
-import java.util.OptionalInt;
 
 public final class MmdGpuDrawDevice implements MmdDrawDevice, ModelGpuMetricsPort, AutoCloseable {
     private static final Logger LOGGER = LogManager.getLogger();
@@ -45,13 +48,43 @@ public final class MmdGpuDrawDevice implements MmdDrawDevice, ModelGpuMetricsPor
             .comparing(PreparedDraw::transparent)
             .thenComparing((PreparedDraw draw) -> draw.transparent() ? -draw.distanceSquared() : 0.0D)
             .thenComparingLong(PreparedDraw::sequence);
-    private static final String[] BONE_UNIFORMS = boneUniformNames();
-    private static final float[] IDENTITY_MATRIX = identityMatrix();
+    // 26.2 的 uniform offset 对齐取决于 GPU；Minecraft 的 RenderPass 要求至少 256 字节。
+    private static final int UBO_ALIGNMENT = 256;
+
+    // std140 布局常量（与 mmd_entity.vsh/fsh 的 MmdTransforms 块一致）
+    private static final int TRANSFORMS_SIZE = 128;
+
+    // std140 布局常量（与 mmd_entity.vsh/fsh 的 MmdModel 块一致）
+    private static final int MODEL_SIZE = 176;
+    private static final int MODEL_OFFSET_MAT = 0;
+    private static final int MODEL_OFFSET_LIGHT0 = 64;
+    private static final int MODEL_OFFSET_LIGHT1 = 80;
+    private static final int MODEL_OFFSET_OUTLINE_WIDTH = 92;
+    private static final int MODEL_OFFSET_MATERIAL_COLOR = 96;
+    private static final int MODEL_OFFSET_ALPHA = 112;
+    private static final int MODEL_OFFSET_LIGHT_FACTOR = 116;
+    private static final int MODEL_OFFSET_EMISSION = 120;
+    private static final int MODEL_OFFSET_OUTLINE_COLOR = 128;
+    private static final int MODEL_OFFSET_TOON_LEVELS = 140;
+    private static final int MODEL_OFFSET_TOON_SHADOW = 144;
+    private static final int MODEL_OFFSET_RIM_POWER = 156;
+    private static final int MODEL_OFFSET_RIM_INTENSITY = 160;
+    private static final int MODEL_OFFSET_SPECULAR_POWER = 164;
+    private static final int MODEL_OFFSET_SPECULAR_INTENSITY = 168;
+
+    // std140 布局：mat4 MmdBonesArray[48]
+    private static final int BONES_ENTRY_SIZE = 64;
+    private static final int BONES_SIZE = NativeRenderDataPort.MAX_PALETTE_BONES * BONES_ENTRY_SIZE;
+
+    private static final Vector3f LIGHT0_DIRECTION = new Vector3f(0.2F, 1.0F, -0.7F).normalize();
+    private static final Vector3f LIGHT1_DIRECTION = new Vector3f(-0.2F, 1.0F, 0.7F).normalize();
 
     private final NativeRenderDataPort nativeData;
     private final TextureRepository textures;
     private final Map<Long, GpuMesh> meshes = new HashMap<>();
+    private final Map<GpuTexture, GpuTextureView> textureViews = new HashMap<>();
     private GpuTexture whiteTexture;
+    private GpuTextureView whiteTextureView;
     private long uploadedVertexBytes;
     private long uploadCount;
     private boolean closed;
@@ -77,21 +110,35 @@ public final class MmdGpuDrawDevice implements MmdDrawDevice, ModelGpuMetricsPor
         }
         draws.sort(DRAW_ORDER);
 
-        RenderTarget target = Minecraft.getInstance().getMainRenderTarget();
-        GpuTexture color = target.getColorTexture();
-        GpuTexture depth = target.useDepth ? target.getDepthTexture() : null;
-        if (color == null || target.useDepth && depth == null) {
+        // 26.2 物品栏纸娃娃/PIP 走离屏渲染：PictureInPictureRenderer.prepare 期间
+        // RenderSystem.outputColorTextureOverride/outputDepthTextureOverride 指向 PIP 离屏
+        // 纹理；此时应画到离屏 target，否则画到主 target 会被 GUI 覆盖/错位。
+        GpuTextureView colorOverride = RenderSystem.outputColorTextureOverride;
+        GpuTextureView depthOverride = RenderSystem.outputDepthTextureOverride;
+        RenderTarget target = Minecraft.getInstance().gameRenderer.mainRenderTarget();
+        GpuTextureView colorView = colorOverride != null ? colorOverride : target.getColorTextureView();
+        GpuTextureView depthView = (depthOverride != null
+                ? depthOverride
+                : (target.useDepth ? target.getDepthTextureView() : null));
+        if (colorView == null || (depthOverride == null && target.useDepth && depthView == null)) {
             closeTextureLeases(draws);
             return;
         }
 
+        CameraMatrices camera = CameraMatrices.capture();
+        GpuSampler sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR);
         try (RenderPass pass = encoder.createRenderPass(
-                color, OptionalInt.empty(), depth, OptionalDouble.empty())) {
-            if (draws.stream().anyMatch(draw -> draw.mesh().gpuSkinning)) {
-                initializeBoneUniforms(pass);
+                () -> "MMD model pass",
+                colorView,
+                Optional.empty(),
+                depthView,
+                OptionalDouble.empty())) {
+            GpuBufferSlice fog = RenderSystem.getShaderFog();
+            if (fog != null) {
+                pass.setUniform("Fog", fog);
             }
             for (PreparedDraw draw : draws) {
-                submit(pass, draw, fallback, uniforms);
+                submit(pass, encoder, draw, fallback, sampler, uniforms, camera);
             }
         } finally {
             closeTextureLeases(draws);
@@ -158,80 +205,113 @@ public final class MmdGpuDrawDevice implements MmdDrawDevice, ModelGpuMetricsPor
         return requestTransparent || (command.flags() & NativeDrawCommand.FLAG_TRANSPARENT) != 0;
     }
 
-    private static void submit(RenderPass pass, PreparedDraw draw, GpuTexture fallback,
-                               FrameUniforms uniforms) {
+    private void submit(RenderPass pass, CommandEncoder encoder, PreparedDraw draw,
+                        GpuTexture fallback, GpuSampler sampler, FrameUniforms uniforms,
+                        CameraMatrices camera) {
         NativeDrawCommand command = draw.command();
         GpuMesh mesh = draw.mesh();
         pass.setPipeline(MmdRenderPipelines.pipeline(draw.pipeline(), mesh.gpuSkinning));
+
+        GpuBufferSlice transforms = encoder.transientMemory().uploadGpu(
+                writeTransforms(camera), UBO_ALIGNMENT, GpuBuffer.USAGE_UNIFORM);
+        pass.setUniform("MmdTransforms", transforms);
+        GpuBufferSlice model = encoder.transientMemory().uploadGpu(
+                writeModel(draw, command, uniforms), UBO_ALIGNMENT, GpuBuffer.USAGE_UNIFORM);
+        pass.setUniform("MmdModel", model);
         if (mesh.gpuSkinning) {
             int offset = command.paletteOffset();
             int count = command.paletteCount();
             if (offset > mesh.paletteMatrices.length - count) {
                 throw new IllegalStateException("bone palette range exceeds copied matrices");
             }
-            for (int index = 0; index < count; index++) {
-                pass.setUniform(BONE_UNIFORMS[index], mesh.paletteMatrices[offset + index]);
-            }
+            GpuBufferSlice bones = encoder.transientMemory().uploadGpu(
+                    writeBones(mesh.paletteMatrices, offset, count), UBO_ALIGNMENT, GpuBuffer.USAGE_UNIFORM);
+            pass.setUniform("MmdBones", bones);
         }
-        pass.bindSampler("Sampler0", draw.texture() == null ? fallback : draw.texture());
-        pass.setUniform("MmdModelMat", draw.modelMatrix());
-        setMaterialColor(pass, command.materialColor());
-        pass.setUniform("MmdAlpha", command.alpha());
-        pass.setUniform("MmdLightFactor", uniforms.lightingEnabled()
-                ? lightFactor(draw.request().snapshot().packedLight()) : 1.0F);
-        pass.setUniform("MmdOutlineWidth", draw.outline() ? uniforms.outlineWidth() : 0.0F);
-        pass.setUniform("MmdOutlineColor", uniforms.outlineR(), uniforms.outlineG(), uniforms.outlineB());
-        pass.setUniform("MmdToonLevels", uniforms.toonLevels());
-        pass.setUniform("MmdToonShadowColor", uniforms.shadowR(), uniforms.shadowG(), uniforms.shadowB());
-        pass.setUniform("MmdRimPower", uniforms.rimPower());
-        pass.setUniform("MmdRimIntensity", uniforms.rimIntensity());
-        pass.setUniform("MmdSpecularPower", uniforms.specularPower());
-        pass.setUniform("MmdSpecularIntensity", uniforms.specularIntensity());
-        pass.setUniform("MmdEmission", draw.pipeline() == PipelineVariant.GLOWING ? 1.0F : 0.0F);
-        pass.setVertexBuffer(0, mesh.vertexBuffer);
+
+        GpuTexture texture = draw.texture() == null ? fallback : draw.texture();
+        pass.bindTexture("Sampler0", textureView(texture), sampler);
+        pass.setVertexBuffer(0, new GpuBufferSlice(mesh.vertexBuffer, 0L, mesh.vertexBuffer.size()));
         pass.setIndexBuffer(draw.outline() ? mesh.outlineIndexBuffer : mesh.indexBuffer, mesh.indexType);
-        pass.drawIndexed(command.firstIndex(), command.indexCount());
+        // 26.2 参数顺序: indexCount, instanceCount, firstIndex, vertexOffset, firstInstance
+        pass.drawIndexed(command.indexCount(), 1, command.firstIndex(), 0, 0);
     }
 
-    private static void setMaterialColor(RenderPass pass, int packed) {
+    private GpuTextureView textureView(GpuTexture texture) {
+        return textureViews.computeIfAbsent(texture,
+                t -> RenderSystem.getDevice().createTextureView(t));
+    }
+
+    private static ByteBuffer direct(int bytes) {
+        return ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder());
+    }
+
+    private static ByteBuffer writeTransforms(CameraMatrices camera) {
+        ByteBuffer buffer = direct(TRANSFORMS_SIZE);
+        camera.modelView().get(0, buffer);
+        camera.projection().get(64, buffer);
+        return buffer;
+    }
+
+    private static ByteBuffer writeModel(PreparedDraw draw, NativeDrawCommand command, FrameUniforms uniforms) {
+        ByteBuffer buffer = direct(MODEL_SIZE);
+        draw.modelMatrix().get(MODEL_OFFSET_MAT, buffer);
+        buffer.putFloat(MODEL_OFFSET_LIGHT0, LIGHT0_DIRECTION.x);
+        buffer.putFloat(MODEL_OFFSET_LIGHT0 + 4, LIGHT0_DIRECTION.y);
+        buffer.putFloat(MODEL_OFFSET_LIGHT0 + 8, LIGHT0_DIRECTION.z);
+        buffer.putFloat(MODEL_OFFSET_LIGHT1, LIGHT1_DIRECTION.x);
+        buffer.putFloat(MODEL_OFFSET_LIGHT1 + 4, LIGHT1_DIRECTION.y);
+        buffer.putFloat(MODEL_OFFSET_LIGHT1 + 8, LIGHT1_DIRECTION.z);
+        buffer.putFloat(MODEL_OFFSET_OUTLINE_WIDTH, draw.outline() ? uniforms.outlineWidth() : 0.0F);
+        writeMaterialColor(buffer, command.materialColor());
+        buffer.putFloat(MODEL_OFFSET_ALPHA, command.alpha());
+        buffer.putFloat(MODEL_OFFSET_LIGHT_FACTOR, uniforms.lightingEnabled()
+                ? lightFactor(draw.request().snapshot().packedLight()) : 1.0F);
+        buffer.putFloat(MODEL_OFFSET_EMISSION, draw.pipeline() == PipelineVariant.GLOWING ? 1.0F : 0.0F);
+        buffer.putFloat(MODEL_OFFSET_OUTLINE_COLOR, uniforms.outlineR());
+        buffer.putFloat(MODEL_OFFSET_OUTLINE_COLOR + 4, uniforms.outlineG());
+        buffer.putFloat(MODEL_OFFSET_OUTLINE_COLOR + 8, uniforms.outlineB());
+        buffer.putInt(MODEL_OFFSET_TOON_LEVELS, uniforms.toonLevels());
+        buffer.putFloat(MODEL_OFFSET_TOON_SHADOW, uniforms.shadowR());
+        buffer.putFloat(MODEL_OFFSET_TOON_SHADOW + 4, uniforms.shadowG());
+        buffer.putFloat(MODEL_OFFSET_TOON_SHADOW + 8, uniforms.shadowB());
+        buffer.putFloat(MODEL_OFFSET_RIM_POWER, uniforms.rimPower());
+        buffer.putFloat(MODEL_OFFSET_RIM_INTENSITY, uniforms.rimIntensity());
+        buffer.putFloat(MODEL_OFFSET_SPECULAR_POWER, uniforms.specularPower());
+        buffer.putFloat(MODEL_OFFSET_SPECULAR_INTENSITY, uniforms.specularIntensity());
+        return buffer;
+    }
+
+    private static ByteBuffer writeBones(float[][] paletteMatrices, int offset, int count) {
+        ByteBuffer buffer = direct(BONES_SIZE);
+        for (int index = 0; index < count; index++) {
+            float[] matrix = paletteMatrices[offset + index];
+            int byteOffset = index * BONES_ENTRY_SIZE;
+            for (int component = 0; component < 16; component++) {
+                buffer.putFloat(byteOffset + component * Float.BYTES, matrix[component]);
+            }
+        }
+        return buffer;
+    }
+
+    private static void writeMaterialColor(ByteBuffer buffer, int packed) {
         if (packed == 0) {
-            pass.setUniform("MmdMaterialColor", 1.0F, 1.0F, 1.0F, 1.0F);
+            buffer.putFloat(MODEL_OFFSET_MATERIAL_COLOR, 1.0F);
+            buffer.putFloat(MODEL_OFFSET_MATERIAL_COLOR + 4, 1.0F);
+            buffer.putFloat(MODEL_OFFSET_MATERIAL_COLOR + 8, 1.0F);
+            buffer.putFloat(MODEL_OFFSET_MATERIAL_COLOR + 12, 1.0F);
             return;
         }
-        pass.setUniform("MmdMaterialColor",
-                (packed & 0xFF) / 255.0F,
-                (packed >>> 8 & 0xFF) / 255.0F,
-                (packed >>> 16 & 0xFF) / 255.0F,
-                (packed >>> 24 & 0xFF) / 255.0F);
+        buffer.putFloat(MODEL_OFFSET_MATERIAL_COLOR, (packed & 0xFF) / 255.0F);
+        buffer.putFloat(MODEL_OFFSET_MATERIAL_COLOR + 4, (packed >>> 8 & 0xFF) / 255.0F);
+        buffer.putFloat(MODEL_OFFSET_MATERIAL_COLOR + 8, (packed >>> 16 & 0xFF) / 255.0F);
+        buffer.putFloat(MODEL_OFFSET_MATERIAL_COLOR + 12, (packed >>> 24 & 0xFF) / 255.0F);
     }
 
     private static float lightFactor(int packedLight) {
         int block = packedLight & 0xFFFF;
         int sky = packedLight >>> 16 & 0xFFFF;
         return Math.clamp(0.2F + Math.max(block, sky) / 240.0F * 0.8F, 0.2F, 1.0F);
-    }
-
-    private static void initializeBoneUniforms(RenderPass pass) {
-        for (String uniform : BONE_UNIFORMS) {
-            pass.setUniform(uniform, IDENTITY_MATRIX);
-        }
-    }
-
-    private static String[] boneUniformNames() {
-        String[] names = new String[NativeRenderDataPort.MAX_PALETTE_BONES];
-        for (int index = 0; index < names.length; index++) {
-            names[index] = "MmdBones[" + index + "]";
-        }
-        return names;
-    }
-
-    private static float[] identityMatrix() {
-        float[] matrix = new float[16];
-        matrix[0] = 1.0F;
-        matrix[5] = 1.0F;
-        matrix[10] = 1.0F;
-        matrix[15] = 1.0F;
-        return matrix;
     }
 
     private static double commandDistanceSquared(Matrix4f modelMatrix, NativeDrawCommand command) {
@@ -272,8 +352,10 @@ public final class MmdGpuDrawDevice implements MmdDrawDevice, ModelGpuMetricsPor
             return whiteTexture;
         }
         whiteTexture = RenderSystem.getDevice().createTexture(
-                () -> "MMD fallback white texture", TextureFormat.RGBA8, 1, 1, 1);
-        whiteTexture.setTextureFilter(FilterMode.LINEAR, false);
+                () -> "MMD fallback white texture",
+                GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_DST,
+                GpuFormat.RGBA8_UNORM, 1, 1, 1, 1);
+        whiteTextureView = null;
         try (NativeImage image = new NativeImage(1, 1, false)) {
             image.setPixel(0, 0, 0xFFFFFFFF);
             encoder.writeToTexture(whiteTexture, image);
@@ -330,9 +412,14 @@ public final class MmdGpuDrawDevice implements MmdDrawDevice, ModelGpuMetricsPor
         closed = true;
         meshes.values().forEach(GpuMesh::close);
         meshes.clear();
+        for (GpuTextureView view : textureViews.values()) {
+            view.close();
+        }
+        textureViews.clear();
         if (whiteTexture != null) {
             whiteTexture.close();
             whiteTexture = null;
+            whiteTextureView = null;
         }
     }
 
@@ -340,7 +427,7 @@ public final class MmdGpuDrawDevice implements MmdDrawDevice, ModelGpuMetricsPor
         private GpuBuffer vertexBuffer;
         private GpuBuffer indexBuffer;
         private GpuBuffer outlineIndexBuffer;
-        private VertexFormat.IndexType indexType;
+        private com.mojang.blaze3d.IndexType indexType;
         private ByteBuffer vertexStaging;
         private ByteBuffer commandStaging;
         private ByteBuffer paletteStaging;
@@ -367,7 +454,7 @@ public final class MmdGpuDrawDevice implements MmdDrawDevice, ModelGpuMetricsPor
                 requireWritten("copyFrameVertices",
                         nativeData.copyFrameVertices(request.model().nativeHandle(), vertexStaging),
                         description.vertexBufferBytes());
-                encoder.writeToBuffer(vertexBuffer, vertexStaging, 0);
+                encoder.writeToBuffer(bufferSlice(vertexBuffer), vertexStaging);
                 recordVertexUpload(description.vertexBufferBytes());
                 uploadedRevision = description.vertexRevision();
             }
@@ -400,6 +487,10 @@ public final class MmdGpuDrawDevice implements MmdDrawDevice, ModelGpuMetricsPor
             }
         }
 
+        private static GpuBufferSlice bufferSlice(GpuBuffer buffer) {
+            return new GpuBufferSlice(buffer, 0L, buffer.size());
+        }
+
         private boolean matches(NativeRenderDataPort.MeshDescription description) {
             return vertexBuffer != null && indexBuffer != null
                     && vertexBytes == description.vertexBufferBytes()
@@ -429,15 +520,15 @@ public final class MmdGpuDrawDevice implements MmdDrawDevice, ModelGpuMetricsPor
             indices.clear().limit(description.indexBufferBytes());
             indexBuffer = RenderSystem.getDevice().createBuffer(
                     () -> "MMD static indices " + modelHandle,
-                    BufferType.INDICES, BufferUsage.STATIC_WRITE, indices);
+                    GpuBuffer.USAGE_INDEX | GpuBuffer.USAGE_COPY_DST, indices);
             ByteBuffer outlineIndices = OutlineIndexBuilder.reverseTriangles(
                     indices, description.indexCount(), description.indexType());
             outlineIndexBuffer = RenderSystem.getDevice().createBuffer(
                     () -> "MMD outline indices " + modelHandle,
-                    BufferType.INDICES, BufferUsage.STATIC_WRITE, outlineIndices);
+                    GpuBuffer.USAGE_INDEX | GpuBuffer.USAGE_COPY_DST, outlineIndices);
             vertexBuffer = RenderSystem.getDevice().createBuffer(
                     () -> "MMD dynamic vertices " + modelHandle,
-                    BufferType.VERTICES, BufferUsage.DYNAMIC_WRITE, description.vertexBufferBytes());
+                    GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST, description.vertexBufferBytes());
             vertexStaging = direct(description.vertexBufferBytes());
             commandStaging = direct(Math.multiplyExact(description.drawCommandCount(), NativeDrawCommand.BYTES));
             paletteStaging = direct(description.paletteBufferBytes());
@@ -452,9 +543,9 @@ public final class MmdGpuDrawDevice implements MmdDrawDevice, ModelGpuMetricsPor
             return ByteBuffer.allocateDirect(bytes).order(ByteOrder.LITTLE_ENDIAN);
         }
 
-        private static VertexFormat.IndexType toGpuIndexType(NativeRenderDataPort.IndexType type) {
+        private static com.mojang.blaze3d.IndexType toGpuIndexType(NativeRenderDataPort.IndexType type) {
             return type == NativeRenderDataPort.IndexType.SHORT
-                    ? VertexFormat.IndexType.SHORT : VertexFormat.IndexType.INT;
+                    ? com.mojang.blaze3d.IndexType.SHORT : com.mojang.blaze3d.IndexType.INT;
         }
 
         private static void requireWritten(String operation, int actual, int expected) {

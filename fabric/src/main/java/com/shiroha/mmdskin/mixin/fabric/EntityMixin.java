@@ -21,7 +21,7 @@ public abstract class EntityMixin {
             return;
         }
         runtime.firstPerson().camera()
-                .resolveInteractionEyePosition(entity, partialTick, minecraft.gameRenderer.getMainCamera())
+                .resolveInteractionEyePosition(entity, partialTick, minecraft.gameRenderer.mainCamera())
                 .ifPresent(callback::setReturnValue);
     }
 
@@ -34,7 +34,7 @@ public abstract class EntityMixin {
             return;
         }
         runtime.firstPerson().camera()
-                .resolveViewVector(entity, minecraft.gameRenderer.getMainCamera())
+                .resolveViewVector(entity, minecraft.gameRenderer.mainCamera())
                 .ifPresent(callback::setReturnValue);
     }
 }

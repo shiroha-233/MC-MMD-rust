@@ -5,8 +5,8 @@ import com.shiroha.mmdskin.asset.catalog.ModelInfo;
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.config.UIConstants;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.EntityType;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
 
 public final class MobReplacementResolver {
@@ -14,10 +14,10 @@ public final class MobReplacementResolver {
     }
 
     public static String getReplacementModelName(LivingEntity entity) {
-        if (entity == null || entity.getType() == EntityType.PLAYER) {
+        if (entity == null || entity.getType() == EntityTypes.PLAYER) {
             return null;
         }
-        ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
+        Identifier id = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
         if (id == null) {
             return null;
         }

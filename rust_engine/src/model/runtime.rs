@@ -137,6 +137,8 @@ pub struct MmdModel {
     // 物理系统
     physics: Option<MMDPhysics>,
     physics_enabled: bool,
+    /// 配置变更后请求重建物理世界（下一次 update_physics 时消费）
+    physics_rebuild_pending: bool,
     /// 骨骼变换缓冲区（避免每帧堆分配）
     physics_bone_transforms_buf: Vec<Mat4>,
 
@@ -254,6 +256,7 @@ impl MmdModel {
             model_transform: Mat4::IDENTITY,
             physics: None,
             physics_enabled: false,
+            physics_rebuild_pending: false,
             physics_bone_transforms_buf: Vec::new(),
             material_visible: Vec::new(),
             user_material_visible: Vec::new(),
@@ -1913,19 +1916,27 @@ impl MmdModel {
 
         self.physics = Some(physics);
         self.physics_enabled = true;
+        self.physics_rebuild_pending = false;
         true
     }
 
-    /// 重置物理系统
+    /// 重置物理系统（用当前骨骼姿态重新初始化）
     pub fn reset_physics(&mut self) {
         if let Some(ref mut physics) = self.physics {
-            physics.reset();
+            physics.reset(&self.physics_bone_transforms_buf);
         }
     }
 
     /// 启用/禁用物理
     pub fn set_physics_enabled(&mut self, enabled: bool) {
         self.physics_enabled = enabled;
+    }
+
+    /// 请求在下一次更新时按最新全局配置重建物理世界。
+    pub fn request_physics_rebuild(&mut self) {
+        if self.physics.is_some() {
+            self.physics_rebuild_pending = true;
+        }
     }
 
     /// 获取物理是否启用
@@ -1950,6 +1961,17 @@ impl MmdModel {
             return;
         }
 
+        // 配置变更触发的重建：丢弃旧世界并按最新配置重建。
+        // 重建失败时必须清除 pending 标志，否则会在 physics.is_none()
+        // 处提前返回，标志永不消费，物理被永久关闭直到手动翻转开关。
+        if self.physics_rebuild_pending {
+            self.physics = None;
+            if !self.init_physics() {
+                self.physics_rebuild_pending = false;
+                return;
+            }
+        }
+
         // 收集骨骼变换（复用缓冲区，resize + 索引赋值避免 push 分支开销）
         let bone_count = self.bone_manager.bone_count();
         self.physics_bone_transforms_buf
@@ -1963,16 +1985,15 @@ impl MmdModel {
         // 拆分借用：先取出 physics 避免同时借用 self
         let mut physics = self.physics.take().unwrap();
 
-        // 1. 同步运动学刚体
+        // 1. 同步运动学刚体（新版内部自取全局配置）
         physics.sync_bodies_with_model_velocity(
             &self.physics_bone_transforms_buf,
             delta_time,
             model_transform,
-            &config,
         );
 
-        // 2. Bullet3 步进（传入 config 避免内部重复 get_config）
-        physics.step_simulation(delta_time, &config);
+        // 2. Bullet3 步进
+        physics.step_simulation(delta_time);
 
         // 3. 同步物理结果回骨骼（复用内部缓冲区）
         let dynamic_bone_transforms =

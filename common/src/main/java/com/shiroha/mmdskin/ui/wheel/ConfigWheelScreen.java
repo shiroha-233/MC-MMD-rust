@@ -1,6 +1,9 @@
 /* 文件职责：提供主配置轮盘界面与按键释放选择语义。 */
 package com.shiroha.mmdskin.ui.wheel;
 
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+
 import com.mojang.blaze3d.platform.InputConstants;
 import com.shiroha.mmdskin.ui.selector.MaterialVisibilityScreen;
 import com.shiroha.mmdskin.ui.selector.ModelSelectorScreen;
@@ -9,7 +12,7 @@ import com.shiroha.mmdskin.ui.stage.StagePlaybackUiAdapter;
 import com.shiroha.mmdskin.util.KeyMappingUtil;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
@@ -72,19 +75,19 @@ public class ConfigWheelScreen extends AbstractWheelScreen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick) {
         renderWheelBase(guiGraphics, mouseX, mouseY, partialTick, buildEntries());
 
         String centerText = selectedSlot >= 0 ? configSlots.get(selectedSlot).name : "MMD Skin";
         renderCenterBubble(guiGraphics, centerText, style.lineColor());
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        super.extractRenderState(guiGraphics, mouseX, mouseY, partialTick);
     }
 
     @Override
     public void tick() {
         super.tick();
-        if (Minecraft.getInstance().screen != this) {
+        if (Minecraft.getInstance().gui.screen() != this) {
             return;
         }
 
@@ -93,7 +96,7 @@ public class ConfigWheelScreen extends AbstractWheelScreen {
             if (monitoredKey.isDown()) {
                 isDown = true;
             } else {
-                long window = Minecraft.getInstance().getWindow().getWindow();
+                long window = Minecraft.getInstance().getWindow().handle();
                 InputConstants.Key key = KeyMappingUtil.getBoundKey(monitoredKey);
                 isDown = key != null
                         && key.getType() == InputConstants.Type.KEYSYM
@@ -122,29 +125,29 @@ public class ConfigWheelScreen extends AbstractWheelScreen {
     }
 
     private void openModelSelector() {
-        Minecraft.getInstance().setScreen(new ModelSelectorScreen());
+        Minecraft.getInstance().gui.setScreen(new ModelSelectorScreen());
     }
 
     private void openActionWheel() {
-        Minecraft.getInstance().setScreen(new ActionWheelScreen());
+        Minecraft.getInstance().gui.setScreen(new ActionWheelScreen());
     }
 
     private void openMorphWheel() {
-        Minecraft.getInstance().setScreen(new MorphWheelScreen(monitoredKey));
+        Minecraft.getInstance().gui.setScreen(new MorphWheelScreen(monitoredKey));
     }
 
     private void openMaterialVisibility() {
         MaterialVisibilityScreen screen = MaterialVisibilityScreen.createForPlayer();
         if (screen != null) {
-            Minecraft.getInstance().setScreen(screen);
+            Minecraft.getInstance().gui.setScreen(screen);
         } else {
-            Minecraft.getInstance().gui.getChat().addMessage(
+            Minecraft.getInstance().gui.hud.getChat().addClientSystemMessage(
                     Component.translatable("message.mmdskin.player.model_not_found"));
         }
     }
 
     private void openSceneSelector() {
-        Minecraft.getInstance().setScreen(new SceneSelectorScreen());
+        Minecraft.getInstance().gui.setScreen(new SceneSelectorScreen());
     }
 
     private void openStageSelect() {
@@ -155,11 +158,11 @@ public class ConfigWheelScreen extends AbstractWheelScreen {
         if (modSettingsScreenFactory != null) {
             Screen settingsScreen = modSettingsScreenFactory.get();
             if (settingsScreen != null) {
-                Minecraft.getInstance().setScreen(settingsScreen);
+                Minecraft.getInstance().gui.setScreen(settingsScreen);
                 return;
             }
         }
-        Minecraft.getInstance().gui.getChat().addMessage(
+        Minecraft.getInstance().gui.hud.getChat().addClientSystemMessage(
                 Component.translatable("message.mmdskin.mod_settings.not_initialized"));
     }
 

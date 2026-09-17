@@ -3,8 +3,10 @@ package com.shiroha.mmdskin.ui.selector;
 import com.shiroha.mmdskin.config.ModelConfigData;
 import com.shiroha.mmdskin.ui.selector.application.ModelSettingsApplicationService;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -91,7 +93,7 @@ public class ModelSettingsScreen extends Screen {
     }
 
     private void openAnimConfig() {
-        Minecraft.getInstance().setScreen(new ModelAnimationScreen(modelName, this));
+        Minecraft.getInstance().gui.setScreen(new ModelAnimationScreen(modelName, this));
     }
 
     private void saveAndClose() {
@@ -104,8 +106,8 @@ public class ModelSettingsScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        super.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+    public void extractRenderState(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick) {
+        super.extractBackground(guiGraphics, mouseX, mouseY, partialTick);
 
         guiGraphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + panelH, COLOR_PANEL_BG);
         guiGraphics.fill(panelX, panelY, panelX + 1, panelY + panelH, COLOR_PANEL_BORDER);
@@ -116,29 +118,29 @@ public class ModelSettingsScreen extends Screen {
         renderSettings(guiGraphics, mouseX, mouseY);
         guiGraphics.disableScissor();
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        super.extractRenderState(guiGraphics, mouseX, mouseY, partialTick);
     }
 
     @Override
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void extractBackground(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick) {
     }
 
-    private void renderHeader(GuiGraphics guiGraphics) {
+    private void renderHeader(GuiGraphicsExtractor guiGraphics) {
         int cx = panelX + PANEL_WIDTH / 2;
-        guiGraphics.drawCenteredString(this.font, this.title, cx, panelY + 4, COLOR_ACCENT);
+        guiGraphics.centeredText(this.font, this.title, cx, panelY + 4, COLOR_ACCENT);
 
         String info = truncate(modelName, 18);
-        guiGraphics.drawCenteredString(this.font, info, cx, panelY + 16, COLOR_TEXT_DIM);
+        guiGraphics.centeredText(this.font, info, cx, panelY + 16, COLOR_TEXT_DIM);
 
         guiGraphics.fill(panelX + 8, listTop - 2, panelX + PANEL_WIDTH - 8, listTop - 1, COLOR_SEPARATOR);
     }
 
-    private void renderSettings(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+    private void renderSettings(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY) {
         int y = listTop + 4;
         int itemX = panelX + 6;
         int itemW = PANEL_WIDTH - 12;
 
-        guiGraphics.drawString(this.font, Component.translatable("gui.mmdskin.model_settings.eye_tracking"), itemX, y, COLOR_TEXT_DIM);
+        guiGraphics.text(this.font, Component.translatable("gui.mmdskin.model_settings.eye_tracking"), itemX, y, COLOR_TEXT_DIM);
         y += 12;
 
         renderToggle(guiGraphics, Component.translatable("gui.mmdskin.model_settings.eye_tracking_enabled").getString(), config.eyeTrackingEnabled,
@@ -155,7 +157,7 @@ public class ModelSettingsScreen extends Screen {
         guiGraphics.fill(panelX + 12, y, panelX + PANEL_WIDTH - 12, y + 1, COLOR_SEPARATOR);
         y += 8;
 
-        guiGraphics.drawString(this.font, Component.translatable("gui.mmdskin.model_settings.model_display"), itemX, y, COLOR_TEXT_DIM);
+        guiGraphics.text(this.font, Component.translatable("gui.mmdskin.model_settings.model_display"), itemX, y, COLOR_TEXT_DIM);
         y += 12;
 
         String scaleLabel = Component.translatable("gui.mmdskin.model_settings.model_scale", String.format("%.2f", config.modelScale)).getString();
@@ -167,7 +169,7 @@ public class ModelSettingsScreen extends Screen {
         guiGraphics.fill(panelX + 12, y, panelX + PANEL_WIDTH - 12, y + 1, COLOR_SEPARATOR);
         y += 8;
 
-        guiGraphics.drawString(this.font, Component.translatable("gui.mmdskin.model_settings.held_item_display"), itemX, y, COLOR_TEXT_DIM);
+        guiGraphics.text(this.font, Component.translatable("gui.mmdskin.model_settings.held_item_display"), itemX, y, COLOR_TEXT_DIM);
         y += 12;
 
         String heldItemScaleLabel = Component.translatable("gui.mmdskin.model_settings.held_item_scale", String.format("%.2f", config.heldItemScale)).getString();
@@ -180,14 +182,14 @@ public class ModelSettingsScreen extends Screen {
         guiGraphics.fill(panelX + 12, y, panelX + PANEL_WIDTH - 12, y + 1, COLOR_SEPARATOR);
         y += 8;
 
-        guiGraphics.drawString(this.font, Component.translatable("gui.mmdskin.model_settings.quick_bind"), itemX, y, COLOR_TEXT_DIM);
+        guiGraphics.text(this.font, Component.translatable("gui.mmdskin.model_settings.quick_bind"), itemX, y, COLOR_TEXT_DIM);
         y += 12;
 
         quickSlotSectionY = y;
         renderQuickSlots(guiGraphics, itemX, y, itemW, mouseX, mouseY);
     }
 
-    private void renderQuickSlots(GuiGraphics guiGraphics, int x, int y, int w, int mouseX, int mouseY) {
+    private void renderQuickSlots(GuiGraphicsExtractor guiGraphics, int x, int y, int w, int mouseX, int mouseY) {
         List<ModelSettingsApplicationService.QuickSlotBinding> bindings = SERVICE.getQuickSlotBindings(modelName);
         int btnW = (w - 4) / 2;
         int btnH = 16;
@@ -218,7 +220,7 @@ public class ModelSettingsScreen extends Screen {
             String label = Component.translatable("gui.mmdskin.model_settings.slot", i + 1).getString();
             int labelColor = isBoundToThis ? 0xFFFFFFFF : COLOR_TEXT;
             int labelW = this.font.width(label);
-            guiGraphics.drawString(this.font, label, btnX + (btnW - labelW) / 2, btnY + 4, labelColor);
+            guiGraphics.text(this.font, label, btnX + (btnW - labelW) / 2, btnY + 4, labelColor);
 
             if (isBoundToOther && isHovered) {
                 String hint = truncate(boundModel, 14);
@@ -226,12 +228,12 @@ public class ModelSettingsScreen extends Screen {
                 int hintX = btnX + (btnW - hintW) / 2;
                 int hintY = btnY + btnH + 1;
                 guiGraphics.fill(hintX - 2, hintY - 1, hintX + hintW + 2, hintY + 9, 0xE0182030);
-                guiGraphics.drawString(this.font, hint, hintX, hintY, COLOR_TEXT_DIM);
+                guiGraphics.text(this.font, hint, hintX, hintY, COLOR_TEXT_DIM);
             }
         }
     }
 
-    private void renderToggle(GuiGraphics guiGraphics, String label, boolean value,
+    private void renderToggle(GuiGraphicsExtractor guiGraphics, String label, boolean value,
                                int x, int y, int w, int mouseX, int mouseY, int settingId) {
         boolean isHovered = mouseX >= x && mouseX <= x + w
                          && mouseY >= y && mouseY <= y + ITEM_HEIGHT;
@@ -240,7 +242,7 @@ public class ModelSettingsScreen extends Screen {
             guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, COLOR_ITEM_HOVER);
         }
 
-        guiGraphics.drawString(this.font, label, x + 4, y + (ITEM_HEIGHT - 8) / 2, COLOR_TEXT);
+        guiGraphics.text(this.font, label, x + 4, y + (ITEM_HEIGHT - 8) / 2, COLOR_TEXT);
 
         int toggleX = x + w - TOGGLE_W - 4;
         int toggleY = y + (ITEM_HEIGHT - TOGGLE_H) / 2;
@@ -251,7 +253,7 @@ public class ModelSettingsScreen extends Screen {
         guiGraphics.fill(dotX + 1, toggleY + 1, dotX + TOGGLE_H - 1, toggleY + TOGGLE_H - 1, 0xFFFFFFFF);
     }
 
-    private void renderSlider(GuiGraphics guiGraphics, String label, float value,
+    private void renderSlider(GuiGraphicsExtractor guiGraphics, String label, float value,
                                float min, float max, int x, int y, int w,
                                int mouseX, int mouseY, int settingId) {
         boolean isHovered = mouseX >= x && mouseX <= x + w
@@ -261,7 +263,7 @@ public class ModelSettingsScreen extends Screen {
             guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, COLOR_ITEM_HOVER);
         }
 
-        guiGraphics.drawString(this.font, label, x + 4, y + 2, COLOR_TEXT);
+        guiGraphics.text(this.font, label, x + 4, y + 2, COLOR_TEXT);
 
         int sliderX = x + 4;
         int sliderY = y + 14;
@@ -279,69 +281,69 @@ public class ModelSettingsScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean triggerDoubleClick) {
+        if (event.button() == 0) {
             int y = listTop + 4;
             int itemX = panelX + 6;
             int itemW = PANEL_WIDTH - 12;
 
             y += 12;
 
-            if (isInToggleArea(mouseX, mouseY, itemX, y, itemW)) {
+            if (isInToggleArea(event.x(), event.y(), itemX, y, itemW)) {
                 config.eyeTrackingEnabled = !config.eyeTrackingEnabled;
                 return true;
             }
             y += ITEM_HEIGHT + ITEM_SPACING;
 
-            if (isInSliderArea(mouseX, mouseY, itemX, y, itemW)) {
+            if (isInSliderArea(event.x(), event.y(), itemX, y, itemW)) {
                 draggingSlider = SETTING_EYE_MAX_ANGLE;
-                updateSliderValue(mouseX, itemX, itemW);
+                updateSliderValue(event.x(), itemX, itemW);
                 return true;
             }
             y += ITEM_HEIGHT + ITEM_SPACING;
 
             y += 4 + 8 + 12;
 
-            if (isInSliderArea(mouseX, mouseY, itemX, y, itemW)) {
+            if (isInSliderArea(event.x(), event.y(), itemX, y, itemW)) {
                 draggingSlider = SETTING_MODEL_SCALE;
-                updateSliderValue(mouseX, itemX, itemW);
+                updateSliderValue(event.x(), itemX, itemW);
                 return true;
             }
             y += ITEM_HEIGHT + ITEM_SPACING;
 
             y += 4 + 8 + 12;
 
-            if (isInSliderArea(mouseX, mouseY, itemX, y, itemW)) {
+            if (isInSliderArea(event.x(), event.y(), itemX, y, itemW)) {
                 draggingSlider = SETTING_HELD_ITEM_SCALE;
-                updateSliderValue(mouseX, itemX, itemW);
+                updateSliderValue(event.x(), itemX, itemW);
                 return true;
             }
 
-            if (handleQuickSlotClick(mouseX, mouseY, itemX, itemW)) {
+            if (handleQuickSlotClick(event.x(), event.y(), itemX, itemW)) {
                 return true;
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, triggerDoubleClick);
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (button == 0 && draggingSlider >= 0) {
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        if (event.button() == 0 && draggingSlider >= 0) {
             int itemX = panelX + 6;
             int itemW = PANEL_WIDTH - 12;
-            updateSliderValue(mouseX, itemX, itemW);
+            updateSliderValue(event.x(), itemX, itemW);
             return true;
         }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        return super.mouseDragged(event, dragX, dragY);
     }
 
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0 && draggingSlider >= 0) {
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (event.button() == 0 && draggingSlider >= 0) {
             draggingSlider = -1;
             return true;
         }
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(event);
     }
 
     private void updateSliderValue(double mouseX, int itemX, int itemW) {
@@ -376,17 +378,17 @@ public class ModelSettingsScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) {
+    public boolean keyPressed(KeyEvent event) {
+        if (event.key() == 256) {
             this.onClose();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override
     public void onClose() {
-        Minecraft.getInstance().setScreen(parentScreen);
+        Minecraft.getInstance().gui.setScreen(parentScreen);
     }
 
     @Override

@@ -58,7 +58,10 @@ public class ConfigData {
     public float physicsMaxLinearVelocity = 20.0f;
     public float physicsMaxAngularVelocity = 20.0f;
     public boolean physicsJointsEnabled = true;
-    public boolean physicsKinematicFilter = true;
+    public boolean physicsKinematicFilter = false;
+    public boolean physicsCollisionEnabled = true;
+    /** 0=STRICT, 1=STABLE(默认), 2=RELAXED */
+    public int physicsCollisionStabilityMode = 1;
     public boolean physicsDebugLog = false;
     public int maxPhysicsModelsPerFrame = 10;
     public float physicsLodMaxDistance = 24.0f;

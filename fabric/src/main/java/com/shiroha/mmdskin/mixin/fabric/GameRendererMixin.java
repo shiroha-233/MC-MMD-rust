@@ -1,12 +1,8 @@
-/** 文件职责：接管舞台 FOV、相机 Roll 和第一人称拾取校正。 */
+/** 文件职责：第一人称拾取校正（26.2 中 pick 迁至 Minecraft，FOV 迁至 Camera）。 */
 package com.shiroha.mmdskin.mixin.fabric;
 
-import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.client.MmdClientRenderRuntime;
-import com.shiroha.mmdskin.stage.client.camera.MMDCameraController;
-import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ItemFrame;
@@ -22,18 +18,9 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(GameRenderer.class)
+@Mixin(Minecraft.class)
 public abstract class GameRendererMixin {
-    @Inject(method = "getFov", at = @At("RETURN"), cancellable = true)
-    private void onGetFov(Camera camera, float partialTick, boolean useFovSetting, CallbackInfoReturnable<Float> cir) {
-        MMDCameraController controller = MMDCameraController.getInstance();
-        if (controller.isActive()) {
-            cir.setReturnValue(controller.getCameraFov());
-        }
-    }
-
     @Inject(method = "pick", at = @At("RETURN"), require = 0)
     private void mmdskin$adjustPickResult(float partialTick, CallbackInfo ci) {
         Minecraft mc = Minecraft.getInstance();
@@ -47,7 +34,7 @@ public abstract class GameRendererMixin {
             return;
         }
 
-        Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
+        Vec3 cameraPos = mc.gameRenderer.mainCamera().position();
         Vec3 viewDir = player.getViewVector(partialTick);
         if (viewDir.lengthSqr() < 1.0E-6) {
             return;

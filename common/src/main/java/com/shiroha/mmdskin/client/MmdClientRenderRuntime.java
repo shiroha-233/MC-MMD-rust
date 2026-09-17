@@ -207,6 +207,8 @@ public final class MmdClientRenderRuntime implements AutoCloseable {
                 ConfigManager.getPhysicsMaxAngularVelocity(),
                 ConfigManager.isPhysicsJointsEnabled(),
                 ConfigManager.isPhysicsKinematicFilter(),
+                ConfigManager.isPhysicsCollisionEnabled(),
+                ConfigManager.getPhysicsCollisionStabilityMode(),
                 ConfigManager.isPhysicsDebugLog());
     }
 

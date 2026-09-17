@@ -72,6 +72,7 @@ final class NativeBindings {
                                         int maxSubstepCount, float inertiaStrength,
                                         float maxLinearVelocity, float maxAngularVelocity,
                                         boolean jointsEnabled, boolean kinematicFilter,
+                                        boolean collisionEnabled, int collisionStabilityMode,
                                         boolean debugLog);
 
     static native boolean IsMaterialVisible(long modelHandle, int materialIndex);

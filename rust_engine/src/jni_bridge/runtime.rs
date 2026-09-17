@@ -58,6 +58,12 @@ impl NativeRuntime {
         Ok(self.state.write()?.models.remove(&handle).is_some())
     }
 
+    /// 收集当前全部已注册模型的快照（Arc 克隆，避免跨读锁持有迭代）。
+    /// 供配置变更等需要遍历所有模型的 JNI 入口使用。
+    pub(crate) fn models_snapshot(&self) -> BridgeResult<Vec<Arc<Mutex<MmdModel>>>> {
+        Ok(self.state.read()?.models.values().cloned().collect())
+    }
+
     pub(crate) fn register_animation(
         &self,
         animation: VmdAnimation,

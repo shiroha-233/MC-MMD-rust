@@ -4,8 +4,10 @@ package com.shiroha.mmdskin.ui.selector;
 import com.shiroha.mmdskin.config.UIConstants;
 import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
@@ -81,49 +83,49 @@ public final class MobReplacementPickerScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void extractBackground(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick) {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick) {
         updateLayout();
         updateHoverState(mouseX, mouseY);
         updateScrollAnimation();
 
         drawFrame(guiGraphics);
         drawModelList(guiGraphics);
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        super.extractRenderState(guiGraphics, mouseX, mouseY, partialTick);
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0) {
-            return super.mouseClicked(mouseX, mouseY, button);
+    public boolean mouseClicked(MouseButtonEvent event, boolean triggerDoubleClick) {
+        if (event.button() != 0) {
+            return super.mouseClicked(event, triggerDoubleClick);
         }
-        if (super.mouseClicked(mouseX, mouseY, button)) {
+        if (super.mouseClicked(event, triggerDoubleClick)) {
             return true;
         }
-        if (layout.refreshButton.contains(mouseX, mouseY)) {
+        if (layout.refreshButton.contains(event.x(), event.y())) {
             refreshModels();
             return true;
         }
-        if (layout.doneButton.contains(mouseX, mouseY) && selectedModel != null) {
+        if (layout.doneButton.contains(event.x(), event.y()) && selectedModel != null) {
             applySelection();
             return true;
         }
-        if (layout.defaultButton.contains(mouseX, mouseY)) {
+        if (layout.defaultButton.contains(event.x(), event.y())) {
             applyDefault();
             return true;
         }
-        if (layout.cancelButton.contains(mouseX, mouseY)) {
+        if (layout.cancelButton.contains(event.x(), event.y())) {
             onClose();
             return true;
         }
-        if (layout.listBox.contains(mouseX, mouseY) && hoveredIndex >= 0 && hoveredIndex < filteredModels.size()) {
+        if (layout.listBox.contains(event.x(), event.y()) && hoveredIndex >= 0 && hoveredIndex < filteredModels.size()) {
             selectedModel = filteredModels.get(hoveredIndex);
             return true;
         }
-        return layout.panel.contains(mouseX, mouseY);
+        return layout.panel.contains(event.x(), event.y());
     }
 
     @Override
@@ -136,24 +138,24 @@ public final class MobReplacementPickerScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) {
+    public boolean keyPressed(KeyEvent event) {
+        if (event.key() == 256) {
             onClose();
             return true;
         }
-        if (keyCode == 257 || keyCode == 335) {
+        if (event.key() == 257 || event.key() == 335) {
             if (selectedModel != null) {
                 applySelection();
                 return true;
             }
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override
     public void onClose() {
         if (this.minecraft != null) {
-            this.minecraft.setScreen(parent);
+            this.minecraft.gui.setScreen(parent);
         }
     }
 
@@ -254,13 +256,13 @@ public final class MobReplacementPickerScreen extends Screen {
         }
     }
 
-    private void drawFrame(GuiGraphics guiGraphics) {
+    private void drawFrame(GuiGraphicsExtractor guiGraphics) {
         TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
         TranslucentTrayChrome.drawPanel(guiGraphics, layout.panel.x, layout.panel.y, layout.panel.w, layout.panel.h);
 
-        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
-        guiGraphics.drawString(this.font, shorten(targetTitle.getString(), 24), layout.header.x, layout.header.y + 11, TranslucentTrayChrome.SUBTITLE_TEXT, false);
-        guiGraphics.drawString(this.font, buildStatusText(), layout.header.x, layout.header.y + 21, TranslucentTrayChrome.DETAIL_TEXT, false);
+        guiGraphics.text(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
+        guiGraphics.text(this.font, shorten(targetTitle.getString(), 24), layout.header.x, layout.header.y + 11, TranslucentTrayChrome.SUBTITLE_TEXT, false);
+        guiGraphics.text(this.font, buildStatusText(), layout.header.x, layout.header.y + 21, TranslucentTrayChrome.DETAIL_TEXT, false);
 
         drawSearchBoxBackplate(guiGraphics);
         drawButton(guiGraphics, layout.refreshButton, Component.translatable("gui.mmdskin.refresh").getString(),
@@ -273,18 +275,18 @@ public final class MobReplacementPickerScreen extends Screen {
                 hoveredButton == ButtonTarget.CANCEL, true);
     }
 
-    private void drawSearchBoxBackplate(GuiGraphics guiGraphics) {
+    private void drawSearchBoxBackplate(GuiGraphicsExtractor guiGraphics) {
         boolean focused = searchBox != null && searchBox.isFocused();
         int fill = focused ? 0x30FFFFFF : TranslucentTrayChrome.LIST_BACKGROUND;
         guiGraphics.fill(layout.searchBox.x, layout.searchBox.y,
                 layout.searchBox.x + layout.searchBox.w, layout.searchBox.y + layout.searchBox.h, fill);
     }
 
-    private void drawModelList(GuiGraphics guiGraphics) {
+    private void drawModelList(GuiGraphicsExtractor guiGraphics) {
         UiRect list = layout.listBox;
         TranslucentTrayChrome.fillListArea(guiGraphics, list.x, list.y, list.w, list.h);
         if (filteredModels.isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, "-", list.centerX(), list.centerY() - 4, TranslucentTrayChrome.DIM_TEXT);
+            guiGraphics.centeredText(this.font, "-", list.centerX(), list.centerY() - 4, TranslucentTrayChrome.DIM_TEXT);
             return;
         }
 
@@ -303,14 +305,14 @@ public final class MobReplacementPickerScreen extends Screen {
             boolean hovered = i == hoveredIndex;
             guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT,
                     TranslucentTrayChrome.cardBackground(selected, hovered));
-            guiGraphics.drawString(this.font, shorten(modelName, 24), list.x + 7, y + 4, TranslucentTrayChrome.BODY_TEXT, false);
+            guiGraphics.text(this.font, shorten(modelName, 24), list.x + 7, y + 4, TranslucentTrayChrome.BODY_TEXT, false);
             y += CARD_HEIGHT + CARD_GAP;
         }
         guiGraphics.disableScissor();
         TranslucentTrayChrome.drawScrollbar(guiGraphics, list.x + list.w - 3, list.y, list.y + list.h, animatedScroll, maxScroll());
     }
 
-    private void drawButton(GuiGraphics guiGraphics, UiRect rect, String text, boolean hovered, boolean enabled) {
+    private void drawButton(GuiGraphicsExtractor guiGraphics, UiRect rect, String text, boolean hovered, boolean enabled) {
         TranslucentTrayChrome.drawButton(guiGraphics, this.font, rect.x, rect.y, rect.w, rect.h, text, hovered, enabled);
     }
 
@@ -372,14 +374,14 @@ public final class MobReplacementPickerScreen extends Screen {
         }
         currentValue = selectedModel;
         selectionConsumer.accept(selectedModel);
-        Minecraft.getInstance().setScreen(parent);
+        Minecraft.getInstance().gui.setScreen(parent);
     }
 
     private void applyDefault() {
         currentValue = UIConstants.DEFAULT_MODEL_NAME;
         selectedModel = null;
         selectionConsumer.accept(UIConstants.DEFAULT_MODEL_NAME);
-        Minecraft.getInstance().setScreen(parent);
+        Minecraft.getInstance().gui.setScreen(parent);
     }
 
     private String buildStatusText() {

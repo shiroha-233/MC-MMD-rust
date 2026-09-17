@@ -2,11 +2,11 @@
 package com.shiroha.mmdskin.client.draw;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 
 public interface EntityBaseRenderBridge {
     void mmdskin$renderEntityBase(EntityRenderState state, PoseStack poseStack,
-                                  MultiBufferSource buffers, int packedLight);
+                                  SubmitNodeCollector collector, CameraRenderState camera);
 }
-

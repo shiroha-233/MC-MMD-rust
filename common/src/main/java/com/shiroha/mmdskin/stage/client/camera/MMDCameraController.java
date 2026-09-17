@@ -256,8 +256,8 @@ public class MMDCameraController {
 
         if (cinematic) {
             Minecraft mc = Minecraft.getInstance();
-            this.previousHideGui = mc.options.hideGui;
-            mc.options.hideGui = true;
+            this.previousHideGui = mc.gui.hud.isHidden();
+            if (!mc.gui.hud.isHidden()) { mc.gui.hud.toggle(); }
         }
 
         this.modelHandle = modelHandle;
@@ -291,7 +291,7 @@ public class MMDCameraController {
         audioPlayer.cleanup();
 
         if (cinematicMode) {
-            Minecraft.getInstance().options.hideGui = previousHideGui;
+            if (Minecraft.getInstance().gui.hud.isHidden() != previousHideGui) { Minecraft.getInstance().gui.hud.toggle(); }
         }
 
         clearLocalPlayerStageFlags();
@@ -347,7 +347,7 @@ public class MMDCameraController {
         if (wasPlaying) {
             audioPlayer.cleanup();
             if (cinematicMode) {
-                Minecraft.getInstance().options.hideGui = previousHideGui;
+                if (Minecraft.getInstance().gui.hud.isHidden() != previousHideGui) { Minecraft.getInstance().gui.hud.toggle(); }
             }
             clearLocalPlayerStageFlags();
             restoreModelState();
@@ -393,13 +393,13 @@ public class MMDCameraController {
     }
 
     private void computeIntroAndStandby(Minecraft mc) {
-        if (mc.gameRenderer != null && mc.gameRenderer.getMainCamera() != null) {
-            var cam = mc.gameRenderer.getMainCamera();
-            introStartX = cam.getPosition().x;
-            introStartY = cam.getPosition().y;
-            introStartZ = cam.getPosition().z;
-            introStartPitch = cam.getXRot();
-            introStartYaw = cam.getYRot();
+        if (mc.gameRenderer != null && mc.gameRenderer.mainCamera() != null) {
+            var cam = mc.gameRenderer.mainCamera();
+            introStartX = cam.position().x;
+            introStartY = cam.position().y;
+            introStartZ = cam.position().z;
+            introStartPitch = cam.xRot();
+            introStartYaw = cam.yRot();
         } else if (mc.player != null) {
             introStartX = mc.player.getX();
             introStartY = mc.player.getEyeY();
@@ -472,7 +472,7 @@ public class MMDCameraController {
 
         if (cinematicMode && lastEscTimeNs != 0
                 && now - lastEscTimeNs >= DOUBLE_ESC_WINDOW_NS) {
-            Minecraft.getInstance().options.hideGui = true;
+            if (!Minecraft.getInstance().gui.hud.isHidden()) { Minecraft.getInstance().gui.hud.toggle(); }
             lastEscTimeNs = 0;
         }
 
@@ -559,14 +559,14 @@ public class MMDCameraController {
         if (state == StageState.INACTIVE) return;
         Minecraft mc = Minecraft.getInstance();
 
-        if (mc.screen instanceof PauseScreen) {
-            mc.setScreen(null);
+        if (mc.gui.screen() instanceof PauseScreen) {
+            mc.gui.setScreen(null);
             return;
         }
 
-        if (mc.screen != null) return;
+        if (mc.gui.screen() != null) return;
 
-        long window = mc.getWindow().getWindow();
+        long window = mc.getWindow().handle();
         boolean escNow = org.lwjgl.glfw.GLFW.glfwGetKey(window, org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
 
         if (escNow && !escWasPressed) {
@@ -578,10 +578,10 @@ public class MMDCameraController {
                 } else {
                     lastEscTimeNs = now;
                     if (cinematicMode) {
-                        mc.options.hideGui = previousHideGui;
+                        if (mc.gui.hud.isHidden() != previousHideGui) { mc.gui.hud.toggle(); }
                     }
                     if (mc.gui != null) {
-                        mc.gui.setOverlayMessage(Component.translatable("gui.mmdskin.stage.esc_hint"), false);
+                        mc.gui.hud.setOverlayMessage(Component.translatable("gui.mmdskin.stage.esc_hint"), false);
                     }
                 }
             } else if (state == StageState.WATCHING) {
@@ -602,7 +602,7 @@ public class MMDCameraController {
             mc.mouseHandler.releaseMouse();
             mouseReleased = true;
             if (mc.gui != null) {
-                mc.gui.setOverlayMessage(Component.translatable("gui.mmdskin.stage.mouse_released"), false);
+                mc.gui.hud.setOverlayMessage(Component.translatable("gui.mmdskin.stage.mouse_released"), false);
             }
         }
     }
@@ -763,8 +763,8 @@ public class MMDCameraController {
 
         this.cinematicMode = com.shiroha.mmdskin.config.StageConfig.getInstance().cinematicMode;
         if (this.cinematicMode) {
-            this.previousHideGui = mc.options.hideGui;
-            mc.options.hideGui = true;
+            this.previousHideGui = mc.gui.hud.isHidden();
+            if (!mc.gui.hud.isHidden()) { mc.gui.hud.toggle(); }
         }
 
         this.lastTickTimeNs = System.nanoTime();
@@ -837,7 +837,7 @@ public class MMDCameraController {
         audioPlayer.cleanup();
 
         if (cinematicMode) {
-            Minecraft.getInstance().options.hideGui = previousHideGui;
+            if (Minecraft.getInstance().gui.hud.isHidden() != previousHideGui) { Minecraft.getInstance().gui.hud.toggle(); }
         }
 
         Minecraft mc = Minecraft.getInstance();
@@ -906,7 +906,7 @@ public class MMDCameraController {
         if (state == StageState.PLAYING) {
             audioPlayer.cleanup();
             if (cinematicMode) {
-                Minecraft.getInstance().options.hideGui = previousHideGui;
+                if (Minecraft.getInstance().gui.hud.isHidden() != previousHideGui) { Minecraft.getInstance().gui.hud.toggle(); }
             }
             clearLocalPlayerStageFlags();
             if (this.motionAnimHandle != 0) ANIMATIONS.deleteAnimation(this.motionAnimHandle);

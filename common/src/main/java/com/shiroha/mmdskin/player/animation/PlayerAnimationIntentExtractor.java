@@ -7,6 +7,7 @@ import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemUseAnimation;
 
@@ -114,8 +115,8 @@ public final class PlayerAnimationIntentExtractor {
     }
 
     private static boolean isHorselike(EntityType<?> type) {
-        return type == EntityType.HORSE || type == EntityType.DONKEY
-                || type == EntityType.MULE || type == EntityType.SKELETON_HORSE
-                || type == EntityType.ZOMBIE_HORSE;
+        return type == EntityTypes.HORSE || type == EntityTypes.DONKEY
+                || type == EntityTypes.MULE || type == EntityTypes.SKELETON_HORSE
+                || type == EntityTypes.ZOMBIE_HORSE;
     }
 }

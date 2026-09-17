@@ -301,10 +301,11 @@ public final class NativePortAdapters {
         public void configure(boolean enabled, float gravityY, float physicsFps,
                               int maxSubstepCount, float inertiaStrength,
                               float maxLinearVelocity, float maxAngularVelocity,
-                              boolean jointsEnabled, boolean kinematicFilter, boolean debugLog) {
+                              boolean jointsEnabled, boolean kinematicFilter,
+                              boolean collisionEnabled, int collisionStabilityMode, boolean debugLog) {
             NativeBindings.SetPhysicsConfig(enabled, gravityY, physicsFps, maxSubstepCount,
                     inertiaStrength, maxLinearVelocity, maxAngularVelocity, jointsEnabled,
-                    kinematicFilter, debugLog);
+                    kinematicFilter, collisionEnabled, collisionStabilityMode, debugLog);
         }
 
         @Override
