@@ -1,5 +1,7 @@
 package com.shiroha.mmdskin.ui.network;
 
+import com.shiroha.mmdskin.player.sync.PlayerModelOverride;
+import com.shiroha.mmdskin.player.sync.PlayerModelOverrideRegistry;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -37,6 +39,14 @@ public class PlayerModelSyncManager {
     }
 
     public static String getPlayerModel(UUID playerUUID, String playerName, boolean isLocalPlayer) {
+        // 本地指定模型优先级最高：只改我自己屏幕上看到的画面，
+        // 不跟着他自选的模型，也不跟着自动下载回来的模型。
+        // 名字是主判断依据（名字相同就按同一个人处理），UUID 只作改名后的兜底。
+        PlayerModelOverride override = PlayerModelOverrideRegistry.findOverride(playerName, playerUUID);
+        if (override != null) {
+            return override.modelName();
+        }
+
         if (isLocalPlayer) {
 
             return ModelSelectorConfig.getInstance().getPlayerModel(playerName);

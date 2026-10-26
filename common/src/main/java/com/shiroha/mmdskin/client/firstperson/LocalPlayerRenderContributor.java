@@ -22,11 +22,11 @@ import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
-import net.minecraft.client.renderer.entity.state.PlayerRenderState;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import org.joml.Matrix4f;
 
 import java.util.Objects;
@@ -47,7 +47,7 @@ public final class LocalPlayerRenderContributor {
 
     public boolean contribute(Minecraft minecraft, Camera camera, float partialTick,
                               long frameId, float deltaSeconds, boolean compatibilityConflict,
-                              PoseStack worldPose, MultiBufferSource buffers) {
+                              PoseStack worldPose, SubmitNodeCollector buffers) {
         LocalPlayer player = minecraft.player;
         if (IrisCompatibility.isShadowPass()) {
             return false;
@@ -82,9 +82,9 @@ public final class LocalPlayerRenderContributor {
             } else if (prepared.leftVr()) {
                 MmdSkinRendererPlayerHelper.resetModelAnimationState(player, model);
             }
-            double x = state.x - camera.getPosition().x;
-            double y = state.y - camera.getPosition().y;
-            double z = state.z - camera.getPosition().z;
+            double x = state.x - camera.position().x;
+            double y = state.y - camera.position().y;
+            double z = state.z - camera.position().z;
             int packedLight = minecraft.getEntityRenderDispatcher().getPackedLightCoords(player, partialTick);
             Matrix4f matrix = new Matrix4f()
                     .translation((float) x, (float) y, (float) z)
@@ -104,7 +104,7 @@ public final class LocalPlayerRenderContributor {
                     transparent), lease);
             queued = true;
 
-            if (state instanceof PlayerRenderState playerState && worldPose != null && buffers != null) {
+            if (state instanceof AvatarRenderState playerState && worldPose != null && buffers != null) {
                 worldPose.pushPose();
                 try {
                     worldPose.translate(x, y, z);

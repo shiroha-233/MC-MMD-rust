@@ -18,7 +18,7 @@ public final class EntityModelSelection {
         Minecraft minecraft = Minecraft.getInstance();
         boolean local = minecraft.player != null && minecraft.player.getUUID().equals(player.getUUID());
         String selected = PlayerModelSyncManager.getPlayerModel(
-                player.getUUID(), player.getGameProfile().getName(), local);
+                player.getUUID(), player.getGameProfile().name(), local);
         if (selected == null || selected.isBlank() || UIConstants.DEFAULT_MODEL_NAME.equals(selected)) {
             return null;
         }

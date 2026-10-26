@@ -1,7 +1,17 @@
-// 根项目配置 - 保留构建基础设施与 Rust 引擎编译/复制
+// MC-MMD-rust —— Minecraft 26.3 移植版（Fabric 单模块）
+//
+// 相对 1.20.1 的关键变化（官方 Fabric 26.1 移植指南 + 实测）：
+//   * Loom 插件 id：fabric-loom  -> net.fabricmc.fabric-loom
+//   * 删掉 `mappings` 那行：26.1 起 Minecraft 未混淆，Mojang 也不再下发映射
+//   * modImplementation -> implementation
+//   * Java 21 -> 25
+//   * Gradle 8.11.1 -> 9.8.2（loom 1.19.3 要求 >= 9.8.0）
+//   * remapJar -> jar
+
 plugins {
-	id 'architectury-plugin' version '3.4-SNAPSHOT'
-	id 'dev.architectury.loom' version '1.10.455' apply false
+	id 'net.fabricmc.fabric-loom' version '1.19.3' apply false
+	// NeoForge 端：Architectury 没有 26.x 版本，改用官方 ModDevGradle。
+	id 'net.neoforged.moddev' version '2.0.148' apply false
 }
 
 def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
@@ -10,23 +20,20 @@ if (isWindows) {
 	System.setProperty('javax.net.ssl.trustStoreType', 'Windows-ROOT')
 }
 
-architectury {
-	minecraft = '1.21.5'
-}
-
 allprojects {
 	apply plugin: 'java'
-	apply plugin: 'architectury-plugin'
 
 	group = maven_group
-	version = '1.0.5-1.21.5-1'
-	
+	version = '1.0.7-26.3'
+
 	repositories {
-		maven { url = 'https://maven.architectury.dev/' }
 		maven { url = 'https://maven.fabricmc.net/' }
-		maven { url = 'https://maven.minecraftforge.net/' }
+		maven { url = 'https://maven.architectury.dev/' }
+		maven { url = 'https://maven.neoforged.net/releases/' }
 		maven { url = 'https://maven.shedaniel.me/' }
 		maven { url = 'https://maven.terraformersmc.com/' }
+		maven { url = 'https://maven.irisshaders.dev' }
+		maven { url = 'https://maven.ladysnake.org/releases' }
 		exclusiveContent {
 			forRepository {
 				maven {
@@ -46,35 +53,54 @@ allprojects {
 			filter { includeGroup 'maven.modrinth' }
 		}
 		mavenCentral()
+		maven { url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
+		maven { url = 'https://maven.aliyun.com/repository/public/' }
+		maven { url = 'https://repo.huaweicloud.com/repository/maven/' }
 	}
 
 	tasks.withType(JavaCompile).configureEach {
 		options.encoding = 'UTF-8'
-		options.release = 21
+		options.release = 25
+	}
+
+	// 原生库有两个来源：Gradle 的 copyRustNatives 任务写进
+	// <module>/build/generated/resources/mmdskin/natives/<平台>/，
+	// 而 CI 还会把同一批原生库 cp 到 common/src/main/resources/natives/<平台>/。
+	// common 的资源目录和上面那个生成目录同时挂在同一模块的 resources 上，
+	// 于是同一个相对路径出现两次：
+	//   * processResources（Copy 任务）-> 在 fabric/neoforge 的 build.gradle 里
+	//     单独设 DuplicatesStrategy.INCLUDE；
+	//   * sourcesJar（Jar 任务，直接打包 sourceSets 的**源**目录）-> 在这里统一设。
+	// 两份内容是同一个 cargo 产物，覆盖即可。
+	tasks.withType(Jar).configureEach {
+		duplicatesStrategy = DuplicatesStrategy.INCLUDE
 	}
 
 	java {
 		toolchain {
-			languageVersion = JavaLanguageVersion.of(21)
+			languageVersion = JavaLanguageVersion.of(25)
 		}
 		withSourcesJar()
 	}
 }
 
 subprojects {
-	apply plugin: 'dev.architectury.loom'
-
 	base {
 		archivesName = "mmdskin-${project.name}"
 	}
-	
-	loom {
-		silentMojangMappingsLicense()
-	}
-	
+}
+
+// Minecraft 依赖按平台拆开：
+//   * :fabric   —— Loom 插件，自己管 minecraft 依赖
+//   * :neoforge —— ModDevGradle 插件，自己管 minecraft + neoforge 依赖
+//                  （重复声明会与 moddev 的 artifact 打架，所以这里不加）
+project(':fabric') {
+	apply plugin: 'net.fabricmc.fabric-loom'
+
 	dependencies {
-		minecraft "com.mojang:minecraft:1.21.5"
-		mappings loom.officialMojangMappings()
+		minecraft "com.mojang:minecraft:${minecraft_version}"
+		// 26.x 是未混淆的 jar：不要写 `mappings loom.officialMojangMappings()`，
+		// Loom 会直接失败："Failed to find official mojang mappings for 26.3"。
 	}
 }
 
@@ -83,7 +109,8 @@ subprojects {
 // ============================================================================
 
 def rustEngineDir = file('rust_engine')
-def generatedNativeResourcesDir = file('common/build/generated/resources/mmdskin')
+def generatedNativeResourcesDir = file('fabric/build/generated/resources/mmdskin')
+def generatedNeoForgeNativeResourcesDir = file('neoforge/build/generated/resources/mmdskin')
 def rustReleaseDir = new File(rustEngineDir, 'target/release')
 def rustLibraryName = isWindows
 		? 'mmd_engine.dll'
@@ -127,9 +154,9 @@ task buildRustEngine {
 task copyRustNatives(type: Copy) {
 	dependsOn buildRustEngine
 	into generatedNativeResourcesDir
-	
+
 	def osName = System.getProperty('os.name').toLowerCase()
-	
+
 	if (osName.contains('windows')) {
 		from(rustReleaseDir) {
 			include 'mmd_engine.dll'
@@ -153,7 +180,34 @@ task copyRustNatives(type: Copy) {
 	}
 }
 
-project(':common').sourceSets.main.resources.srcDir(tasks.named('copyRustNatives'))
+// NeoForge 端需要同一份原生库：单独一个 Copy 任务（不能复用 fabric 那个，
+// 否则两个平台的 resources 会互相污染）。
+task copyRustNativesNeoForge(type: Copy) {
+	dependsOn buildRustEngine
+	into generatedNeoForgeNativeResourcesDir
+
+	def osName = System.getProperty('os.name').toLowerCase()
+
+	if (osName.contains('windows')) {
+		from(rustReleaseDir) {
+			include 'mmd_engine.dll'
+			into 'natives/windows-x64'
+		}
+	} else if (osName.contains('mac')) {
+		from(rustReleaseDir) {
+			include 'libmmd_engine.dylib'
+			into 'natives/macos-x64'
+		}
+	} else if (osName.contains('linux')) {
+		from(rustReleaseDir) {
+			include 'libmmd_engine.so'
+			into 'natives/linux-x64'
+		}
+	}
+}
+
+project(':fabric').sourceSets.main.resources.srcDir(tasks.named('copyRustNatives'))
+project(':neoforge').sourceSets.main.resources.srcDir(tasks.named('copyRustNativesNeoForge'))
 
 static String findCargo() {
     def isWin = System.getProperty('os.name').toLowerCase().contains('windows')

@@ -7,6 +7,7 @@ import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemUseAnimation;
 
@@ -68,8 +69,13 @@ public final class PlayerAnimationIntentExtractor {
             InteractionHand hand = player.getUsedItemHand();
             return actionFor(player.getItemInHand(hand), hand, true);
         }
-        if (player.swinging && player.swingingArm != null) {
-            return actionFor(player.getItemInHand(player.swingingArm), player.swingingArm, false);
+        // 26.3 起挥动状态改由 LivingEntity.SwingState 维护，挥动手通过 getCurrentSwing() 获取
+        if (player.isSwinging()) {
+            var swing = player.getCurrentSwing();
+            if (swing != null) {
+                InteractionHand hand = swing.hand();
+                return actionFor(player.getItemInHand(hand), hand, false);
+            }
         }
         return MmdAnimationIntent.Action.clear();
     }
@@ -114,8 +120,8 @@ public final class PlayerAnimationIntentExtractor {
     }
 
     private static boolean isHorselike(EntityType<?> type) {
-        return type == EntityType.HORSE || type == EntityType.DONKEY
-                || type == EntityType.MULE || type == EntityType.SKELETON_HORSE
-                || type == EntityType.ZOMBIE_HORSE;
+        return type == EntityTypes.HORSE || type == EntityTypes.DONKEY
+                || type == EntityTypes.MULE || type == EntityTypes.SKELETON_HORSE
+                || type == EntityTypes.ZOMBIE_HORSE;
     }
 }

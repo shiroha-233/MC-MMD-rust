@@ -2,6 +2,7 @@
 package com.shiroha.mmdskin.neoforge.register;
 
 import com.shiroha.mmdskin.bonesync.BoneSyncNetworkHandler;
+import com.shiroha.mmdskin.distrib.ModelDistributionClient;
 import com.shiroha.mmdskin.neoforge.network.MmdSkinNetworkPack;
 import com.shiroha.mmdskin.player.sync.PlayerMorphSyncService;
 import com.shiroha.mmdskin.ui.network.ActionWheelNetworkHandler;
@@ -11,61 +12,61 @@ import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import com.shiroha.mmdskin.ui.network.StageNetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.neoforged.neoforge.network.PacketDistributor;
 
 final class NeoForgeClientNetworkBindings {
-    private boolean registered;
-
-    void register() {
-        if (registered) {
-            return;
-        }
-        registered = true;
-
-        Minecraft minecraft = Minecraft.getInstance();
-
+    void register(Minecraft minecraft) {
         ActionWheelNetworkHandler.getInstance().setNetworkSender(animId -> {
             LocalPlayer player = minecraft.player;
             if (player != null) {
-                PacketDistributor.sendToServer(MmdSkinNetworkPack.withAnimId(NetworkOpCode.CUSTOM_ANIM, player.getUUID(), animId));
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.CUSTOM_ANIM, player.getUUID(), animId);
             }
         });
 
         ActionWheelNetworkHandler.getInstance().setAnimStopSender(() -> {
             LocalPlayer player = minecraft.player;
             if (player != null) {
-                PacketDistributor.sendToServer(MmdSkinNetworkPack.withArg(NetworkOpCode.RESET_PHYSICS, player.getUUID(), 0));
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.RESET_PHYSICS, player.getUUID(), 0);
             }
         });
 
         PlayerMorphSyncService.getInstance().setMorphSender(morphName -> {
             LocalPlayer player = minecraft.player;
             if (player != null) {
-                PacketDistributor.sendToServer(MmdSkinNetworkPack.withAnimId(NetworkOpCode.MORPH_SYNC, player.getUUID(), morphName));
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.MORPH_SYNC, player.getUUID(), morphName);
             }
         });
 
         ModelSelectorNetworkHandler.getInstance().setNetworkSender(modelName -> {
             LocalPlayer player = minecraft.player;
             if (player != null) {
-                PacketDistributor.sendToServer(MmdSkinNetworkPack.withAnimId(NetworkOpCode.MODEL_SELECT, player.getUUID(), modelName));
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.MODEL_SELECT, player.getUUID(), modelName);
             }
         });
 
         PlayerModelSyncManager.setNetworkBroadcaster((playerUUID, modelName) ->
-            PacketDistributor.sendToServer(MmdSkinNetworkPack.withAnimId(NetworkOpCode.MODEL_SELECT, playerUUID, modelName)));
+            MmdSkinNetworkPack.sendToServer(NetworkOpCode.MODEL_SELECT, playerUUID, modelName));
 
         StageNetworkHandler.setStageMultiSender(payload -> {
             LocalPlayer player = minecraft.player;
             if (player != null) {
-                PacketDistributor.sendToServer(MmdSkinNetworkPack.withAnimId(NetworkOpCode.STAGE_MULTI, player.getUUID(), payload));
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.STAGE_MULTI, player.getUUID(), payload);
             }
         });
 
         BoneSyncNetworkHandler.setNetworkSender(payload -> {
             LocalPlayer player = minecraft.player;
             if (player != null) {
-                PacketDistributor.sendToServer(MmdSkinNetworkPack.withBinary(NetworkOpCode.BONE_SYNC, player.getUUID(), payload));
+                MmdSkinNetworkPack.sendBinaryToServer(NetworkOpCode.BONE_SYNC, player.getUUID(), payload);
+            }
+        });
+
+        // 模型分发：客户端向服务器请求某个模型。
+        // 断点续传靠"首个未完成的文件相对路径"表达，格式 "模型名|相对路径"。
+        ModelDistributionClient.setRequester((modelName, firstIncompletePath) -> {
+            LocalPlayer player = minecraft.player;
+            if (player != null) {
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.DISTRIB_REQUEST, player.getUUID(),
+                        modelName + "|" + (firstIncompletePath == null ? "" : firstIncompletePath));
             }
         });
     }

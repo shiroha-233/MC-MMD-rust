@@ -27,9 +27,23 @@ public class ConfigData {
     public boolean lightingEnabled = true;
     public boolean gpuSkinningEnabled = true;
     public int modelPoolMaxCount = 20;
+    /** 自动下载附近玩家正在使用的模型（仅限房主授权分发的模型）。 */
+    public boolean autoDownloadNearbyModels = false;
+
+    /** 自动下载的半径（格）。 */
+    public int autoDownloadRadius = 48;
+
     public boolean performanceProfilingEnabled = false;
     public int performanceLogIntervalSeconds = 5;
-    public int maxVisibleModelsPerFrame = 10;
+    public int maxVisibleModelsPerFrame = 20;
+    /**
+     * 加载前距离闸门（格）。
+     *
+     * <p>超过这个距离且模型<b>尚未加载</b>时不触发加载（PMX 解析 + 独立 Bullet 世界 +
+     * 4 个 GPU buffer 全部省掉）；已加载的模型继续正常渲染，走近时不会闪回原版皮肤。
+     * 0 = 不限制（闸门关闭，等价于旧行为）。
+     */
+    public float modelLoadMaxDistance = 64.0f;
     public float animationLodMediumDistance = 24.0f;
     public float animationLodFarDistance = 48.0f;
     public int animationLodMediumUpdateInterval = 2;
@@ -66,6 +80,17 @@ public class ConfigData {
     public boolean firstPersonModelEnabled = false;
     public float firstPersonCameraForwardOffset = 0.0f;
     public float firstPersonCameraVerticalOffset = 0.0f;
+
+    public boolean ragdollEnabled = true;
+    public String corpseKeepMode = "NEARBY";
+    public double corpseKeepRadius = 48.0;
+    public long corpseKeepSeconds = 60;
+    public int maxCorpses = 2;
+    public float ragdollJointStrength = 1.35f;
+    public boolean hideDeathPoof = true;
+    public boolean hijackDeathScreen = true;
+    public float ragdollDeathAnimSeconds = 0.0f;
+    public int ragdollPhysicsKeepSeconds = 60;
 
     public int textureCacheBudgetMB = 256;
     public boolean debugHudEnabled = false;
@@ -155,6 +180,10 @@ public class ConfigData {
         modelPoolMaxCount = Math.max(1, modelPoolMaxCount);
         performanceLogIntervalSeconds = Math.max(1, performanceLogIntervalSeconds);
         maxVisibleModelsPerFrame = Math.max(1, maxVisibleModelsPerFrame);
+        // 0 = 不限制（闸门关闭）；NaN 必须单独挡掉，否则距离比较恒不成立（等于永不加载）。
+        modelLoadMaxDistance = Float.isFinite(modelLoadMaxDistance)
+                ? Math.max(0.0f, modelLoadMaxDistance)
+                : 64.0f;
         animationLodMediumDistance = Math.max(0.0f, animationLodMediumDistance);
         animationLodFarDistance = Math.max(animationLodMediumDistance, animationLodFarDistance);
         animationLodMediumUpdateInterval = Math.max(1, animationLodMediumUpdateInterval);
@@ -173,7 +202,38 @@ public class ConfigData {
         toonOutlineB = clamp(toonOutlineB, 0.0f, 1.0f);
         maxPhysicsModelsPerFrame = Math.max(1, maxPhysicsModelsPerFrame);
         physicsLodMaxDistance = Math.max(0.0f, physicsLodMaxDistance);
+        corpseKeepMode = normalizeCorpseKeepMode(corpseKeepMode);
+        // 上下限与 1.20.1 的 ConfigData 归一化保持一致。26.3 移植时这些上限被放开了：
+        // 每具尸体 = 1 个 native 模型实例 + 1 个 Bullet world（16 刚体 + 15 约束）
+        // + 持续的渲染与物理步进，没有上限时用户一个手改的配置文件就能吃满内存/CPU。
+        //
+        // NaN 要单独挡掉：clamp 是 Math.max(min, Math.min(max, v))，Math.min(256, NaN) = NaN，
+        // NaN 会原样穿过去 —— corpseKeepRadius = NaN 时距离逐出恒不成立（尸体永不逐出）。
+        corpseKeepRadius = Double.isFinite(corpseKeepRadius)
+                ? clamp((float) corpseKeepRadius, 8.0f, 256.0f)
+                : 48.0;
+        corpseKeepSeconds = Math.max(5L, corpseKeepSeconds);
+        maxCorpses = Math.max(1, Math.min(64, maxCorpses));
+        ragdollJointStrength = Float.isFinite(ragdollJointStrength)
+                ? clamp(ragdollJointStrength, 0.3f, 4.0f)
+                : 1.35f;
+        ragdollDeathAnimSeconds = Float.isFinite(ragdollDeathAnimSeconds)
+                ? clamp(ragdollDeathAnimSeconds, 0.0f, 5.0f)
+                : 0.0f;
+        ragdollPhysicsKeepSeconds = Math.max(0, Math.min(3600, ragdollPhysicsKeepSeconds));
         vrArmIKStrength = !Float.isFinite(vrArmIKStrength) ? 1.0f : clamp(vrArmIKStrength, 0.0f, 1.0f);
+    }
+
+    /** 尸体保留模式只接受三种取值，未知值回退到 NEARBY。 */
+    private static String normalizeCorpseKeepMode(String mode) {
+        if (mode == null) {
+            return "NEARBY";
+        }
+        String normalized = mode.trim().toUpperCase(java.util.Locale.ROOT);
+        return switch (normalized) {
+            case "NEARBY", "SECONDS", "FOREVER" -> normalized;
+            default -> "NEARBY";
+        };
     }
 
     private static float clamp(float value, float min, float max) {
@@ -191,6 +251,22 @@ public class ConfigData {
         changed |= root.remove("mmdShaderEnabled") != null;
         if (!root.has("gpuSkinningEnabled")) {
             root.addProperty("gpuSkinningEnabled", true);
+            changed = true;
+        }
+        if (!root.has("modelLoadMaxDistance")) {
+            // 26.3 性能优化新增的"加载前距离闸门"。旧配置补一个默认值：
+            // 取值与代码里的默认值一致（行为不变），只是让这个开关在配置文件里看得见、可调。
+            root.addProperty("modelLoadMaxDistance", 64.0);
+            changed = true;
+        }
+        if (!root.has("autoDownloadNearbyModels")) {
+            // 1.20.1 的「模型自动下载」配置项在 26.3 落地。旧配置补默认值：
+            // 默认关闭（与 1.20.1 一致），只是让这两个键在配置文件里看得见、可调。
+            root.addProperty("autoDownloadNearbyModels", false);
+            changed = true;
+        }
+        if (!root.has("autoDownloadRadius")) {
+            root.addProperty("autoDownloadRadius", 48);
             changed = true;
         }
         changed |= root.remove("gpuMorphEnabled") != null;

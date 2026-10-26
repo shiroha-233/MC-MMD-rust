@@ -41,6 +41,13 @@ public final class YsmCompat {
         return BINDINGS.booleanValue(BINDINGS.disableSelfHands());
     }
 
+    /**
+     * YSM 的 NeoForge 侧绑定全部走反射：YSM 的混淆类名每个版本都会变，
+     * 绑定失败时静默回退到原版 / MMD 路由（不崩游戏）。
+     *
+     * <p>26.3 适配：实体附件的读取走 {@code Entity.getData(AttachmentType)}
+     * （NeoForge 26.3 把 {@code getData} 放在了 {@code AttachmentHolder} 基类上）。
+     */
     private record Bindings(
             AttachmentType<?> attachmentType,
             Method isModelActive,
@@ -52,7 +59,9 @@ public final class YsmCompat {
         private static final Bindings UNAVAILABLE = new Bindings(null, null, null, null, null, null);
 
         private static Bindings load() {
-            if (!ModList.get().isLoaded("yes_steve_model")) {
+            // ModList 在 ModList 初始化之前 get() 会返回 null，这里要防一手。
+            ModList modList = ModList.get();
+            if (modList == null || !modList.isLoaded("yes_steve_model")) {
                 return UNAVAILABLE;
             }
             try {

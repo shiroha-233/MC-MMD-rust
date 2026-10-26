@@ -6,7 +6,7 @@ import com.shiroha.mmdskin.stage.client.viewmodel.StageLobbyViewModel;
 import com.shiroha.mmdskin.stage.domain.model.StageMemberState;
 import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.util.Mth;
 
 import java.util.List;
@@ -99,7 +99,7 @@ final class StageAssignPanel {
         clampScrolls();
     }
 
-    void render(GuiGraphics graphics, int mouseX, int mouseY) {
+    void render(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         hoveredMemberIndex = -1;
         hoveredMotionIndex = -1;
         hoveredInviteButton = false;
@@ -159,11 +159,11 @@ final class StageAssignPanel {
         return false;
     }
 
-    private void renderHeader(GuiGraphics graphics, int mouseX, int mouseY) {
-        graphics.drawString(font, StageScreenUtils.wb("session.section"), panelX + PANEL_PADDING, panelY + 8, COLOR_ACCENT, false);
+    private void renderHeader(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        graphics.text(font, StageScreenUtils.wb("session.section"), panelX + PANEL_PADDING, panelY + 8, COLOR_ACCENT, false);
         if (facade.isSessionMember()) {
             String stats = StageScreenUtils.wb("guest.members.short", memberViews.size());
-            graphics.drawString(font, stats, panelX + PANEL_WIDTH - PANEL_PADDING - font.width(stats), panelY + 8, COLOR_TEXT_MUTED, false);
+            graphics.text(font, stats, panelX + PANEL_WIDTH - PANEL_PADDING - font.width(stats), panelY + 8, COLOR_TEXT_MUTED, false);
         } else {
             hoveredInviteButton = isRectHovered(mouseX, mouseY, inviteButtonX, inviteButtonY, INVITE_BUTTON_WIDTH, BUTTON_HEIGHT);
             graphics.fill(
@@ -173,13 +173,13 @@ final class StageAssignPanel {
                     inviteButtonY + BUTTON_HEIGHT,
                     hoveredInviteButton ? COLOR_ACTION_HOVER : COLOR_ACTION
             );
-            graphics.drawCenteredString(font, StageScreenUtils.wb("host.invite_all.short"),
+            graphics.centeredText(font, StageScreenUtils.wb("host.invite_all.short"),
                     inviteButtonX + INVITE_BUTTON_WIDTH / 2, inviteButtonY + 4, TranslucentTrayChrome.TITLE_TEXT);
         }
         TranslucentTrayChrome.drawSeparator(graphics, panelX + PANEL_PADDING, listTop - 6, PANEL_WIDTH - PANEL_PADDING * 2);
     }
 
-    private void renderMemberList(GuiGraphics graphics, int mouseX, int mouseY) {
+    private void renderMemberList(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         graphics.enableScissor(panelX, listTop, panelX + PANEL_WIDTH, listBottom);
         if (facade.isSessionMember()) {
             renderGuestMembers(graphics, mouseX, mouseY);
@@ -190,9 +190,9 @@ final class StageAssignPanel {
         drawScrollbar(graphics, listTop, listBottom, memberScroll, maxMemberScroll());
     }
 
-    private void renderGuestMembers(GuiGraphics graphics, int mouseX, int mouseY) {
+    private void renderGuestMembers(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         if (memberViews.isEmpty()) {
-            graphics.drawCenteredString(font, net.minecraft.network.chat.Component.translatable("gui.mmdskin.stage.waiting_host"),
+            graphics.centeredText(font, net.minecraft.network.chat.Component.translatable("gui.mmdskin.stage.waiting_host"),
                     panelX + PANEL_WIDTH / 2, listTop + 4, COLOR_TEXT_DIM);
             return;
         }
@@ -210,17 +210,17 @@ final class StageAssignPanel {
                 fillRow(graphics, y, COLOR_ROW);
             }
             String prefix = memberView.host() ? "HOST" : memberView.local() ? "YOU" : "GUEST";
-            graphics.drawString(font, StageScreenUtils.shorten(prefix + " " + memberView.name(), 17), panelX + PANEL_PADDING, y + 4, COLOR_TEXT, false);
+            graphics.text(font, StageScreenUtils.shorten(prefix + " " + memberView.name(), 17), panelX + PANEL_PADDING, y + 4, COLOR_TEXT, false);
             String state = guestStateText(memberView.state(), memberView.useHostCamera());
-            graphics.drawString(font, StageScreenUtils.shorten(state, 13),
+            graphics.text(font, StageScreenUtils.shorten(state, 13),
                     panelX + PANEL_WIDTH - PANEL_PADDING - font.width(StageScreenUtils.shorten(state, 13)),
                     y + 4, colorForState(memberView.state()), false);
         }
     }
 
-    private void renderHostMembers(GuiGraphics graphics, int mouseX, int mouseY) {
+    private void renderHostMembers(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         if (hostEntries.isEmpty()) {
-            graphics.drawCenteredString(font, StageScreenUtils.wb("host.empty.short"), panelX + PANEL_WIDTH / 2, listTop + 4, COLOR_TEXT_DIM);
+            graphics.centeredText(font, StageScreenUtils.wb("host.empty.short"), panelX + PANEL_WIDTH / 2, listTop + 4, COLOR_TEXT_DIM);
             return;
         }
         for (int i = 0; i < hostEntries.size(); i++) {
@@ -236,16 +236,16 @@ final class StageAssignPanel {
             } else {
                 fillRow(graphics, y, COLOR_ROW);
             }
-            graphics.drawString(font, StageScreenUtils.shorten(entry.name(), 17), panelX + PANEL_PADDING, y + 4,
+            graphics.text(font, StageScreenUtils.shorten(entry.name(), 17), panelX + PANEL_PADDING, y + 4,
                     entry.nearby() ? COLOR_TEXT : COLOR_TEXT_MUTED, false);
             String action = hostActionText(entry);
-            graphics.drawString(font, StageScreenUtils.shorten(action, 11),
+            graphics.text(font, StageScreenUtils.shorten(action, 11),
                     panelX + PANEL_WIDTH - PANEL_PADDING - font.width(StageScreenUtils.shorten(action, 11)),
                     y + 4, colorForHostEntry(entry), false);
         }
     }
 
-    private void renderGuestMotionArea(GuiGraphics graphics, int mouseX, int mouseY) {
+    private void renderGuestMotionArea(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         TranslucentTrayChrome.drawSeparator(graphics, panelX + PANEL_PADDING, guestToggleY - 5, PANEL_WIDTH - PANEL_PADDING * 2);
 
         int toggleWidth = PANEL_WIDTH - PANEL_PADDING * 2;
@@ -262,12 +262,12 @@ final class StageAssignPanel {
         );
 
         if (!facade.isLocalCustomMotionEnabled()) {
-            graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.mmdskin.stage.local_motion_fallback"),
+            graphics.text(font, net.minecraft.network.chat.Component.translatable("gui.mmdskin.stage.local_motion_fallback"),
                     panelX + PANEL_PADDING, guestMotionTop, COLOR_TEXT_DIM, false);
             return;
         }
         if (motionFiles.isEmpty()) {
-            graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.mmdskin.stage.local_motion_empty"),
+            graphics.text(font, net.minecraft.network.chat.Component.translatable("gui.mmdskin.stage.local_motion_empty"),
                     panelX + PANEL_PADDING, guestMotionTop, COLOR_TEXT_DIM, false);
             return;
         }
@@ -287,21 +287,21 @@ final class StageAssignPanel {
                 fillRow(graphics, y, COLOR_ROW);
             }
             drawCheckbox(graphics, panelX + PANEL_PADDING, y + 4, facade.isLocalCustomMotionSelected(info.name));
-            graphics.drawString(font, StageScreenUtils.shorten(StageScreenUtils.stripExtension(info.name), 14), panelX + PANEL_PADDING + 13, y + 4, COLOR_TEXT, false);
+            graphics.text(font, StageScreenUtils.shorten(StageScreenUtils.stripExtension(info.name), 14), panelX + PANEL_PADDING + 13, y + 4, COLOR_TEXT, false);
             String tag = StageScreenUtils.motionTag(info);
-            graphics.drawString(font, tag, panelX + PANEL_WIDTH - PANEL_PADDING - font.width(tag), y + 4, COLOR_TEXT_MUTED, false);
+            graphics.text(font, tag, panelX + PANEL_WIDTH - PANEL_PADDING - font.width(tag), y + 4, COLOR_TEXT_MUTED, false);
         }
         graphics.disableScissor();
         drawScrollbar(graphics, guestMotionTop, guestMotionBottom, motionScroll, maxMotionScroll());
     }
 
-    private void drawToggle(GuiGraphics graphics, int x, int y, int width, int height,
+    private void drawToggle(GuiGraphicsExtractor graphics, int x, int y, int width, int height,
                             boolean enabled, boolean hovered, String label) {
         if (hovered) {
             graphics.fill(x, y, x + width, y + height, 0x12000000);
         }
         int labelY = y + Math.max(0, (height - font.lineHeight) / 2);
-        graphics.drawString(font, label, x, labelY, COLOR_TEXT, false);
+        graphics.text(font, label, x, labelY, COLOR_TEXT, false);
 
         int trackHeight = Math.max(10, height - 2);
         int trackX = x + width - TOGGLE_TRACK_WIDTH;
@@ -315,19 +315,19 @@ final class StageAssignPanel {
         graphics.fill(knobX, knobY, knobX + knobSize, knobY + knobSize, 0xFFF5FAFF);
     }
 
-    private void drawCheckbox(GuiGraphics graphics, int x, int y, boolean checked) {
+    private void drawCheckbox(GuiGraphicsExtractor graphics, int x, int y, boolean checked) {
         graphics.fill(x, y, x + 8, y + 8, checked ? COLOR_TOGGLE_ON : COLOR_TOGGLE_OFF);
         if (checked) {
-            graphics.drawString(font, "v", x + 1, y - 1, 0xFFFFFFFF, false);
+            graphics.text(font, "v", x + 1, y - 1, 0xFFFFFFFF, false);
         }
     }
 
-    private void drawScrollbar(GuiGraphics graphics, int top, int bottom, float offset, float maxScroll) {
+    private void drawScrollbar(GuiGraphicsExtractor graphics, int top, int bottom, float offset, float maxScroll) {
         int barX = panelX + PANEL_WIDTH - 4;
         TranslucentTrayChrome.drawScrollbar(graphics, barX, top, bottom, offset, maxScroll);
     }
 
-    private void fillRow(GuiGraphics graphics, int y, int color) {
+    private void fillRow(GuiGraphicsExtractor graphics, int y, int color) {
         graphics.fill(panelX + PANEL_PADDING - 2, y, panelX + PANEL_WIDTH - PANEL_PADDING + 2, y + LIST_ROW_HEIGHT, color);
     }
 

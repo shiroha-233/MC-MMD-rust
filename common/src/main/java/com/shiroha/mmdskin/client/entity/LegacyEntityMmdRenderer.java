@@ -9,7 +9,8 @@ import com.shiroha.mmdskin.client.frame.MmdModelMotion;
 import com.shiroha.mmdskin.client.frame.MmdRenderSnapshot;
 import com.shiroha.mmdskin.client.frame.ModelTransform;
 import com.shiroha.mmdskin.client.model.ModelKey;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
@@ -51,14 +52,20 @@ public final class LegacyEntityMmdRenderer<T extends Entity>
                 MmdRenderSnapshot.Context.WORLD);
     }
 
+    // 26.3 起实体渲染从"立即绘制"改成"提取状态 + 提交"：
+    //   render(T, float, PoseStack, MultiBufferSource, int)
+    // -> submit(S, PoseStack, SubmitNodeCollector, CameraRenderState)
+    // 并且不再传 packedLight —— 光照等级改由 EntityRenderState.lightCoords 提供。
     @Override
-    public void render(State state, PoseStack poseStack, MultiBufferSource buffers, int packedLight) {
-        if (MmdRenderRouter.route(state.snapshot, poseStack, packedLight, false)
-                == MmdRenderRouter.Result.FALLTHROUGH) {
-            super.render(state, poseStack, buffers, packedLight);
+    public void submit(State state, PoseStack poseStack, SubmitNodeCollector collector,
+                       CameraRenderState camera) {
+        int packedLight = state.lightCoords;
+        MmdRenderRouter.Result result = MmdRenderRouter.route(state.snapshot, poseStack, packedLight, false);
+        if (result == MmdRenderRouter.Result.SUPPRESSED) {
+            // 尸体已接管：本体整体不画（原版主体也不画）。
             return;
         }
-        super.render(state, poseStack, buffers, packedLight);
+        super.submit(state, poseStack, collector, camera);
     }
 
     public static final class State extends EntityRenderState {

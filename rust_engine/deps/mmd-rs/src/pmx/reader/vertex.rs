@@ -5,7 +5,11 @@ use crate::{
 };
 use byteorder::{ReadBytesExt, LE};
 use std::marker::PhantomData;
-use std::{io::Read, usize};
+// 见 bone.rs 同名注释：`use std::{io::Read, usize};` 里的 `usize` 是 std 的
+// **usize 模块**路径，Rust 1.99 起 deprecated，配合本 crate 的
+// `#![deny(warnings)]` 会让新工具链直接编译失败。这里的 `usize` 全是
+// primitive 类型用法，prelude 里本来就有，不需要这个 import。
+use std::io::Read;
 
 pub struct VertexReader<R> {
   pub settings: Settings,

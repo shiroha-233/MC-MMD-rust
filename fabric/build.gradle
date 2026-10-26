@@ -1,19 +1,18 @@
-// 负责 Fabric 平台的依赖装配、阴影打包与重映射发布。
-plugins {
-	id 'com.gradleup.shadow' version '8.3.6'
-}
+// Fabric 平台模块（Minecraft 26.3 移植版）
+//
+// 26.x 迁移要点：
+//   * Loom 插件：net.fabricmc.fabric-loom（根 build.gradle 里声明）
+//   * modImplementation -> implementation
+//   * remapJar -> jar（26.x 未混淆，不需要重映射）
+//   * 去掉 shadow 插件：26.x 的成品 jar 只需"类 + 资源 + JiJ"，不需要把整个
+//     runtimeClasspath 影子打包进去（那会产出 130MB 巨型 jar，且条目数超过
+//     65535 时 Zip64RequiredException 直接失败）。
+//   * 去掉 loom.mixin 配置：Loom 1.19.3 起默认不再启用 mixin 注解处理器
+//     （MC 26.x 未混淆，不需要 refmap），保留会触发 Gradle 警告。
 
 def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
 
-architectury {
-	platformSetupLoomIde()
-	fabric()
-}
-
 loom {
-	mixin {
-		defaultRefmapName = "mmdskin-fabric-refmap.json"
-	}
 	runs {
 		client {
 			client()
@@ -23,16 +22,6 @@ loom {
 				vmArgs "-Djavax.net.ssl.trustStoreType=Windows-ROOT"
 			}
 			programArgs "--username", "Player1"
-			vmArgs "-Xmx2G", "-Xms1G"
-		}
-		client2 {
-			client()
-			name "Fabric Client 2"
-			runDir "run/client2"
-			if (isWindows) {
-				vmArgs "-Djavax.net.ssl.trustStoreType=Windows-ROOT"
-			}
-			programArgs "--username", "Player2"
 			vmArgs "-Xmx2G", "-Xms1G"
 		}
 		server {
@@ -46,15 +35,6 @@ loom {
 	}
 }
 
-configurations {
-	common
-	shadowCommon // Don't use shadow from the shadow plugin since it conflicts with Loom.
-	shadowBundle
-	compileClasspath.extendsFrom common
-	runtimeClasspath.extendsFrom common
-	developmentFabric.extendsFrom common
-}
-
 repositories {
 	maven {
 		url = "https://api.modrinth.com/maven"
@@ -63,118 +43,92 @@ repositories {
 		url "https://maven.shedaniel.me/"
 		name "Shedaniel Maven"
 	}
-	// Sodium 和 Iris 的 Maven 仓库
 	maven {
-		url "https://maven.terraformersmc.com/releases/"
+		url = "https://maven.terraformersmc.com/releases/"
 		name "TerraformersMC"
 	}
-	// Iris Maven
 	maven {
-		url "https://maven.irisshaders.dev"
+		url = "https://maven.irisshaders.dev"
 		name "Iris Shaders"
+	}
+	maven {
+		url = "https://maven.ladysnake.org/releases"
+		name "Ladysnake"
 	}
 }
 
 dependencies {
-	implementation project(":common")
-	common(project(path: ":common", configuration: "namedElements")) { transitive = false }
-	shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive = false }
-	
-	// JLayer 运行时由平台包私有化，避免与其他模组的 JPMS 模块导出冲突。
-	common("javazoom:jlayer:1.0.1") { transitive = false }
-	shadowBundle("javazoom:jlayer:1.0.1") { transitive = false }
-	
 	// Fabric Loader
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-	
-	// Fabric API
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-	
-	// Architectury API - 内嵌到模组中
-	modImplementation("dev.architectury:architectury-fabric:${project.architectury_version}") {
-		exclude group: "net.fabricmc.fabric-api"
-	}
-	include("dev.architectury:architectury-fabric:${project.architectury_version}")
-	
-	// Cloth Config API - 配置界面
-	modApi("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}") {
-		exclude(group: "net.fabricmc.fabric-api")
-	}
-	include("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}")
-	
-	// Cardinal Components API v3 - Touhou Little Maid Orihime 的传递依赖
-	
-	// Nashorn 脚本引擎 - Java 21 不再内置，Touhou Little Maid JS 动画需要
-	
-	// NightConfig - Forge Config API Port 的传递依赖，dev 环境需要显式声明
-	
-	// mc-vr-api - Vivecraft VR API（软依赖，运行时可选）
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
-	// TouhouLittleMaid Orihime (Fabric 移植版) - 可选依赖，用于联动
-	
+	// Fabric API
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+	// Cloth Config API - 配置界面
+	implementation "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
+
+	// JLayer - MP3 解码器（舞台模式音频播放），运行时由本平台包私有化
+	implementation "javazoom:jlayer:1.0.1"
+	include "javazoom:jlayer:1.0.1"
+
+	// 单元测试：模型分发的路径安全 / 分块帧编解码 / 临时目录语义
+	// （测试代码不依赖 Minecraft，可直接在纯 JVM 里跑）
+	testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+test {
+	useJUnitPlatform()
+	testLogging {
+		events "passed", "skipped", "failed"
+	}
 }
 
 processResources {
 	inputs.property "version", project.version
+
+	// 原生库有两个来源：Gradle 的 copyRustNatives 任务写进
+	// fabric/build/generated/resources/mmdskin/，而 CI 还会把同一批原生库
+	// cp 到 common/src/main/resources/natives/（common 的资源目录也挂在本模块的
+	// resources sourceSet 上）。两个 source root 出现同一个相对路径时，
+	// Gradle 7+ 的 processResources 默认 DuplicatesStrategy.FAIL 会直接让构建失败
+	// （实测：Entry natives/windows-x64/mmd_engine.dll is a duplicate）。
+	// 两份内容是同一个 cargo 产物，用 INCLUDE 覆盖即可。
+	duplicatesStrategy = DuplicatesStrategy.INCLUDE
 
 	filesMatching("fabric.mod.json") {
 		expand "version": project.version
 	}
 }
 
-shadowJar {
-    exclude "architectury.common.json"
-    configurations = [project.configurations.shadowCommon, project.configurations.shadowBundle]
-    archiveClassifier.set("dev-shadow")
-    relocate "javazoom", "com.shiroha.mmdskin.shadow.javazoom"
-
-    // 包含 common 模块的资源（原生库、默认动画等）
-    from(project(":common").sourceSets.main.resources)
-
-    // 排除不需要的文件
-    exclude 'META-INF/versions/**'
-
-    // 强制更新 META-INF/services 里的类名
-    mergeServiceFiles()
-
-    // 排除 module-info.class 避免 JPMS 冲突
-    exclude 'module-info.class'
-}
-
-remapJar {
-	inputFile.set shadowJar.archiveFile
-	dependsOn shadowJar
-	archiveClassifier.set(null)
-}
-
+// 26.x 的 jar 未混淆，不需要 remapJar，也不需要把整个 runtimeClasspath 打包进来
+// （那会产出 130MB 的巨型 jar）。成品就是普通 jar 任务：
+//   - sourceSets.main.output：类 + 资源（assets/**、mixin 配置、natives/windows-x64/mmd_engine.dll）
+//   - META-INF/jars/jlayer-1.0.1.jar：jar-in-jar（javazoom），由 `include` 生成，MC 运行时加载
 jar {
-	archiveClassifier.set("dev")
 	from("${rootProject.projectDir}/LICENSE") {
 		rename { "${it}_${base.archivesName.get()}"}
 	}
-}
-sourcesJar {
-    // Avoid duplicate entries when merging common sources
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    def commonSources = project(':common').sourcesJar
-    dependsOn commonSources
-    from commonSources.archiveFile.map { zipTree(it) }
-}
-
-components.java {
-    withVariantsFromConfiguration(project.configurations.shadowRuntimeElements) {
-        skip()
-    }
 }
 
 sourceSets {
     main {
         java {
-            // Avoid JPMS split-package with shaded common (network package) in dev runtime
+            // 原 common 模块的源码目录直接挂进来（单模块化，省掉一次目录搬迁）
+            srcDir '../common/src/main/java'
         }
         resources {
-            exclude 'assets/mmdskin/lang/*.json'
+            srcDir '../common/src/main/resources'
+            // 注意：这里**不能**排除 assets/mmdskin/lang/*.json。
+            // 26.3 移植时把它排除了（上游 1.21.5 是 Architectury 多模块，没有这个 exclude），
+            // 结果语言文件没进 jar → 界面全部显示原始翻译键（gui.mmdskin.xxx）。
             exclude 'pack.mcmeta'
+        }
+    }
+    test {
+        java {
+            // 原 common 模块的测试目录同样挂进来
+            srcDir '../common/src/test/java'
         }
     }
 }

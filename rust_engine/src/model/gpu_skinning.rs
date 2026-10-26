@@ -55,12 +55,19 @@ pub enum GpuSkinningError {
 }
 
 impl GpuSkinningTopology {
+    /// 构建 GPU 蒙皮拓扑。
+    ///
+    /// `head_mask` 是可选的头部顶点掩码（true = 该顶点属于脖子分界线以上的头部）。
+    /// 传入后，凡是命中掩码的三角形会被整块丢弃 —— 材质级隐藏救不了「身体皮肤和
+    /// 脖子皮肤在同一个材质里」的模型（整块隐藏会把四肢一起弄没），
+    /// 只有在索引层面剔除才能既去掉脖子又不动身体。
     pub fn build(
         vertices: &[RuntimeVertex],
         indices: &[u32],
         weights: &[VertexWeight],
         submeshes: &[SubMesh],
         bone_count: usize,
+        head_mask: Option<&[bool]>,
     ) -> Result<Self, GpuSkinningError> {
         if vertices.len() != weights.len() {
             return Err(GpuSkinningError::WeightCountMismatch {
@@ -78,7 +85,7 @@ impl GpuSkinningTopology {
         };
 
         for submesh in submeshes {
-            topology.append_submesh(vertices, indices, weights, submesh, bone_count)?;
+            topology.append_submesh(vertices, indices, weights, submesh, bone_count, head_mask)?;
         }
         Ok(topology)
     }
@@ -90,6 +97,7 @@ impl GpuSkinningTopology {
         weights: &[VertexWeight],
         submesh: &SubMesh,
         bone_count: usize,
+        head_mask: Option<&[bool]>,
     ) -> Result<(), GpuSkinningError> {
         let begin = submesh.begin_index as usize;
         let end = begin
@@ -111,9 +119,16 @@ impl GpuSkinningTopology {
             let batch_begin = cursor;
             let mut palette = Vec::with_capacity(MAX_PALETTE_BONES);
             let mut palette_lookup = HashMap::with_capacity(MAX_PALETTE_BONES);
+            let mut kept_triangles = 0_usize;
 
             while cursor < end {
                 let triangle = &indices[cursor..cursor + 3];
+                // 命中头部掩码的三角形整块丢弃：
+                // 只丢掉一部分顶点会让剩下的顶点被身体骨骼拉出长尖刺。
+                if is_head_masked(triangle, head_mask) {
+                    cursor += 3;
+                    continue;
+                }
                 let triangle_bones = triangle_bones(triangle, weights, bone_count)?;
                 let missing = triangle_bones
                     .iter()
@@ -130,7 +145,15 @@ impl GpuSkinningTopology {
                         palette.push(bone);
                     }
                 }
+                kept_triangles += 1;
                 cursor += 3;
+            }
+
+            // 整个子网格都被头部掩码吃掉时不要产生空批次：
+            // 空批次的 palette 长度为 0，Java 侧会绑到 0 长度的骨骼槽位区间。
+            // 没有掩码时必然至少保留一个三角形，这个条件不会成立（行为与原来完全一致）。
+            if kept_triangles == 0 {
+                continue;
             }
 
             self.append_batch(
@@ -143,6 +166,7 @@ impl GpuSkinningTopology {
                 bone_count,
                 &palette,
                 &palette_lookup,
+                head_mask,
             )?;
         }
         Ok(())
@@ -163,6 +187,7 @@ impl GpuSkinningTopology {
         bone_count: usize,
         palette: &[u32],
         palette_lookup: &HashMap<u32, u16>,
+        head_mask: Option<&[bool]>,
     ) -> Result<(), GpuSkinningError> {
         let first_index = checked_u32(self.indices.len())?;
         let palette_offset = checked_u32(self.palette_bones.len())?;
@@ -171,32 +196,43 @@ impl GpuSkinningTopology {
         let mut vertex_remap = HashMap::<u32, u32>::new();
         let mut center = [0.0_f32; 3];
         let mut center_count = 0_u32;
-        for source_index in indices[begin..end].iter().copied() {
-            let mapped = if let Some(mapped) = vertex_remap.get(&source_index) {
-                *mapped
-            } else {
-                let source = vertices.get(source_index as usize).ok_or(
-                    GpuSkinningError::VertexOutOfBounds {
-                        index: source_index,
-                        vertex_count: vertices.len(),
-                    },
-                )?;
-                let encoded = encode_weight(
-                    source_index,
-                    &weights[source_index as usize],
-                    bone_count,
-                    palette_lookup,
-                )?;
-                let mapped = checked_u32(self.vertices.len())?;
-                self.vertices.push(encoded);
-                vertex_remap.insert(source_index, mapped);
-                center[0] += source.position.x;
-                center[1] += source.position.y;
-                center[2] += source.position.z;
-                center_count += 1;
-                mapped
-            };
-            self.indices.push(mapped);
+        let mut kept_indices = 0_u32;
+        let mut cursor = begin;
+        while cursor < end {
+            let triangle = &indices[cursor..cursor + 3];
+            // 与 append_submesh 用同一把尺子过滤，保证 palette 里有的骨骼
+            // 一定出现在保留下来的三角形上。
+            if !is_head_masked(triangle, head_mask) {
+                for source_index in triangle.iter().copied() {
+                    let mapped = if let Some(mapped) = vertex_remap.get(&source_index) {
+                        *mapped
+                    } else {
+                        let source = vertices.get(source_index as usize).ok_or(
+                            GpuSkinningError::VertexOutOfBounds {
+                                index: source_index,
+                                vertex_count: vertices.len(),
+                            },
+                        )?;
+                        let encoded = encode_weight(
+                            source_index,
+                            &weights[source_index as usize],
+                            bone_count,
+                            palette_lookup,
+                        )?;
+                        let mapped = checked_u32(self.vertices.len())?;
+                        self.vertices.push(encoded);
+                        vertex_remap.insert(source_index, mapped);
+                        center[0] += source.position.x;
+                        center[1] += source.position.y;
+                        center[2] += source.position.z;
+                        center_count += 1;
+                        mapped
+                    };
+                    self.indices.push(mapped);
+                }
+                kept_indices += 3;
+            }
+            cursor += 3;
         }
 
         if center_count != 0 {
@@ -208,13 +244,26 @@ impl GpuSkinningTopology {
         self.draws.push(GpuSkinningDraw {
             material_id,
             first_index,
-            index_count: checked_u32(end - begin)?,
+            index_count: kept_indices,
             palette_offset,
             palette_count: checked_u32(palette.len())?,
             center,
         });
         Ok(())
     }
+}
+
+/// 三角形是否命中头部顶点掩码。
+///
+/// 只要有任意一个顶点属于头部就整块丢弃：部分丢弃会让剩下的顶点
+/// 被身体骨骼拉到脖子位置，形成从身体里长出来的尖刺。
+fn is_head_masked(triangle: &[u32], head_mask: Option<&[bool]>) -> bool {
+    let Some(mask) = head_mask else {
+        return false;
+    };
+    triangle
+        .iter()
+        .any(|vertex| mask.get(*vertex as usize).copied().unwrap_or(false))
 }
 
 fn validate_indices(indices: &[u32], vertex_count: usize) -> Result<(), GpuSkinningError> {
@@ -380,10 +429,142 @@ mod tests {
             index_count: indices.len() as u32,
         }];
 
-        let topology =
-            GpuSkinningTopology::build(&vertices, &indices, &weights, &submeshes, vertices.len())
-                .expect("topology should build");
+        let topology = GpuSkinningTopology::build(
+            &vertices,
+            &indices,
+            &weights,
+            &submeshes,
+            vertices.len(),
+            None,
+        )
+        .expect("topology should build");
 
         assert_eq!(topology.draws.len(), 2);
+    }
+
+    /// 造一个「身体 + 头部」两段的模型：前 3 个顶点是身体（骨骼 0），
+    /// 后 3 个顶点是头（骨骼 1），两个子网格各一个三角形。
+    fn head_body_fixture() -> (
+        Vec<RuntimeVertex>,
+        Vec<u32>,
+        Vec<VertexWeight>,
+        Vec<SubMesh>,
+    ) {
+        let vertices = vec![
+            RuntimeVertex {
+                position: Vec3::new(0.0, 5.0, 0.0),
+                normal: Vec3::Y,
+                uv: Vec2::ZERO,
+            },
+            RuntimeVertex {
+                position: Vec3::new(1.0, 5.0, 0.0),
+                normal: Vec3::Y,
+                uv: Vec2::ZERO,
+            },
+            RuntimeVertex {
+                position: Vec3::new(0.0, 6.0, 0.0),
+                normal: Vec3::Y,
+                uv: Vec2::ZERO,
+            },
+            RuntimeVertex {
+                position: Vec3::new(0.0, 15.0, 0.0),
+                normal: Vec3::Y,
+                uv: Vec2::ZERO,
+            },
+            RuntimeVertex {
+                position: Vec3::new(1.0, 15.0, 0.0),
+                normal: Vec3::Y,
+                uv: Vec2::ZERO,
+            },
+            RuntimeVertex {
+                position: Vec3::new(0.0, 16.0, 0.0),
+                normal: Vec3::Y,
+                uv: Vec2::ZERO,
+            },
+        ];
+        let indices = vec![0, 1, 2, 3, 4, 5];
+        let weights = vec![
+            VertexWeight::Bdef1 { bone: 0 },
+            VertexWeight::Bdef1 { bone: 0 },
+            VertexWeight::Bdef1 { bone: 0 },
+            VertexWeight::Bdef1 { bone: 1 },
+            VertexWeight::Bdef1 { bone: 1 },
+            VertexWeight::Bdef1 { bone: 1 },
+        ];
+        let submeshes = vec![
+            SubMesh {
+                material_id: 0,
+                begin_index: 0,
+                index_count: 3,
+            },
+            SubMesh {
+                material_id: 1,
+                begin_index: 3,
+                index_count: 3,
+            },
+        ];
+        (vertices, indices, weights, submeshes)
+    }
+
+    #[test]
+    fn head_mask_should_drop_triangles_that_touch_masked_vertices() {
+        let (vertices, indices, weights, submeshes) = head_body_fixture();
+        // 掩码命中顶点 3/4/5（头部）
+        let mask = [false, false, false, true, true, true];
+
+        let topology =
+            GpuSkinningTopology::build(&vertices, &indices, &weights, &submeshes, 2, Some(&mask))
+                .expect("topology should build");
+
+        // 头部三角形整块消失，索引缓冲里只剩身体的 3 个索引
+        assert_eq!(topology.indices.len(), 3);
+        assert_eq!(topology.draws.len(), 1);
+        assert_eq!(topology.draws[0].material_id, 0);
+        assert_eq!(topology.draws[0].first_index, 0);
+        assert_eq!(topology.draws[0].index_count, 3);
+        // 调色板只统计保留下来的三角形用到的骨骼（头骨 1 不该出现）
+        assert_eq!(topology.palette_bones, vec![0]);
+    }
+
+    #[test]
+    fn head_mask_should_keep_topology_identical_when_disabled() {
+        let (vertices, indices, weights, submeshes) = head_body_fixture();
+
+        let baseline =
+            GpuSkinningTopology::build(&vertices, &indices, &weights, &submeshes, 2, None)
+                .expect("topology should build");
+        let empty_mask = vec![false; vertices.len()];
+        let masked = GpuSkinningTopology::build(
+            &vertices,
+            &indices,
+            &weights,
+            &submeshes,
+            2,
+            Some(&empty_mask),
+        )
+        .expect("topology should build");
+
+        assert_eq!(baseline.indices, masked.indices);
+        assert_eq!(baseline.palette_bones, masked.palette_bones);
+        assert_eq!(baseline.draws.len(), masked.draws.len());
+        for (left, right) in baseline.draws.iter().zip(masked.draws.iter()) {
+            assert_eq!(left.first_index, right.first_index);
+            assert_eq!(left.index_count, right.index_count);
+            assert_eq!(left.palette_count, right.palette_count);
+        }
+    }
+
+    #[test]
+    fn partially_masked_triangle_should_be_dropped_entirely() {
+        let (vertices, indices, weights, submeshes) = head_body_fixture();
+        // 只掩码身体三角形的最后一个顶点 → 整个身体三角形都必须被丢掉
+        let mask = [false, false, true, true, true, true];
+
+        let topology =
+            GpuSkinningTopology::build(&vertices, &indices, &weights, &submeshes, 2, Some(&mask))
+                .expect("topology should build");
+
+        assert!(topology.indices.is_empty());
+        assert!(topology.draws.is_empty());
     }
 }

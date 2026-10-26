@@ -4,7 +4,9 @@ package com.shiroha.mmdskin.compat.vr;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.item.ItemModelResolver;
+import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemDisplayContext;
@@ -21,7 +23,7 @@ public final class VRHandRenderer {
 
     private VRHandRenderer() {}
 
-    public static void renderHandItem(PoseStack poseStack, MultiBufferSource buffer,
+    public static void renderHandItem(PoseStack poseStack, SubmitNodeCollector buffer,
                                        int packedLight, InteractionHand hand) {
         try {
             LocalPlayer player = Minecraft.getInstance().player;
@@ -37,10 +39,15 @@ public final class VRHandRenderer {
 
             poseStack.pushPose();
             try {
-                Minecraft.getInstance().getItemRenderer().renderStatic(
-                        player, itemStack, ctx,
-                        poseStack, buffer, player.level(),
-                        packedLight, OverlayTexture.NO_OVERLAY, 0);
+                // 26.3：Minecraft.getItemRenderer().renderStatic(...) 已整体移除，
+                // 物品渲染改成"渲染状态 + 提交"两步：
+                //   ItemModelResolver 把 ItemStack 填进 ItemStackRenderState，
+                //   再由 ItemStackRenderState.submit(...) 交给 SubmitNodeCollector。
+                ItemStackRenderState itemState = new ItemStackRenderState();
+                ItemModelResolver resolver = new ItemModelResolver(
+                        Minecraft.getInstance().getModelManager());
+                resolver.updateForLiving(itemState, itemStack, ctx, player);
+                itemState.submit(poseStack, buffer, packedLight, OverlayTexture.NO_OVERLAY, 0);
             } finally {
                 poseStack.popPose();
             }

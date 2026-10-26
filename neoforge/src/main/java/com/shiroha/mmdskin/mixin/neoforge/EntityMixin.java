@@ -1,4 +1,7 @@
 // 负责让 NeoForge 实体眼位与视线查询读取实例化第一人称相机模块。
+//
+// 26.3 适配要点：Minecraft.gameRenderer 是 public final 字段，Camera 的取法从
+// 1.21.5 的 gameRenderer.getMainCamera() 改成 gameRenderer.mainCamera()。
 package com.shiroha.mmdskin.mixin.neoforge;
 
 import com.shiroha.mmdskin.client.MmdClientRenderRuntime;
@@ -21,7 +24,7 @@ public abstract class EntityMixin {
             return;
         }
         runtime.firstPerson().camera()
-                .resolveInteractionEyePosition(entity, partialTick, minecraft.gameRenderer.getMainCamera())
+                .resolveInteractionEyePosition(entity, partialTick, minecraft.gameRenderer.mainCamera())
                 .ifPresent(callback::setReturnValue);
     }
 
@@ -34,7 +37,7 @@ public abstract class EntityMixin {
             return;
         }
         runtime.firstPerson().camera()
-                .resolveViewVector(entity, minecraft.gameRenderer.getMainCamera())
+                .resolveViewVector(entity, minecraft.gameRenderer.mainCamera())
                 .ifPresent(callback::setReturnValue);
     }
 }

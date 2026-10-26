@@ -1,0 +1,245 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/C:/Users/naxid/.gradle/wrapper/dists/gradle-9.8.2-bin/3wb4k92zt3y241x5qwqkhg6w0/gradle-9.8.2/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:24: 错误: 找不到符号
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+                                                  ^
+  符号:   类 HudRenderCallback
+  位置: 程序包 net.fabricmc.fabric.api.client.rendering.v1
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:25: 错误: 找不到符号
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+                                                  ^
+  符号:   类 WorldRenderEvents
+  位置: 程序包 net.fabricmc.fabric.api.client.rendering.v1
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:14: 错误: 程序包net.fabricmc.fabric.api.client.keybinding.v1不存在
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+                                                   ^
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:22: 错误: 程序包org.lwjgl.glfw不存在
+import org.lwjgl.glfw.GLFW;
+                     ^
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:51: 错误: 程序包HudRenderCallback不存在
+        HudRenderCallback.EVENT.register((graphics, tickDelta) -> PerformanceHud.render(graphics));
+                         ^
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:57: 错误: 程序包WorldRenderEvents不存在
+        WorldRenderEvents.START.register(context -> MmdClientRenderRuntime.current().beginFrame(
+                         ^
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:59: 错误: 程序包WorldRenderEvents不存在
+        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+                         ^
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:74: 错误: 找不到符号
+                    camera.x, camera.y, camera.z, Lightmap.FULL_BRIGHT);
+                                                          ^
+  符号:   变量 FULL_BRIGHT
+  位置: 类 Lightmap
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:94: 错误: 方法引用无效
+                                RenderSystem.getDevice(), minecraft.getShaderManager()::getShader);
+                                                          ^
+  找不到符号
+    符号:   方法 getShader()
+    位置: 类 ShaderManager
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:116: 错误: 找不到符号
+        if (minecraft.screen == null || minecraft.screen instanceof ConfigWheelScreen) {
+                     ^
+  符号:   变量 screen
+  位置: 类型为Minecraft的变量 minecraft
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:116: 错误: 找不到符号
+        if (minecraft.screen == null || minecraft.screen instanceof ConfigWheelScreen) {
+                                                 ^
+  符号:   变量 screen
+  位置: 类型为Minecraft的变量 minecraft
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:119: 错误: 找不到符号
+                minecraft.setScreen(new ConfigWheelScreen(keyConfigWheel));
+                         ^
+  符号:   方法 setScreen(ConfigWheelScreen)
+  位置: 类型为Minecraft的变量 minecraft
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:126: 错误: 找不到符号
+        if (minecraft.screen == null) {
+                     ^
+  符号:   变量 screen
+  位置: 类型为Minecraft的变量 minecraft
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:30: 错误: 找不到符号
+        InputConstants.Type.KEYSYM,
+                           ^
+  符号:   变量 KEYSYM
+  位置: 类 Type
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:31: 错误: 找不到符号
+        GLFW.GLFW_KEY_LEFT_ALT,
+        ^
+  符号:   变量 GLFW
+  位置: 类 MmdSkinRegisterClient
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:45: 错误: 找不到符号
+                InputConstants.Type.KEYSYM,
+                                   ^
+  符号:   变量 KEYSYM
+  位置: 类 Type
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:65: 错误: 找不到符号
+        KeyBindingHelper.registerKeyBinding(KEY_CONFIG_WHEEL);
+        ^
+  符号:   变量 KeyBindingHelper
+  位置: 类 MmdSkinRegisterClient
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:67: 错误: 找不到符号
+            KeyBindingHelper.registerKeyBinding(keyQuickModel);
+            ^
+  符号:   变量 KeyBindingHelper
+  位置: 类 MmdSkinRegisterClient
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:93: 错误: 找不到符号
+            EntityType.byString(entityTypeId).ifPresentOrElse(
+                      ^
+  符号:   方法 byString(String)
+  位置: 类 EntityType
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterCommon.java:25: 错误: 找不到符号
+        PayloadTypeRegistry.playC2S().register(MmdSkinPayload.TYPE, MmdSkinPayload.CODEC);
+                           ^
+  符号:   方法 playC2S()
+  位置: 接口 PayloadTypeRegistry
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterCommon.java:26: 错误: 找不到符号
+        PayloadTypeRegistry.playS2C().register(MmdSkinPayload.TYPE, MmdSkinPayload.CODEC);
+                           ^
+  符号:   方法 playS2C()
+  位置: 接口 PayloadTypeRegistry
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\stage\FabricStageSessionRegistry.java:37: 错误: 找不到符号
+        return new StageServerPlayer(player.getUUID(), player.getGameProfile().getName());
+                                                                              ^
+  符号:   方法 getName()
+  位置: 类 GameProfile
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\stage\FabricStageSessionRegistry.java:53: 错误: 找不到符号
+            return new StageServerPlayer(player.getUUID(), player.getGameProfile().getName());
+                                                                                  ^
+  符号:   方法 getName()
+  位置: 类 GameProfile
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\stage\FabricStageSessionRegistry.java:59: 错误: 找不到符号
+                    .map(player -> new StageServerPlayer(player.getUUID(), player.getGameProfile().getName()))
+                                                                                                  ^
+  符号:   方法 getName()
+  位置: 类 GameProfile
+注: 某些输入文件使用或覆盖了已过时的 API。
+注: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+24 个错误
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':fabric:compileJava' (registered by plugin class 'org.gradle.api.plugins.JavaBasePlugin').
+> Compilation failed; see the compiler output below.
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:24: 错误: 找不到符号
+  import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+                                                    ^
+    符号:   类 HudRenderCallback
+    位置: 程序包 net.fabricmc.fabric.api.client.rendering.v1
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:25: 错误: 找不到符号
+  import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+                                                    ^
+    符号:   类 WorldRenderEvents
+    位置: 程序包 net.fabricmc.fabric.api.client.rendering.v1
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:74: 错误: 找不到符号
+                      camera.x, camera.y, camera.z, Lightmap.FULL_BRIGHT);
+                                                            ^
+    符号:   变量 FULL_BRIGHT
+    位置: 类 Lightmap
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:116: 错误: 找不到符号
+          if (minecraft.screen == null || minecraft.screen instanceof ConfigWheelScreen) {
+                       ^
+    符号:   变量 screen
+    位置: 类型为Minecraft的变量 minecraft
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:116: 错误: 找不到符号
+          if (minecraft.screen == null || minecraft.screen instanceof ConfigWheelScreen) {
+                                                   ^
+    符号:   变量 screen
+    位置: 类型为Minecraft的变量 minecraft
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:126: 错误: 找不到符号
+          if (minecraft.screen == null) {
+                       ^
+    符号:   变量 screen
+    位置: 类型为Minecraft的变量 minecraft
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:30: 错误: 找不到符号
+          InputConstants.Type.KEYSYM,
+                             ^
+    符号:   变量 KEYSYM
+    位置: 类 Type
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:31: 错误: 找不到符号
+          GLFW.GLFW_KEY_LEFT_ALT,
+          ^
+    符号:   变量 GLFW
+    位置: 类 MmdSkinRegisterClient
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:45: 错误: 找不到符号
+                  InputConstants.Type.KEYSYM,
+                                     ^
+    符号:   变量 KEYSYM
+    位置: 类 Type
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:65: 错误: 找不到符号
+          KeyBindingHelper.registerKeyBinding(KEY_CONFIG_WHEEL);
+          ^
+    符号:   变量 KeyBindingHelper
+    位置: 类 MmdSkinRegisterClient
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:67: 错误: 找不到符号
+              KeyBindingHelper.registerKeyBinding(keyQuickModel);
+              ^
+    符号:   变量 KeyBindingHelper
+    位置: 类 MmdSkinRegisterClient
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:14: 错误: 程序包net.fabricmc.fabric.api.client.keybinding.v1不存在
+  import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+                                                     ^
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:22: 错误: 程序包org.lwjgl.glfw不存在
+  import org.lwjgl.glfw.GLFW;
+                       ^
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:51: 错误: 程序包HudRenderCallback不存在
+          HudRenderCallback.EVENT.register((graphics, tickDelta) -> PerformanceHud.render(graphics));
+                           ^
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:57: 错误: 程序包WorldRenderEvents不存在
+          WorldRenderEvents.START.register(context -> MmdClientRenderRuntime.current().beginFrame(
+                           ^
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:59: 错误: 程序包WorldRenderEvents不存在
+          WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+                           ^
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:94: 错误: 方法引用无效
+                                  RenderSystem.getDevice(), minecraft.getShaderManager()::getShader);
+                                                            ^
+    找不到符号
+      符号:   方法 getShader()
+      位置: 类 ShaderManager
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:119: 错误: 找不到符号
+                  minecraft.setScreen(new ConfigWheelScreen(keyConfigWheel));
+                           ^
+    符号:   方法 setScreen(ConfigWheelScreen)
+    位置: 类型为Minecraft的变量 minecraft
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:93: 错误: 找不到符号
+              EntityType.byString(entityTypeId).ifPresentOrElse(
+                        ^
+    符号:   方法 byString(String)
+    位置: 类 EntityType
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterCommon.java:25: 错误: 找不到符号
+          PayloadTypeRegistry.playC2S().register(MmdSkinPayload.TYPE, MmdSkinPayload.CODEC);
+                             ^
+    符号:   方法 playC2S()
+    位置: 接口 PayloadTypeRegistry
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterCommon.java:26: 错误: 找不到符号
+          PayloadTypeRegistry.playS2C().register(MmdSkinPayload.TYPE, MmdSkinPayload.CODEC);
+                             ^
+    符号:   方法 playS2C()
+    位置: 接口 PayloadTypeRegistry
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\stage\FabricStageSessionRegistry.java:37: 错误: 找不到符号
+          return new StageServerPlayer(player.getUUID(), player.getGameProfile().getName());
+                                                                                ^
+    符号:   方法 getName()
+    位置: 类 GameProfile
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\stage\FabricStageSessionRegistry.java:53: 错误: 找不到符号
+              return new StageServerPlayer(player.getUUID(), player.getGameProfile().getName());
+                                                                                    ^
+    符号:   方法 getName()
+    位置: 类 GameProfile
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\stage\FabricStageSessionRegistry.java:59: 错误: 找不到符号
+                      .map(player -> new StageServerPlayer(player.getUUID(), player.getGameProfile().getName()))
+                                                                                                    ^
+    符号:   方法 getName()
+    位置: 类 GameProfile
+  注: 某些输入文件使用或覆盖了已过时的 API。
+  注: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+  24 个错误
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 9s

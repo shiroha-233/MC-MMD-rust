@@ -1,9 +1,12 @@
 package com.shiroha.mmdskin.ui.stage;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.shiroha.mmdskin.stage.client.viewmodel.StageLobbyViewModel;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.UUID;
@@ -47,7 +50,7 @@ public class StageInvitePopup extends Screen {
         var host = mc.level.getPlayerByUUID(hostUUID);
         String name = host != null ? host.getName().getString() : hostUUID.toString().substring(0, 8);
 
-        Runnable openPopup = () -> mc.setScreen(new StageInvitePopup(name));
+        Runnable openPopup = () -> mc.gui.setScreen(new StageInvitePopup(name));
         if (mc.isSameThread()) {
             openPopup.run();
         } else {
@@ -65,7 +68,7 @@ public class StageInvitePopup extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
 
         if (!lobbyViewModel.hasPendingInvite()) {
             this.onClose();
@@ -79,11 +82,11 @@ public class StageInvitePopup extends Screen {
         g.fill(px + POPUP_W - 1, py, px + POPUP_W, py + POPUP_H, BORDER);
         g.fill(px + MARGIN, py + 18, px + POPUP_W - MARGIN, py + 19, 0x30FFFFFF);
 
-        g.drawCenteredString(this.font, this.title, px + POPUP_W / 2, py + MARGIN - 1, ACCENT);
+        g.centeredText(this.font, this.title, px + POPUP_W / 2, py + MARGIN - 1, ACCENT);
 
         Component msg = Component.translatable("message.mmdskin.stage.invite_received", inviterName);
-        g.drawCenteredString(this.font, msg, px + POPUP_W / 2, py + 26, TEXT);
-        g.drawCenteredString(this.font,
+        g.centeredText(this.font, msg, px + POPUP_W / 2, py + 26, TEXT);
+        g.centeredText(this.font,
                 Component.translatable("gui.mmdskin.stage.invite_prompt"),
                 px + POPUP_W / 2,
                 py + 38,
@@ -95,21 +98,21 @@ public class StageInvitePopup extends Screen {
                     && mouseY >= btnY && mouseY <= btnY + BTN_H;
 
         g.fill(acceptX, btnY, acceptX + BTN_W, btnY + BTN_H, hoverAccept ? BTN_ACCEPT_HOVER : BTN_ACCEPT);
-        g.drawCenteredString(this.font,
+        g.centeredText(this.font,
             Component.translatable("gui.mmdskin.stage.accept"),
             acceptX + BTN_W / 2, btnY + 4, 0xFFFFFFFF);
 
         g.fill(declineX, btnY, declineX + BTN_W, btnY + BTN_H, hoverDecline ? BTN_DECLINE_HOVER : BTN_DECLINE);
-        g.drawCenteredString(this.font,
+        g.centeredText(this.font,
             Component.translatable("gui.mmdskin.stage.decline"),
             declineX + BTN_W / 2, btnY + 4, 0xFFFFFFFF);
 
-        super.render(g, mouseX, mouseY, partialTick);
+        super.extractRenderState(g, mouseX, mouseY, partialTick);
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             if (hoverAccept) {
                 lobbyViewModel.acceptInvite();
                 StagePlaybackUiAdapter.INSTANCE.openStageSelection();
@@ -121,17 +124,17 @@ public class StageInvitePopup extends Screen {
                 return true;
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) {
+    public boolean keyPressed(KeyEvent event) {
+        if (event.isEscape()) {
             lobbyViewModel.declineInvite();
             this.onClose();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override

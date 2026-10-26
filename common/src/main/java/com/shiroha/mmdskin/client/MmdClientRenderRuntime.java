@@ -23,8 +23,10 @@ import com.shiroha.mmdskin.client.texture.NativeTexturePathResolver;
 import com.shiroha.mmdskin.client.texture.TextureRepository;
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.compat.vr.DefaultVrRuntimePort;
+import com.shiroha.mmdskin.player.ragdoll.RagdollRenderEntrypoint;
 import com.shiroha.mmdskin.scene.client.SceneRenderContributor;
 import com.shiroha.mmdskin.scene.client.SceneSession;
+import net.minecraft.client.Minecraft;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -215,10 +217,14 @@ public final class MmdClientRenderRuntime implements AutoCloseable {
                 (long) ConfigManager.getTextureCacheBudgetMB(), 1024L * 1024L));
         textures.tick();
         scenes.contribute(cameraX, cameraY, cameraZ, packedLight, frameId, frameDeltaSeconds);
+        // 死亡布娃娃尸体：和其它 MMD 模型同一条链（Frame Queue → MmdGpuDrawDevice）
+        RagdollRenderEntrypoint.contribute(cameraX, cameraY, cameraZ, frameId, frameDeltaSeconds);
         frameQueue.flush(drawDevice);
     }
 
     public void tick() {
+        // 死亡布娃娃：模型接管、保留策略逐出、物理启停（逐出的模型在帧间隙销毁）
+        RagdollRenderEntrypoint.tick(Minecraft.getInstance());
         models.tick();
         scenes.tick();
         models.evictUnused(ConfigManager.getModelPoolMaxCount());

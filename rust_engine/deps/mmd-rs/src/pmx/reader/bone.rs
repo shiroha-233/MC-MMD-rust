@@ -6,7 +6,13 @@ use crate::{
 use byteorder::{ReadBytesExt, LE};
 use enumflags2::BitFlags;
 use std::marker::PhantomData;
-use std::{io::Read, usize};
+// `use std::{io::Read, usize};` 里的 `usize` 走的是 std 的 **usize 模块**路径，
+// 而该模块在 Rust 1.99 起被标记 deprecated。本 crate 顶部有 `#![deny(warnings)]`，
+// 于是新工具链上直接编译失败（CI 用 rustc 1.99.1 时报
+// "use of deprecated module `std::usize`"）。
+// 这里根本不需要它 —— 文件里用到的 `usize` 都是 primitive 类型（`as usize` /
+// `-> usize`），primitive 在 prelude 里本来就可用。
+use std::io::Read;
 
 pub struct BoneReader<R> {
   pub settings: Settings,

@@ -1,8 +1,11 @@
 # MC-MMD-rust
 
-面向 Minecraft 1.21.5 的 MMD（MikuMikuDance）模型、动画和物理模组，同时支持 Fabric 与 NeoForge。
+面向 Minecraft **26.3** 的 MMD（MikuMikuDance）模型、动画和物理模组。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> 26.3 移植说明见 [PORTING-26.3-STATUS.md](PORTING-26.3-STATUS.md)。
+> 上游 1.21.5 版本见 [shiroha-233/MC-MMD-rust](https://github.com/shiroha-233/MC-MMD-rust)。
 
 ## 功能特性
 
@@ -10,8 +13,17 @@
 - **VMD / FBX / VPD**: 支持骨骼动画、表情、Morph 和姿态数据
 - **物理模拟**: 使用 Bullet3 实现头发、衣物和配饰的实时物理效果
 - **GPU 蒙皮与 CPU 回退**: Rust 统一执行动画、Morph 和物理，RenderPipeline 顶点着色器执行 palette 蒙皮，不可用时回退 CPU
-- **1.21.5 渲染管线**: 使用 `RenderPipeline`、`GpuBuffer`、`GpuTexture` 与批量 `RenderPass`
+- **26.3 渲染管线**: 使用 `RenderPipeline`、`GpuBuffer`、`GpuTexture` 与批量 `RenderPass`
 - **多层动画**: 支持多个动画同时混合播放
+
+### 26.3 新增
+
+- **死亡布娃娃**: 死亡时生成带物理模拟的尸体，到期自动冻结（姿势保持、跳过模拟）
+- **死亡屏劫持 + 死亡观战相机**: 透明死亡屏，右下角「自由观战 / 复活」两个按钮；自由观战支持鼠标环视与滚轮缩放
+- **模型分发**: 服务器转发或 OSS 直链两种分发方式，客户端按需下载周围玩家的模型
+- **第一人称模型显示**: 第一人称下正确裁剪头部（三角形级掩码）并对齐眼骨骼锚点
+- **本地指定玩家模型**: 在**自己屏幕上**把某个玩家渲染成指定的模型（纯客户端本地生效，不写服务器、不影响他人）
+- **性能优化**: 加载前距离闸门、物理 LOD、动画 LOD、模型池上限、纹理缓存预算等
 
 ## 架构
 
@@ -23,12 +35,26 @@
    - Bullet3 物理模拟
    - 受检 JNI bridge，不向 Java 暴露裸 native 指针
 
-2. **Minecraft Mod**（Common/Fabric/NeoForge）: 基于 Java 的渲染和集成
-   - Fabric / NeoForge 加载器适配
+2. **Minecraft Mod**（Java）: 基于 Java 的渲染和集成
+   - Fabric 加载器适配（26.3 上为**单模块**，无 Architectury）
    - Blaze3D `RenderPipeline` 与 GPU 资源生命周期
    - 异步模型/纹理解码、帧队列和兼容回退
 
-1.21.5 后端使用 48 骨骼 palette 的顶点着色器蒙皮，不依赖 Compute Shader、SSBO 或裸 OpenGL。Morph 与 Bullet 物理仍由 Rust CPU 完整求值，只有 Morph 结果变化时才更新顶点缓冲；骨骼姿态通过独立的 `f32 mat4` palette revision 每帧同步。
+26.3 后端使用 48 骨骼 palette 的顶点着色器蒙皮，不依赖 Compute Shader、SSBO 或裸 OpenGL。Morph 与 Bullet 物理仍由 Rust CPU 完整求值，只有 Morph 结果变化时才更新顶点缓冲；骨骼姿态通过独立的 `f32 mat4` palette revision 每帧同步。
+
+> **为什么是单模块**：Architectury 多模块需要 `de.oceanlabs.mcp:mcp_config:26.3`，
+> 而该版本在 Mojang 侧**不存在**。因此 26.3 移植把 `common/` 的源码与资源目录
+> 直接挂到 `fabric/` 与 `neoforge/` 两个模块的 sourceSet 上（见各自的 `build.gradle`）。
+
+## 支持平台
+
+| 平台 | 状态 | 说明 |
+|---|---|---|
+| **Fabric** | ✅ 已实机验证 | Fabric Loader 0.20.1 + Fabric API 0.165.0+26.3 |
+| **NeoForge** | ⚠️ 编译通过，未实机验证 | NeoForge 26.3.0.97 + ModDevGradle 2.0.148 |
+
+两个平台的实现语义等价，共用同一份 `common/` 源码。
+NeoForge 端的构建与 API 迁移细节见 [neoforge/README-26.3.md](neoforge/README-26.3.md)。
 
 ## 使用教程
 
@@ -257,13 +283,57 @@ EntityPlayer/
 
 配置保存在 `.minecraft/config/mmdskin/` 目录下。
 
+### 死亡布娃娃与死亡观战
+
+在「模组设置 → 布娃娃系统」中可配置：
+
+| 设置项 | 说明 |
+|--------|------|
+| **启用布娃娃** | 死亡时生成带物理的 ragdoll 尸体 |
+| **尸体保留方式** | 按时长 / 按半径 / 不保留 |
+| **尸体物理保持时长** | 0 ~ 3600 秒；到期冻结尸体物理（姿势保持、跳过模拟），0 = 永久模拟 |
+| **隐藏死亡白烟** | 隐藏原版死亡粒子 |
+| **劫持死亡屏** | 透明死亡屏 + 自由观战相机（困难模式完全放行原版行为） |
+
+死亡屏被劫持后，屏幕右下角会出现两个按钮：
+
+- **自由观战**：接管相机，鼠标环视、滚轮缩放
+- **复活**：立即复活
+
+> **注意**：死亡屏交互在原始输入层（`MouseHandler.onButton`）处理，
+> 因为 26.3 的输入层会把点击在派发到 `Screen` 之前消费掉。
+
+### 模型分发
+
+管理员可在服务端配置允许分发的模型；客户端按需下载。
+
+- **服务器转发**：服务端把模型分块推给客户端，适合内网/自建服
+- **OSS 直链**：客户端直接从对象存储拉取，服务端零转发，适合公网
+
+配置说明见 [specs/001-model-distribution/OSS配置说明.md](specs/001-model-distribution/OSS配置说明.md)。
+
+### 本地指定玩家模型
+
+在「模型切换」界面顶部点「本地指定玩家模型」，可以让你**在自己屏幕上**把某个玩家
+渲染成你指定的模型。
+
+- **纯本地**：不写进服务器、不广播、对方也不需要同意；服务器该怎么渲染怎么渲染
+- **名字为主键**：输入玩家名，按 `TAB` 补全在线玩家；离线玩家的名字也能手输，
+  他上线后自动生效
+- **优先级最高**：盖过对方自选的模型，也盖过自动下载的结果；所有设置值都原样保留
+- 记录存在你自己的 `config/mmdskin/model_overrides.json` 里
+
+> 想让某个模型能被你指定，需要它在本机存在（或服务器授权分发、且你开了自动下载）。
+
 ## 构建
 
 ### 前置要求
 
 - Rust 1.88+（用于 rust_engine）
-- JDK 21+（用于 Minecraft mod）
-- Gradle 8.x
+- JDK **25**（用 Minecraft 自带的 `java-runtime-epsilon` 即可，不要装新 JDK）
+- Gradle **9.8.2**（Loom 1.19.3 要求 ≥ 9.8.0）
+
+> 拉取依赖需要走代理时，记得把 `maven.fabricmc.net` 加进 `nonProxyHosts`。
 
 ### 构建 rust_engine
 
@@ -277,6 +347,8 @@ cargo build --release --locked
 ```bash
 ./gradlew build
 ```
+
+产物在 `fabric/build/libs/`。
 
 ## 许可证
 

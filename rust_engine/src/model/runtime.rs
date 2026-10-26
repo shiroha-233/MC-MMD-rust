@@ -15,7 +15,7 @@ use crate::vrm_runtime::{
 use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::VrmExtensions;
@@ -61,6 +61,55 @@ fn rand_float() -> f32 {
         cell.set(s);
         (s as f32) / (u32::MAX as f32)
     })
+}
+
+/// CPU 蒙皮路径的头部掩码过滤结果。
+///
+/// 材质级隐藏救不了「身体皮肤与脖子皮肤同材质」的模型，只能在索引层面剔除。
+/// 剔除之后索引缓冲变短了，每个子网格在缓冲里的区间也会整体前移，
+/// 所以 draw command 的 firstIndex/indexCount 必须用这里重算出来的区间，
+/// 否则会画到别的子网格的三角形上。
+pub(crate) struct CpuHeadFilter {
+    /// 过滤后的索引缓冲（只含保留下来的三角形）
+    pub indices: Vec<u32>,
+    /// 与 `submeshes` 一一对应的 (first_index, index_count)，单位是「索引个数」
+    pub ranges: Vec<(u32, u32)>,
+}
+
+impl CpuHeadFilter {
+    /// 按头部顶点掩码过滤三角形。
+    ///
+    /// 只要三角形的任意一个顶点被掩码，整块三角形都要丢掉：
+    /// 只丢一部分顶点，剩下的顶点会被身体骨骼拉到脖子位置，形成从身体里长出来的尖刺。
+    fn build(indices: &[u32], submeshes: &[SubMesh], mask: &[bool]) -> Self {
+        let mut filtered = Vec::with_capacity(indices.len());
+        let mut ranges = Vec::with_capacity(submeshes.len());
+
+        for submesh in submeshes {
+            let begin = (submesh.begin_index as usize).min(indices.len());
+            let end = begin
+                .saturating_add(submesh.index_count as usize)
+                .min(indices.len());
+            let first_index = filtered.len() as u32;
+            let mut cursor = begin;
+            while cursor + 3 <= end {
+                let triangle = &indices[cursor..cursor + 3];
+                let masked = triangle
+                    .iter()
+                    .any(|vertex| mask.get(*vertex as usize).copied().unwrap_or(false));
+                if !masked {
+                    filtered.extend_from_slice(triangle);
+                }
+                cursor += 3;
+            }
+            ranges.push((first_index, filtered.len() as u32 - first_index));
+        }
+
+        Self {
+            indices: filtered,
+            ranges,
+        }
+    }
 }
 
 /// MMD 运行时模型
@@ -125,7 +174,12 @@ pub struct MmdModel {
     material_morph_signature: u64,
     effective_morph_weights: Vec<f32>,
     gpu_skinning_enabled: bool,
-    gpu_skinning_topology: OnceLock<Result<GpuSkinningTopology, GpuSkinningError>>,
+    /// GPU 蒙皮拓扑缓存。
+    ///
+    /// 为什么不能用 OnceLock：拓扑里含索引缓冲，索引缓冲会被「头部顶点掩码」过滤，
+    /// 而掩码要跟着第一人称开关来回切换 → 拓扑必须能失效重建。
+    /// 用 Mutex 包一层既保留懒加载，又允许在掩码状态变化时整体作废。
+    gpu_skinning_topology: Mutex<Option<Result<Arc<GpuSkinningTopology>, GpuSkinningError>>>,
 
     /// VRM 模型标志（影响坐标系处理）
     is_vrm: bool,
@@ -139,6 +193,11 @@ pub struct MmdModel {
     physics_enabled: bool,
     /// 骨骼变换缓冲区（避免每帧堆分配）
     physics_bone_transforms_buf: Vec<Mat4>,
+
+    /// Death ragdoll (takes over the main body bones, independent of MMD physics)
+    ragdoll: Option<crate::ragdoll::MmdRagdoll>,
+    /// Freeze flag: when true the ragdoll stops stepping (pose is held, saves CPU)
+    ragdoll_frozen: bool,
 
     // 材质可见性控制（用于脱外套等功能）
     material_visible: Vec<bool>,
@@ -157,6 +216,25 @@ pub struct MmdModel {
     head_bone_index: Option<usize>,
     /// 每个子网格是否属于头部（基于顶点位置自动检测）
     head_submesh_flags: Vec<bool>,
+    /// 脖子分界线的 Y 坐标（模型局部空间），头部检测用
+    head_cutoff_y: Option<f32>,
+    /// 头部顶点掩码：true = 该顶点在脖子分界线以上（静止姿势判定）。
+    ///
+    /// 为什么需要顶点级掩码：材质级隐藏只能整块隐藏材质，而很多模型把
+    /// 「身体皮肤 + 脖子皮肤」放在同一个材质里（如「肌2」），整块隐藏会把四肢一起弄没，
+    /// 不隐藏又会让第一人称相机卡在脖子里、低头看到自己身体的内部。
+    /// 只有在索引层面剔除「脖子分界线以上」的三角形，才能既去掉脖子又不影响身体。
+    head_vertex_mask: Vec<bool>,
+    /// 头部顶点掩码是否启用。
+    ///
+    /// 只由 PMX 的第一人称开关（`set_first_person_mode` 的非 VRM 分支）控制。
+    /// VRM 模型的第一人称可见性由 UniVRM 的 mesh annotation 决定，
+    /// 和材质级隐藏一样走独立通道（`set_first_person_mode` 的 VRM 分支会提前返回），
+    /// 所以这里绝不能跟着 `first_person_enabled` 走 ——
+    /// 否则会覆盖 VRM 作者自己安排的第一人称网格。
+    head_mask_enabled: bool,
+    /// CPU 蒙皮路径的头部掩码过滤结果（None = 未过滤，索引缓冲与原始完全一致）
+    cpu_head_filter: Option<CpuHeadFilter>,
     /// 头部检测是否已初始化
     head_detection_initialized: bool,
     /// 用户设置的材质可见性备份（进入第一人称前保存，退出时恢复）
@@ -248,13 +326,15 @@ impl MmdModel {
             material_morph_signature: u64::MAX,
             effective_morph_weights: Vec::new(),
             gpu_skinning_enabled: false,
-            gpu_skinning_topology: OnceLock::new(),
+            gpu_skinning_topology: Mutex::new(None),
             is_vrm: false,
             vrm_runtime_state: None,
             model_transform: Mat4::IDENTITY,
             physics: None,
             physics_enabled: false,
             physics_bone_transforms_buf: Vec::new(),
+        ragdoll: None,
+        ragdoll_frozen: false,
             material_visible: Vec::new(),
             user_material_visible: Vec::new(),
             material_morph_results_flat_cache: Vec::new(),
@@ -275,6 +355,10 @@ impl MmdModel {
             first_person_enabled: false,
             head_bone_index: None,
             head_submesh_flags: Vec::new(),
+            head_cutoff_y: None,
+            head_vertex_mask: Vec::new(),
+            head_mask_enabled: false,
+            cpu_head_filter: None,
             head_detection_initialized: false,
             eye_bone_index: None,
             eye_bone_pair: None,
@@ -357,13 +441,20 @@ impl MmdModel {
     fn apply_first_person_material_mask(&mut self) {
         let (head_materials, body_materials) = self.classify_head_materials();
         let mut hidden_count = 0;
+        let mut visible = self.material_visible.clone();
         for material_id in head_materials {
-            if body_materials.contains(&material_id) || material_id >= self.material_visible.len() {
+            if body_materials.contains(&material_id) || material_id >= visible.len() {
                 continue;
             }
-            self.material_visible[material_id] = false;
+            visible[material_id] = false;
             hidden_count += 1;
         }
+        // 必须走 replace_material_visibility：它是唯一会自增 material_revision 的入口，
+        // 而 Java 侧靠 material_revision 判断要不要重新拷贝 draw command
+        // （MmdGpuDrawDevice.prepare 里比较 commandRevision 与 description.materialRevision()）。
+        // 直接改 Vec 会让 revision 不变 → 命令缓冲里还是「全部可见」的旧命令 →
+        // 第一人称下头部照旧被画出来，相机像卡在头里。
+        self.replace_material_visibility(visible);
         log::info!(
             "First person material mask applied: hidden_materials={}, head_submeshes={}",
             hidden_count,
@@ -390,6 +481,9 @@ impl MmdModel {
         for (i, vis) in self.material_visible.iter_mut().enumerate() {
             *vis = *vis && hand_mat_ids.contains(&i);
         }
+        // 同上：必须让 material_revision 自增，否则 Java 侧的 draw command 缓存不会刷新。
+        let visible = self.material_visible.clone();
+        self.replace_material_visibility(visible);
     }
 
     pub(crate) fn classify_head_materials(&mut self) -> (HashSet<usize>, HashSet<usize>) {
@@ -621,11 +715,27 @@ impl MmdModel {
             None => {
                 log::warn!("颈部/头部骨骼均未找到，第一人称头部隐藏不可用");
                 self.head_submesh_flags = vec![false; self.submeshes.len()];
+                self.head_cutoff_y = None;
+                self.head_vertex_mask.clear();
+                self.refresh_head_mask_geometry();
                 return;
             }
         };
+        self.head_cutoff_y = Some(cutoff_y);
 
-        // 3. 对每个子网格，按顶点位置判断是否在脖子以上
+        // 3. 头部顶点掩码（三角形级隐藏的基础）
+        //
+        // 判据用**静止姿势**的顶点 Y（vertices 里是 PMX 原始坐标，不会被动画/物理改写），
+        // 阈值与上面子网格判定用的是同一个脖子分界线，保证两条路径口径一致。
+        // 动画后的坐标不能用来判定：模型播放动作时头会上下移动，
+        // 用动画坐标会让掩码随动作漂移，甚至把身体判成头。
+        self.head_vertex_mask = self
+            .vertices
+            .iter()
+            .map(|vertex| vertex.position.y >= cutoff_y)
+            .collect();
+
+        // 4. 对每个子网格，按顶点位置判断是否在脖子以上
         self.head_submesh_flags = Vec::with_capacity(self.submeshes.len());
 
         for submesh in &self.submeshes {
@@ -686,48 +796,94 @@ impl MmdModel {
             }
         }
 
-        // 4. 查找眼睛骨骼（用于第一人称相机位置）
-        //    优先级：両目 > 目 > 左目+右目中点
-        let single_eye_names = ["両目", "目", "eye", "Eye", "Eyes", "eyes"];
+        // 5. 掩码算完后立刻刷新两条渲染路径的过滤结果，
+        // 否则「先开第一人称、后算头部检测」的顺序下掩码会一直不生效。
+        self.refresh_head_mask_geometry();
+
+        // 6. 查找眼睛骨骼（用于第一人称相机位置）
+        //
+        //    原优先级是「両目 > 目 > 左目+右目中点」，但只看名字会选错：
+        //    有些模型（如纳西妲）的「両目」是放在**头顶上方**的控制骨骼，并不在眼睛位置，
+        //    直接采用会把相机顶到头顶外面去（第一人称视角变成俯视自己的头）。
+        //    眼睛一定紧挨着头骨，所以这里改成：收集所有候选，挑**离头骨最近**的那个；
+        //    距离相同时仍按原优先级（両目 > 目 > 左目/右目）。
+        let single_eye_names: [&str; 2] = ["両目", "目"];
+        let english_eye_names: [&str; 4] = ["eye", "Eye", "Eyes", "eyes"];
+        let left_names: [&str; 4] = ["左目", "eye_L", "Eye_L", "LeftEye"];
+        let right_names: [&str; 4] = ["右目", "eye_R", "Eye_R", "RightEye"];
         self.eye_bone_index = None;
         self.eye_bone_pair = None;
 
-        for name in &single_eye_names {
+        // (优先级, 主索引, 可选的配对索引)
+        let mut candidates: Vec<(u8, usize, Option<usize>)> = Vec::new();
+        for (priority, name) in single_eye_names.iter().enumerate() {
             if let Some(idx) = self.bone_manager.find_bone_by_name(name) {
-                self.eye_bone_index = Some(idx);
-                log::info!("眼睛骨骼检测: 使用 '{}' (索引={})", name, idx);
+                candidates.push((priority as u8, idx, None));
                 break;
             }
         }
+        for name in english_eye_names.iter() {
+            if let Some(idx) = self.bone_manager.find_bone_by_name(name) {
+                candidates.push((2, idx, None));
+                break;
+            }
+        }
+        let left_idx = left_names
+            .iter()
+            .find_map(|name| self.bone_manager.find_bone_by_name(name));
+        let right_idx = right_names
+            .iter()
+            .find_map(|name| self.bone_manager.find_bone_by_name(name));
+        match (left_idx, right_idx) {
+            (Some(left), Some(right)) => candidates.push((3, left, Some(right))),
+            (Some(left), None) => candidates.push((4, left, None)),
+            (None, Some(right)) => candidates.push((4, right, None)),
+            (None, None) => {}
+        }
 
-        if self.eye_bone_index.is_none() {
-            // 尝试左目+右目
-            let left_names = ["左目", "eye_L", "Eye_L", "LeftEye"];
-            let right_names = ["右目", "eye_R", "Eye_R", "RightEye"];
-            let mut left_idx = None;
-            let mut right_idx = None;
-            for name in &left_names {
-                if let Some(idx) = self.bone_manager.find_bone_by_name(name) {
-                    left_idx = Some(idx);
-                    break;
+        let head_y = self
+            .head_bone_index
+            .and_then(|idx| self.bone_manager.get_bone(idx))
+            .map(|bone| bone.initial_position.y);
+        let mut best: Option<(u8, f32, usize, Option<usize>)> = None;
+        for (priority, index, pair) in candidates {
+            let Some(bone) = self.bone_manager.get_bone(index) else {
+                continue;
+            };
+            let y = bone.initial_position.y;
+            // 没有头骨时退化成「全距离相等」，交给优先级决定。
+            let distance = head_y.map(|head| (y - head).abs()).unwrap_or(0.0);
+            let better = match best {
+                None => true,
+                Some((best_priority, best_distance, _, _)) => {
+                    distance < best_distance - 0.01
+                        || (distance <= best_distance + 0.01 && priority < best_priority)
                 }
+            };
+            if better {
+                best = Some((priority, distance, index, pair));
             }
-            for name in &right_names {
-                if let Some(idx) = self.bone_manager.find_bone_by_name(name) {
-                    right_idx = Some(idx);
-                    break;
-                }
+        }
+
+        match best {
+            Some((_, distance, index, Some(right))) => {
+                self.eye_bone_pair = Some((index, right));
+                log::info!(
+                    "眼睛骨骼检测: 使用左右眼中点 (索引={}/{})，离头骨距离={:.2}",
+                    index,
+                    right,
+                    distance
+                );
             }
-            if let (Some(l), Some(r)) = (left_idx, right_idx) {
-                self.eye_bone_pair = Some((l, r));
-                log::info!("眼睛骨骼检测: 使用左目({})+右目({})中点", l, r);
-            } else if let Some(l) = left_idx {
-                self.eye_bone_index = Some(l);
-                log::info!("眼睛骨骼检测: 仅找到左目({})", l);
-            } else if let Some(r) = right_idx {
-                self.eye_bone_index = Some(r);
-                log::info!("眼睛骨骼检测: 仅找到右目({})", r);
-            } else {
+            Some((_, distance, index, None)) => {
+                self.eye_bone_index = Some(index);
+                log::info!(
+                    "眼睛骨骼检测: 使用单个眼睛骨骼 (索引={})，离头骨距离={:.2}",
+                    index,
+                    distance
+                );
+            }
+            None => {
                 log::info!("眼睛骨骼检测: 未找到可用眼睛骨骼");
             }
         }
@@ -748,7 +904,142 @@ impl MmdModel {
             return;
         }
 
+        // 三角形级头部隐藏：材质级隐藏救不了「身体皮肤与脖子皮肤同材质」的模型，
+        // 这里同步刷新顶点掩码的过滤结果（并让 GPU 拓扑缓存失效重建）。
+        self.head_mask_enabled = enabled;
+        self.refresh_head_mask_geometry();
         self.refresh_effective_material_visibility();
+    }
+
+    /// 依据当前的第一人称开关与头部顶点掩码，重算两条渲染路径要用的过滤结果。
+    ///
+    /// 为什么必须集中在这里做：GPU 路径的拓扑（索引缓冲 + palette + draw command）
+    /// 和 CPU 路径的索引缓冲 / 子网格区间都由头部掩码决定，
+    /// 掩码状态一变就必须同时失效，否则会出现「索引缓冲换了但 draw command 还是旧的」
+    /// 这种错位（Java 侧会拿旧区间去画新索引缓冲，直接画错三角形）。
+    ///
+    /// 掩码关闭时 `cpu_head_filter` 为 None、拓扑按原始索引重建，
+    /// 因此非第一人称下的索引缓冲与 draw command 与改动前逐字节一致。
+    fn refresh_head_mask_geometry(&mut self) {
+        let enabled = self.head_mask_active();
+        self.cpu_head_filter = if enabled {
+            Some(CpuHeadFilter::build(
+                &self.indices,
+                &self.submeshes,
+                &self.head_vertex_mask,
+            ))
+        } else {
+            None
+        };
+
+        // GPU 拓扑缓存必须整体作废：索引缓冲内容变了，必须重建。
+        *self.gpu_skinning_topology_cache() = None;
+    }
+
+    /// 三角形级头部隐藏当前是否真正生效（开关打开 + 掩码已经算出来）
+    fn head_mask_active(&self) -> bool {
+        self.head_mask_enabled && !self.head_vertex_mask.is_empty()
+    }
+
+    /// 当前生效的头部顶点掩码（None = 不生效，拓扑与原始完全一致）
+    fn effective_head_mask(&self) -> Option<&[bool]> {
+        if self.head_mask_active() {
+            Some(&self.head_vertex_mask)
+        } else {
+            None
+        }
+    }
+
+    /// CPU 蒙皮路径的头部掩码过滤结果（None = 未过滤）
+    pub(crate) fn cpu_head_filter(&self) -> Option<&CpuHeadFilter> {
+        self.cpu_head_filter.as_ref()
+    }
+
+    /// CPU 蒙皮路径实际要上传的索引个数（掩码生效时是过滤后的长度）
+    pub(crate) fn cpu_index_count(&self) -> usize {
+        match &self.cpu_head_filter {
+            Some(filter) => filter.indices.len(),
+            None => self.indices.len(),
+        }
+    }
+
+    /// 取 GPU 拓扑缓存锁。
+    ///
+    /// 用 `unwrap_or_else` 吞掉 poison：上一次持锁线程 panic 不应该让模型彻底不可用。
+    fn gpu_skinning_topology_cache(
+        &self,
+    ) -> MutexGuard<'_, Option<Result<Arc<GpuSkinningTopology>, GpuSkinningError>>> {
+        self.gpu_skinning_topology
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+    }
+
+    /// 第一人称诊断信息（供 Java 侧写日志排查用，不参与渲染）。
+    ///
+    /// 把「头部识别结果 / 被隐藏的材质 / 眼睛骨骼位置」一次性摊开，
+    /// 避免只能靠 Rust 内部 log（游戏里看不到）来猜。
+    pub fn first_person_debug_info(&mut self) -> String {
+        if !self.head_detection_initialized {
+            self.init_head_detection();
+        }
+        let head_bone = self
+            .head_bone_index
+            .and_then(|idx| self.bone_manager.get_bone(idx))
+            .map(|b| format!("{}(y={:.2})", b.name, b.initial_position.y))
+            .unwrap_or_else(|| "<无>".to_string());
+        let eye_bone = self
+            .eye_bone_index
+            .and_then(|idx| self.bone_manager.get_bone(idx))
+            .map(|b| format!("{}(y={:.2})", b.name, b.position().y))
+            .unwrap_or_else(|| "<无>".to_string());
+        let eye_pair = match self.eye_bone_pair {
+            Some((left, right)) => format!(
+                "{}/{}",
+                self.bone_manager
+                    .get_bone(left)
+                    .map(|b| b.name.clone())
+                    .unwrap_or_default(),
+                self.bone_manager
+                    .get_bone(right)
+                    .map(|b| b.name.clone())
+                    .unwrap_or_default()
+            ),
+            None => "<无>".to_string(),
+        };
+        let hidden: Vec<String> = self
+            .materials
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !self.is_material_visible(*index))
+            .map(|(index, material)| format!("{}#{}", material.name, index))
+            .collect();
+        let head_submeshes: Vec<usize> = self
+            .head_submesh_flags
+            .iter()
+            .enumerate()
+            .filter(|(_, flag)| **flag)
+            .map(|(index, _)| index)
+            .collect();
+        let eye_position = self.get_eye_bone_animated_position();
+        // 头部顶点掩码的统计也一并打出来，方便实机确认「三角形级隐藏」是否真的生效
+        let masked_vertices = self.head_vertex_mask.iter().filter(|flag| **flag).count();
+        format!(
+            "firstPerson={} materials={} headBone={} cutoffY={:?} headSubmeshes={:?} eyeBone={} eyePair={} eyePos=({:.2},{:.2},{:.2}) hidden={:?} headMask(active={}, vertices={}/{})",
+            self.first_person_enabled,
+            self.materials.len(),
+            head_bone,
+            self.head_cutoff_y,
+            head_submeshes,
+            eye_bone,
+            eye_pair,
+            eye_position.x,
+            eye_position.y,
+            eye_position.z,
+            hidden,
+            self.head_mask_active(),
+            masked_vertices,
+            self.head_vertex_mask.len()
+        )
     }
 
     /// 获取第一人称模式是否启用
@@ -1143,67 +1434,12 @@ impl MmdModel {
     }
 
     /// 更新动画（每帧调用）- 多动画层版本（CPU蒙皮模式）
-    #[allow(unreachable_code)]
+    ///
+    /// 真正的实现见 {@link MmdModel::tick_animation_internal}。这里原来还留着一份
+    /// 早期实现，被 `return;` 挡在后面成为死代码——其中包含第二处布娃娃步进，
+    /// 一旦有人删掉那句 return 就会每帧步进两次（物理速度翻倍、肉体穿地）。
     pub fn tick_animation(&mut self, elapsed: f32) {
         self.tick_animation_internal(elapsed);
-        return;
-        // 更新所有动画层
-        self.animation_layer_manager.update(elapsed);
-
-        // 执行动画更新
-        self.begin_animation();
-
-        // 评估所有层并混合结果
-        self.animation_layer_manager
-            .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager);
-
-        // 应用 VPD 骨骼姿势覆盖（在动画评估后）
-        self.apply_vpd_bone_overrides();
-
-        // 自动眨眼
-        self.update_auto_blink(elapsed);
-
-        // VR 模式下跳过普通头部旋转，由 VR IK 接管
-        if !self.vr_enabled {
-            self.apply_head_rotation();
-        }
-        self.update_morph_animation();
-
-        // 骨骼更新（物理前）— 先计算当前帧全局变换
-        self.update_node_animation(false);
-
-        // VR IK 求解（在全局变换计算之后，确保用当前帧的骨骼位置）
-        if self.vr_enabled {
-            let strength = self.vr_ik_strength;
-            if let Some(frame) = self.vr_tracking_frame {
-                self.vr_debug_state = self.vr_ik_solver.solve_tracking_frame(
-                    &mut self.bone_manager,
-                    &frame,
-                    strength,
-                );
-            } else {
-                let tracking = self.vr_tracking_data;
-                self.vr_ik_solver
-                    .solve(&mut self.bone_manager, &tracking, strength);
-                self.vr_debug_state = VrDebugState::default();
-            }
-        }
-
-        // 物理更新
-        self.update_physics(elapsed);
-
-        // 骨骼更新（物理后）
-        self.update_node_animation(true);
-
-        // 清除物理骨骼保护（允许下一帧重新计算）
-        self.end_physics_update();
-
-        self.end_animation();
-
-        // 应用矩阵插值过渡
-        self.apply_transition_blend(elapsed);
-
-        self.update();
     }
 
     /// 应用矩阵插值过渡
@@ -1580,19 +1816,46 @@ impl MmdModel {
         self.gpu_skinning_enabled
     }
 
-    pub(crate) fn gpu_skinning_topology(&self) -> Result<&GpuSkinningTopology, GpuSkinningError> {
-        self.gpu_skinning_topology
-            .get_or_init(|| {
-                GpuSkinningTopology::build(
-                    &self.vertices,
-                    &self.indices,
-                    &self.weights,
-                    &self.submeshes,
-                    self.bone_manager.bone_count(),
-                )
-            })
-            .as_ref()
-            .map_err(Clone::clone)
+    /// 取 GPU 蒙皮拓扑（带懒加载与失效重建）。
+    ///
+    /// 返回 `Arc` 是为了避免每帧深拷贝整份拓扑：
+    /// 这个函数每帧会被 describe/copy 路径调用好几次，
+    /// 克隆 `Arc` 只是引用计数 +1，克隆拓扑本身则要复制上万个顶点。
+    ///
+    /// 缓存被作废的时机：头部顶点掩码状态变化（`refresh_head_mask_geometry`）。
+    /// 重建出来的拓扑会带上掩码过滤后的索引缓冲，Java 侧靠
+    /// `description.indexCount()/indexBytes()/drawCommandCount()` 与
+    /// `MmdGpuDrawDevice.GpuMesh.matches()` 的比较自动重新拷贝缓冲，无需改 Java。
+    pub(crate) fn gpu_skinning_topology(
+        &self,
+    ) -> Result<Arc<GpuSkinningTopology>, GpuSkinningError> {
+        // 快路径：缓存命中直接复用
+        {
+            let cache = self.gpu_skinning_topology_cache();
+            if let Some(cached) = cache.as_ref() {
+                return clone_topology_result(cached);
+            }
+        }
+
+        // 慢路径：缓存为空 → 按当前掩码状态重建
+        let mut cache = self.gpu_skinning_topology_cache();
+        if cache.is_none() {
+            let built = GpuSkinningTopology::build(
+                &self.vertices,
+                &self.indices,
+                &self.weights,
+                &self.submeshes,
+                self.bone_manager.bone_count(),
+                self.effective_head_mask(),
+            )
+            .map(Arc::new);
+            *cache = Some(built);
+        }
+        clone_topology_result(
+            cache
+                .as_ref()
+                .expect("gpu skinning topology should be cached after build"),
+        )
     }
 
     fn refresh_morph_revisions(&mut self) {
@@ -1823,6 +2086,11 @@ impl MmdModel {
         self.animation_layer_manager.update(elapsed);
         self.begin_animation();
         self.bone_manager.reset_all_ik_enabled();
+        // While the ragdoll drives the body, IK is disabled so leg/hand IK
+        // cannot overwrite the physical pose.
+        if self.ragdoll.is_some() {
+            self.bone_manager.set_all_ik_enabled(false);
+        }
 
         self.animation_layer_manager
             .evaluate_normalized(&mut self.bone_manager, &mut self.morph_manager);
@@ -1840,9 +2108,21 @@ impl MmdModel {
 
         self.update_morph_animation();
 
+        // 死亡布娃娃步进 + 回写（放在骨骼全局更新之前：
+        // 接管骨被 update_transforms 跳过，其从属骨由 pass 1 从新姿势传播）。
+        // 顺序与 1.20.1 权威实现保持一致（ragdoll/mod.rs 里 step 的契约也是这么写的）。
+        if let Some(ragdoll) = self.ragdoll.as_mut() {
+            // 冻结时不步进也不回写：接管骨的全局矩阵停留在最后一次物理姿势
+            if !self.ragdoll_frozen {
+                ragdoll.step(&mut self.bone_manager, elapsed);
+            }
+        }
+
         self.update_node_animation(false);
 
-        if self.vr_enabled {
+        // 布娃娃接管骨骼时不做 VR IK：否则 IK 会去改手臂/头部骨骼，
+        // 和布娃娃刚回写的姿势打架（表现为手臂被拽回、抖动）。
+        if self.vr_enabled && self.ragdoll.is_none() {
             let strength = self.vr_ik_strength;
             if let Some(frame) = self.vr_tracking_frame {
                 self.vr_debug_state = self.vr_ik_solver.solve_tracking_frame(
@@ -1877,7 +2157,12 @@ impl MmdModel {
             runtime_state.refresh_output(model);
         });
 
-        self.apply_transition_blend(elapsed);
+        // 布娃娃激活时跳过矩阵过渡混合（它会向旧快照插值，与物理姿势冲突）。
+        // 与 1.20.1 权威实现保持一致：死亡那一刻恰好是"切 Die 动画 + 启物理"的时刻，
+        // 此时若矩阵过渡还在进行，尸体会被向旧姿势拉扯回去。
+        if self.ragdoll.is_none() {
+            self.apply_transition_blend(elapsed);
+        }
 
         self.update();
     }
@@ -1934,6 +2219,88 @@ impl MmdModel {
     }
 
     /// 获取物理系统是否已初始化
+    /// 启用死亡布娃娃（从当前骨骼姿势构建刚体）
+    ///
+    /// 调用时机：骨骼全局矩阵为死亡姿势时（Java 在实体死亡的下一帧 Update 之前）。
+    /// v1 仅支持 PMX 模型（VRM 走独立 vrm_runtime 管线）。
+    pub fn enable_ragdoll(&mut self, params: crate::ragdoll::RagdollParams) -> bool {
+        if self.is_vrm {
+            log::debug!("[Ragdoll] VRM 模型暂不支持布娃娃");
+            return false;
+        }
+        if self.ragdoll.is_some() {
+            return true;
+        }
+        match crate::ragdoll::MmdRagdoll::new(self, params) {
+            Some(ragdoll) => {
+                self.bone_manager
+                    .set_ragdoll_bone_indices(ragdoll.ragdoll_bone_indices());
+                self.ragdoll = Some(ragdoll);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// 禁用并拆除布娃娃（骨骼恢复动画驱动）
+    pub fn disable_ragdoll(&mut self) {
+        if self.ragdoll.take().is_some() {
+            self.bone_manager.clear_ragdoll_bone_indices();
+        }
+    }
+
+    /// 布娃娃是否激活
+    pub fn is_ragdoll_active(&self) -> bool {
+        self.ragdoll.is_some()
+    }
+
+    /// 设置布娃娃地面高度（模型局部单位）
+    pub fn ragdoll_set_ground_y(&mut self, ground_local_y: f32) {
+        if let Some(ref mut ragdoll) = self.ragdoll {
+            ragdoll.set_ground_y(ground_local_y);
+        }
+    }
+
+    /// 施加速度增量（世界 m/s + yaw，内部换算到模型局部 Bullet 空间）
+    pub fn ragdoll_apply_world_velocity_delta(
+        &mut self,
+        vx: f32,
+        vy: f32,
+        vz: f32,
+        yaw: f32,
+        world_to_model_scale: f32,
+        upper_body_only: bool,
+    ) {
+        let Some(ragdoll) = self.ragdoll.as_mut() else {
+            return;
+        };
+        // 世界 → 模型局部（R^T·v，R 与 set_model_position_and_yaw 的旋转一致）
+        let cos_y = yaw.cos();
+        let sin_y = yaw.sin();
+        let lx = cos_y * vx + sin_y * vz;
+        let lz = -sin_y * vx + cos_y * vz;
+        let scale = if world_to_model_scale.abs() > 1e-6 {
+            world_to_model_scale
+        } else {
+            0.09
+        };
+        let delta = Vec3::new(lx / scale, vy / scale, -lz / scale);
+        ragdoll.apply_velocity_delta(delta, upper_body_only);
+    }
+
+    /// 布娃娃调试信息（JSON）
+    /// 冻结/解冻布娃娃（冻结 = 姿势保持 + 跳过步进，性能保持期用）
+    pub fn set_ragdoll_frozen(&mut self, frozen: bool) {
+        self.ragdoll_frozen = frozen;
+    }
+
+    pub fn ragdoll_debug_info(&self) -> String {
+        match &self.ragdoll {
+            Some(r) => r.debug_info(),
+            None => String::from("{\"active\": false}"),
+        }
+    }
+
     pub fn has_physics(&self) -> bool {
         self.physics.is_some()
     }
@@ -2340,6 +2707,13 @@ impl MmdModel {
         total += (self.material_visible.capacity() * size_of::<bool>()) as u64;
         total += (self.head_submesh_flags.capacity() * size_of::<bool>()) as u64;
 
+        // 第一人称头部掩码与 CPU 路径过滤结果
+        total += (self.head_vertex_mask.capacity() * size_of::<bool>()) as u64;
+        if let Some(filter) = &self.cpu_head_filter {
+            total += (filter.indices.capacity() * size_of::<u32>()) as u64;
+            total += (filter.ranges.capacity() * size_of::<(u32, u32)>()) as u64;
+        }
+
         // 子系统估算
         total += self.bone_manager.memory_usage();
         total += self.morph_manager.memory_usage();
@@ -2391,6 +2765,16 @@ fn normalized_material_visibility(source: &[bool], material_count: usize) -> Vec
         visible[index] = value;
     }
     visible
+}
+
+/// 克隆缓存里的拓扑结果（Arc 克隆只是引用计数 +1，错误则原样复制）
+fn clone_topology_result(
+    cached: &Result<Arc<GpuSkinningTopology>, GpuSkinningError>,
+) -> Result<Arc<GpuSkinningTopology>, GpuSkinningError> {
+    match cached {
+        Ok(topology) => Ok(Arc::clone(topology)),
+        Err(error) => Err(error.clone()),
+    }
 }
 
 fn morph_signature(
@@ -2674,5 +3058,127 @@ mod tests {
             .add_bone(BoneLink::new("Head".to_string()));
         model.init_material_visibility();
         model
+    }
+
+    /// 造一个「身体 + 头部」两段的模型：
+    /// 前 3 个顶点在 Y=5（身体），后 3 个顶点在 Y=15（头部），
+    /// 脖子骨骼 Neck 在 Y=10，所以分界线把后 3 个顶点判成头部。
+    fn make_head_mask_test_model() -> MmdModel {
+        let vertex = |y: f32| RuntimeVertex {
+            position: Vec3::new(0.0, y, 0.0),
+            normal: Vec3::Y,
+            uv: Vec2::ZERO,
+        };
+        let mut model = MmdModel::new();
+        model.vertices = vec![
+            vertex(5.0),
+            vertex(5.0),
+            vertex(6.0),
+            vertex(15.0),
+            vertex(15.0),
+            vertex(16.0),
+        ];
+        model.update_positions = model.vertices.iter().map(|v| v.position).collect();
+        model.update_normals = model.vertices.iter().map(|v| v.normal).collect();
+        model.update_uvs = model.vertices.iter().map(|v| v.uv).collect();
+        model.indices = vec![0, 1, 2, 3, 4, 5];
+        model.weights = vec![
+            VertexWeight::Bdef1 { bone: 0 },
+            VertexWeight::Bdef1 { bone: 0 },
+            VertexWeight::Bdef1 { bone: 0 },
+            VertexWeight::Bdef1 { bone: 1 },
+            VertexWeight::Bdef1 { bone: 1 },
+            VertexWeight::Bdef1 { bone: 1 },
+        ];
+        model.materials = vec![MmdMaterial::default(), MmdMaterial::default()];
+        model.submeshes = vec![SubMesh::new(0, 3, 0), SubMesh::new(3, 3, 1)];
+
+        let mut root = BoneLink::new("root".to_string());
+        root.parent_index = -1;
+        model.bone_manager.add_bone(root);
+        let mut neck = BoneLink::new("Neck".to_string());
+        neck.initial_position = Vec3::new(0.0, 10.0, 0.0);
+        neck.parent_index = 0;
+        model.bone_manager.add_bone(neck);
+        let mut head = BoneLink::new("Head".to_string());
+        head.initial_position = Vec3::new(0.0, 12.0, 0.0);
+        head.parent_index = 1;
+        model.bone_manager.add_bone(head);
+        model.bone_manager.build_hierarchy();
+
+        model.init_material_visibility();
+        model
+    }
+
+    #[test]
+    fn head_vertex_mask_should_follow_neck_cutoff() {
+        let mut model = make_head_mask_test_model();
+
+        model.init_head_detection();
+
+        assert_eq!(model.head_cutoff_y, Some(10.0));
+        assert_eq!(
+            model.head_vertex_mask,
+            vec![false, false, false, true, true, true]
+        );
+    }
+
+    #[test]
+    fn first_person_should_filter_head_triangles_from_cpu_geometry() {
+        let mut model = make_head_mask_test_model();
+        model.init_head_detection();
+
+        model.set_first_person_mode(true);
+
+        let filter = model
+            .cpu_head_filter()
+            .expect("head filter should be active in first person");
+        // 头部三角形整块被剔除，只剩身体的 3 个索引
+        assert_eq!(filter.indices, vec![0, 1, 2]);
+        // 头部子网格的区间被清空（firstIndex 指向过滤后缓冲的末尾，indexCount = 0）
+        assert_eq!(filter.ranges, vec![(0, 3), (3, 0)]);
+        assert_eq!(model.cpu_index_count(), 3);
+    }
+
+    #[test]
+    fn disabling_first_person_should_restore_original_indices() {
+        let mut model = make_head_mask_test_model();
+        model.init_head_detection();
+        model.set_first_person_mode(true);
+
+        model.set_first_person_mode(false);
+
+        assert!(model.cpu_head_filter().is_none());
+        assert_eq!(model.cpu_index_count(), model.indices.len());
+        assert_eq!(model.indices, vec![0, 1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn gpu_topology_should_follow_head_mask_state() {
+        let mut model = make_head_mask_test_model();
+        model.init_head_detection();
+
+        let unmasked = model
+            .gpu_skinning_topology()
+            .expect("topology should build");
+        assert_eq!(unmasked.indices.len(), 6);
+        assert_eq!(unmasked.draws.len(), 2);
+
+        model.set_first_person_mode(true);
+
+        let masked = model
+            .gpu_skinning_topology()
+            .expect("topology should build");
+        assert_eq!(masked.indices.len(), 3);
+        assert_eq!(masked.draws.len(), 1);
+        assert_eq!(masked.draws[0].material_id, 0);
+
+        model.set_first_person_mode(false);
+
+        let restored = model
+            .gpu_skinning_topology()
+            .expect("topology should build");
+        assert_eq!(restored.indices.len(), 6);
+        assert_eq!(restored.draws.len(), 2);
     }
 }

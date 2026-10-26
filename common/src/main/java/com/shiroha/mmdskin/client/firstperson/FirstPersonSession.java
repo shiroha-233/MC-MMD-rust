@@ -1,6 +1,7 @@
 // 负责维护本地玩家第一人称与 VR 模型会话，不承担相机计算或绘制提交。
 package com.shiroha.mmdskin.client.firstperson;
 
+import com.shiroha.mmdskin.bridge.NativeDiagnostics;
 import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
 import com.shiroha.mmdskin.client.model.MmdModelInstance;
 import com.shiroha.mmdskin.client.model.ModelLease;
@@ -50,6 +51,21 @@ public final class FirstPersonSession implements AutoCloseable {
         reconcileLiveState();
     }
 
+    /**
+     * 第一人称诊断：把 Rust 侧的头部识别结果、被隐藏的材质、眼睛骨骼位置写进游戏日志。
+     *
+     * <p>Rust 内部的 log 走的是 log crate，游戏里看不到；这条日志是唯一能在
+     * 客户端侧直接观察第一人称掩码是否生效的途径。
+     */
+    private void logFirstPersonInfo(long handle, boolean enabled) {
+        try {
+            LOGGER.info("[第一人称] 模式={} 诊断: {}",
+                    enabled, NativeDiagnostics.firstPersonInfo(handle));
+        } catch (Throwable exception) {
+            LOGGER.warn("[第一人称] 诊断信息读取失败", exception);
+        }
+    }
+
     public PreparedModel prepareModel(MmdModelInstance model, Player player,
                                       float partialTick, float effectiveModelScale) {
         Objects.requireNonNull(model, "model");
@@ -76,6 +92,7 @@ public final class FirstPersonSession implements AutoCloseable {
 
         if (modelChanged || desktopActive != nextDesktop) {
             modelPort.setFirstPersonMode(nextHandle, nextDesktop);
+            logFirstPersonInfo(nextHandle, nextDesktop);
         }
         if (vrModeChanged) {
             vrRuntime.setModelVrEnabled(nextHandle, nextVr);

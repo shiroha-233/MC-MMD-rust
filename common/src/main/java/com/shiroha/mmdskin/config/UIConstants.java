@@ -52,11 +52,11 @@ public final class UIConstants {
 
     public static final int COLOR_MAID_CENTER_BORDER = 0xFFD060A0;
 
-    public static final int COLOR_TEXT_PRIMARY = 0xFFFFFF;
+    public static final int COLOR_TEXT_PRIMARY = 0xFFFFFFFF;
 
-    public static final int COLOR_TEXT_SECONDARY = 0xAAAAAA;
+    public static final int COLOR_TEXT_SECONDARY = 0xFFAAAAAA;
 
-    public static final int COLOR_TEXT_DIM = 0x666666;
+    public static final int COLOR_TEXT_DIM = 0xFF666666;
 
     public static final int COLOR_PANEL_BG = 0x80000000;
 
@@ -64,11 +64,11 @@ public final class UIConstants {
 
     public static final int COLOR_ITEM_HOVER = 0x80555555;
 
-    public static final int COLOR_SOURCE_DEFAULT = 0x88AAFF;
+    public static final int COLOR_SOURCE_DEFAULT = 0xFF88AAFF;
 
-    public static final int COLOR_SOURCE_CUSTOM = 0x88FF88;
+    public static final int COLOR_SOURCE_CUSTOM = 0xFF88FF88;
 
-    public static final int COLOR_SOURCE_MODEL = 0xFFAA88;
+    public static final int COLOR_SOURCE_MODEL = 0xFFFFAA88;
 
     public static final int COLOR_CARD_BG = 0x80000000;
 
@@ -80,7 +80,7 @@ public final class UIConstants {
 
     public static final int COLOR_CARD_BORDER_SELECTED = 0xFF00AA00;
 
-    public static final int COLOR_TEXT_ACCENT = 0x55FF55;
+    public static final int COLOR_TEXT_ACCENT = 0xFF55FF55;
 
     public static final int COLOR_FORMAT_PMX = 0xFF6699FF;
 

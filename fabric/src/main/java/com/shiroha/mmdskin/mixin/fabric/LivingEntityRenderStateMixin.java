@@ -12,6 +12,9 @@ public abstract class LivingEntityRenderStateMixin implements MmdRenderStateExte
     @Unique
     private MmdRenderSnapshot mmdskin$snapshot;
 
+    @Unique
+    private boolean mmdskin$suppressShadow;
+
     @Override
     public MmdRenderSnapshot mmdskin$snapshot() {
         return mmdskin$snapshot;
@@ -20,5 +23,15 @@ public abstract class LivingEntityRenderStateMixin implements MmdRenderStateExte
     @Override
     public void mmdskin$setSnapshot(MmdRenderSnapshot snapshot) {
         mmdskin$snapshot = snapshot;
+    }
+
+    @Override
+    public boolean mmdskin$suppressShadow() {
+        return mmdskin$suppressShadow;
+    }
+
+    @Override
+    public void mmdskin$setSuppressShadow(boolean suppressShadow) {
+        mmdskin$suppressShadow = suppressShadow;
     }
 }

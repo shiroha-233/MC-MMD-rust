@@ -4,6 +4,7 @@ package com.shiroha.mmdskin.mixin.fabric;
 import com.shiroha.mmdskin.client.MmdClientRenderRuntime;
 import com.shiroha.mmdskin.client.frame.MmdRenderSnapshot;
 import com.shiroha.mmdskin.client.frame.MmdRenderStateExtension;
+import com.shiroha.mmdskin.player.ragdoll.RagdollManager;
 import com.shiroha.mmdskin.client.frame.MmdSnapshotFactory;
 import com.shiroha.mmdskin.fabric.compat.YsmCompat;
 import net.minecraft.client.renderer.entity.EntityRenderer;
@@ -38,5 +39,11 @@ public abstract class LivingEntityRendererStateCaptureMixin {
                 .map(runtime -> MmdRenderSnapshot.Context.INVENTORY)
                 .orElse(MmdRenderSnapshot.Context.WORLD);
         extension.mmdskin$setSnapshot(MmdSnapshotFactory.capture(living, livingState, context));
+        // 尸体接管后原版影子要去掉：MMD 尸体自己不走原版阴影通道，
+        // 不抑制的话地上会留一个"没有身体的影子"。
+        // 26.3 的影子提取（EntityRenderer.extractShadow）只拿得到 render state，
+        // 所以结论必须在这里（还有实体对象的时候）先记到 state 上。
+        extension.mmdskin$setSuppressShadow(
+                RagdollManager.getInstance().shouldSuppressEntityRender(living));
     }
 }

@@ -8,6 +8,7 @@ import com.shiroha.mmdskin.bridge.runtime.NativeModelPort;
 import com.shiroha.mmdskin.bridge.runtime.NativeModelQueryPort;
 import com.shiroha.mmdskin.bridge.runtime.NativeMorphPort;
 import com.shiroha.mmdskin.bridge.runtime.NativePhysicsPort;
+import com.shiroha.mmdskin.bridge.runtime.NativeRagdollPort;
 import com.shiroha.mmdskin.bridge.runtime.NativeStagePort;
 import com.shiroha.mmdskin.bridge.runtime.NativeVrPort;
 
@@ -51,13 +52,17 @@ public final class NativePortAdapters {
         return ADAPTER;
     }
 
+    public static NativeRagdollPort ragdoll() {
+        return ADAPTER;
+    }
+
     public static NativeVrPort vr() {
         return ADAPTER;
     }
 
     private static final class Adapter implements NativeModelLoadPort, NativeModelPort, NativeModelMatrixPort,
             NativeModelQueryPort, NativeAnimationPort, NativeMorphPort, NativeStagePort,
-            NativePhysicsPort, NativeVrPort {
+            NativePhysicsPort, NativeRagdollPort, NativeVrPort {
         @Override
         public long loadModel(String modelFile, String modelDirectory, Format format,
                               int animationLayers) {
@@ -305,6 +310,49 @@ public final class NativePortAdapters {
             NativeBindings.SetPhysicsConfig(enabled, gravityY, physicsFps, maxSubstepCount,
                     inertiaStrength, maxLinearVelocity, maxAngularVelocity, jointsEnabled,
                     kinematicFilter, debugLog);
+        }
+
+        @Override
+        public boolean enterRagdoll(long modelHandle, float[] params) {
+            return NativeBindings.RagdollEnable(modelHandle, params);
+        }
+
+        @Override
+        public void disableRagdoll(long modelHandle) {
+            NativeBindings.RagdollDisable(modelHandle);
+        }
+
+        @Override
+        public void setRagdollGround(long modelHandle, float groundLocalY) {
+            NativeBindings.RagdollSetGround(modelHandle, groundLocalY);
+        }
+
+        @Override
+        public void applyRagdollVelocityDelta(long modelHandle, float vx, float vy, float vz,
+                                              float yawRadians, float worldToModelScale,
+                                              boolean upperBodyOnly) {
+            NativeBindings.RagdollApplyVelocityDelta(modelHandle, vx, vy, vz, yawRadians,
+                    worldToModelScale, upperBodyOnly);
+        }
+
+        @Override
+        public boolean isRagdollActive(long modelHandle) {
+            return NativeBindings.RagdollIsActive(modelHandle);
+        }
+
+        @Override
+        public void setRagdollFrozen(long modelHandle, boolean frozen) {
+            NativeBindings.RagdollSetFrozen(modelHandle, frozen);
+        }
+
+        @Override
+        public void setModelPhysicsEnabled(long modelHandle, boolean enabled) {
+            NativeBindings.SetPhysicsEnabled(modelHandle, enabled);
+        }
+
+        @Override
+        public String getRagdollDebugInfo(long modelHandle) {
+            return NativeBindings.RagdollGetDebugInfo(modelHandle);
         }
 
         @Override

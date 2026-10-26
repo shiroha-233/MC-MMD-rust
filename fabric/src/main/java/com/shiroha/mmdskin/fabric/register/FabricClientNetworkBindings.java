@@ -2,6 +2,7 @@
 package com.shiroha.mmdskin.fabric.register;
 
 import com.shiroha.mmdskin.bonesync.BoneSyncNetworkHandler;
+import com.shiroha.mmdskin.distrib.ModelDistributionClient;
 import com.shiroha.mmdskin.fabric.network.MmdSkinNetworkPack;
 import com.shiroha.mmdskin.player.sync.PlayerMorphSyncService;
 import com.shiroha.mmdskin.ui.network.ActionWheelNetworkHandler;
@@ -56,6 +57,16 @@ final class FabricClientNetworkBindings {
             LocalPlayer player = minecraft.player;
             if (player != null) {
                 MmdSkinNetworkPack.sendBinaryToServer(NetworkOpCode.BONE_SYNC, player.getUUID(), payload);
+            }
+        });
+
+        // 模型分发：客户端向服务器请求某个模型。
+        // 断点续传靠"首个未完成的文件相对路径"表达，格式 "模型名|相对路径"。
+        ModelDistributionClient.setRequester((modelName, firstIncompletePath) -> {
+            LocalPlayer player = minecraft.player;
+            if (player != null) {
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.DISTRIB_REQUEST, player.getUUID(),
+                        modelName + "|" + (firstIncompletePath == null ? "" : firstIncompletePath));
             }
         });
     }

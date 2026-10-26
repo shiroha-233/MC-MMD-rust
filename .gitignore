@@ -129,3 +129,9 @@ rust_engine/VR_RUNTIME_HANDOFF.md
 /.tmp_vivecraft_scan
 rust_engine/deps/PhysX/
 /minecraft-sources
+
+# codegraph index
+.codegraph/
+
+# codegraph auth key (never commit)
+.codegraph/auth.key

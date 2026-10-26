@@ -3,24 +3,26 @@
   "minVersion": "0.8",
   "package": "com.shiroha.mmdskin.mixin.fabric",
   "plugin": "com.shiroha.mmdskin.mixin.fabric.compat.MmdFabricMixinPlugin",
-  "compatibilityLevel": "JAVA_21",
-  "refmap": "mmdskin-fabric-refmap.json",
+  "compatibilityLevel": "JAVA_25",
   "mixins": [],
   "client": [
     "FabricPlayerRendererMixin",
     "InventoryScreenMixin",
     "EntityRendererCullingMixin",
+    "EntityShadowSuppressMixin",
     "LivingEntityRenderStateMixin",
     "LivingEntityRendererStateCaptureMixin",
+    "LivingEntityDeathParticleMixin",
     "compat.VivecraftVRArmHelperMixin",
     "CameraMixin",
-    "GameRendererMixin",
+    "DeathScreenMixin",
     "KeyMappingAccessor",
     "ItemInHandRendererMixin",
     "MinecraftMixin",
     "MouseHandlerMixin",
     "KeyboardInputMixin",
-    "EntityMixin"
+    "EntityMixin",
+    "GuiEntityRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

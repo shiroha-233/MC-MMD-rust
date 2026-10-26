@@ -1,6 +1,7 @@
 /* 文件职责：提供场景模型选择原生界面。 */
 package com.shiroha.mmdskin.ui.selector;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.shiroha.mmdskin.asset.catalog.ModelInfo;
 import com.shiroha.mmdskin.scene.client.SceneModelCatalog;
 import com.shiroha.mmdskin.client.MmdClientRenderRuntime;
@@ -8,8 +9,10 @@ import com.shiroha.mmdskin.scene.client.ScenePlacement;
 import com.shiroha.mmdskin.scene.client.SceneSession;
 import com.shiroha.mmdskin.ui.chrome.TranslucentTrayChrome;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import org.apache.logging.log4j.LogManager;
@@ -64,7 +67,7 @@ public class SceneSelectorScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick) {
         Minecraft minecraft = Minecraft.getInstance();
         try {
             updateLayout();
@@ -78,12 +81,14 @@ public class SceneSelectorScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0) {
-            return super.mouseClicked(mouseX, mouseY, button);
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
+            return super.mouseClicked(event, doubleClick);
         }
+        double mouseX = event.x();
+        double mouseY = event.y();
         if (!layout.panel.contains(mouseX, mouseY)) {
-            return super.mouseClicked(mouseX, mouseY, button);
+            return super.mouseClicked(event, doubleClick);
         }
 
         if (layout.doneButton.contains(mouseX, mouseY)) {
@@ -111,12 +116,12 @@ public class SceneSelectorScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) {
+    public boolean keyPressed(KeyEvent event) {
+        if (event.isEscape()) {
             this.onClose();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override
@@ -193,7 +198,7 @@ public class SceneSelectorScreen extends Screen {
         return Math.max(0.0f, contentHeight - layout.listBox.h);
     }
 
-    private void renderScreen(GuiGraphics guiGraphics) {
+    private void renderScreen(GuiGraphicsExtractor guiGraphics) {
         SceneSession scenes = MmdClientRenderRuntime.current().scenes();
         boolean hasScene = scenes.isActive() || scenes.isLoading();
         String secondaryText = hasScene
@@ -202,8 +207,8 @@ public class SceneSelectorScreen extends Screen {
 
         TranslucentTrayChrome.drawOverlay(guiGraphics, this.width, this.height);
         TranslucentTrayChrome.drawPanel(guiGraphics, layout.panel.x, layout.panel.y, layout.panel.w, layout.panel.h);
-        guiGraphics.drawString(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
-        guiGraphics.drawString(this.font, buildStatusText(), layout.header.x, layout.header.y + 10, TranslucentTrayChrome.SUBTITLE_TEXT, false);
+        guiGraphics.text(this.font, this.title.getString(), layout.header.x, layout.header.y + 1, TranslucentTrayChrome.TITLE_TEXT, false);
+        guiGraphics.text(this.font, buildStatusText(), layout.header.x, layout.header.y + 10, TranslucentTrayChrome.SUBTITLE_TEXT, false);
 
         TranslucentTrayChrome.drawButton(guiGraphics, this.font, layout.doneButton.x, layout.doneButton.y, layout.doneButton.w, layout.doneButton.h,
                 Component.translatable("gui.done").getString(), hoveredButton == ButtonTarget.DONE, true);
@@ -213,7 +218,7 @@ public class SceneSelectorScreen extends Screen {
         UiRect list = layout.listBox;
         TranslucentTrayChrome.fillListArea(guiGraphics, list.x, list.y, list.w, list.h);
         if (sceneCards.isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, "No scenes", list.centerX(), list.centerY() - 4, TranslucentTrayChrome.BODY_TEXT);
+            guiGraphics.centeredText(this.font, "No scenes", list.centerX(), list.centerY() - 4, TranslucentTrayChrome.BODY_TEXT);
             return;
         }
 
@@ -231,7 +236,7 @@ public class SceneSelectorScreen extends Screen {
             boolean selected = card.displayName.equals(currentScene);
             boolean hovered = i == hoveredCard;
             guiGraphics.fill(list.x + 4, y, list.x + list.w - 4, y + CARD_HEIGHT, TranslucentTrayChrome.cardBackground(selected, hovered));
-            guiGraphics.drawString(this.font, shorten(card.displayName, 14), list.x + 7, y + 3, TranslucentTrayChrome.BODY_TEXT, false);
+            guiGraphics.text(this.font, shorten(card.displayName, 14), list.x + 7, y + 3, TranslucentTrayChrome.BODY_TEXT, false);
             y += CARD_HEIGHT + CARD_GAP;
         }
         guiGraphics.disableScissor();
@@ -279,17 +284,17 @@ public class SceneSelectorScreen extends Screen {
     }
 
     private void flushPendingActions(Minecraft minecraft) {
-        if (pendingClose && minecraft.screen == this) {
+        if (pendingClose && minecraft.gui.screen() == this) {
             pendingClose = false;
-            minecraft.setScreen(null);
+            minecraft.gui.setScreen(null);
         }
     }
 
     private void closeAfterFailure(Throwable throwable) {
         LOGGER.error("[SceneSelector] Native selector render failed and will close", throwable);
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.screen == this) {
-            minecraft.setScreen(null);
+        if (minecraft.gui.screen() == this) {
+            minecraft.gui.setScreen(null);
         }
     }
 

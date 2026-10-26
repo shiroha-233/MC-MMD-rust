@@ -81,6 +81,7 @@ mod ffi {
         );
         pub fn bw_world_remove_constraint(world: *mut BW_World, c: *mut BW_Constraint);
         pub fn bw_world_set_kinematic_filter(world: *mut BW_World, enabled: bool);
+        pub fn bw_world_refresh_rigid_body(world: *mut BW_World, rb: *mut BW_RigidBody);
 
         // 碰撞形状
         pub fn bw_shape_sphere(radius: c_float) -> *mut BW_Shape;
@@ -253,6 +254,11 @@ impl BulletWorld {
 
     pub fn set_kinematic_filter(&self, enabled: bool) {
         unsafe { ffi::bw_world_set_kinematic_filter(self.ptr, enabled) }
+    }
+
+    /// 运动学刚体移动后刷新 broadphase AABB / 接触对并唤醒动态刚体
+    pub fn refresh_rigid_body(&self, rb: &BulletRigidBody) {
+        unsafe { ffi::bw_world_refresh_rigid_body(self.ptr, rb.ptr) }
     }
 }
 

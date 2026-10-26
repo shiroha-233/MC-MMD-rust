@@ -1,0 +1,1081 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/C:/Users/naxid/.gradle/wrapper/dists/gradle-9.8.2-bin/3wb4k92zt3y241x5qwqkhg6w0/gradle-9.8.2/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:24: 错误: 找不到符号
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+                                                  ^
+  符号:   类 HudRenderCallback
+  位置: 程序包 net.fabricmc.fabric.api.client.rendering.v1
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:25: 错误: 找不到符号
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+                                                  ^
+  符号:   类 WorldRenderEvents
+  位置: 程序包 net.fabricmc.fabric.api.client.rendering.v1
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:14: 错误: 程序包net.fabricmc.fabric.api.client.keybinding.v1不存在
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+                                                   ^
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:22: 错误: 程序包org.lwjgl.glfw不存在
+import org.lwjgl.glfw.GLFW;
+                     ^
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\mixin\fabric\ItemInHandRendererMixin.java:28: 错误: 找不到符号
+                                        SubmitNodeCollector.BufferSource bufferSource,
+                                                           ^
+  符号:   类 BufferSource
+  位置: 接口 SubmitNodeCollector
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:4: 错误: 找不到符号
+import com.mojang.blaze3d.buffers.BufferType;
+                                 ^
+  符号:   类 BufferType
+  位置: 程序包 com.mojang.blaze3d.buffers
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:5: 错误: 找不到符号
+import com.mojang.blaze3d.buffers.BufferUsage;
+                                 ^
+  符号:   类 BufferUsage
+  位置: 程序包 com.mojang.blaze3d.buffers
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:14: 错误: 程序包com.mojang.blaze3d.textures不存在
+import com.mojang.blaze3d.textures.TextureFormat;
+                                  ^
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:343: 错误: 找不到符号
+        private VertexFormat.IndexType indexType;
+                            ^
+  符号:   类 IndexType
+  位置: 类 VertexFormat
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:455: 错误: 找不到符号
+        private static VertexFormat.IndexType toGpuIndexType(NativeRenderDataPort.IndexType type) {
+                                   ^
+  符号:   类 IndexType
+  位置: 类 VertexFormat
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\texture\MinecraftTextureDevice.java:8: 错误: 程序包com.mojang.blaze3d.textures不存在
+import com.mojang.blaze3d.textures.TextureFormat;
+                                  ^
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\stage\client\camera\StageAudioPlayer.java:3: 错误: 程序包javazoom.jl.decoder不存在
+import javazoom.jl.decoder.*;
+                  ^
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\ui\wheel\AbstractWheelScreen.java:9: 错误: 找不到符号
+import net.minecraft.client.renderer.RenderType;
+                                    ^
+  符号:   类 RenderType
+  位置: 程序包 net.minecraft.client.renderer
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\ui\wheel\ConfigWheelScreen.java:15: 错误: 程序包org.lwjgl.glfw不存在
+import org.lwjgl.glfw.GLFW;
+                     ^
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\config\MobReplacementListEntry.java:52: 错误: 找不到符号
+        Screen parent = Minecraft.getInstance().screen;
+                                               ^
+  符号:   变量 screen
+  位置: 类 Minecraft
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\config\MobReplacementListEntry.java:56: 错误: 找不到符号
+        Minecraft.getInstance().setScreen(new MobReplacementPickerScreen(
+                               ^
+  符号:   方法 setScreen(MobReplacementPickerScreen)
+  位置: 类 Minecraft
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\config\MobReplacementListEntry.java:118: 错误: 方法不会覆盖或实现超类型的方法
+    @Override
+    ^
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\config\MobReplacementListEntry.java:131: 错误: 找不到符号
+        guiGraphics.drawString(minecraft.font, target.displayName(), x, y + 6, COLOR_LABEL, false);
+                   ^
+  符号:   方法 drawString(Font,Component,int,int,int,boolean)
+  位置: 类型为GuiGraphicsExtractor的变量 guiGraphics
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\config\MobReplacementListEntry.java:138: 错误: 找不到符号
+        guiGraphics.drawString(minecraft.font, summary, chooseX - 8 - summaryWidth, y + 6, COLOR_VALUE, false);
+                   ^
+  符号:   方法 drawString(Font,String,int,int,int,boolean)
+  位置: 类型为GuiGraphicsExtractor的变量 guiGraphics
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\config\MobReplacementListEntry.java:140: 错误: 找不到符号
+        chooseButton.render(guiGraphics, mouseX, mouseY, delta);
+                    ^
+  符号:   方法 render(GuiGraphicsExtractor,int,int,float)
+  位置: 类型为Button的变量 chooseButton
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\config\MobReplacementListEntry.java:141: 错误: 找不到符号
+        resetButton.render(guiGraphics, mouseX, mouseY, delta);
+                   ^
+  符号:   方法 render(GuiGraphicsExtractor,int,int,float)
+  位置: 类型为Button的变量 resetButton
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\render\MobReplacementTargets.java:30: 错误: 找不到符号
+        if (entityType == EntityType.PLAYER) {
+                                    ^
+  符号:   变量 PLAYER
+  位置: 类 EntityType
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:51: 错误: 程序包HudRenderCallback不存在
+        HudRenderCallback.EVENT.register((graphics, tickDelta) -> PerformanceHud.render(graphics));
+                         ^
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:57: 错误: 程序包WorldRenderEvents不存在
+        WorldRenderEvents.START.register(context -> MmdClientRenderRuntime.current().beginFrame(
+                         ^
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:59: 错误: 程序包WorldRenderEvents不存在
+        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+                         ^
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:74: 错误: 找不到符号
+                    camera.x, camera.y, camera.z, Lightmap.FULL_BRIGHT);
+                                                          ^
+  符号:   变量 FULL_BRIGHT
+  位置: 类 Lightmap
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:94: 错误: 方法引用无效
+                                RenderSystem.getDevice(), minecraft.getShaderManager()::getShader);
+                                                          ^
+  找不到符号
+    符号:   方法 getShader(Identifier,ShaderType)
+    位置: 类 ShaderManager
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:116: 错误: 找不到符号
+        if (minecraft.screen == null || minecraft.screen instanceof ConfigWheelScreen) {
+                     ^
+  符号:   变量 screen
+  位置: 类型为Minecraft的变量 minecraft
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:116: 错误: 找不到符号
+        if (minecraft.screen == null || minecraft.screen instanceof ConfigWheelScreen) {
+                                                 ^
+  符号:   变量 screen
+  位置: 类型为Minecraft的变量 minecraft
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:119: 错误: 找不到符号
+                minecraft.setScreen(new ConfigWheelScreen(keyConfigWheel));
+                         ^
+  符号:   方法 setScreen(ConfigWheelScreen)
+  位置: 类型为Minecraft的变量 minecraft
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:126: 错误: 找不到符号
+        if (minecraft.screen == null) {
+                     ^
+  符号:   变量 screen
+  位置: 类型为Minecraft的变量 minecraft
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:30: 错误: 找不到符号
+        InputConstants.Type.KEYSYM,
+                           ^
+  符号:   变量 KEYSYM
+  位置: 类 Type
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:31: 错误: 找不到符号
+        GLFW.GLFW_KEY_LEFT_ALT,
+        ^
+  符号:   变量 GLFW
+  位置: 类 MmdSkinRegisterClient
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:45: 错误: 找不到符号
+                InputConstants.Type.KEYSYM,
+                                   ^
+  符号:   变量 KEYSYM
+  位置: 类 Type
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:65: 错误: 找不到符号
+        KeyBindingHelper.registerKeyBinding(KEY_CONFIG_WHEEL);
+        ^
+  符号:   变量 KeyBindingHelper
+  位置: 类 MmdSkinRegisterClient
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:67: 错误: 找不到符号
+            KeyBindingHelper.registerKeyBinding(keyQuickModel);
+            ^
+  符号:   变量 KeyBindingHelper
+  位置: 类 MmdSkinRegisterClient
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:93: 错误: 找不到符号
+            EntityType.byString(entityTypeId).ifPresentOrElse(
+                      ^
+  符号:   方法 byString(String)
+  位置: 类 EntityType
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterCommon.java:25: 错误: 找不到符号
+        PayloadTypeRegistry.playC2S().register(MmdSkinPayload.TYPE, MmdSkinPayload.CODEC);
+                           ^
+  符号:   方法 playC2S()
+  位置: 接口 PayloadTypeRegistry
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterCommon.java:26: 错误: 找不到符号
+        PayloadTypeRegistry.playS2C().register(MmdSkinPayload.TYPE, MmdSkinPayload.CODEC);
+                           ^
+  符号:   方法 playS2C()
+  位置: 接口 PayloadTypeRegistry
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\stage\FabricStageSessionRegistry.java:37: 错误: 找不到符号
+        return new StageServerPlayer(player.getUUID(), player.getGameProfile().getName());
+                                                                              ^
+  符号:   方法 getName()
+  位置: 类 GameProfile
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\stage\FabricStageSessionRegistry.java:53: 错误: 找不到符号
+            return new StageServerPlayer(player.getUUID(), player.getGameProfile().getName());
+                                                                                  ^
+  符号:   方法 getName()
+  位置: 类 GameProfile
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\stage\FabricStageSessionRegistry.java:59: 错误: 找不到符号
+                    .map(player -> new StageServerPlayer(player.getUUID(), player.getGameProfile().getName()))
+                                                                                                  ^
+  符号:   方法 getName()
+  位置: 类 GameProfile
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\mixin\fabric\EntityMixin.java:24: 错误: 找不到符号
+                .resolveInteractionEyePosition(entity, partialTick, minecraft.gameRenderer.getMainCamera())
+                                                                                          ^
+  符号:   方法 getMainCamera()
+  位置: 类型为GameRenderer的变量 gameRenderer
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\mixin\fabric\EntityMixin.java:37: 错误: 找不到符号
+                .resolveViewVector(entity, minecraft.gameRenderer.getMainCamera())
+                                                                 ^
+  符号:   方法 getMainCamera()
+  位置: 类型为GameRenderer的变量 gameRenderer
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\mixin\fabric\FabricPlayerRendererMixin.java:52: 错误: 找不到符号
+        super.render((LivingEntityRenderState) state, poseStack, buffers, packedLight);
+             ^
+  符号: 方法 render(LivingEntityRenderState,PoseStack,SubmitNodeCollector,int)
+D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\mixin\fabric\GameRendererMixin.java:50: 错误: 找不到符号
+        Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
+                                        ^
+  符号:   方法 getMainCamera()
+  位置: 类型为GameRenderer的变量 gameRenderer
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\draw\MmdHeldItemRenderer.java:33: 错误: 找不到符号
+            renderHand(state.rightHandItem, model, NativeModelMatrixPort.Hand.RIGHT,
+                            ^
+  符号:   变量 rightHandItem
+  位置: 类型为AvatarRenderState的变量 state
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\draw\MmdHeldItemRenderer.java:35: 错误: 找不到符号
+            renderHand(state.leftHandItem, model, NativeModelMatrixPort.Hand.LEFT,
+                            ^
+  符号:   变量 leftHandItem
+  位置: 类型为AvatarRenderState的变量 state
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\draw\MmdHeldItemRenderer.java:55: 错误: 对于mulPose(Quaternionf), 找不到合适的方法
+            poseStack.mulPose(ITEM_ORIENTATION);
+                     ^
+    方法 PoseStack.mulPose(Matrix4fc)不适用
+      (参数不匹配; Quaternionf无法转换为Matrix4fc)
+    方法 PoseStack.mulPose(Transformation)不适用
+      (参数不匹配; Quaternionf无法转换为Transformation)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\draw\MmdHeldItemRenderer.java:58: 错误: 找不到符号
+            item.render(poseStack, buffers, packedLight, OverlayTexture.NO_OVERLAY);
+                ^
+  符号:   方法 render(PoseStack,SubmitNodeCollector,int,int)
+  位置: 类型为ItemStackRenderState的变量 item
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\entity\EntityModelSelection.java:21: 错误: 找不到符号
+                player.getUUID(), player.getGameProfile().getName(), local);
+                                                         ^
+  符号:   方法 getName()
+  位置: 类 GameProfile
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\entity\LegacyEntityMmdRenderer.java:54: 错误: 方法不会覆盖或实现超类型的方法
+    @Override
+    ^
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\entity\LegacyEntityMmdRenderer.java:58: 错误: 找不到符号
+            super.render(state, poseStack, buffers, packedLight);
+                 ^
+  符号: 方法 render(State,PoseStack,SubmitNodeCollector,int)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\entity\LegacyEntityMmdRenderer.java:61: 错误: 找不到符号
+        super.render(state, poseStack, buffers, packedLight);
+             ^
+  符号: 方法 render(State,PoseStack,SubmitNodeCollector,int)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\entity\MobReplacementResolver.java:17: 错误: 找不到符号
+        if (entity == null || entity.getType() == EntityType.PLAYER) {
+                                                            ^
+  符号:   变量 PLAYER
+  位置: 类 EntityType
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\FirstPersonCamera.java:57: 错误: 找不到符号
+                && camera.isInitialized() && camera.getEntity() == entity) {
+                                                   ^
+  符号:   方法 getEntity()
+  位置: 类型为Camera的变量 camera
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\FirstPersonCamera.java:58: 错误: 找不到符号
+            return Optional.of(camera.getPosition());
+                                     ^
+  符号:   方法 getPosition()
+  位置: 类型为Camera的变量 camera
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\FirstPersonCamera.java:70: 错误: 找不到符号
+                || !camera.isInitialized() || camera.getEntity() != entity) {
+                                                    ^
+  符号:   方法 getEntity()
+  位置: 类型为Camera的变量 camera
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\FirstPersonCamera.java:73: 错误: 找不到符号
+        return Optional.of(viewVector(camera.getYRot(), camera.getXRot()));
+                                            ^
+  符号:   方法 getYRot()
+  位置: 类型为Camera的变量 camera
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\FirstPersonCamera.java:73: 错误: 找不到符号
+        return Optional.of(viewVector(camera.getYRot(), camera.getXRot()));
+                                                              ^
+  符号:   方法 getXRot()
+  位置: 类型为Camera的变量 camera
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\LocalPlayerRenderContributor.java:85: 错误: 找不到符号
+            double x = state.x - camera.getPosition().x;
+                                       ^
+  符号:   方法 getPosition()
+  位置: 类型为Camera的变量 camera
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\LocalPlayerRenderContributor.java:86: 错误: 找不到符号
+            double y = state.y - camera.getPosition().y;
+                                       ^
+  符号:   方法 getPosition()
+  位置: 类型为Camera的变量 camera
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\LocalPlayerRenderContributor.java:87: 错误: 找不到符号
+            double z = state.z - camera.getPosition().z;
+                                       ^
+  符号:   方法 getPosition()
+  位置: 类型为Camera的变量 camera
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\frame\MmdSnapshotFactory.java:57: 错误: 找不到符号
+                state.appearsGlowing,
+                     ^
+  符号:   变量 appearsGlowing
+  位置: 类型为LivingEntityRenderState的变量 state
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:80: 错误: 找不到符号
+        RenderTarget target = Minecraft.getInstance().getMainRenderTarget();
+                                                     ^
+  符号:   方法 getMainRenderTarget()
+  位置: 类 Minecraft
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:82: 错误: 找不到符号
+        GpuTexture depth = target.useDepth ? target.getDepthTexture() : null;
+                                 ^
+  符号:   变量 useDepth
+  位置: 类型为RenderTarget的变量 target
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:83: 错误: 找不到符号
+        if (color == null || target.useDepth && depth == null) {
+                                   ^
+  符号:   变量 useDepth
+  位置: 类型为RenderTarget的变量 target
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:88: 错误: 对于createRenderPass(GpuTexture,OptionalInt,GpuTexture,OptionalDouble), 找不到合适的方法
+        try (RenderPass pass = encoder.createRenderPass(
+                                      ^
+    方法 CommandEncoder.createRenderPass(Supplier<String>,GpuTextureView,Optional<Vector4fc>)不适用
+      (实际参数列表和形式参数列表长度不同)
+    方法 CommandEncoder.createRenderPass(Supplier<String>,GpuTextureView,Optional<Vector4fc>,@org.jspecify.annotations.Nullable GpuTextureView,OptionalDouble)不适用
+      (实际参数列表和形式参数列表长度不同)
+    方法 CommandEncoder.createRenderPass(Supplier<String>,GpuTextureView,Optional<Vector4fc>,@org.jspecify.annotations.Nullable GpuTextureView,OptionalDouble,RenderArea)不适用
+      (实际参数列表和形式参数列表长度不同)
+    方法 CommandEncoder.createRenderPass(RenderPassDescriptor)不适用
+      (实际参数列表和形式参数列表长度不同)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:165: 错误: 不兼容的类型: RenderPipeline无法转换为CompiledRenderPipeline
+        pass.setPipeline(MmdRenderPipelines.pipeline(draw.pipeline(), mesh.gpuSkinning));
+                                                    ^
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:173: 错误: 对于setUniform(String,float[]), 找不到合适的方法
+                pass.setUniform(BONE_UNIFORMS[index], mesh.paletteMatrices[offset + index]);
+                    ^
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (参数不匹配; float[]无法转换为GpuBuffer)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (参数不匹配; float[]无法转换为GpuBufferSlice)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:176: 错误: 找不到符号
+        pass.bindSampler("Sampler0", draw.texture() == null ? fallback : draw.texture());
+            ^
+  符号:   方法 bindSampler(String,draw.textu[...]ure())
+  位置: 类型为RenderPass的变量 pass
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:177: 错误: 对于setUniform(String,Matrix4f), 找不到合适的方法
+        pass.setUniform("MmdModelMat", draw.modelMatrix());
+            ^
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (参数不匹配; Matrix4f无法转换为GpuBuffer)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (参数不匹配; Matrix4f无法转换为GpuBufferSlice)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:179: 错误: 对于setUniform(String,float), 找不到合适的方法
+        pass.setUniform("MmdAlpha", command.alpha());
+            ^
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (参数不匹配; float无法转换为GpuBuffer)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (参数不匹配; float无法转换为GpuBufferSlice)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:180: 错误: 对于setUniform(String,float), 找不到合适的方法
+        pass.setUniform("MmdLightFactor", uniforms.lightingEnabled()
+            ^
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (参数不匹配; 条件表达式中的类型错误
+          float无法转换为GpuBuffer)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (参数不匹配; 条件表达式中的类型错误
+          float无法转换为GpuBufferSlice)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:182: 错误: 对于setUniform(String,float), 找不到合适的方法
+        pass.setUniform("MmdOutlineWidth", draw.outline() ? uniforms.outlineWidth() : 0.0F);
+            ^
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (参数不匹配; 条件表达式中的类型错误
+          float无法转换为GpuBuffer)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (参数不匹配; 条件表达式中的类型错误
+          float无法转换为GpuBufferSlice)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:183: 错误: 对于setUniform(String,float,float,float), 找不到合适的方法
+        pass.setUniform("MmdOutlineColor", uniforms.outlineR(), uniforms.outlineG(), uniforms.outlineB());
+            ^
+    方法 RenderPass.setUniform(String,@org.jspecify.annotations.Nullable GpuTextureView,@org.jspecify.annotations.Nullable GpuSampler)不适用
+      (实际参数列表和形式参数列表长度不同)
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (实际参数列表和形式参数列表长度不同)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (实际参数列表和形式参数列表长度不同)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:184: 错误: 对于setUniform(String,int), 找不到合适的方法
+        pass.setUniform("MmdToonLevels", uniforms.toonLevels());
+            ^
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (参数不匹配; int无法转换为GpuBuffer)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (参数不匹配; int无法转换为GpuBufferSlice)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:185: 错误: 对于setUniform(String,float,float,float), 找不到合适的方法
+        pass.setUniform("MmdToonShadowColor", uniforms.shadowR(), uniforms.shadowG(), uniforms.shadowB());
+            ^
+    方法 RenderPass.setUniform(String,@org.jspecify.annotations.Nullable GpuTextureView,@org.jspecify.annotations.Nullable GpuSampler)不适用
+      (实际参数列表和形式参数列表长度不同)
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (实际参数列表和形式参数列表长度不同)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (实际参数列表和形式参数列表长度不同)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:186: 错误: 对于setUniform(String,float), 找不到合适的方法
+        pass.setUniform("MmdRimPower", uniforms.rimPower());
+            ^
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (参数不匹配; float无法转换为GpuBuffer)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (参数不匹配; float无法转换为GpuBufferSlice)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:187: 错误: 对于setUniform(String,float), 找不到合适的方法
+        pass.setUniform("MmdRimIntensity", uniforms.rimIntensity());
+            ^
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (参数不匹配; float无法转换为GpuBuffer)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (参数不匹配; float无法转换为GpuBufferSlice)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:188: 错误: 对于setUniform(String,float), 找不到合适的方法
+        pass.setUniform("MmdSpecularPower", uniforms.specularPower());
+            ^
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (参数不匹配; float无法转换为GpuBuffer)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (参数不匹配; float无法转换为GpuBufferSlice)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:189: 错误: 对于setUniform(String,float), 找不到合适的方法
+        pass.setUniform("MmdSpecularIntensity", uniforms.specularIntensity());
+            ^
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (参数不匹配; float无法转换为GpuBuffer)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (参数不匹配; float无法转换为GpuBufferSlice)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:190: 错误: 对于setUniform(String,float), 找不到合适的方法
+        pass.setUniform("MmdEmission", draw.pipeline() == PipelineVariant.GLOWING ? 1.0F : 0.0F);
+            ^
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (参数不匹配; 条件表达式中的类型错误
+          float无法转换为GpuBuffer)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (参数不匹配; 条件表达式中的类型错误
+          float无法转换为GpuBufferSlice)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:191: 错误: 不兼容的类型: GpuBuffer无法转换为GpuBufferSlice
+        pass.setVertexBuffer(0, mesh.vertexBuffer);
+                                    ^
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:193: 错误: 无法将接口 RenderPass中的方法 drawIndexed应用到给定类型;
+        pass.drawIndexed(command.firstIndex(), command.indexCount());
+            ^
+  需要: int,int,int,int,int
+  找到:    int,int
+  原因: 实际参数列表和形式参数列表长度不同
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:198: 错误: 对于setUniform(String,float,float,float,float), 找不到合适的方法
+            pass.setUniform("MmdMaterialColor", 1.0F, 1.0F, 1.0F, 1.0F);
+                ^
+    方法 RenderPass.setUniform(String,@org.jspecify.annotations.Nullable GpuTextureView,@org.jspecify.annotations.Nullable GpuSampler)不适用
+      (实际参数列表和形式参数列表长度不同)
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (实际参数列表和形式参数列表长度不同)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (实际参数列表和形式参数列表长度不同)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:201: 错误: 对于setUniform(String,float,float,float,float), 找不到合适的方法
+        pass.setUniform("MmdMaterialColor",
+            ^
+    方法 RenderPass.setUniform(String,@org.jspecify.annotations.Nullable GpuTextureView,@org.jspecify.annotations.Nullable GpuSampler)不适用
+      (实际参数列表和形式参数列表长度不同)
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (实际参数列表和形式参数列表长度不同)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (实际参数列表和形式参数列表长度不同)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:216: 错误: 对于setUniform(String,float[]), 找不到合适的方法
+            pass.setUniform(uniform, IDENTITY_MATRIX);
+                ^
+    方法 RenderPass.setUniform(String,GpuBuffer)不适用
+      (参数不匹配; float[]无法转换为GpuBuffer)
+    方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+      (参数不匹配; float[]无法转换为GpuBufferSlice)
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:275: 错误: 找不到符号
+                () -> "MMD fallback white texture", TextureFormat.RGBA8, 1, 1, 1);
+                                                    ^
+  符号:   变量 TextureFormat
+  位置: 类 MmdGpuDrawDevice
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:276: 错误: 找不到符号
+        whiteTexture.setTextureFilter(FilterMode.LINEAR, false);
+                    ^
+  符号:   方法 setTextureFilter(FilterMode,boolean)
+  位置: 类型为GpuTexture的变量 whiteTexture
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:370: 错误: 无法将接口 CommandEncoder中的方法 writeToBuffer应用到给定类型;
+                encoder.writeToBuffer(vertexBuffer, vertexStaging, 0);
+                       ^
+  需要: GpuBufferSlice,ByteBuffer
+  找到:    GpuBuffer,ByteBuffer,int
+  原因: 实际参数列表和形式参数列表长度不同
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:432: 错误: 找不到符号
+                    BufferType.INDICES, BufferUsage.STATIC_WRITE, indices);
+                    ^
+  符号:   变量 BufferType
+  位置: 类 MmdGpuDrawDevice.GpuMesh
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:432: 错误: 找不到符号
+                    BufferType.INDICES, BufferUsage.STATIC_WRITE, indices);
+                                        ^
+  符号:   变量 BufferUsage
+  位置: 类 MmdGpuDrawDevice.GpuMesh
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:437: 错误: 找不到符号
+                    BufferType.INDICES, BufferUsage.STATIC_WRITE, outlineIndices);
+                    ^
+  符号:   变量 BufferType
+  位置: 类 MmdGpuDrawDevice.GpuMesh
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:437: 错误: 找不到符号
+                    BufferType.INDICES, BufferUsage.STATIC_WRITE, outlineIndices);
+                                        ^
+  符号:   变量 BufferUsage
+  位置: 类 MmdGpuDrawDevice.GpuMesh
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:440: 错误: 找不到符号
+                    BufferType.VERTICES, BufferUsage.DYNAMIC_WRITE, description.vertexBufferBytes());
+                    ^
+  符号:   变量 BufferType
+  位置: 类 MmdGpuDrawDevice.GpuMesh
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:440: 错误: 找不到符号
+                    BufferType.VERTICES, BufferUsage.DYNAMIC_WRITE, description.vertexBufferBytes());
+                                         ^
+  符号:   变量 BufferUsage
+  位置: 类 MmdGpuDrawDevice.GpuMesh
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:457: 错误: 找不到符号
+                    ? VertexFormat.IndexType.SHORT : VertexFormat.IndexType.INT;
+                                  ^
+  符号:   变量 IndexType
+  位置: 类 VertexFormat
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:457: 错误: 找不到符号
+                    ? VertexFormat.IndexType.SHORT : VertexFormat.IndexType.INT;
+                                                                 ^
+  符号:   变量 IndexType
+  位置: 类 VertexFormat
+D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdRenderPipelines.java:48: 错误: 找不到符号
+            .withUniform("MmdEmission", UniformType.FLOAT)
+                                                   ^
+  符号:   变量 FLOAT
+  位置: 类 UniformType
+注: 某些输入文件使用或覆盖了已过时的 API。
+注: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+注: 某些消息已经过简化; 请使用 -Xdiags:verbose 重新编译以获得完整输出
+100 个错误
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':fabric:compileJava' (registered by plugin class 'org.gradle.api.plugins.JavaBasePlugin').
+> Compilation failed; see the compiler output below.
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:24: 错误: 找不到符号
+  import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+                                                    ^
+    符号:   类 HudRenderCallback
+    位置: 程序包 net.fabricmc.fabric.api.client.rendering.v1
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:25: 错误: 找不到符号
+  import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+                                                    ^
+    符号:   类 WorldRenderEvents
+    位置: 程序包 net.fabricmc.fabric.api.client.rendering.v1
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\mixin\fabric\ItemInHandRendererMixin.java:28: 错误: 找不到符号
+                                          SubmitNodeCollector.BufferSource bufferSource,
+                                                             ^
+    符号:   类 BufferSource
+    位置: 接口 SubmitNodeCollector
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:4: 错误: 找不到符号
+  import com.mojang.blaze3d.buffers.BufferType;
+                                   ^
+    符号:   类 BufferType
+    位置: 程序包 com.mojang.blaze3d.buffers
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:5: 错误: 找不到符号
+  import com.mojang.blaze3d.buffers.BufferUsage;
+                                   ^
+    符号:   类 BufferUsage
+    位置: 程序包 com.mojang.blaze3d.buffers
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:343: 错误: 找不到符号
+          private VertexFormat.IndexType indexType;
+                              ^
+    符号:   类 IndexType
+    位置: 类 VertexFormat
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:455: 错误: 找不到符号
+          private static VertexFormat.IndexType toGpuIndexType(NativeRenderDataPort.IndexType type) {
+                                     ^
+    符号:   类 IndexType
+    位置: 类 VertexFormat
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\ui\wheel\AbstractWheelScreen.java:9: 错误: 找不到符号
+  import net.minecraft.client.renderer.RenderType;
+                                      ^
+    符号:   类 RenderType
+    位置: 程序包 net.minecraft.client.renderer
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\config\MobReplacementListEntry.java:52: 错误: 找不到符号
+          Screen parent = Minecraft.getInstance().screen;
+                                                 ^
+    符号:   变量 screen
+    位置: 类 Minecraft
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\render\MobReplacementTargets.java:30: 错误: 找不到符号
+          if (entityType == EntityType.PLAYER) {
+                                      ^
+    符号:   变量 PLAYER
+    位置: 类 EntityType
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:74: 错误: 找不到符号
+                      camera.x, camera.y, camera.z, Lightmap.FULL_BRIGHT);
+                                                            ^
+    符号:   变量 FULL_BRIGHT
+    位置: 类 Lightmap
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:116: 错误: 找不到符号
+          if (minecraft.screen == null || minecraft.screen instanceof ConfigWheelScreen) {
+                       ^
+    符号:   变量 screen
+    位置: 类型为Minecraft的变量 minecraft
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:116: 错误: 找不到符号
+          if (minecraft.screen == null || minecraft.screen instanceof ConfigWheelScreen) {
+                                                   ^
+    符号:   变量 screen
+    位置: 类型为Minecraft的变量 minecraft
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:126: 错误: 找不到符号
+          if (minecraft.screen == null) {
+                       ^
+    符号:   变量 screen
+    位置: 类型为Minecraft的变量 minecraft
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:30: 错误: 找不到符号
+          InputConstants.Type.KEYSYM,
+                             ^
+    符号:   变量 KEYSYM
+    位置: 类 Type
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:31: 错误: 找不到符号
+          GLFW.GLFW_KEY_LEFT_ALT,
+          ^
+    符号:   变量 GLFW
+    位置: 类 MmdSkinRegisterClient
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:45: 错误: 找不到符号
+                  InputConstants.Type.KEYSYM,
+                                     ^
+    符号:   变量 KEYSYM
+    位置: 类 Type
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:65: 错误: 找不到符号
+          KeyBindingHelper.registerKeyBinding(KEY_CONFIG_WHEEL);
+          ^
+    符号:   变量 KeyBindingHelper
+    位置: 类 MmdSkinRegisterClient
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:67: 错误: 找不到符号
+              KeyBindingHelper.registerKeyBinding(keyQuickModel);
+              ^
+    符号:   变量 KeyBindingHelper
+    位置: 类 MmdSkinRegisterClient
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\draw\MmdHeldItemRenderer.java:33: 错误: 找不到符号
+              renderHand(state.rightHandItem, model, NativeModelMatrixPort.Hand.RIGHT,
+                              ^
+    符号:   变量 rightHandItem
+    位置: 类型为AvatarRenderState的变量 state
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\draw\MmdHeldItemRenderer.java:35: 错误: 找不到符号
+              renderHand(state.leftHandItem, model, NativeModelMatrixPort.Hand.LEFT,
+                              ^
+    符号:   变量 leftHandItem
+    位置: 类型为AvatarRenderState的变量 state
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\entity\MobReplacementResolver.java:17: 错误: 找不到符号
+          if (entity == null || entity.getType() == EntityType.PLAYER) {
+                                                              ^
+    符号:   变量 PLAYER
+    位置: 类 EntityType
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\frame\MmdSnapshotFactory.java:57: 错误: 找不到符号
+                  state.appearsGlowing,
+                       ^
+    符号:   变量 appearsGlowing
+    位置: 类型为LivingEntityRenderState的变量 state
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:82: 错误: 找不到符号
+          GpuTexture depth = target.useDepth ? target.getDepthTexture() : null;
+                                   ^
+    符号:   变量 useDepth
+    位置: 类型为RenderTarget的变量 target
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:83: 错误: 找不到符号
+          if (color == null || target.useDepth && depth == null) {
+                                     ^
+    符号:   变量 useDepth
+    位置: 类型为RenderTarget的变量 target
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:275: 错误: 找不到符号
+                  () -> "MMD fallback white texture", TextureFormat.RGBA8, 1, 1, 1);
+                                                      ^
+    符号:   变量 TextureFormat
+    位置: 类 MmdGpuDrawDevice
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:432: 错误: 找不到符号
+                      BufferType.INDICES, BufferUsage.STATIC_WRITE, indices);
+                      ^
+    符号:   变量 BufferType
+    位置: 类 MmdGpuDrawDevice.GpuMesh
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:432: 错误: 找不到符号
+                      BufferType.INDICES, BufferUsage.STATIC_WRITE, indices);
+                                          ^
+    符号:   变量 BufferUsage
+    位置: 类 MmdGpuDrawDevice.GpuMesh
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:437: 错误: 找不到符号
+                      BufferType.INDICES, BufferUsage.STATIC_WRITE, outlineIndices);
+                      ^
+    符号:   变量 BufferType
+    位置: 类 MmdGpuDrawDevice.GpuMesh
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:437: 错误: 找不到符号
+                      BufferType.INDICES, BufferUsage.STATIC_WRITE, outlineIndices);
+                                          ^
+    符号:   变量 BufferUsage
+    位置: 类 MmdGpuDrawDevice.GpuMesh
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:440: 错误: 找不到符号
+                      BufferType.VERTICES, BufferUsage.DYNAMIC_WRITE, description.vertexBufferBytes());
+                      ^
+    符号:   变量 BufferType
+    位置: 类 MmdGpuDrawDevice.GpuMesh
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:440: 错误: 找不到符号
+                      BufferType.VERTICES, BufferUsage.DYNAMIC_WRITE, description.vertexBufferBytes());
+                                           ^
+    符号:   变量 BufferUsage
+    位置: 类 MmdGpuDrawDevice.GpuMesh
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:457: 错误: 找不到符号
+                      ? VertexFormat.IndexType.SHORT : VertexFormat.IndexType.INT;
+                                    ^
+    符号:   变量 IndexType
+    位置: 类 VertexFormat
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:457: 错误: 找不到符号
+                      ? VertexFormat.IndexType.SHORT : VertexFormat.IndexType.INT;
+                                                                   ^
+    符号:   变量 IndexType
+    位置: 类 VertexFormat
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdRenderPipelines.java:48: 错误: 找不到符号
+              .withUniform("MmdEmission", UniformType.FLOAT)
+                                                     ^
+    符号:   变量 FLOAT
+    位置: 类 UniformType
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:14: 错误: 程序包net.fabricmc.fabric.api.client.keybinding.v1不存在
+  import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+                                                     ^
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:22: 错误: 程序包org.lwjgl.glfw不存在
+  import org.lwjgl.glfw.GLFW;
+                       ^
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:14: 错误: 程序包com.mojang.blaze3d.textures不存在
+  import com.mojang.blaze3d.textures.TextureFormat;
+                                    ^
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\texture\MinecraftTextureDevice.java:8: 错误: 程序包com.mojang.blaze3d.textures不存在
+  import com.mojang.blaze3d.textures.TextureFormat;
+                                    ^
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\stage\client\camera\StageAudioPlayer.java:3: 错误: 程序包javazoom.jl.decoder不存在
+  import javazoom.jl.decoder.*;
+                    ^
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\ui\wheel\ConfigWheelScreen.java:15: 错误: 程序包org.lwjgl.glfw不存在
+  import org.lwjgl.glfw.GLFW;
+                       ^
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:51: 错误: 程序包HudRenderCallback不存在
+          HudRenderCallback.EVENT.register((graphics, tickDelta) -> PerformanceHud.render(graphics));
+                           ^
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:57: 错误: 程序包WorldRenderEvents不存在
+          WorldRenderEvents.START.register(context -> MmdClientRenderRuntime.current().beginFrame(
+                           ^
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:59: 错误: 程序包WorldRenderEvents不存在
+          WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+                           ^
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\config\MobReplacementListEntry.java:56: 错误: 找不到符号
+          Minecraft.getInstance().setScreen(new MobReplacementPickerScreen(
+                                 ^
+    符号:   方法 setScreen(MobReplacementPickerScreen)
+    位置: 类 Minecraft
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\config\MobReplacementListEntry.java:131: 错误: 找不到符号
+          guiGraphics.drawString(minecraft.font, target.displayName(), x, y + 6, COLOR_LABEL, false);
+                     ^
+    符号:   方法 drawString(Font,Component,int,int,int,boolean)
+    位置: 类型为GuiGraphicsExtractor的变量 guiGraphics
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\config\MobReplacementListEntry.java:138: 错误: 找不到符号
+          guiGraphics.drawString(minecraft.font, summary, chooseX - 8 - summaryWidth, y + 6, COLOR_VALUE, false);
+                     ^
+    符号:   方法 drawString(Font,String,int,int,int,boolean)
+    位置: 类型为GuiGraphicsExtractor的变量 guiGraphics
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\config\MobReplacementListEntry.java:140: 错误: 找不到符号
+          chooseButton.render(guiGraphics, mouseX, mouseY, delta);
+                      ^
+    符号:   方法 render(GuiGraphicsExtractor,int,int,float)
+    位置: 类型为Button的变量 chooseButton
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\config\MobReplacementListEntry.java:141: 错误: 找不到符号
+          resetButton.render(guiGraphics, mouseX, mouseY, delta);
+                     ^
+    符号:   方法 render(GuiGraphicsExtractor,int,int,float)
+    位置: 类型为Button的变量 resetButton
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:119: 错误: 找不到符号
+                  minecraft.setScreen(new ConfigWheelScreen(keyConfigWheel));
+                           ^
+    符号:   方法 setScreen(ConfigWheelScreen)
+    位置: 类型为Minecraft的变量 minecraft
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterClient.java:93: 错误: 找不到符号
+              EntityType.byString(entityTypeId).ifPresentOrElse(
+                        ^
+    符号:   方法 byString(String)
+    位置: 类 EntityType
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterCommon.java:25: 错误: 找不到符号
+          PayloadTypeRegistry.playC2S().register(MmdSkinPayload.TYPE, MmdSkinPayload.CODEC);
+                             ^
+    符号:   方法 playC2S()
+    位置: 接口 PayloadTypeRegistry
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\MmdSkinRegisterCommon.java:26: 错误: 找不到符号
+          PayloadTypeRegistry.playS2C().register(MmdSkinPayload.TYPE, MmdSkinPayload.CODEC);
+                             ^
+    符号:   方法 playS2C()
+    位置: 接口 PayloadTypeRegistry
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\stage\FabricStageSessionRegistry.java:37: 错误: 找不到符号
+          return new StageServerPlayer(player.getUUID(), player.getGameProfile().getName());
+                                                                                ^
+    符号:   方法 getName()
+    位置: 类 GameProfile
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\stage\FabricStageSessionRegistry.java:53: 错误: 找不到符号
+              return new StageServerPlayer(player.getUUID(), player.getGameProfile().getName());
+                                                                                    ^
+    符号:   方法 getName()
+    位置: 类 GameProfile
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\stage\FabricStageSessionRegistry.java:59: 错误: 找不到符号
+                      .map(player -> new StageServerPlayer(player.getUUID(), player.getGameProfile().getName()))
+                                                                                                    ^
+    符号:   方法 getName()
+    位置: 类 GameProfile
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\mixin\fabric\EntityMixin.java:24: 错误: 找不到符号
+                  .resolveInteractionEyePosition(entity, partialTick, minecraft.gameRenderer.getMainCamera())
+                                                                                            ^
+    符号:   方法 getMainCamera()
+    位置: 类型为GameRenderer的变量 gameRenderer
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\mixin\fabric\EntityMixin.java:37: 错误: 找不到符号
+                  .resolveViewVector(entity, minecraft.gameRenderer.getMainCamera())
+                                                                   ^
+    符号:   方法 getMainCamera()
+    位置: 类型为GameRenderer的变量 gameRenderer
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\mixin\fabric\GameRendererMixin.java:50: 错误: 找不到符号
+          Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
+                                          ^
+    符号:   方法 getMainCamera()
+    位置: 类型为GameRenderer的变量 gameRenderer
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\draw\MmdHeldItemRenderer.java:58: 错误: 找不到符号
+              item.render(poseStack, buffers, packedLight, OverlayTexture.NO_OVERLAY);
+                  ^
+    符号:   方法 render(PoseStack,SubmitNodeCollector,int,int)
+    位置: 类型为ItemStackRenderState的变量 item
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\entity\EntityModelSelection.java:21: 错误: 找不到符号
+                  player.getUUID(), player.getGameProfile().getName(), local);
+                                                           ^
+    符号:   方法 getName()
+    位置: 类 GameProfile
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\FirstPersonCamera.java:57: 错误: 找不到符号
+                  && camera.isInitialized() && camera.getEntity() == entity) {
+                                                     ^
+    符号:   方法 getEntity()
+    位置: 类型为Camera的变量 camera
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\FirstPersonCamera.java:58: 错误: 找不到符号
+              return Optional.of(camera.getPosition());
+                                       ^
+    符号:   方法 getPosition()
+    位置: 类型为Camera的变量 camera
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\FirstPersonCamera.java:70: 错误: 找不到符号
+                  || !camera.isInitialized() || camera.getEntity() != entity) {
+                                                      ^
+    符号:   方法 getEntity()
+    位置: 类型为Camera的变量 camera
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\FirstPersonCamera.java:73: 错误: 找不到符号
+          return Optional.of(viewVector(camera.getYRot(), camera.getXRot()));
+                                              ^
+    符号:   方法 getYRot()
+    位置: 类型为Camera的变量 camera
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\FirstPersonCamera.java:73: 错误: 找不到符号
+          return Optional.of(viewVector(camera.getYRot(), camera.getXRot()));
+                                                                ^
+    符号:   方法 getXRot()
+    位置: 类型为Camera的变量 camera
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\LocalPlayerRenderContributor.java:85: 错误: 找不到符号
+              double x = state.x - camera.getPosition().x;
+                                         ^
+    符号:   方法 getPosition()
+    位置: 类型为Camera的变量 camera
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\LocalPlayerRenderContributor.java:86: 错误: 找不到符号
+              double y = state.y - camera.getPosition().y;
+                                         ^
+    符号:   方法 getPosition()
+    位置: 类型为Camera的变量 camera
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\firstperson\LocalPlayerRenderContributor.java:87: 错误: 找不到符号
+              double z = state.z - camera.getPosition().z;
+                                         ^
+    符号:   方法 getPosition()
+    位置: 类型为Camera的变量 camera
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:80: 错误: 找不到符号
+          RenderTarget target = Minecraft.getInstance().getMainRenderTarget();
+                                                       ^
+    符号:   方法 getMainRenderTarget()
+    位置: 类 Minecraft
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:176: 错误: 找不到符号
+          pass.bindSampler("Sampler0", draw.texture() == null ? fallback : draw.texture());
+              ^
+    符号:   方法 bindSampler(String,draw.textu[...]ure())
+    位置: 类型为RenderPass的变量 pass
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:276: 错误: 找不到符号
+          whiteTexture.setTextureFilter(FilterMode.LINEAR, false);
+                      ^
+    符号:   方法 setTextureFilter(FilterMode,boolean)
+    位置: 类型为GpuTexture的变量 whiteTexture
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\config\MobReplacementListEntry.java:118: 错误: 方法不会覆盖或实现超类型的方法
+      @Override
+      ^
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\entity\LegacyEntityMmdRenderer.java:54: 错误: 方法不会覆盖或实现超类型的方法
+      @Override
+      ^
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\fabric\register\FabricClientRuntimeHooks.java:94: 错误: 方法引用无效
+                                  RenderSystem.getDevice(), minecraft.getShaderManager()::getShader);
+                                                            ^
+    找不到符号
+      符号:   方法 getShader(Identifier,ShaderType)
+      位置: 类 ShaderManager
+  D:\尝试文件夹\MC MMD\mc263\fabric\src\main\java\com\shiroha\mmdskin\mixin\fabric\FabricPlayerRendererMixin.java:52: 错误: 找不到符号
+          super.render((LivingEntityRenderState) state, poseStack, buffers, packedLight);
+               ^
+    符号: 方法 render(LivingEntityRenderState,PoseStack,SubmitNodeCollector,int)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\entity\LegacyEntityMmdRenderer.java:58: 错误: 找不到符号
+              super.render(state, poseStack, buffers, packedLight);
+                   ^
+    符号: 方法 render(State,PoseStack,SubmitNodeCollector,int)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\entity\LegacyEntityMmdRenderer.java:61: 错误: 找不到符号
+          super.render(state, poseStack, buffers, packedLight);
+               ^
+    符号: 方法 render(State,PoseStack,SubmitNodeCollector,int)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\draw\MmdHeldItemRenderer.java:55: 错误: 对于mulPose(Quaternionf), 找不到合适的方法
+              poseStack.mulPose(ITEM_ORIENTATION);
+                       ^
+      方法 PoseStack.mulPose(Matrix4fc)不适用
+        (参数不匹配; Quaternionf无法转换为Matrix4fc)
+      方法 PoseStack.mulPose(Transformation)不适用
+        (参数不匹配; Quaternionf无法转换为Transformation)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:88: 错误: 对于createRenderPass(GpuTexture,OptionalInt,GpuTexture,OptionalDouble), 找不到合适的方法
+          try (RenderPass pass = encoder.createRenderPass(
+                                        ^
+      方法 CommandEncoder.createRenderPass(Supplier<String>,GpuTextureView,Optional<Vector4fc>)不适用
+        (实际参数列表和形式参数列表长度不同)
+      方法 CommandEncoder.createRenderPass(Supplier<String>,GpuTextureView,Optional<Vector4fc>,@org.jspecify.annotations.Nullable GpuTextureView,OptionalDouble)不适用
+        (实际参数列表和形式参数列表长度不同)
+      方法 CommandEncoder.createRenderPass(Supplier<String>,GpuTextureView,Optional<Vector4fc>,@org.jspecify.annotations.Nullable GpuTextureView,OptionalDouble,RenderArea)不适用
+        (实际参数列表和形式参数列表长度不同)
+      方法 CommandEncoder.createRenderPass(RenderPassDescriptor)不适用
+        (实际参数列表和形式参数列表长度不同)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:173: 错误: 对于setUniform(String,float[]), 找不到合适的方法
+                  pass.setUniform(BONE_UNIFORMS[index], mesh.paletteMatrices[offset + index]);
+                      ^
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (参数不匹配; float[]无法转换为GpuBuffer)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (参数不匹配; float[]无法转换为GpuBufferSlice)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:177: 错误: 对于setUniform(String,Matrix4f), 找不到合适的方法
+          pass.setUniform("MmdModelMat", draw.modelMatrix());
+              ^
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (参数不匹配; Matrix4f无法转换为GpuBuffer)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (参数不匹配; Matrix4f无法转换为GpuBufferSlice)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:179: 错误: 对于setUniform(String,float), 找不到合适的方法
+          pass.setUniform("MmdAlpha", command.alpha());
+              ^
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (参数不匹配; float无法转换为GpuBuffer)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (参数不匹配; float无法转换为GpuBufferSlice)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:180: 错误: 对于setUniform(String,float), 找不到合适的方法
+          pass.setUniform("MmdLightFactor", uniforms.lightingEnabled()
+              ^
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (参数不匹配; 条件表达式中的类型错误
+            float无法转换为GpuBuffer)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (参数不匹配; 条件表达式中的类型错误
+            float无法转换为GpuBufferSlice)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:182: 错误: 对于setUniform(String,float), 找不到合适的方法
+          pass.setUniform("MmdOutlineWidth", draw.outline() ? uniforms.outlineWidth() : 0.0F);
+              ^
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (参数不匹配; 条件表达式中的类型错误
+            float无法转换为GpuBuffer)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (参数不匹配; 条件表达式中的类型错误
+            float无法转换为GpuBufferSlice)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:183: 错误: 对于setUniform(String,float,float,float), 找不到合适的方法
+          pass.setUniform("MmdOutlineColor", uniforms.outlineR(), uniforms.outlineG(), uniforms.outlineB());
+              ^
+      方法 RenderPass.setUniform(String,@org.jspecify.annotations.Nullable GpuTextureView,@org.jspecify.annotations.Nullable GpuSampler)不适用
+        (实际参数列表和形式参数列表长度不同)
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (实际参数列表和形式参数列表长度不同)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (实际参数列表和形式参数列表长度不同)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:184: 错误: 对于setUniform(String,int), 找不到合适的方法
+          pass.setUniform("MmdToonLevels", uniforms.toonLevels());
+              ^
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (参数不匹配; int无法转换为GpuBuffer)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (参数不匹配; int无法转换为GpuBufferSlice)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:185: 错误: 对于setUniform(String,float,float,float), 找不到合适的方法
+          pass.setUniform("MmdToonShadowColor", uniforms.shadowR(), uniforms.shadowG(), uniforms.shadowB());
+              ^
+      方法 RenderPass.setUniform(String,@org.jspecify.annotations.Nullable GpuTextureView,@org.jspecify.annotations.Nullable GpuSampler)不适用
+        (实际参数列表和形式参数列表长度不同)
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (实际参数列表和形式参数列表长度不同)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (实际参数列表和形式参数列表长度不同)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:186: 错误: 对于setUniform(String,float), 找不到合适的方法
+          pass.setUniform("MmdRimPower", uniforms.rimPower());
+              ^
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (参数不匹配; float无法转换为GpuBuffer)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (参数不匹配; float无法转换为GpuBufferSlice)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:187: 错误: 对于setUniform(String,float), 找不到合适的方法
+          pass.setUniform("MmdRimIntensity", uniforms.rimIntensity());
+              ^
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (参数不匹配; float无法转换为GpuBuffer)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (参数不匹配; float无法转换为GpuBufferSlice)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:188: 错误: 对于setUniform(String,float), 找不到合适的方法
+          pass.setUniform("MmdSpecularPower", uniforms.specularPower());
+              ^
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (参数不匹配; float无法转换为GpuBuffer)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (参数不匹配; float无法转换为GpuBufferSlice)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:189: 错误: 对于setUniform(String,float), 找不到合适的方法
+          pass.setUniform("MmdSpecularIntensity", uniforms.specularIntensity());
+              ^
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (参数不匹配; float无法转换为GpuBuffer)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (参数不匹配; float无法转换为GpuBufferSlice)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:190: 错误: 对于setUniform(String,float), 找不到合适的方法
+          pass.setUniform("MmdEmission", draw.pipeline() == PipelineVariant.GLOWING ? 1.0F : 0.0F);
+              ^
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (参数不匹配; 条件表达式中的类型错误
+            float无法转换为GpuBuffer)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (参数不匹配; 条件表达式中的类型错误
+            float无法转换为GpuBufferSlice)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:198: 错误: 对于setUniform(String,float,float,float,float), 找不到合适的方法
+              pass.setUniform("MmdMaterialColor", 1.0F, 1.0F, 1.0F, 1.0F);
+                  ^
+      方法 RenderPass.setUniform(String,@org.jspecify.annotations.Nullable GpuTextureView,@org.jspecify.annotations.Nullable GpuSampler)不适用
+        (实际参数列表和形式参数列表长度不同)
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (实际参数列表和形式参数列表长度不同)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (实际参数列表和形式参数列表长度不同)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:201: 错误: 对于setUniform(String,float,float,float,float), 找不到合适的方法
+          pass.setUniform("MmdMaterialColor",
+              ^
+      方法 RenderPass.setUniform(String,@org.jspecify.annotations.Nullable GpuTextureView,@org.jspecify.annotations.Nullable GpuSampler)不适用
+        (实际参数列表和形式参数列表长度不同)
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (实际参数列表和形式参数列表长度不同)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (实际参数列表和形式参数列表长度不同)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:216: 错误: 对于setUniform(String,float[]), 找不到合适的方法
+              pass.setUniform(uniform, IDENTITY_MATRIX);
+                  ^
+      方法 RenderPass.setUniform(String,GpuBuffer)不适用
+        (参数不匹配; float[]无法转换为GpuBuffer)
+      方法 RenderPass.setUniform(String,GpuBufferSlice)不适用
+        (参数不匹配; float[]无法转换为GpuBufferSlice)
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:165: 错误: 不兼容的类型: RenderPipeline无法转换为CompiledRenderPipeline
+          pass.setPipeline(MmdRenderPipelines.pipeline(draw.pipeline(), mesh.gpuSkinning));
+                                                      ^
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:191: 错误: 不兼容的类型: GpuBuffer无法转换为GpuBufferSlice
+          pass.setVertexBuffer(0, mesh.vertexBuffer);
+                                      ^
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:193: 错误: 无法将接口 RenderPass中的方法 drawIndexed应用到给定类型;
+          pass.drawIndexed(command.firstIndex(), command.indexCount());
+              ^
+    需要: int,int,int,int,int
+    找到:    int,int
+    原因: 实际参数列表和形式参数列表长度不同
+  D:\尝试文件夹\MC MMD\mc263\common\src\main\java\com\shiroha\mmdskin\client\gpu\MmdGpuDrawDevice.java:370: 错误: 无法将接口 CommandEncoder中的方法 writeToBuffer应用到给定类型;
+                  encoder.writeToBuffer(vertexBuffer, vertexStaging, 0);
+                         ^
+    需要: GpuBufferSlice,ByteBuffer
+    找到:    GpuBuffer,ByteBuffer,int
+    原因: 实际参数列表和形式参数列表长度不同
+  注: 某些输入文件使用或覆盖了已过时的 API。
+  注: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+  注: 某些消息已经过简化; 请使用 -Xdiags:verbose 重新编译以获得完整输出
+  100 个错误
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 9s

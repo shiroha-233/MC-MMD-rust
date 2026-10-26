@@ -13,6 +13,7 @@ import com.shiroha.mmdskin.client.model.MmdModelInstance;
 import com.shiroha.mmdskin.player.runtime.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.player.model.PlayerModelResolver;
 import com.shiroha.mmdskin.stage.client.sync.StageAnimSyncHelper;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -256,8 +257,8 @@ public class MMDCameraController {
 
         if (cinematic) {
             Minecraft mc = Minecraft.getInstance();
-            this.previousHideGui = mc.options.hideGui;
-            mc.options.hideGui = true;
+            this.previousHideGui = mc.gui.hud.isHidden();
+            setHudHidden(true);
         }
 
         this.modelHandle = modelHandle;
@@ -291,7 +292,7 @@ public class MMDCameraController {
         audioPlayer.cleanup();
 
         if (cinematicMode) {
-            Minecraft.getInstance().options.hideGui = previousHideGui;
+            setHudHidden(previousHideGui);
         }
 
         clearLocalPlayerStageFlags();
@@ -347,7 +348,7 @@ public class MMDCameraController {
         if (wasPlaying) {
             audioPlayer.cleanup();
             if (cinematicMode) {
-                Minecraft.getInstance().options.hideGui = previousHideGui;
+                setHudHidden(previousHideGui);
             }
             clearLocalPlayerStageFlags();
             restoreModelState();
@@ -393,13 +394,13 @@ public class MMDCameraController {
     }
 
     private void computeIntroAndStandby(Minecraft mc) {
-        if (mc.gameRenderer != null && mc.gameRenderer.getMainCamera() != null) {
-            var cam = mc.gameRenderer.getMainCamera();
-            introStartX = cam.getPosition().x;
-            introStartY = cam.getPosition().y;
-            introStartZ = cam.getPosition().z;
-            introStartPitch = cam.getXRot();
-            introStartYaw = cam.getYRot();
+        if (mc.gameRenderer != null && mc.gameRenderer.mainCamera() != null) {
+            var cam = mc.gameRenderer.mainCamera();
+            introStartX = cam.position().x;
+            introStartY = cam.position().y;
+            introStartZ = cam.position().z;
+            introStartPitch = cam.xRot();
+            introStartYaw = cam.yRot();
         } else if (mc.player != null) {
             introStartX = mc.player.getX();
             introStartY = mc.player.getEyeY();
@@ -472,7 +473,7 @@ public class MMDCameraController {
 
         if (cinematicMode && lastEscTimeNs != 0
                 && now - lastEscTimeNs >= DOUBLE_ESC_WINDOW_NS) {
-            Minecraft.getInstance().options.hideGui = true;
+            setHudHidden(true);
             lastEscTimeNs = 0;
         }
 
@@ -559,15 +560,15 @@ public class MMDCameraController {
         if (state == StageState.INACTIVE) return;
         Minecraft mc = Minecraft.getInstance();
 
-        if (mc.screen instanceof PauseScreen) {
-            mc.setScreen(null);
+        if (mc.gui.screen() instanceof PauseScreen) {
+            mc.gui.setScreen(null);
             return;
         }
 
-        if (mc.screen != null) return;
+        if (mc.gui.screen() != null) return;
 
-        long window = mc.getWindow().getWindow();
-        boolean escNow = org.lwjgl.glfw.GLFW.glfwGetKey(window, org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
+        // 26.3 起窗口层从 GLFW 换成 SDL，ESC 状态统一由 InputConstants.isKeyDown 查询
+        boolean escNow = InputConstants.isKeyDown(InputConstants.KEY_ESCAPE);
 
         if (escNow && !escWasPressed) {
             if (state == StageState.PLAYING) {
@@ -578,10 +579,10 @@ public class MMDCameraController {
                 } else {
                     lastEscTimeNs = now;
                     if (cinematicMode) {
-                        mc.options.hideGui = previousHideGui;
+                        setHudHidden(previousHideGui);
                     }
                     if (mc.gui != null) {
-                        mc.gui.setOverlayMessage(Component.translatable("gui.mmdskin.stage.esc_hint"), false);
+                        mc.gui.hud.setOverlayMessage(Component.translatable("gui.mmdskin.stage.esc_hint"), false);
                     }
                 }
             } else if (state == StageState.WATCHING) {
@@ -602,7 +603,7 @@ public class MMDCameraController {
             mc.mouseHandler.releaseMouse();
             mouseReleased = true;
             if (mc.gui != null) {
-                mc.gui.setOverlayMessage(Component.translatable("gui.mmdskin.stage.mouse_released"), false);
+                mc.gui.hud.setOverlayMessage(Component.translatable("gui.mmdskin.stage.mouse_released"), false);
             }
         }
     }
@@ -619,6 +620,18 @@ public class MMDCameraController {
         }
         escWasPressed = false;
         lastEscTimeNs = 0;
+    }
+
+    /**
+     * 设置 HUD 隐藏状态。
+     * 26.3 起 Options.hideGui 字段被移除，隐藏状态改由 Hud.isHidden() 维护，
+     * 且 Hud 只提供取反语义的 toggle()，因此这里用「状态不同才取反」来模拟赋值。
+     */
+    private static void setHudHidden(boolean hidden) {
+        var hud = Minecraft.getInstance().gui.hud;
+        if (hud.isHidden() != hidden) {
+            hud.toggle();
+        }
     }
 
     private void clearLocalPlayerStageFlags() {
@@ -763,8 +776,8 @@ public class MMDCameraController {
 
         this.cinematicMode = com.shiroha.mmdskin.config.StageConfig.getInstance().cinematicMode;
         if (this.cinematicMode) {
-            this.previousHideGui = mc.options.hideGui;
-            mc.options.hideGui = true;
+            this.previousHideGui = mc.gui.hud.isHidden();
+            setHudHidden(true);
         }
 
         this.lastTickTimeNs = System.nanoTime();
@@ -837,7 +850,7 @@ public class MMDCameraController {
         audioPlayer.cleanup();
 
         if (cinematicMode) {
-            Minecraft.getInstance().options.hideGui = previousHideGui;
+            setHudHidden(previousHideGui);
         }
 
         Minecraft mc = Minecraft.getInstance();
@@ -906,7 +919,7 @@ public class MMDCameraController {
         if (state == StageState.PLAYING) {
             audioPlayer.cleanup();
             if (cinematicMode) {
-                Minecraft.getInstance().options.hideGui = previousHideGui;
+                setHudHidden(previousHideGui);
             }
             clearLocalPlayerStageFlags();
             if (this.motionAnimHandle != 0) ANIMATIONS.deleteAnimation(this.motionAnimHandle);

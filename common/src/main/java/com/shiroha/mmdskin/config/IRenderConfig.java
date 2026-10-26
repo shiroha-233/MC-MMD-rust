@@ -8,11 +8,20 @@ public interface IRenderConfig {
 
     int getModelPoolMaxCount();
 
+    /** 是否自动下载附近玩家正在使用的模型（仅限服务器授权分发的模型）。 */
+    default boolean isAutoDownloadNearbyModels() { return false; }
+
+    /** 自动下载半径（格）。 */
+    default int getAutoDownloadRadius() { return 48; }
+
     default boolean isPerformanceProfilingEnabled() { return false; }
 
     default int getPerformanceLogIntervalSeconds() { return 5; }
 
-    default int getMaxVisibleModelsPerFrame() { return 10; }
+    default int getMaxVisibleModelsPerFrame() { return 20; }
+
+    /** 加载前距离闸门（格）：超过且未加载则不加载模型；0 = 不限制。 */
+    default float getModelLoadMaxDistance() { return 64.0f; }
 
     default float getAnimationLodMediumDistance() { return 24.0f; }
 

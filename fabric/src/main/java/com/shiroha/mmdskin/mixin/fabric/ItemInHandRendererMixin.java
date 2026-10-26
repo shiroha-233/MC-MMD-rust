@@ -3,34 +3,46 @@ package com.shiroha.mmdskin.mixin.fabric;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.compat.vr.VRArmHider;
-import com.shiroha.mmdskin.compat.vr.VRHandRenderer;
 import com.shiroha.mmdskin.config.UIConstants;
 import com.shiroha.mmdskin.fabric.compat.YsmCompat;
 import com.shiroha.mmdskin.client.MmdClientRenderRuntime;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
-import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.ItemInHandRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.HumanoidArm;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.state.level.FirstPersonHandsAndItemsRenderState;
+import net.minecraft.client.renderer.state.level.PlayerRenderState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(value = ItemInHandRenderer.class, priority = 900)
+@Mixin(value = FirstPersonHandsAndItemsRenderer.class, priority = 900)
 public abstract class ItemInHandRendererMixin {
-    @Inject(method = "renderHandsWithItems", at = @At("HEAD"), cancellable = true)
-    private void onRenderHandsWithItems(float partialTick,
+    /**
+     * 26.3 的变化：{@code ItemInHandRenderer} 被拆成
+     * {@code FirstPersonHandsAndItemsRenderer}，手臂与手持物的绘制合并进了
+     * {@code submitHandsWithItems(...)}；旧的 {@code renderArmWithItem} /
+     * {@code renderPlayerArm} 两个方法已经不存在，因此这两处注入合并到下面这一个。
+     */
+    @Inject(
+            method = "submitHandsWithItems(FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/state/level/PlayerRenderState;Lnet/minecraft/client/renderer/state/level/FirstPersonHandsAndItemsRenderState;)V",
+            at = @At("HEAD"), cancellable = true)
+    private void onSubmitHandsWithItems(float partialTick,
                                         PoseStack poseStack,
-                                        MultiBufferSource.BufferSource bufferSource,
-                                        LocalPlayer player,
-                                        int packedLight,
+                                        SubmitNodeCollector collector,
+                                        PlayerRenderState playerState,
+                                        FirstPersonHandsAndItemsRenderState handsState,
                                         CallbackInfo ci) {
         if (VRArmHider.shouldHideVRArms()) {
             ci.cancel();
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getInstance();
+        LocalPlayer player = minecraft.player;
+        if (player == null) {
             return;
         }
 
@@ -54,37 +66,6 @@ public abstract class ItemInHandRendererMixin {
         var runtime = MmdClientRenderRuntime.currentIfInstalled().orElse(null);
         if (runtime != null && runtime.firstPerson().session().desktopActive()
                 && hasMmdModel && !useVanillaModel) {
-            ci.cancel();
-        }
-    }
-
-    @Inject(method = "renderArmWithItem", at = @At("HEAD"), cancellable = true)
-    private void onRenderArmWithItem(AbstractClientPlayer player,
-                                     float partialTick,
-                                     float pitch,
-                                     InteractionHand hand,
-                                     float swingProgress,
-                                     ItemStack itemStack,
-                                     float equippedProgress,
-                                     PoseStack poseStack,
-                                     MultiBufferSource buffer,
-                                     int combinedLight,
-                                     CallbackInfo ci) {
-        if (VRArmHider.shouldHideVRArms()) {
-            VRHandRenderer.renderHandItem(poseStack, buffer, combinedLight, hand);
-            ci.cancel();
-        }
-    }
-
-    @Inject(method = "renderPlayerArm", at = @At("HEAD"), cancellable = true)
-    private void onRenderPlayerArm(PoseStack poseStack,
-                                   MultiBufferSource buffer,
-                                   int combinedLight,
-                                   float equippedProgress,
-                                   float swingProgress,
-                                   HumanoidArm side,
-                                   CallbackInfo ci) {
-        if (VRArmHider.shouldHideVRArms()) {
             ci.cancel();
         }
     }

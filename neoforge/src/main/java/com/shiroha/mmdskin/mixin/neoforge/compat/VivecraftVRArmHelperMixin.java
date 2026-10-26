@@ -1,4 +1,4 @@
-/** 文件职责：在 NeoForge 侧拦截 Vivecraft VR 原生手臂渲染。 */
+/** 文件职责：在 Vivecraft VR 手部辅助渲染前拦截原生手臂。 */
 package com.shiroha.mmdskin.mixin.neoforge.compat;
 
 import com.mojang.blaze3d.vertex.PoseStack;

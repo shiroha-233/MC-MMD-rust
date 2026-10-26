@@ -19,6 +19,7 @@ pub(crate) use gpu_skinning::{
 };
 pub use loader::load_pmx;
 pub use material::MmdMaterial;
+pub(crate) use runtime::CpuHeadFilter;
 pub use runtime::{MmdModel, ModelVrDebugSnapshot};
 pub use submesh::SubMesh;
 pub use vrm_extensions::{

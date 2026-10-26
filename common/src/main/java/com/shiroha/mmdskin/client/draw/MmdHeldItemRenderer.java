@@ -4,8 +4,8 @@ package com.shiroha.mmdskin.client.draw;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.bridge.runtime.NativeModelMatrixPort;
 import com.shiroha.mmdskin.client.model.MmdModelInstance;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.entity.state.PlayerRenderState;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import org.apache.logging.log4j.LogManager;
@@ -21,8 +21,8 @@ public final class MmdHeldItemRenderer {
     private MmdHeldItemRenderer() {
     }
 
-    public static void render(PlayerRenderState state, MmdModelInstance model, PoseStack poseStack,
-                              MultiBufferSource buffers, int packedLight, float bodyYawDegrees) {
+    public static void render(AvatarRenderState state, MmdModelInstance model, PoseStack poseStack,
+                              SubmitNodeCollector buffers, int packedLight, float bodyYawDegrees) {
         poseStack.pushPose();
         try {
             float yawRadians = (float) Math.toRadians(-bodyYawDegrees);
@@ -30,9 +30,11 @@ public final class MmdHeldItemRenderer {
             poseStack.last().normal().rotateY(yawRadians);
             float renderScale = model.renderScale();
             poseStack.scale(renderScale, renderScale, renderScale);
-            renderHand(state.rightHandItem, model, NativeModelMatrixPort.Hand.RIGHT,
+            // 26.3 起手持物在实体状态里改名为 rightHandItemState / leftHandItemState
+            // （类型仍是 ItemStackRenderState）。
+            renderHand(state.rightHandItemState, model, NativeModelMatrixPort.Hand.RIGHT,
                     poseStack, buffers, packedLight);
-            renderHand(state.leftHandItem, model, NativeModelMatrixPort.Hand.LEFT,
+            renderHand(state.leftHandItemState, model, NativeModelMatrixPort.Hand.LEFT,
                     poseStack, buffers, packedLight);
         } finally {
             poseStack.popPose();
@@ -41,7 +43,7 @@ public final class MmdHeldItemRenderer {
 
     private static void renderHand(ItemStackRenderState item, MmdModelInstance model,
                                    NativeModelMatrixPort.Hand hand, PoseStack poseStack,
-                                   MultiBufferSource buffers, int packedLight) {
+                                   SubmitNodeCollector buffers, int packedLight) {
         if (item.isEmpty()) {
             return;
         }
@@ -52,10 +54,12 @@ public final class MmdHeldItemRenderer {
                 return;
             }
             poseStack.mulPose(handTransform);
-            poseStack.mulPose(ITEM_ORIENTATION);
+            // 26.3 的 PoseStack 用 rotate(Quaternionfc) 代替旧的 mulPose(Quaternionf)
+            poseStack.rotate(ITEM_ORIENTATION);
             float itemScale = 10.0F * model.heldItemScale();
             poseStack.scale(itemScale, itemScale, itemScale);
-            item.render(poseStack, buffers, packedLight, OverlayTexture.NO_OVERLAY);
+            // 26.3：ItemStackRenderState.render(...) -> submit(pose, collector, light, overlay, outlineColor)
+            item.submit(poseStack, buffers, packedLight, OverlayTexture.NO_OVERLAY, 0);
         } catch (RuntimeException exception) {
             LOGGER.warn("MMD 手持物矩阵提交失败: {} {}", model.modelName(), hand, exception);
         } finally {

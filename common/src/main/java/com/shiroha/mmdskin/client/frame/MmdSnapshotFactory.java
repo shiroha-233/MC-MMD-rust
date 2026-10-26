@@ -5,6 +5,7 @@ import com.shiroha.mmdskin.client.animation.MmdAnimationIntent;
 import com.shiroha.mmdskin.client.entity.EntityModelSelection;
 import com.shiroha.mmdskin.client.model.ModelKey;
 import com.shiroha.mmdskin.player.animation.PlayerAnimationIntentExtractor;
+import com.shiroha.mmdskin.player.ragdoll.RagdollManager;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.world.entity.LivingEntity;
@@ -23,6 +24,8 @@ public final class MmdSnapshotFactory {
         if (modelName == null) {
             return null;
         }
+        // 死亡布娃娃登记点：渲染层的死亡解析点（每帧可重复调用，内部幂等）
+        RagdollManager.getInstance().tryEnterRagdoll(entity, modelName);
         MmdRenderSnapshot.Visibility visibility = resolveVisibility(state);
         ModelKey key = new ModelKey(modelName, entity.getStringUUID(), usageFor(context));
         MmdEntityPose pose = new MmdEntityPose(
@@ -54,7 +57,7 @@ public final class MmdSnapshotFactory {
                 motion,
                 ModelTransform.identity(),
                 visibility,
-                state.appearsGlowing,
+                state.appearsGlowing(),
                 0,
                 Math.max(0.0D, state.distanceToCameraSq),
                 context);

@@ -99,6 +99,18 @@ public final class ModelRepository implements ModelLoadMetricsPort, AutoCloseabl
         return entry != null && entry.pending != null && !entry.pending.isDone();
     }
 
+    /**
+     * 模型是否已经加载完成（不会触发加载，也不占用租约）。
+     *
+     * <p>加载前距离闸门要用它区分"还没加载"和"已经加载"：
+     * 只有还没加载的模型才允许被距离挡下来，已经加载的继续正常渲染，
+     * 走近时不会突然闪回原版皮肤。
+     */
+    public boolean isLoaded(ModelKey key) {
+        Entry entry = entries.get(key);
+        return entry != null && entry.instance != null;
+    }
+
     @Override
     public int loadedCount() {
         return (int) entries.values().stream().filter(entry -> entry.instance != null).count();

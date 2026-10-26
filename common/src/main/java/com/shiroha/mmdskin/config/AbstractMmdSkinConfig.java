@@ -11,9 +11,12 @@ public abstract class AbstractMmdSkinConfig implements ConfigManager.IConfigProv
     @Override public boolean isLightingEnabled() { return data.lightingEnabled; }
     @Override public boolean isGpuSkinningEnabled() { return data.gpuSkinningEnabled; }
     @Override public int getModelPoolMaxCount() { return data.modelPoolMaxCount; }
+    @Override public boolean isAutoDownloadNearbyModels() { return data.autoDownloadNearbyModels; }
+    @Override public int getAutoDownloadRadius() { return data.autoDownloadRadius; }
     @Override public boolean isPerformanceProfilingEnabled() { return data.performanceProfilingEnabled; }
     @Override public int getPerformanceLogIntervalSeconds() { return data.performanceLogIntervalSeconds; }
     @Override public int getMaxVisibleModelsPerFrame() { return data.maxVisibleModelsPerFrame; }
+    @Override public float getModelLoadMaxDistance() { return data.modelLoadMaxDistance; }
     @Override public float getAnimationLodMediumDistance() { return data.animationLodMediumDistance; }
     @Override public float getAnimationLodFarDistance() { return data.animationLodFarDistance; }
     @Override public int getAnimationLodMediumUpdateInterval() { return data.animationLodMediumUpdateInterval; }
@@ -50,6 +53,17 @@ public abstract class AbstractMmdSkinConfig implements ConfigManager.IConfigProv
     @Override public boolean isFirstPersonModelEnabled() { return data.firstPersonModelEnabled; }
     @Override public float getFirstPersonCameraForwardOffset() { return data.firstPersonCameraForwardOffset; }
     @Override public float getFirstPersonCameraVerticalOffset() { return data.firstPersonCameraVerticalOffset; }
+
+    @Override public boolean isRagdollEnabled() { return data.ragdollEnabled; }
+    @Override public String getCorpseKeepMode() { return data.corpseKeepMode; }
+    @Override public double getCorpseKeepRadius() { return data.corpseKeepRadius; }
+    @Override public long getCorpseKeepSeconds() { return data.corpseKeepSeconds; }
+    @Override public int getMaxCorpses() { return data.maxCorpses; }
+    @Override public float getRagdollJointStrength() { return data.ragdollJointStrength; }
+    @Override public boolean isHideDeathPoof() { return data.hideDeathPoof; }
+    @Override public boolean isHijackDeathScreen() { return data.hijackDeathScreen; }
+    @Override public float getRagdollDeathAnimSeconds() { return data.ragdollDeathAnimSeconds; }
+    @Override public int getRagdollPhysicsKeepSeconds() { return data.ragdollPhysicsKeepSeconds; }
     @Override public boolean isDebugHudEnabled() { return data.debugHudEnabled; }
     @Override public int getTextureCacheBudgetMB() { return data.textureCacheBudgetMB; }
     @Override public String getMobModelReplacement(String entityTypeId) {

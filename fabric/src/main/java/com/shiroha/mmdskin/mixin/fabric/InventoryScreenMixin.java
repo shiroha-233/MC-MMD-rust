@@ -10,18 +10,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(InventoryScreen.class)
 public abstract class InventoryScreenMixin {
-    @Inject(method = "renderEntityInInventory", at = @At("HEAD"))
+    // 26.3 里物品栏实体的绘制入口由 renderEntityInInventory 改名为 extractEntityInInventoryFollowsMouse，
+    // 并且不再有 GuiGraphicsExtractor.flush()，因此收尾点改为方法返回。
+    @Inject(method = "extractEntityInInventoryFollowsMouse", at = @At("HEAD"))
     private static void mmdskin$beginInventoryRender(CallbackInfo callback) {
         MmdClientRenderRuntime.currentIfInstalled()
                 .ifPresent(runtime -> runtime.inventory().begin());
     }
 
-    @Inject(
-            method = "renderEntityInInventory",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/client/gui/GuiGraphics;flush()V",
-                    ordinal = 1))
+    @Inject(method = "extractEntityInInventoryFollowsMouse", at = @At("RETURN"))
     private static void mmdskin$flushInventoryRender(CallbackInfo callback) {
         MmdClientRenderRuntime.currentIfInstalled()
                 .ifPresent(runtime -> runtime.inventory().finish());

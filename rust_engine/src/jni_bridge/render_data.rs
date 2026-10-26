@@ -1,9 +1,11 @@
 //! 负责将 CPU/GPU 蒙皮数据编码为 Minecraft 1.21.5 可上传的受检缓冲区。
 
 use crate::model::{
-    GpuSkinningDraw, GpuSkinningTopology, MmdModel, SubMesh, IDENTITY_BONE, MAX_PALETTE_BONES,
+    CpuHeadFilter, GpuSkinningDraw, GpuSkinningTopology, MmdModel, SubMesh, IDENTITY_BONE,
+    MAX_PALETTE_BONES,
 };
 use crate::texture::Texture;
+use std::sync::Arc;
 
 use super::{BridgeError, BridgeResult};
 
@@ -86,7 +88,9 @@ pub fn describe_mesh(model: &MmdModel) -> BridgeResult<MeshDescription> {
             validate_indices(model)?;
             (
                 model.vertices.len(),
-                model.indices.len(),
+                // 头部掩码生效时索引缓冲被过滤过，上传长度必须跟着变，
+                // 否则 Java 侧会按旧长度重建缓冲并画到越界的索引。
+                model.cpu_index_count(),
                 model.submeshes.len(),
                 VERTEX_STRIDE,
                 0,
@@ -154,7 +158,12 @@ pub fn copy_indices(model: &MmdModel, destination: &mut [u8]) -> BridgeResult<us
         topology = require_gpu_topology(model)?;
         topology.indices.as_slice()
     } else {
-        model.indices.as_slice()
+        // CPU 路径：头部掩码生效时写过滤后的索引缓冲；
+        // 掩码关闭时直接写原始索引（与改动前逐字节一致）。
+        match model.cpu_head_filter() {
+            Some(filter) => filter.indices.as_slice(),
+            None => model.indices.as_slice(),
+        }
     };
 
     match description.index_format {
@@ -303,15 +312,60 @@ pub fn copy_draw_commands(model: &MmdModel, destination: &mut [u8]) -> BridgeRes
             encode_draw_command(model, chunk, DrawSource::Gpu(draw))?;
         }
     } else {
-        for (chunk, submesh) in destination[..byte_count]
+        // CPU 路径：头部掩码生效时索引缓冲被过滤过，
+        // draw command 的 firstIndex/indexCount 必须指向过滤后的区间，
+        // 语义与 GPU 路径保持一致（都是相对各自索引缓冲的偏移）。
+        let filter = model.cpu_head_filter();
+        for (chunk, (submesh_index, submesh)) in destination[..byte_count]
             .chunks_exact_mut(DRAW_COMMAND_STRIDE)
-            .zip(&model.submeshes)
+            .zip(model.submeshes.iter().enumerate())
         {
-            encode_draw_command(model, chunk, DrawSource::Cpu(submesh))?;
+            let source = cpu_draw_source(model, filter, submesh_index, submesh)?;
+            encode_draw_command(model, chunk, source)?;
         }
     }
 
     Ok(byte_count)
+}
+
+/// CPU 路径的 draw 来源：子网格 + 它在（可能已过滤的）索引缓冲里的实际区间。
+fn cpu_draw_source(
+    model: &MmdModel,
+    filter: Option<&CpuHeadFilter>,
+    submesh_index: usize,
+    submesh: &SubMesh,
+) -> BridgeResult<DrawSource<'static>> {
+    let (first_index, index_count, center) = match filter {
+        Some(filter) => {
+            let (first_index, index_count) =
+                filter.ranges.get(submesh_index).copied().unwrap_or((0, 0));
+            let begin = first_index as usize;
+            let end = begin + index_count as usize;
+            let center = static_center(model, &filter.indices[begin..end]);
+            (first_index, index_count, center)
+        }
+        None => {
+            let begin = submesh.begin_index as usize;
+            let end = begin
+                .checked_add(submesh.index_count as usize)
+                .ok_or(BridgeError::SizeOverflow)?;
+            if end > model.indices.len() {
+                return Err(BridgeError::InvalidData(format!(
+                    "子网格索引范围越界: {begin}..{end}/{}",
+                    model.indices.len()
+                )));
+            }
+            let center = static_center(model, &model.indices[begin..end]);
+            (submesh.begin_index, submesh.index_count, center)
+        }
+    };
+
+    Ok(DrawSource::Cpu {
+        material_id: submesh.material_id,
+        first_index,
+        index_count,
+        center,
+    })
 }
 
 pub fn copy_texture_pixels(texture: &Texture, destination: &mut [u8]) -> BridgeResult<usize> {
@@ -379,62 +433,57 @@ fn validate_indices(model: &MmdModel) -> BridgeResult<()> {
     Ok(())
 }
 
-fn require_gpu_topology(model: &MmdModel) -> BridgeResult<&GpuSkinningTopology> {
+fn require_gpu_topology(model: &MmdModel) -> BridgeResult<Arc<GpuSkinningTopology>> {
     model
         .gpu_skinning_topology()
         .map_err(|error| BridgeError::InvalidData(error.to_string()))
 }
 
 enum DrawSource<'a> {
-    Cpu(&'a SubMesh),
+    /// CPU 路径：子网格在索引缓冲里的实际区间
+    /// （头部掩码生效时区间指向过滤后的缓冲，与 GPU 路径语义一致）
+    Cpu {
+        material_id: i32,
+        first_index: u32,
+        index_count: u32,
+        center: [f32; 3],
+    },
     Gpu(&'a GpuSkinningDraw),
 }
 
 impl DrawSource<'_> {
     fn material_id(&self) -> i32 {
         match self {
-            Self::Cpu(submesh) => submesh.material_id,
+            Self::Cpu { material_id, .. } => *material_id,
             Self::Gpu(draw) => draw.material_id,
         }
     }
 
     fn first_index(&self) -> u32 {
         match self {
-            Self::Cpu(submesh) => submesh.begin_index,
+            Self::Cpu { first_index, .. } => *first_index,
             Self::Gpu(draw) => draw.first_index,
         }
     }
 
     fn index_count(&self) -> u32 {
         match self {
-            Self::Cpu(submesh) => submesh.index_count,
+            Self::Cpu { index_count, .. } => *index_count,
             Self::Gpu(draw) => draw.index_count,
         }
     }
 
     fn palette_range(&self) -> (u32, u32) {
         match self {
-            Self::Cpu(_) => (0, 0),
+            Self::Cpu { .. } => (0, 0),
             Self::Gpu(draw) => (draw.palette_offset, draw.palette_count),
         }
     }
 
-    fn center(&self, model: &MmdModel) -> BridgeResult<[f32; 3]> {
+    fn center(&self) -> [f32; 3] {
         match self {
-            Self::Gpu(draw) => Ok(draw.center),
-            Self::Cpu(submesh) => {
-                let begin = submesh.begin_index as usize;
-                let end = begin
-                    .checked_add(submesh.index_count as usize)
-                    .ok_or(BridgeError::SizeOverflow)?;
-                if end > model.indices.len() {
-                    return Err(BridgeError::InvalidData(format!(
-                        "子网格索引范围越界: {begin}..{end}/{}",
-                        model.indices.len()
-                    )));
-                }
-                Ok(static_submesh_center(model, begin, end))
-            }
+            Self::Gpu(draw) => draw.center,
+            Self::Cpu { center, .. } => *center,
         }
     }
 }
@@ -471,7 +520,7 @@ fn encode_draw_command(
     if should_outline(model, material_index) {
         flags |= DRAW_OUTLINE;
     }
-    let center = source.center(model)?;
+    let center = source.center();
     let (palette_offset, palette_count) = source.palette_range();
 
     destination.fill(0);
@@ -523,12 +572,14 @@ fn should_outline(model: &MmdModel, material_index: usize) -> bool {
         .any(|token| name.contains(token) || texture.contains(token))
 }
 
-fn static_submesh_center(model: &MmdModel, begin: usize, end: usize) -> [f32; 3] {
+/// 计算一段索引所引用顶点的中心（用于透明排序的距离估算）
+fn static_center(model: &MmdModel, indices: &[u32]) -> [f32; 3] {
     let mut sum = [0.0; 3];
     let mut count = 0_u32;
-    for vertex_index in model.indices[begin..end].iter().copied() {
-        let vertex_index = vertex_index as usize;
-        let source = &model.vertices[vertex_index];
+    for vertex_index in indices.iter().copied() {
+        let Some(source) = model.vertices.get(vertex_index as usize) else {
+            continue;
+        };
         sum[0] += source.position.x;
         sum[1] += source.position.y;
         sum[2] += source.position.z;
@@ -582,7 +633,7 @@ fn put_f32(destination: &mut [u8], offset: usize, value: f32) {
 mod tests {
     use glam::{Vec2, Vec3, Vec4};
 
-    use crate::model::{MmdMaterial, RuntimeVertex, SubMesh};
+    use crate::model::{MmdMaterial, RuntimeVertex, SubMesh, VertexWeight};
 
     use super::*;
 
@@ -762,6 +813,95 @@ mod tests {
         assert_eq!(read_f32(&output, 16), 0.5);
         assert_eq!(read_u32(&output, 20), 0b1111);
         assert_eq!(read_u32(&output, 36), 0x80FF_FFFF);
+    }
+
+    /// CPU 路径 + 头部掩码：索引缓冲被过滤后，
+    /// draw command 的 firstIndex/indexCount 必须指向过滤后的区间。
+    #[test]
+    fn head_mask_should_rewrite_cpu_indices_and_draw_ranges() {
+        let mut model = model_with_head_and_body();
+        model.set_first_person_mode(true);
+
+        let description = describe_mesh(&model).expect("mesh should describe");
+        assert_eq!(description.index_count, 3);
+        assert_eq!(description.draw_count, 2);
+
+        let mut indices = [0_u8; 6];
+        let written = copy_indices(&model, &mut indices).expect("indices should encode");
+        assert_eq!(written, 6);
+        // 只剩身体的 3 个索引（顶点 0/1/2）
+        assert_eq!(indices, [0, 0, 1, 0, 2, 0]);
+
+        let mut commands = [0_u8; DRAW_COMMAND_STRIDE * 2];
+        copy_draw_commands(&model, &mut commands).expect("commands should encode");
+        // 身体子网格：firstIndex=0，indexCount=3
+        assert_eq!(read_u32(&commands, 4), 0);
+        assert_eq!(read_u32(&commands, 8), 3);
+        // 头部子网格：区间被清空（Java 侧遇到 indexCount==0 会跳过）
+        assert_eq!(read_u32(&commands, DRAW_COMMAND_STRIDE + 4), 3);
+        assert_eq!(read_u32(&commands, DRAW_COMMAND_STRIDE + 8), 0);
+    }
+
+    /// 关掉第一人称后，CPU 路径必须回到原始索引与原始区间（逐字节一致）。
+    #[test]
+    fn disabling_head_mask_should_restore_cpu_geometry() {
+        let mut model = model_with_head_and_body();
+        model.set_first_person_mode(true);
+        model.set_first_person_mode(false);
+
+        let description = describe_mesh(&model).expect("mesh should describe");
+        assert_eq!(description.index_count, model.indices.len());
+
+        let mut indices = [0_u8; 12];
+        let written = copy_indices(&model, &mut indices).expect("indices should encode");
+        assert_eq!(written, 12);
+        assert_eq!(indices, [0, 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0]);
+
+        let mut commands = [0_u8; DRAW_COMMAND_STRIDE * 2];
+        copy_draw_commands(&model, &mut commands).expect("commands should encode");
+        assert_eq!(read_u32(&commands, 4), 0);
+        assert_eq!(read_u32(&commands, 8), 3);
+        assert_eq!(read_u32(&commands, DRAW_COMMAND_STRIDE + 4), 3);
+        assert_eq!(read_u32(&commands, DRAW_COMMAND_STRIDE + 8), 3);
+    }
+
+    /// 造一个「身体 + 头部」两段的模型：脖子骨骼 Neck 在 Y=10，
+    /// 后 3 个顶点（Y=15）属于头部。
+    fn model_with_head_and_body() -> MmdModel {
+        let vertex = |y: f32| RuntimeVertex {
+            position: Vec3::new(0.0, y, 0.0),
+            normal: Vec3::Y,
+            uv: Vec2::ZERO,
+        };
+        let mut model = MmdModel::new();
+        model.vertices = vec![
+            vertex(5.0),
+            vertex(5.0),
+            vertex(6.0),
+            vertex(15.0),
+            vertex(15.0),
+            vertex(16.0),
+        ];
+        model.update_positions = model.vertices.iter().map(|v| v.position).collect();
+        model.update_normals = model.vertices.iter().map(|v| v.normal).collect();
+        model.update_uvs = model.vertices.iter().map(|v| v.uv).collect();
+        model.indices = vec![0, 1, 2, 3, 4, 5];
+        model.weights = vec![VertexWeight::Bdef1 { bone: 0 }; 6];
+        model.materials = vec![MmdMaterial::default(), MmdMaterial::default()];
+        model.submeshes = vec![SubMesh::new(0, 3, 0), SubMesh::new(3, 3, 1)];
+
+        let mut root = crate::skeleton::BoneLink::new("root".to_string());
+        root.parent_index = -1;
+        model.bone_manager.add_bone(root);
+        let mut neck = crate::skeleton::BoneLink::new("Neck".to_string());
+        neck.initial_position = Vec3::new(0.0, 10.0, 0.0);
+        neck.parent_index = 0;
+        model.bone_manager.add_bone(neck);
+        model.bone_manager.build_hierarchy();
+
+        model.init_material_visibility();
+        model.init_head_detection();
+        model
     }
 
     fn model_with_vertices(count: usize) -> MmdModel {

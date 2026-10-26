@@ -19,12 +19,13 @@ public final class QuickModelSwitcher {
         if (mc.player == null) return;
 
         ModelSelectionApplicationService.QuickSwitchResult result = SERVICE.switchToSlot(slot);
+        // 26.3 起聊天栏挂在 Hud 下，Gui 已不再提供 getChat()
         switch (result.status()) {
-            case UNBOUND -> mc.gui.getChat().addMessage(
+            case UNBOUND -> mc.gui.hud.getChat().addClientSystemMessage(
                     Component.translatable("message.mmdskin.quick_model.unbound", slot + 1));
-            case RESET_TO_DEFAULT -> mc.gui.getChat().addMessage(
+            case RESET_TO_DEFAULT -> mc.gui.hud.getChat().addClientSystemMessage(
                     Component.translatable("message.mmdskin.quick_model.reset"));
-            case SWITCHED -> mc.gui.getChat().addMessage(
+            case SWITCHED -> mc.gui.hud.getChat().addClientSystemMessage(
                     Component.translatable("message.mmdskin.quick_model.switched", result.targetModelName()));
         }
     }

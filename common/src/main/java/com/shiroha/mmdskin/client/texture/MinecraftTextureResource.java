@@ -2,7 +2,7 @@
 package com.shiroha.mmdskin.client.texture;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTexture;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;

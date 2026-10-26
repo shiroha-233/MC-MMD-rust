@@ -192,6 +192,22 @@ void bw_world_set_kinematic_filter(BW_World* w, bool enabled) {
     }
 }
 
+void bw_world_refresh_rigid_body(BW_World* w, BW_RigidBody* rb) {
+    if (!w || !rb) return;
+    btRigidBody* moved = (btRigidBody*)rb;
+    // setWorldTransform 已更新 motion state；这里同步 broadphase proxy，
+    // 否则旧接触对可能在某些帧继续把尸体"钉"在旧地面上。
+    w->world->updateSingleAabb(moved);
+    w->world->getBroadphase()->calculateOverlappingPairs(w->world->getDispatcher());
+    for (int i = 0; i < w->world->getNumCollisionObjects(); ++i) {
+        btCollisionObject* object = w->world->getCollisionObjectArray()[i];
+        if (!object || object == moved || object->isStaticObject() || object->isKinematicObject()) {
+            continue;
+        }
+        object->activate(true);
+    }
+}
+
 /* ===== 碰撞形状 ===== */
 
 BW_Shape* bw_shape_sphere(float radius) {

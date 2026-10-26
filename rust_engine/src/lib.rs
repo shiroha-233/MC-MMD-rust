@@ -5,6 +5,7 @@ pub mod jni_bridge;
 pub mod model;
 pub mod morph;
 pub mod physics;
+pub mod ragdoll;
 pub mod skeleton;
 pub mod skinning;
 pub mod texture;

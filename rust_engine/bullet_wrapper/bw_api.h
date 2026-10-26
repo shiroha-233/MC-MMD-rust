@@ -68,6 +68,8 @@ void bw_world_remove_rigid_body(BW_World* world, BW_RigidBody* rb);
 void bw_world_add_constraint(BW_World* world, BW_Constraint* c, bool disable_collision);
 void bw_world_remove_constraint(BW_World* world, BW_Constraint* c);
 void bw_world_set_kinematic_filter(BW_World* world, bool enabled);
+/* 地面等运动学刚体移动后，强制刷新 broadphase AABB 并唤醒动态刚体 */
+void bw_world_refresh_rigid_body(BW_World* world, BW_RigidBody* rb);
 
 /* ===== 碰撞形状 ===== */
 BW_Shape* bw_shape_sphere(float radius);

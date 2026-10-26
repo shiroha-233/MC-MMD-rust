@@ -36,4 +36,3 @@ public final class MmdSkinConfig extends AbstractMmdSkinConfig {
         instance.data.save(configPath);
     }
 }
-

@@ -1,5 +1,5 @@
 //! 负责实现模型、动画、舞台、物理、Morph 与 VR 的集中 JNI 入口。
-use jni::objects::{JByteBuffer, JClass, JString};
+use jni::objects::{JByteBuffer, JClass, JFloatArray, JString};
 use jni::sys::{jboolean, jfloat, jint, jlong, jstring};
 use jni::JNIEnv;
 use std::ptr;

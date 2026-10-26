@@ -16,6 +16,26 @@ pub extern "system" fn Java_com_shiroha_mmdskin_bridge_NativeBindings_SetFirstPe
 
 // 获取第一人称模式是否启用
 
+// 第一人称诊断信息（供 Java 侧写日志排查，不影响渲染）
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_mmdskin_bridge_NativeBindings_GetFirstPersonInfo(
+    env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+) -> jstring {
+    let models = MODELS.read().unwrap();
+    if let Some(model_arc) = models.get(&model) {
+        let mut model = model_arc.lock().unwrap();
+        let info = model.first_person_debug_info();
+        if let Ok(s) = env.new_string(&info) {
+            return s.into_raw();
+        }
+    }
+    env.new_string("no-model")
+        .map(|s| s.into_raw())
+        .unwrap_or(ptr::null_mut())
+}
+
 // 获取头部骨骼的静态 Y 坐标（模型局部空间，用于相机高度计算）
 
 // 获取眼睛骨骼的当前动画位置（模型局部空间）

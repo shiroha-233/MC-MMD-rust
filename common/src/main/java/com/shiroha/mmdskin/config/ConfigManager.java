@@ -23,6 +23,21 @@ public final class ConfigManager {
         return provider != null ? provider.getModelPoolMaxCount() : 20;
     }
 
+    /**
+     * 是否自动下载附近玩家正在使用的模型。
+     *
+     * <p>默认关闭：只下"半径内玩家正在用、且服务器授权分发"的模型，
+     * 不会把服务器上的模型批量拉下来。
+     */
+    public static boolean isAutoDownloadNearbyModels() {
+        return provider != null && provider.isAutoDownloadNearbyModels();
+    }
+
+    /** 自动下载半径（格）。 */
+    public static int getAutoDownloadRadius() {
+        return provider != null ? provider.getAutoDownloadRadius() : 48;
+    }
+
     public static boolean isPerformanceProfilingEnabled() {
         return provider != null ? provider.isPerformanceProfilingEnabled() : false;
     }
@@ -32,7 +47,17 @@ public final class ConfigManager {
     }
 
     public static int getMaxVisibleModelsPerFrame() {
-        return provider != null ? provider.getMaxVisibleModelsPerFrame() : 10;
+        return provider != null ? provider.getMaxVisibleModelsPerFrame() : 20;
+    }
+
+    /**
+     * 加载前距离闸门（格）；0 = 不限制。
+     *
+     * <p>用来在 acquire 之前挡掉远离相机的实体：不触发 PMX 解析、独立 Bullet 物理世界
+     * 与 GPU buffer 的创建，模型一多时的卡顿主要就来自这里。
+     */
+    public static float getModelLoadMaxDistance() {
+        return provider != null ? provider.getModelLoadMaxDistance() : 64.0f;
     }
 
     public static float getAnimationLodMediumDistance() {
@@ -187,7 +212,47 @@ public final class ConfigManager {
         return provider != null ? provider.getMobModelReplacement(entityTypeId) : "";
     }
 
-    public interface IConfigProvider extends IRenderConfig, IToonConfig, IPhysicsConfig, IVRConfig {
+    public static boolean isRagdollEnabled() {
+        return provider != null ? provider.isRagdollEnabled() : true;
+    }
+
+    public static String getCorpseKeepMode() {
+        return provider != null ? provider.getCorpseKeepMode() : "NEARBY";
+    }
+
+    public static double getCorpseKeepRadius() {
+        return provider != null ? provider.getCorpseKeepRadius() : 48.0;
+    }
+
+    public static long getCorpseKeepSeconds() {
+        return provider != null ? provider.getCorpseKeepSeconds() : 60;
+    }
+
+    public static int getMaxCorpses() {
+        return provider != null ? provider.getMaxCorpses() : 2;
+    }
+
+    public static float getRagdollJointStrength() {
+        return provider != null ? provider.getRagdollJointStrength() : 1.35f;
+    }
+
+    public static boolean isHideDeathPoof() {
+        return provider != null ? provider.isHideDeathPoof() : true;
+    }
+
+    public static boolean isHijackDeathScreen() {
+        return provider != null ? provider.isHijackDeathScreen() : true;
+    }
+
+    public static float getRagdollDeathAnimSeconds() {
+        return provider != null ? provider.getRagdollDeathAnimSeconds() : 0.0f;
+    }
+
+    public static int getRagdollPhysicsKeepSeconds() {
+        return provider != null ? provider.getRagdollPhysicsKeepSeconds() : 60;
+    }
+
+    public interface IConfigProvider extends IRenderConfig, IToonConfig, IPhysicsConfig, IVRConfig, IRagdollConfig {
         String getMobModelReplacement(String entityTypeId);
     }
 }

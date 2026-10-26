@@ -1,9 +1,6 @@
 pluginManagement {
 	repositories {
-		// Gradle Plugin Portal 优先（包含 Shadow 等插件）
 		gradlePluginPortal()
-		
-		// Architectury 仓库必须在前面（包含 SNAPSHOT 版本）
 		maven {
 			name = 'Architectury'
 			url = 'https://maven.architectury.dev/'
@@ -13,13 +10,11 @@ pluginManagement {
 			url = 'https://maven.fabricmc.net/'
 		}
 		maven {
-			name = 'Forge'
-			url = 'https://maven.minecraftforge.net/'
+			name = 'NeoForge'
+			url = 'https://maven.neoforged.net/releases/'
 		}
-		
 		mavenCentral()
-		
-		// 中国镜像源（作为备用）
+		// 国内镜像源（备用）
 		maven { url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
 		maven { url = 'https://maven.aliyun.com/repository/public/' }
 		maven { url = 'https://repo.huaweicloud.com/repository/maven/' }
@@ -28,39 +23,29 @@ pluginManagement {
 
 dependencyResolutionManagement {
 	repositories {
-		// 中国镜像源
+		mavenCentral()
+		maven { url = 'https://maven.fabricmc.net/' }
+		maven { url = 'https://api.modrinth.com/maven' }
+		maven { url = 'https://maven.architectury.dev/' }
+		maven { url = 'https://maven.neoforged.net/releases/' }
+		maven { url = 'https://maven.shedaniel.me/' }
+		maven { url = 'https://maven.ladysnake.org/releases' }
+		// 国内镜像源（备用）
 		maven { url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
 		maven { url = 'https://maven.aliyun.com/repository/public/' }
 		maven { url = 'https://repo.huaweicloud.com/repository/maven/' }
-		
-		mavenCentral()
-		maven { url = 'https://maven.fabricmc.net/' }
-		maven { url = 'https://maven.architectury.dev/' }
-		maven { url = 'https://api.modrinth.com/maven' }
-		maven { url = 'https://maven.minecraftforge.net/' }
-		maven {
-			name = 'NeoForge'
-			url = 'https://neoforged.forgecdn.net/releases/'
-		}
-		maven { url = 'https://bmclapi2.bangbang93.com/maven/' }
-
-		// 仅从官方仓库解析 Forge 组件，避免无意义的回退请求
-		exclusiveContent {
-			forRepository {
-				maven {
-					name = 'Forge'
-					url = 'https://maven.minecraftforge.net/'
-				}
-			}
-			filter {
-				includeGroup 'net.minecraftforge'
-				includeGroupByRegex 'net\\.minecraftforge\\..*'
-			}
-		}
 	}
 }
+
 rootProject.name = 'mmdskin'
-// 包含子项目
-include 'common'
+
+// 26.3 移植版：两个平台模块（Fabric / NeoForge）。
+// 原本的 common 模块不再作为独立 Gradle 模块构建，它的源码/资源目录直接挂到
+// fabric / neoforge 模块的 sourceSet 上（见各自的 build.gradle），这样既避免
+// Architectury 的 SRG/transform 链路（mcp_config:26.3 在 Mojang 侧不存在），
+// 也省掉一次目录搬迁。
+//
+// 注意：NeoForge 端**不能**用 Architectury —— architectury-neoforge 最高只有
+// 21.0.5（对应 MC 1.21.x），没有 26.x 版本，因此改用官方 net.neoforged.moddev 插件。
 include 'fabric'
 include 'neoforge'
